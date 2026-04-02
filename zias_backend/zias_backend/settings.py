@@ -43,14 +43,15 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware', 
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',   # ← Must be BEFORE custom middleware
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'accounts.middleware.PasswordExpiryMiddleware',              # ← Now after AuthenticationMiddleware
 ]
 
 ROOT_URLCONF = 'zias_backend.urls'
@@ -137,7 +138,7 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
-    'DEFAULT_PERMISSIONS_CLASSES': (
+    'DEFAULT_PERMISSION_CLASSES': (   # ← Fixed typo (was DEFAULT_PERMISSIONS_CLASSES)
         'rest_framework.permissions.IsAuthenticated',
     ),
 }
@@ -151,5 +152,15 @@ SIMPLE_JWT = {
     'REFRESH_TOKEN_LIFETIME': timedelta(days=365),
 }
 
+
+
+# Email settings for automatic notifications
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'localhost'
+EMAIL_PORT = 1025
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'fsulthanaibrahim@gmail.com'          # Replace with your Gmail address
+EMAIL_HOST_PASSWORD = 'gsoxdcilnfvuinxh' # Paste the App Password (spaces removed)
+DEFAULT_FROM_EMAIL = 'ZIAS <fsulthanaibrahim@gmail.com>'
 
 
