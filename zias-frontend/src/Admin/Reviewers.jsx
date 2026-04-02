@@ -5,6 +5,7 @@ function Reviewers() {
   const [reviewers, setReviewers] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");   // ← ADDED
   const [formData, setFormData] = useState({
     username: "",
     email: "",
@@ -71,6 +72,13 @@ function Reviewers() {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
+  // ← ADDED: filter reviewers based on search term (case‑insensitive)
+  const filteredReviewers = reviewers.filter((r) =>
+    r.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    r.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    r.department.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
     <div className="min-h-screen w-screen bg-[#0f1623] p-8">
       {/* Header */}
@@ -94,7 +102,26 @@ function Reviewers() {
         </button>
       </div>
 
-      {/* Modal Form */}
+      {/* ← ADDED: Search Bar */}
+      <div className="mb-4 flex gap-2">
+        <input
+          type="text"
+          placeholder="Search by name, email, or department..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="flex-1 bg-[#1a2538] border border-white/10 rounded-lg px-4 py-2 text-white placeholder-white/30 focus:outline-none focus:border-blue-500 transition"
+        />
+        {searchTerm && (
+          <button
+            onClick={() => setSearchTerm("")}
+            className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+
+      {/* Modal Form (unchanged) */}
       {showForm && (
         <div
           className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
@@ -170,7 +197,8 @@ function Reviewers() {
             </tr>
           </thead>
           <tbody>
-            {reviewers.map((r) => (
+            {/* ← CHANGED: use filteredReviewers instead of reviewers */}
+            {filteredReviewers.map((r) => (
               <tr key={r.id} className="border-b border-white/5 hover:bg-white/5 transition"><td className="p-4 text-white">{r.username}</td><td className="p-4 text-white/80">{r.email}</td><td className="p-4 text-white/80">{r.department}</td><td className="p-4">
                   <button onClick={() => handleEdit(r)} className="text-blue-400 hover:text-blue-300 mr-3 transition" title="Edit">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -185,7 +213,11 @@ function Reviewers() {
                 </td>
               </tr>
             ))}
-            {reviewers.length === 0 && <tr><td colSpan="4" className="text-center p-8 text-white/40">No reviewers found. Click "Add Reviewer" to create one.</td></tr>}
+            {filteredReviewers.length === 0 && (
+              <tr><td colSpan="4" className="text-center p-8 text-white/40">
+                {searchTerm ? "No reviewers match your search." : "No reviewers found. Click 'Add Reviewer' to create one."}
+              </td></tr>
+            )}
           </tbody>
         </table>
       </div>
