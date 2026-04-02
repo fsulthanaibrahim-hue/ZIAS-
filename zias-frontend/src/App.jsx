@@ -1,12 +1,24 @@
 import { Routes, Route, Navigate } from "react-router-dom";
-import Login from "./Admin/Login";
+import AdminLogin from "./Admin/Login";
+import UserLogin from "./pages/UserLogin";
+import UserDashboard from "./pages/UserDashboard";
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./Admin/Dashboard";
 import Students from "./Admin/Students";
 import Mentors from "./Admin/Mentors";
 import Reviewers from "./Admin/Reviewers";
+import Navbar from "./components/Navbar";
+import Home from "./pages/Home";
+import Courses from "./pages/Courses";
+import About from "./pages/About";
+import Contact from "./pages/Contact";
 
 function PrivateRoute({ children }) {
+  const token = localStorage.getItem("access_token");
+  return token ? children : <Navigate to="/login" replace />;
+}
+
+function AdminRoute({ children }) {
   const token = localStorage.getItem("access_token");
   return token ? children : <Navigate to="/admin/login" replace />;
 }
@@ -14,66 +26,25 @@ function PrivateRoute({ children }) {
 function App() {
   return (
     <Routes>
-      {/* Redirect root to login */}
-      <Route path="/" element={<Navigate to="/admin/login" replace />} />
+      {/* Public pages with Navbar */}
+      <Route path="/" element={<><Navbar /><Home /></>} />
+      <Route path="/courses" element={<><Navbar /><Courses /></>} />
+      <Route path="/about" element={<><Navbar /><About /></>} />
+      <Route path="/contact" element={<><Navbar /><Contact /></>} />
+      <Route path="/login" element={<UserLogin />} />
+      <Route path="/admin/login" element={<AdminLogin />} />
 
-      {/* Admin login */}
-      <Route path="/admin/login" element={<Login />} />
+      {/* User dashboard (protected) */}
+      <Route path="/user/dashboard" element={<PrivateRoute><UserDashboard /></PrivateRoute>} />
 
-      {/* Dashboard */}
-      <Route
-        path="/admin/dashboard"
-        element={
-          <PrivateRoute>
-            <div style={{ display: "flex" }}>
-              <Sidebar />
-              <Dashboard />
-            </div>
-          </PrivateRoute>
-        }
-      />
+      {/* Admin routes (protected) */}
+      <Route path="/admin/dashboard" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Dashboard /></div></AdminRoute>} />
+      <Route path="/admin/students" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Students /></div></AdminRoute>} />
+      <Route path="/admin/mentors" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Mentors /></div></AdminRoute>} />
+      <Route path="/admin/reviewers" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Reviewers /></div></AdminRoute>} />
 
-      {/* Students */}
-      <Route
-        path="/admin/students"
-        element={
-          <PrivateRoute>
-            <div style={{ display: "flex" }}>
-              <Sidebar />
-              <Students />
-            </div>
-          </PrivateRoute>
-        }
-      />
-
-      {/* Mentors */}
-      <Route
-        path="/admin/mentors"
-        element={
-          <PrivateRoute>
-            <div style={{ display: "flex" }}>
-              <Sidebar />
-              <Mentors />
-            </div>
-          </PrivateRoute>
-        }
-      />
-
-      {/* Reviewers */}
-      <Route
-        path="/admin/reviewers"
-        element={
-          <PrivateRoute>
-            <div style={{ display: "flex" }}>
-              <Sidebar />
-              <Reviewers />
-            </div>
-          </PrivateRoute>
-        }
-      />
-
-      {/* Fallback 404 */}
-      <Route path="*" element={<h1 style={{ color: "white", textAlign: "center", marginTop: "50px" }}>404 - Page Not Found</h1>} />
+      {/* 404 */}
+      <Route path="*" element={<h1 className="text-white text-center mt-10">404 - Page Not Found</h1>} />
     </Routes>
   );
 }

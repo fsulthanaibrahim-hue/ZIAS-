@@ -1,9 +1,10 @@
+// src/pages/Home.jsx
 import heroImg from '../assets/images/heroImg.png';
 import coursesImg from '../assets/images/coursesImg.png';
-import certificationsImg from '../assets/images/certificationsImg.';
-import projectsImg from '../assets/projects.jpg';
-import journeyImg from '../assets/journeyImg.jpg'; 
-import zias from '../assets/zias.png';
+import certificationsImg from '../assets/images/certification.jpg';   // adjust filename if needed
+import projectsImg from '../assets/images/projects.jpg';
+import journeyImg from '../assets/images/journeyImg.jpg'; 
+import zias from '../assets/images/zias.png';
 
 import {
   FaCheckCircle, FaUsers, FaGlobe, FaLightbulb,
@@ -32,7 +33,6 @@ const Home = () => {
                 It's a skill that can be learned through experience and practice.
               </p>
 
-              {/* ✅ Read Now Button */}
               <Link
                 to="/about"
                 className="bg-green-600 text-white px-8 py-3 rounded-lg font-semibold tracking-wide hover:bg-green-700 transition"
@@ -59,9 +59,9 @@ const Home = () => {
 
           <div className="grid md:grid-cols-3 gap-8">
 
-            {[{img:coursesImg,title:"Courses",desc:"Learn modern full stack technologies with structured lessons and expert guidance."},
-              {img:certificationsImg,title:"Certifications",desc:"Earn an industry-recognized certificate after completing your training."},
-              {img:projectsImg,title:"Projects",desc:"Build real-world projects and gain practical development experience."}
+            {[{img:coursesImg, title:"Courses", desc:"Learn modern full stack technologies with structured lessons and expert guidance."},
+              {img:certificationsImg, title:"Certifications", desc:"Earn an industry-recognized certificate after completing your training."},
+              {img:projectsImg, title:"Projects", desc:"Build real-world projects and gain practical development experience."}
             ].map((item,i)=>(
               <div key={i} className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition text-center">
                 <div className="flex justify-center mb-4">
@@ -96,7 +96,6 @@ const Home = () => {
                 Learn modern technologies, build real-world projects, and gain the skills needed for a successful career.
               </p>
 
-              {/* ✅ Start Now Button */}
               <Link
                 to="/contact"
                 className="bg-green-600 text-white px-8 py-3 rounded-lg font-semibold tracking-wide hover:bg-green-700 transition"

@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { FiMenu, FiX } from "react-icons/fi";
 import { Link } from "react-router-dom";
-import logo from "./assets/images/logo.png";
+import logo from "../assets/images/logo.png";
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -17,12 +17,14 @@ const Navbar = () => {
     <nav className="bg-white shadow-md sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
+          {/* Logo */}
           <div className="flex items-center">
             <Link to="/" className="flex items-center">
               <img src={logo} alt="Logo" className="h-40 w-40 mt-8" />
             </Link>
           </div>
 
+          {/* Desktop menu */}
           <div className="hidden md:flex items-center space-x-8">
             {navLinks.map((link) => (
               <Link
@@ -41,6 +43,7 @@ const Navbar = () => {
             </Link>
           </div>
 
+          {/* Mobile menu button */}
           <div className="md:hidden flex items-center">
             <button onClick={() => setIsOpen(!isOpen)}>
               {isOpen ? <FiX size={24} /> : <FiMenu size={24} />}
@@ -48,6 +51,7 @@ const Navbar = () => {
           </div>
         </div>
 
+        {/* Mobile dropdown */}
         {isOpen && (
           <div className="md:hidden pb-3">
             <div className="flex flex-col space-y-2">

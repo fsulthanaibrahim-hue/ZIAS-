@@ -3,6 +3,21 @@ from rest_framework import serializers
 from .models import User, Student, Mentor, Reviewer
 
 # ----------------------------
+# USER SERIALIZER (required for CurrentUserView)
+# ----------------------------
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'email', 'is_admin', 'is_student', 'is_mentor', 'is_reviewer']
+        extra_kwargs = {
+            'password': {'write_only': True, 'required': False}
+        }
+
+    def update(self, instance, validated_data):
+        validated_data.pop('password', None)
+        return super().update(instance, validated_data)
+
+# ----------------------------
 # STUDENT SERIALIZER
 # ----------------------------
 class StudentSerializer(serializers.ModelSerializer):
@@ -34,7 +49,6 @@ class StudentSerializer(serializers.ModelSerializer):
             instance.user.email = user_data.get('email', instance.user.email)
             instance.user.save()
         return super().update(instance, validated_data)
-
 
 # ----------------------------
 # MENTOR SERIALIZER
@@ -68,7 +82,6 @@ class MentorSerializer(serializers.ModelSerializer):
             instance.user.email = user_data.get('email', instance.user.email)
             instance.user.save()
         return super().update(instance, validated_data)
-
 
 # ----------------------------
 # REVIEWER SERIALIZER

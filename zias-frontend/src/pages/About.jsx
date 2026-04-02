@@ -1,11 +1,11 @@
-import React from "react";
-import about from "../assets/images/about.jpg"
+// src/pages/About.jsx
+import about from "../assets/images/about.jpg";
 import Footer from "../components/Footer";
-import { Link } from "react-router-dom"; // if you want a button linking elsewhere
+import { Link } from "react-router-dom";
 
 const About = () => {
   return (
-    <main className="font-sans">
+    <main className="font-serif">
       {/* Hero Section (same gradient as Home) */}
       <section className="bg-gradient-to-r from-green-50 to-emerald-50 py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -15,9 +15,7 @@ const About = () => {
                 About <span className="text-green-600">ZIAS</span>
               </h1>
               <p className="text-lg md:text-xl text-gray-600 leading-relaxed mb-8 max-w-2xl mx-auto md:mx-0">
-               ZIAS is a developer training platform that helps students learn modern software development through practical learning and real-world projects. The platform provides structured training programs designed to build strong coding skills and prepare learners for careers in the technology industry.
-
-
+                ZIAS is a developer training platform that helps students learn modern software development through practical learning and real-world projects. The platform provides structured training programs designed to build strong coding skills and prepare learners for careers in the technology industry.
               </p>
               <Link
                 to="/contact"
@@ -37,7 +35,7 @@ const About = () => {
         </div>
       </section>
 
-      {/* Our Learning Process (alternating bg-gray-50) */}
+      {/* Our Learning Process */}
       <section className="py-16 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl font-bold font-display tracking-tight text-center text-gray-900 mb-12">
@@ -62,7 +60,7 @@ const About = () => {
         </div>
       </section>
 
-      {/* Payment Options (white background) */}
+      {/* Payment Options */}
       <section className="py-16 bg-white">
         <div className="max-w-4xl mx-auto px-4">
           <h2 className="text-3xl font-bold font-display tracking-tight text-center text-gray-900 mb-12">
@@ -83,7 +81,7 @@ const About = () => {
         </div>
       </section>
 
-      {/* Our Goal (alternating bg-gray-50) */}
+      {/* Our Goal */}
       <section className="py-16 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl font-bold font-display tracking-tight text-center text-gray-900 mb-12">

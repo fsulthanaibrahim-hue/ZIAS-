@@ -1,3 +1,4 @@
+// src/pages/Courses.jsx
 import {
   FaCode, FaCloud, FaMobileAlt, FaRobot,
   FaComments, FaProjectDiagram, FaUserTie,
@@ -7,9 +8,7 @@ import Footer from "../components/Footer";
 
 const Courses = () => {
   return (
-    <div>
     <div className="bg-gray-50 min-h-screen font-sans">
-
       {/* Hero Section */}
       <section className="bg-gradient-to-r from-green-50 to-emerald-50 py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
@@ -27,7 +26,6 @@ const Courses = () => {
         <h2 className="text-3xl font-bold font-display text-gray-900 mb-6 text-center">
           Explore Our Courses
         </h2>
-
         <p className="text-gray-600 text-lg mb-12 max-w-3xl mx-auto text-center leading-relaxed">
           From beginner to advanced levels, learn modern technologies with hands-on projects and expert guidance.
         </p>
@@ -110,9 +108,7 @@ const Courses = () => {
         </div>
       </section>
 
-    </div>
-
-    <Footer />
+      <Footer />
     </div>
   );
 };
