@@ -154,13 +154,10 @@ SIMPLE_JWT = {
 
 
 
-# Email settings for automatic notifications
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'localhost'
-EMAIL_PORT = 1025
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'fsulthanaibrahim@gmail.com'          # Replace with your Gmail address
-EMAIL_HOST_PASSWORD = 'gsoxdcilnfvuinxh' # Paste the App Password (spaces removed)
-DEFAULT_FROM_EMAIL = 'ZIAS <fsulthanaibrahim@gmail.com>'
-
-
+EMAIL_HOST_USER = 'fsulthanaibrahim@gmail.com'    # your actual Gmail
+EMAIL_HOST_PASSWORD = 'gsoxdcilnfvuinxh'          # App Password (no spaces)
+DEFAULT_FROM_EMAIL = 'ZIAS <fsulthanaibrahim@gmail.com>'   # must match EMAIL_HOST_USER

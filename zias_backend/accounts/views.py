@@ -3,7 +3,9 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
-from .models import Student, Mentor, Reviewer
+from django.core.mail import send_mail
+from django.conf import settings
+from .models import User, Student, Mentor, Reviewer   # Added User import
 from .serializers import StudentSerializer, MentorSerializer, ReviewerSerializer, UserSerializer
 
 # ----------------------------
@@ -16,7 +18,7 @@ class StudentViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         student = self.get_object()
         user = student.user
-        user.delete()          # Deletes the User, which cascades to Student
+        user.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 # ----------------------------
@@ -79,3 +81,39 @@ class ChangePasswordView(APIView):
         user.password_changed_at = timezone.now()
         user.save()
         return Response({"detail": "Password changed successfully."}, status=status.HTTP_200_OK)
+
+# ----------------------------
+# SEND BULK EMAIL TO ALL USERS (Admin only)
+# ----------------------------
+class SendBulkEmailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        if not user.is_admin:
+            return Response({"detail": "Admin access required."}, status=status.HTTP_403_FORBIDDEN)
+
+        subject = request.data.get('subject')
+        message = request.data.get('message')
+
+        if not subject or not message:
+            return Response({"detail": "Subject and message are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Get all active users with email addresses
+        users = User.objects.filter(is_active=True)
+        recipient_list = [u.email for u in users if u.email]
+
+        if not recipient_list:
+            return Response({"detail": "No recipients found."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            send_mail(
+                subject,
+                message,
+                settings.DEFAULT_FROM_EMAIL,
+                recipient_list,
+                fail_silently=False,
+            )
+            return Response({"detail": f"Email sent to {len(recipient_list)} users."}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

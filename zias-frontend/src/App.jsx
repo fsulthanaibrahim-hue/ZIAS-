@@ -7,6 +7,7 @@ import Dashboard from "./Admin/Dashboard";
 import Students from "./Admin/Students";
 import Mentors from "./Admin/Mentors";
 import Reviewers from "./Admin/Reviewers";
+import SendMessage from "./Admin/SendMessage";   // 👈 import the new component
 import Navbar from "./components/Navbar";
 import Home from "./pages/Home";
 import Courses from "./pages/Courses";
@@ -42,6 +43,9 @@ function App() {
       <Route path="/admin/students" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Students /></div></AdminRoute>} />
       <Route path="/admin/mentors" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Mentors /></div></AdminRoute>} />
       <Route path="/admin/reviewers" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Reviewers /></div></AdminRoute>} />
+      
+      {/* 👇 New route for Send Message */}
+      <Route path="/admin/send-message" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><SendMessage /></div></AdminRoute>} />
 
       {/* 404 */}
       <Route path="*" element={<h1 className="text-white text-center mt-10">404 - Page Not Found</h1>} />
