@@ -4,7 +4,7 @@ from django.core.mail import send_mail
 from django.conf import settings
 from django.db import IntegrityError
 from rest_framework import serializers
-from .models import User, Student, Mentor, Reviewer, Course, Enrollment
+from .models import User, Student, Mentor, Reviewer, Course, Enrollment, Module, Day   # added Day
 
 def generate_random_password(length=10):
     alphabet = string.ascii_letters + string.digits
@@ -34,6 +34,24 @@ class CourseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Course
         fields = ['id', 'name', 'description', 'duration', 'created_at', 'student_count']
+
+# ----------------------------
+# DAY SERIALIZER (nested inside Module)
+# ----------------------------
+class DaySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Day
+        fields = ['id', 'module', 'title', 'content', 'order']
+
+# ----------------------------
+# MODULE SERIALIZER (includes days)
+# ----------------------------
+class ModuleSerializer(serializers.ModelSerializer):
+    days = DaySerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Module
+        fields = ['id', 'course', 'title', 'content', 'order', 'days']
 
 # ----------------------------
 # ENROLLMENT SERIALIZER

@@ -2,12 +2,13 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import AdminLogin from "./Admin/Login";
 import UserLogin from "./pages/UserLogin";
 import UserDashboard from "./pages/UserDashboard";
+import ModuleView from "./pages/ModuleView";   // 👈 import the new component
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./Admin/Dashboard";
 import Students from "./Admin/Students";
 import Mentors from "./Admin/Mentors";
 import Reviewers from "./Admin/Reviewers";
-import CoursesAdmin from "./Admin/Courses";   // new component for course management
+import CoursesAdmin from "./Admin/Courses";
 import Navbar from "./components/Navbar";
 import Home from "./pages/Home";
 import Courses from "./pages/Courses";
@@ -37,6 +38,9 @@ function App() {
 
       {/* User dashboard (protected) */}
       <Route path="/user/dashboard" element={<PrivateRoute><UserDashboard /></PrivateRoute>} />
+
+      {/* Student-facing module view (protected) */}
+      <Route path="/module/:moduleId" element={<PrivateRoute><ModuleView /></PrivateRoute>} />
 
       {/* Admin routes (protected) */}
       <Route path="/admin/dashboard" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Dashboard /></div></AdminRoute>} />

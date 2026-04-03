@@ -5,10 +5,10 @@ from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
 from django.core.mail import send_mail
 from django.conf import settings
-from .models import User, Student, Mentor, Reviewer, Course, Enrollment   # added Course, Enrollment
+from .models import User, Student, Mentor, Reviewer, Course, Enrollment, Module, Day   # added Day
 from .serializers import (
     StudentSerializer, MentorSerializer, ReviewerSerializer, UserSerializer,
-    CourseSerializer, EnrollmentSerializer   # added CourseSerializer, EnrollmentSerializer
+    CourseSerializer, EnrollmentSerializer, ModuleSerializer, DaySerializer   # added DaySerializer
 )
 
 # ----------------------------
@@ -65,6 +65,20 @@ class EnrollmentViewSet(viewsets.ModelViewSet):
     serializer_class = EnrollmentSerializer
 
 # ----------------------------
+# MODULE VIEWSET
+# ----------------------------
+class ModuleViewSet(viewsets.ModelViewSet):
+    queryset = Module.objects.all()
+    serializer_class = ModuleSerializer
+
+# ----------------------------
+# DAY VIEWSET
+# ----------------------------
+class DayViewSet(viewsets.ModelViewSet):
+    queryset = Day.objects.all()
+    serializer_class = DaySerializer
+
+# ----------------------------
 # GET CURRENT USER INFO (for frontend role detection)
 # ----------------------------
 class CurrentUserView(APIView):
@@ -116,7 +130,6 @@ class SendBulkEmailView(APIView):
         if not subject or not message:
             return Response({"detail": "Subject and message are required."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Get all active users with email addresses
         users = User.objects.filter(is_active=True)
         recipient_list = [u.email for u in users if u.email]
 

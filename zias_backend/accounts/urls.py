@@ -4,15 +4,17 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .views import (
     StudentViewSet, MentorViewSet, ReviewerViewSet, CurrentUserView,
     ChangePasswordView, SendBulkEmailView,
-    CourseViewSet, EnrollmentViewSet          # import the new viewsets
+    CourseViewSet, EnrollmentViewSet, ModuleViewSet, DayViewSet   # added DayViewSet
 )
 
 router = DefaultRouter()
 router.register('students', StudentViewSet)
 router.register('mentors', MentorViewSet)
 router.register('reviewers', ReviewerViewSet)
-router.register('courses', CourseViewSet)          # new
-router.register('enrollments', EnrollmentViewSet)  # new
+router.register('courses', CourseViewSet)
+router.register('enrollments', EnrollmentViewSet)
+router.register('modules', ModuleViewSet)
+router.register('days', DayViewSet)   # new
 
 urlpatterns = [
     path('api/', include(router.urls)),
