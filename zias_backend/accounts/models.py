@@ -85,6 +85,7 @@ class Module(models.Model):
     title = models.CharField(max_length=200)
     content = models.TextField(help_text="HTML or Markdown content for the module")
     order = models.IntegerField(default=0)
+    is_public = models.BooleanField(default=False)   # new field
 
     class Meta:
         ordering = ['order', 'id']

@@ -4,7 +4,7 @@ from django.core.mail import send_mail
 from django.conf import settings
 from django.db import IntegrityError
 from rest_framework import serializers
-from .models import User, Student, Mentor, Reviewer, Course, Enrollment, Module, Day   # added Day
+from .models import User, Student, Mentor, Reviewer, Course, Enrollment, Module, Day
 
 def generate_random_password(length=10):
     alphabet = string.ascii_letters + string.digits
@@ -44,14 +44,14 @@ class DaySerializer(serializers.ModelSerializer):
         fields = ['id', 'module', 'title', 'content', 'order']
 
 # ----------------------------
-# MODULE SERIALIZER (includes days)
+# MODULE SERIALIZER (includes days and is_public)
 # ----------------------------
 class ModuleSerializer(serializers.ModelSerializer):
     days = DaySerializer(many=True, read_only=True)
 
     class Meta:
         model = Module
-        fields = ['id', 'course', 'title', 'content', 'order', 'days']
+        fields = ['id', 'course', 'title', 'content', 'order', 'days', 'is_public']   # added is_public
 
 # ----------------------------
 # ENROLLMENT SERIALIZER
@@ -93,6 +93,11 @@ class StudentSerializer(serializers.ModelSerializer):
                 {"username": "A user with this username already exists."}
             )
 
+        # Set the user as a student
+        user.is_student = True
+        user.save()
+
+        # Send email with credentials
         subject = 'Your ZIAS Account Credentials'
         message = f"""
 Dear {user_data['username']},
@@ -169,6 +174,10 @@ class MentorSerializer(serializers.ModelSerializer):
                 {"username": "A user with this username already exists."}
             )
 
+        # Set the user as a mentor
+        user.is_mentor = True
+        user.save()
+
         subject = 'Your ZIAS Account Credentials'
         message = f"""
 Dear {user_data['username']},
@@ -233,6 +242,10 @@ class ReviewerSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"username": "A user with this username already exists."}
             )
+
+        # Set the user as a reviewer
+        user.is_reviewer = True
+        user.save()
 
         subject = 'Your ZIAS Account Credentials'
         message = f"""
