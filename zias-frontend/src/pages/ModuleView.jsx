@@ -13,7 +13,6 @@ function ModuleView() {
   // Helper: convert plain text to HTML (paragraphs + unordered lists)
   const formatTextToHtml = (text) => {
     if (!text) return "";
-    // If text already contains HTML tags, return as is (trusted content)
     if (/<[^>]*>/.test(text)) return text;
 
     const lines = text.split(/\r?\n/);
@@ -21,12 +20,10 @@ function ModuleView() {
     let i = 0;
     while (i < lines.length) {
       const line = lines[i];
-      // Check if line starts a list item
       if (line.trim().match(/^[-*]\s+/)) {
         const listItems = [];
         while (i < lines.length && lines[i].trim().match(/^[-*]\s+/)) {
           let itemText = lines[i].trim().replace(/^[-*]\s+/, "");
-          // Allow inner HTML or links inside list items (simple detection)
           if (itemText.includes("http")) {
             itemText = itemText.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-400 underline">$1</a>');
           }
@@ -34,20 +31,15 @@ function ModuleView() {
           i++;
         }
         result.push(`<ul class="list-disc pl-6 my-2">${listItems.join("")}</ul>`);
-      } 
-      // Empty line -> paragraph separator
-      else if (line.trim() === "") {
+      } else if (line.trim() === "") {
         i++;
         continue;
-      }
-      // Regular paragraph
-      else {
+      } else {
         let para = line.trim();
         while (i + 1 < lines.length && lines[i + 1].trim() !== "" && !lines[i + 1].trim().match(/^[-*]\s+/)) {
           i++;
           para += " " + lines[i].trim();
         }
-        // Convert URLs to clickable links
         para = para.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-400 underline">$1</a>');
         result.push(`<p class="my-2">${para}</p>`);
         i++;
@@ -59,19 +51,23 @@ function ModuleView() {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        // Fetch module details
         const modRes = await API.get(`modules/${moduleId}/`);
         setModule(modRes.data);
 
+        // ✅ Use me endpoint to get student profile
         const userRes = await API.get("users/me/");
         const user = userRes.data;
         if (user.is_student) {
-          const studentRes = await API.get(`students/?user=${user.id}`);
-          if (studentRes.data.length > 0) {
-            setStudent(studentRes.data[0]);
-          }
+          const studentRes = await API.get("students/me/");
+          setStudent(studentRes.data);
         }
       } catch (err) {
-        setError("Failed to load module content.");
+        if (err.response?.status === 403) {
+          setError("You are not enrolled in this course.");
+        } else {
+          setError("Failed to load module content.");
+        }
         console.error(err);
       } finally {
         setLoading(false);
@@ -81,7 +77,16 @@ function ModuleView() {
   }, [moduleId]);
 
   if (loading) return <div className="min-h-screen bg-[#0f1623] text-white flex items-center justify-center">Loading...</div>;
-  if (error) return <div className="min-h-screen bg-[#0f1623] text-red-400 flex items-center justify-center">{error}</div>;
+  if (error) {
+    return (
+      <div className="min-h-screen bg-[#0f1623] text-white flex flex-col items-center justify-center">
+        <p className="text-red-400 text-lg mb-4">{error}</p>
+        <button onClick={() => navigate("/user/dashboard")} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
+          Go to My Learning
+        </button>
+      </div>
+    );
+  }
   if (!module) return <div className="min-h-screen bg-[#0f1623] text-white flex items-center justify-center">Module not found.</div>;
 
   return (
@@ -102,10 +107,7 @@ function ModuleView() {
         {/* Week at a Glance */}
         <div className="mb-8 p-6 bg-[#1a2538] rounded-xl border border-white/10">
           <h2 className="text-2xl font-semibold mb-4">📦 Week at a Glance</h2>
-          <div
-            className="prose prose-invert max-w-none text-white/90"
-            dangerouslySetInnerHTML={{ __html: formatTextToHtml(module.content) }}
-          />
+          <div className="prose prose-invert max-w-none text-white/90" dangerouslySetInnerHTML={{ __html: formatTextToHtml(module.content) }} />
         </div>
 
         {/* Days Breakdown */}
@@ -119,10 +121,7 @@ function ModuleView() {
                     <h3 className="text-xl font-semibold">{day.title}</h3>
                   </div>
                   <div className="p-4">
-                    <div
-                      className="prose prose-invert max-w-none text-white/90"
-                      dangerouslySetInnerHTML={{ __html: formatTextToHtml(day.content) }}
-                    />
+                    <div className="prose prose-invert max-w-none text-white/90" dangerouslySetInnerHTML={{ __html: formatTextToHtml(day.content) }} />
                   </div>
                 </div>
               ))
@@ -137,10 +136,7 @@ function ModuleView() {
           <p className="text-white/70 italic">“Discomfort is the currency of growth.” – Keep building! 🚀</p>
         </div>
 
-        <button
-          onClick={() => navigate(-1)}
-          className="mt-6 bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg"
-        >
+        <button onClick={() => navigate(-1)} className="mt-6 bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg">
           ← Back
         </button>
       </div>
