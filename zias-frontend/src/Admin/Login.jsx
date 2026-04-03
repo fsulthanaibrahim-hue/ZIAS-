@@ -9,23 +9,40 @@ function Login() {
   const [error, setError] = useState("");
   const navigate = useNavigate();
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError("");
-    axios
-      .post("http://127.0.0.1:8000/api/token/", { username, password })
-      .then((res) => {
-        localStorage.setItem("access_token", res.data.access);
-        localStorage.setItem("refresh_token", res.data.refresh);
-        navigate("/admin/dashboard");
-      })
-      .catch(() => {
-        setError("Invalid username or password.");
-        setLoading(false);
+
+    try {
+      // 1. Get JWT tokens
+      const tokenRes = await axios.post("http://127.0.0.1:8000/api/token/", { username, password });
+      const accessToken = tokenRes.data.access;
+      localStorage.setItem("access_token", accessToken);
+      localStorage.setItem("refresh_token", tokenRes.data.refresh);
+
+      // 2. Fetch current user info (role)
+      const userRes = await axios.get("http://127.0.0.1:8000/api/users/me/", {
+        headers: { Authorization: `Bearer ${accessToken}` }
       });
+      const user = userRes.data;
+      localStorage.setItem("user", JSON.stringify(user));
+
+      // 3. Redirect based on role
+      if (user.is_admin) {
+        navigate("/admin/dashboard");
+      } else {
+        setError("You are not authorized as admin.");
+        setLoading(false);
+      }
+    } catch (err) {
+      console.error(err);
+      setError("Invalid username or password.");
+      setLoading(false);
+    }
   };
 
+  // Styling (unchanged – keep your existing styles)
   const inputStyle = {
     width: "100%",
     padding: "10px 14px",

@@ -1,5 +1,6 @@
 // src/pages/Contact.jsx
 import React, { useState } from "react";
+import axios from "axios";
 import { 
   FaMapMarkerAlt, 
   FaPhoneAlt, 
@@ -50,7 +51,7 @@ const Contact = () => {
   };
 
   // Form submission
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
     // Validate all fields
@@ -68,19 +69,22 @@ const Contact = () => {
       return;
     }
     
-    // If all valid, proceed with submission (e.g., API call)
-    console.log("Form submitted:", formData);
-    alert("Message sent successfully!");
-    
-    // Optionally reset form
-    setFormData({
-      name: "",
-      email: "",
-      phone: "",
-      subject: "",
-      message: ""
-    });
-    setErrors({});
+    // Send to backend API
+    try {
+      const res = await axios.post("http://127.0.0.1:8000/api/contact/", formData);
+      alert(res.data.detail);
+      // Reset form on success
+      setFormData({
+        name: "",
+        email: "",
+        phone: "",
+        subject: "",
+        message: ""
+      });
+      setErrors({});
+    } catch (err) {
+      alert(err.response?.data?.detail || "Failed to send message. Please try again.");
+    }
   };
 
   return (
@@ -251,7 +255,7 @@ const Contact = () => {
           <div className="flex justify-center gap-6 flex-wrap">
             {/* Instagram */}
             <a
-              href="https://www.instagram.com/zaitoon internatinal campus"
+              href="https://www.instagram.com/zaitoon"
               target="_blank"
               rel="noopener noreferrer"
               className="w-14 h-14 flex items-center justify-center rounded-full bg-gray-100 hover:bg-green-600 text-gray-600 hover:text-white transition shadow-md"
@@ -269,7 +273,7 @@ const Contact = () => {
             </a>
             {/* Youtube */}
             <a
-              href="https://www.youtube.com/results?search_query=zaitoon+international+campus"
+              href="https://www.youtube.com/results?search_query=zaitoon"
               target="_blank"
               rel="noopener noreferrer"
               className="w-14 h-14 flex items-center justify-center rounded-full bg-gray-100 hover:bg-green-600 text-gray-600 hover:text-white transition shadow-md"

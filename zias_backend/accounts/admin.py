@@ -1,8 +1,8 @@
 from django.contrib import admin
 from django.contrib import messages
 from django.utils import timezone
-from .models import User, Student, Mentor, Reviewer
-from .utils import generate_random_password, send_password_email  # we'll create utils.py
+from .models import User, Student, Mentor, Reviewer, ContactMessage
+from .utils import generate_random_password, send_password_email  
 
 # Admin action to reset password and email the user
 def reset_password_and_email(modeladmin, request, queryset):
@@ -38,3 +38,14 @@ class MentorAdmin(admin.ModelAdmin):
 class ReviewerAdmin(admin.ModelAdmin):
     list_display = ['id', 'user', 'department']
     search_fields = ['user__username', 'department']
+
+@admin.register(ContactMessage)
+class ContactMessageAdmin(admin.ModelAdmin):
+    list_display = ['name', 'email', 'subject', 'created_at', 'is_read']
+    list_filter = ['is_read', 'created_at']
+    search_fields = ['name', 'email', 'subject', 'message']
+    actions = ['mark_as_read']
+    def mark_as_read(self, request, queryset):
+        queryset.update(is_read=True)
+    mark_as_read.short_description = "Mark selected messages as read"
+

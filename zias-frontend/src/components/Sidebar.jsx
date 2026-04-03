@@ -1,4 +1,5 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import NotificationBell from "./NotificationBell";
 
 function NavLink({ to, label, active, badge }) {
   return (
@@ -57,6 +58,11 @@ function NavLink({ to, label, active, badge }) {
             <path d="M2 2h12v1H2V2zm0 2h12v1H2V4zm0 2h12v1H2V6zm0 2h12v1H2V8zm0 2h12v1H2v-1zm0 2h12v1H2v-1zM2 0h12v1H2V0z" />
           </svg>
         )}
+        {label === "Messages" && (
+          <svg viewBox="0 0 16 16" fill="currentColor" width="16" height="16">
+            <path d="M14.5 2h-13A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h13a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 14.5 2zM1.5 3h13a.5.5 0 0 1 .5.5v.5L8 7.939 1 4v-.5a.5.5 0 0 1 .5-.5zm13 10h-13a.5.5 0 0 1-.5-.5V5.5l6.5 4.5 6.5-4.5v7a.5.5 0 0 1-.5.5z" />
+          </svg>
+        )}
       </span>
 
       {label}
@@ -99,7 +105,6 @@ function Sidebar() {
     padding: "8px 10px 6px",
   };
 
-  // Helper to check active link
   const isActive = (linkPath) => {
     if (linkPath === "/admin/dashboard") {
       return pathname === linkPath;
@@ -118,46 +123,49 @@ function Sidebar() {
         fontFamily: "'DM Sans', 'Segoe UI', sans-serif",
       }}
     >
-      {/* Brand Header */}
+      {/* Brand Header with Notification Bell */}
       <div
         style={{
           padding: "24px 20px 20px",
           borderBottom: "0.5px solid rgba(255,255,255,0.08)",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <div
-            style={{
-              width: "32px",
-              height: "32px",
-              background: "#3b6eff",
-              borderRadius: "8px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-            }}
-          >
-            <svg viewBox="0 0 16 16" fill="white" width="16" height="16">
-              <path d="M2 2h5v5H2zM9 2h5v5H9zM2 9h5v5H2zM9 9h5v5H9z" />
-            </svg>
-          </div>
-          <div>
-            <p style={{ fontSize: "15px", fontWeight: "600", color: "#ffffff", margin: 0 }}>
-              ZIAS Admin
-            </p>
-            <p
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div
               style={{
-                fontSize: "10px",
-                color: "rgba(255,255,255,0.35)",
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-                margin: 0,
+                width: "32px",
+                height: "32px",
+                background: "#3b6eff",
+                borderRadius: "8px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
               }}
             >
-              Portal
-            </p>
+              <svg viewBox="0 0 16 16" fill="white" width="16" height="16">
+                <path d="M2 2h5v5H2zM9 2h5v5H9zM2 9h5v5H2zM9 9h5v5H9z" />
+              </svg>
+            </div>
+            <div>
+              <p style={{ fontSize: "15px", fontWeight: "600", color: "#ffffff", margin: 0 }}>
+                ZIAS Admin
+              </p>
+              <p
+                style={{
+                  fontSize: "10px",
+                  color: "rgba(255,255,255,0.35)",
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  margin: 0,
+                }}
+              >
+                Portal
+              </p>
+            </div>
           </div>
+          <NotificationBell />
         </div>
       </div>
 
@@ -192,16 +200,20 @@ function Sidebar() {
           label="Courses"
           active={isActive("/admin/courses")}
         />
+        <NavLink
+          to="/admin/messages"
+          label="Messages"
+          active={isActive("/admin/messages")}
+        />
       </nav>
 
-      {/* Footer */}
+      {/* Footer (unchanged) */}
       <div
         style={{
           padding: "12px 10px 16px",
           borderTop: "0.5px solid rgba(255,255,255,0.08)",
         }}
       >
-        {/* User Info */}
         <div
           style={{
             display: "flex",
@@ -248,7 +260,6 @@ function Sidebar() {
           </div>
         </div>
 
-        {/* Logout Button */}
         <button
           onClick={handleLogout}
           style={{

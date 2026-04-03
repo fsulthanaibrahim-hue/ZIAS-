@@ -4,7 +4,7 @@ from django.core.mail import send_mail
 from django.conf import settings
 from django.db import IntegrityError
 from rest_framework import serializers
-from .models import User, Student, Mentor, Reviewer, Course, Enrollment, Module, Day
+from .models import User, Student, Mentor, Reviewer, Course, Enrollment, Module, Day, ContactMessage
 
 def generate_random_password(length=10):
     alphabet = string.ascii_letters + string.digits
@@ -51,7 +51,7 @@ class ModuleSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Module
-        fields = ['id', 'course', 'title', 'content', 'order', 'days', 'is_public']   # added is_public
+        fields = ['id', 'course', 'title', 'content', 'order', 'days', 'is_public']
 
 # ----------------------------
 # ENROLLMENT SERIALIZER
@@ -74,7 +74,7 @@ class StudentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Student
-        fields = ['id', 'username', 'email', 'course', 'batch', 'phone', 'courses']
+        fields = ['id', 'username', 'email', 'course', 'batch', 'phone', 'date_of_birth', 'courses']
 
     def get_courses(self, obj):
         return [{'id': e.course.id, 'name': e.course.name} for e in obj.enrollments.all()]
@@ -93,11 +93,9 @@ class StudentSerializer(serializers.ModelSerializer):
                 {"username": "A user with this username already exists."}
             )
 
-        # Set the user as a student
         user.is_student = True
         user.save()
 
-        # Send email with credentials
         subject = 'Your ZIAS Account Credentials'
         message = f"""
 Dear {user_data['username']},
@@ -115,15 +113,11 @@ ZIAS Team
 """
         send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [user_data['email']], fail_silently=False)
 
-        # Create the student
         student = Student.objects.create(user=user, **validated_data)
 
-        # Auto-enroll the student in a course based on the 'course' field
         course_name = validated_data.get('course')
         if course_name:
-            # Get or create the course
             course, created = Course.objects.get_or_create(name=course_name)
-            # Create enrollment (avoid duplicate)
             Enrollment.objects.get_or_create(student=student, course=course)
 
         return student
@@ -150,7 +144,7 @@ ZIAS Team
         return super().update(instance, validated_data)
 
 # ----------------------------
-# MENTOR SERIALIZER (same pattern)
+# MENTOR SERIALIZER
 # ----------------------------
 class MentorSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username')
@@ -174,7 +168,6 @@ class MentorSerializer(serializers.ModelSerializer):
                 {"username": "A user with this username already exists."}
             )
 
-        # Set the user as a mentor
         user.is_mentor = True
         user.save()
 
@@ -219,7 +212,7 @@ ZIAS Team
         return super().update(instance, validated_data)
 
 # ----------------------------
-# REVIEWER SERIALIZER (same pattern)
+# REVIEWER SERIALIZER
 # ----------------------------
 class ReviewerSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username')
@@ -243,7 +236,6 @@ class ReviewerSerializer(serializers.ModelSerializer):
                 {"username": "A user with this username already exists."}
             )
 
-        # Set the user as a reviewer
         user.is_reviewer = True
         user.save()
 
@@ -286,3 +278,12 @@ ZIAS Team
                     else:
                         raise
         return super().update(instance, validated_data)
+
+# ----------------------------
+# CONTACT MESSAGE SERIALIZER
+# ----------------------------
+class ContactMessageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ContactMessage
+        fields = '__all__'
+        

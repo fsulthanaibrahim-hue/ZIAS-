@@ -3,20 +3,39 @@ import API from "../api/api";
 
 function Dashboard() {
   const [stats, setStats] = useState({ students: 0, mentors: 0, reviewers: 0 });
+  const [unreadMessages, setUnreadMessages] = useState(0);
+  const [prevUnread, setPrevUnread] = useState(0);
 
   useEffect(() => {
-    Promise.all([
-      API.get("students/"),
-      API.get("mentors/"),
-      API.get("reviewers/")
-    ]).then(([studentsRes, mentorsRes, reviewersRes]) => {
-      setStats({
-        students: studentsRes.data.length,
-        mentors: mentorsRes.data.length,
-        reviewers: reviewersRes.data.length
-      });
-    }).catch(err => console.log(err));
-  }, []);
+    const fetchData = async () => {
+      try {
+        const [studentsRes, mentorsRes, reviewersRes, messagesRes] = await Promise.all([
+          API.get("students/"),
+          API.get("mentors/"),
+          API.get("reviewers/"),
+          API.get("unread-messages/")
+        ]);
+        setStats({
+          students: studentsRes.data.length,
+          mentors: mentorsRes.data.length,
+          reviewers: reviewersRes.data.length
+        });
+        const newUnread = messagesRes.data.unread_count;
+        setUnreadMessages(newUnread);
+        // Show alert if new messages arrived since last poll
+        if (prevUnread !== 0 && newUnread > prevUnread) {
+          alert(`📩 New contact message! You have ${newUnread} unread message(s).`);
+        }
+        setPrevUnread(newUnread);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    fetchData(); // initial fetch
+    const interval = setInterval(fetchData, 10000); // poll every 10 seconds
+    return () => clearInterval(interval);
+  }, [prevUnread]);
 
   return (
     <div className="p-8">
@@ -33,6 +52,10 @@ function Dashboard() {
         <div className="bg-yellow-100 p-5 rounded-lg flex-1 min-w-[150px] text-center shadow">
           <h3 className="text-lg font-medium">Reviewers</h3>
           <p className="text-3xl font-bold mt-2">{stats.reviewers}</p>
+        </div>
+        <div className="bg-purple-100 p-5 rounded-lg flex-1 min-w-[150px] text-center shadow">
+          <h3 className="text-lg font-medium">Unread Messages</h3>
+          <p className="text-3xl font-bold mt-2">{unreadMessages}</p>
         </div>
       </div>
     </div>

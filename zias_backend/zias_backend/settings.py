@@ -161,3 +161,4 @@ EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'fsulthanaibrahim@gmail.com'    # your actual Gmail
 EMAIL_HOST_PASSWORD = 'gsoxdcilnfvuinxh'          # App Password (no spaces)
 DEFAULT_FROM_EMAIL = 'ZIAS <fsulthanaibrahim@gmail.com>'   # must match EMAIL_HOST_USER
+ADMIN_EMAIL = 'admin@gmail.com'
