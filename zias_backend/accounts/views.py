@@ -5,8 +5,11 @@ from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
 from django.core.mail import send_mail
 from django.conf import settings
-from .models import User, Student, Mentor, Reviewer   # Added User import
-from .serializers import StudentSerializer, MentorSerializer, ReviewerSerializer, UserSerializer
+from .models import User, Student, Mentor, Reviewer, Course, Enrollment   # added Course, Enrollment
+from .serializers import (
+    StudentSerializer, MentorSerializer, ReviewerSerializer, UserSerializer,
+    CourseSerializer, EnrollmentSerializer   # added CourseSerializer, EnrollmentSerializer
+)
 
 # ----------------------------
 # STUDENT VIEWSET
@@ -46,6 +49,20 @@ class ReviewerViewSet(viewsets.ModelViewSet):
         user = reviewer.user
         user.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+# ----------------------------
+# COURSE VIEWSET
+# ----------------------------
+class CourseViewSet(viewsets.ModelViewSet):
+    queryset = Course.objects.all()
+    serializer_class = CourseSerializer
+
+# ----------------------------
+# ENROLLMENT VIEWSET
+# ----------------------------
+class EnrollmentViewSet(viewsets.ModelViewSet):
+    queryset = Enrollment.objects.all()
+    serializer_class = EnrollmentSerializer
 
 # ----------------------------
 # GET CURRENT USER INFO (for frontend role detection)

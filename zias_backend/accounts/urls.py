@@ -3,13 +3,16 @@ from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .views import (
     StudentViewSet, MentorViewSet, ReviewerViewSet, CurrentUserView,
-    ChangePasswordView, SendBulkEmailView   # add SendBulkEmailView
+    ChangePasswordView, SendBulkEmailView,
+    CourseViewSet, EnrollmentViewSet          # import the new viewsets
 )
 
 router = DefaultRouter()
 router.register('students', StudentViewSet)
 router.register('mentors', MentorViewSet)
 router.register('reviewers', ReviewerViewSet)
+router.register('courses', CourseViewSet)          # new
+router.register('enrollments', EnrollmentViewSet)  # new
 
 urlpatterns = [
     path('api/', include(router.urls)),
@@ -17,5 +20,5 @@ urlpatterns = [
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/users/me/', CurrentUserView.as_view(), name='current_user'),
     path('api/change-password/', ChangePasswordView.as_view(), name='change_password'),
-    path('api/send-bulk-email/', SendBulkEmailView.as_view(), name='send_bulk_email'),  # new line
+    path('api/send-bulk-email/', SendBulkEmailView.as_view(), name='send_bulk_email'),
 ]

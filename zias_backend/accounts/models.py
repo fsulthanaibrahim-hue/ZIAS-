@@ -52,3 +52,27 @@ class Reviewer(models.Model):
 
     def __str__(self):
         return self.user.username
+
+# ----------------------------
+# COURSE MANAGEMENT MODELS
+# ----------------------------
+class Course(models.Model):
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+    duration = models.CharField(max_length=50, blank=True)  # e.g., "6 months"
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
+
+class Enrollment(models.Model):
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='enrollments')
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='enrollments')
+    enrolled_at = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(max_length=20, default='active')  # active, completed, dropped
+
+    class Meta:
+        unique_together = ('student', 'course')  # prevent duplicate enrollment
+
+    def __str__(self):
+        return f"{self.student.user.username} -> {self.course.name}"

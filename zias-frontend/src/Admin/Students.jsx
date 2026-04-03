@@ -5,7 +5,7 @@ function Students() {
   const [students, setStudents] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [searchTerm, setSearchTerm] = useState("");   // ← ADDED
+  const [searchTerm, setSearchTerm] = useState("");
   const [formData, setFormData] = useState({
     username: "",
     email: "",
@@ -79,13 +79,14 @@ function Students() {
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  // ← ADDED: filter students based on search term (case‑insensitive, multiple fields)
+  // Filter students based on search term (include enrolled courses)
   const filteredStudents = students.filter((s) =>
     s.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
     s.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
     s.course.toLowerCase().includes(searchTerm.toLowerCase()) ||
     s.batch.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    s.phone.toLowerCase().includes(searchTerm.toLowerCase())
+    s.phone.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (s.courses && s.courses.some(c => c.name.toLowerCase().includes(searchTerm.toLowerCase())))
   );
 
   return (
@@ -111,11 +112,11 @@ function Students() {
         </button>
       </div>
 
-      {/* ← ADDED: Search Bar */}
+      {/* Search Bar */}
       <div className="mb-4 flex gap-2">
         <input
           type="text"
-          placeholder="Search by name, email, course, batch or phone..."
+          placeholder="Search by name, email, course, batch, phone or enrolled courses..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="flex-1 bg-[#1a2538] border border-white/10 rounded-lg px-4 py-2 text-white placeholder-white/30 focus:outline-none focus:border-blue-500 transition"
@@ -171,7 +172,7 @@ function Students() {
               <input
                 type="text"
                 name="course"
-                placeholder="Course"
+                placeholder="Course (main)"
                 value={formData.course}
                 onChange={handleChange}
                 required
@@ -215,14 +216,14 @@ function Students() {
             <tr className="border-b border-white/10">
               <th className="text-left p-4 text-white/60 text-sm font-medium">Name</th>
               <th className="text-left p-4 text-white/60 text-sm font-medium">Email</th>
-              <th className="text-left p-4 text-white/60 text-sm font-medium">Course</th>
+              <th className="text-left p-4 text-white/60 text-sm font-medium">Course (Main)</th>
               <th className="text-left p-4 text-white/60 text-sm font-medium">Batch</th>
               <th className="text-left p-4 text-white/60 text-sm font-medium">Phone</th>
+              <th className="text-left p-4 text-white/60 text-sm font-medium">Enrolled Courses</th>
               <th className="text-left p-4 text-white/60 text-sm font-medium">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {/* ← CHANGED: use filteredStudents instead of students */}
             {filteredStudents.length > 0 ? (
               filteredStudents.map((s) => (
                 <tr key={s.id} className="border-b border-white/5 hover:bg-white/5 transition">
@@ -231,6 +232,11 @@ function Students() {
                   <td className="p-4 text-white/80">{s.course}</td>
                   <td className="p-4 text-white/80">{s.batch}</td>
                   <td className="p-4 text-white/80">{s.phone}</td>
+                  <td className="p-4 text-white/80">
+                    {s.courses && s.courses.length > 0
+                      ? s.courses.map(c => c.name).join(", ")
+                      : "-"}
+                  </td>
                   <td className="p-4">
                     <button
                       onClick={() => handleEdit(s)}
@@ -255,7 +261,7 @@ function Students() {
               ))
             ) : (
               <tr>
-                <td colSpan="6" className="text-center p-8 text-white/40">
+                <td colSpan="7" className="text-center p-8 text-white/40">
                   {searchTerm ? "No students match your search." : "No students found. Click 'Add Student' to create one."}
                 </td>
               </tr>

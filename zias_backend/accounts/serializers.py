@@ -4,7 +4,7 @@ from django.core.mail import send_mail
 from django.conf import settings
 from django.db import IntegrityError
 from rest_framework import serializers
-from .models import User, Student, Mentor, Reviewer
+from .models import User, Student, Mentor, Reviewer, Course, Enrollment
 
 def generate_random_password(length=10):
     alphabet = string.ascii_letters + string.digits
@@ -26,15 +26,40 @@ class UserSerializer(serializers.ModelSerializer):
         return super().update(instance, validated_data)
 
 # ----------------------------
-# STUDENT SERIALIZER
+# COURSE SERIALIZER
+# ----------------------------
+class CourseSerializer(serializers.ModelSerializer):
+    student_count = serializers.IntegerField(source='enrollments.count', read_only=True)
+
+    class Meta:
+        model = Course
+        fields = ['id', 'name', 'description', 'duration', 'created_at', 'student_count']
+
+# ----------------------------
+# ENROLLMENT SERIALIZER
+# ----------------------------
+class EnrollmentSerializer(serializers.ModelSerializer):
+    student_name = serializers.CharField(source='student.user.username', read_only=True)
+    course_name = serializers.CharField(source='course.name', read_only=True)
+
+    class Meta:
+        model = Enrollment
+        fields = ['id', 'student', 'course', 'student_name', 'course_name', 'enrolled_at', 'status']
+
+# ----------------------------
+# STUDENT SERIALIZER (with courses and auto-enrollment)
 # ----------------------------
 class StudentSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username')
     email = serializers.EmailField(source='user.email')
+    courses = serializers.SerializerMethodField()
 
     class Meta:
         model = Student
-        fields = ['id', 'username', 'email', 'course', 'batch', 'phone']
+        fields = ['id', 'username', 'email', 'course', 'batch', 'phone', 'courses']
+
+    def get_courses(self, obj):
+        return [{'id': e.course.id, 'name': e.course.name} for e in obj.enrollments.all()]
 
     def create(self, validated_data):
         user_data = validated_data.pop('user')
@@ -67,7 +92,18 @@ ZIAS Team
 """
         send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [user_data['email']], fail_silently=False)
 
-        return Student.objects.create(user=user, **validated_data)
+        # Create the student
+        student = Student.objects.create(user=user, **validated_data)
+
+        # Auto-enroll the student in a course based on the 'course' field
+        course_name = validated_data.get('course')
+        if course_name:
+            # Get or create the course
+            course, created = Course.objects.get_or_create(name=course_name)
+            # Create enrollment (avoid duplicate)
+            Enrollment.objects.get_or_create(student=student, course=course)
+
+        return student
 
     def update(self, instance, validated_data):
         user_data = validated_data.pop('user', None)
@@ -75,7 +111,6 @@ ZIAS Team
             new_username = user_data.get('username', instance.user.username)
             new_email = user_data.get('email', instance.user.email)
 
-            # Compare ignoring case to avoid unnecessary saves
             if (new_username.lower() != instance.user.username.lower() or 
                 new_email.lower() != instance.user.email.lower()):
                 try:

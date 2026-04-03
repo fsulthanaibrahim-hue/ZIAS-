@@ -52,9 +52,9 @@ function NavLink({ to, label, active, badge }) {
             <path d="M8 1a3 3 0 110 6A3 3 0 018 1zm-4 9a4 4 0 018 0v1H4v-1zm6.5-2a2.5 2.5 0 110 5 2.5 2.5 0 010-5zm0 1.5a1 1 0 100 2 1 1 0 000-2z" />
           </svg>
         )}
-        {label === "Send Message" && (
+        {label === "Courses" && (
           <svg viewBox="0 0 16 16" fill="currentColor" width="16" height="16">
-            <path d="M14.5 2h-13A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h13a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 14.5 2zM1.5 3h13a.5.5 0 0 1 .5.5v.5L8 7.939 1 4v-.5a.5.5 0 0 1 .5-.5zm13 10h-13a.5.5 0 0 1-.5-.5V5.5l6.5 4.5 6.5-4.5v7a.5.5 0 0 1-.5.5z" />
+            <path d="M2 2h12v1H2V2zm0 2h12v1H2V4zm0 2h12v1H2V6zm0 2h12v1H2V8zm0 2h12v1H2v-1zm0 2h12v1H2v-1zM2 0h12v1H2V0z" />
           </svg>
         )}
       </span>
@@ -99,7 +99,7 @@ function Sidebar() {
     padding: "8px 10px 6px",
   };
 
-  // Helper to check if a link is active
+  // Helper to check active link
   const isActive = (linkPath) => {
     if (linkPath === "/admin/dashboard") {
       return pathname === linkPath;
@@ -164,15 +164,34 @@ function Sidebar() {
       {/* Navigation */}
       <nav style={{ flex: 1, padding: "12px 10px" }}>
         <span style={sectionLabel}>Overview</span>
-        <NavLink to="/admin/dashboard" label="Dashboard" active={isActive("/admin/dashboard")} badge="Live" />
+        <NavLink
+          to="/admin/dashboard"
+          label="Dashboard"
+          active={isActive("/admin/dashboard")}
+          badge="Live"
+        />
 
         <span style={{ ...sectionLabel, marginTop: "8px" }}>Management</span>
-        <NavLink to="/admin/students" label="Students" active={isActive("/admin/students")} />
-        <NavLink to="/admin/mentors" label="Mentors" active={isActive("/admin/mentors")} />
-        <NavLink to="/admin/reviewers" label="Reviewers" active={isActive("/admin/reviewers")} />
-
-        <span style={{ ...sectionLabel, marginTop: "8px" }}>Communication</span>
-        <NavLink to="/admin/send-message" label="Send Message" active={isActive("/admin/send-message")} />
+        <NavLink
+          to="/admin/students"
+          label="Students"
+          active={isActive("/admin/students")}
+        />
+        <NavLink
+          to="/admin/mentors"
+          label="Mentors"
+          active={isActive("/admin/mentors")}
+        />
+        <NavLink
+          to="/admin/reviewers"
+          label="Reviewers"
+          active={isActive("/admin/reviewers")}
+        />
+        <NavLink
+          to="/admin/courses"
+          label="Courses"
+          active={isActive("/admin/courses")}
+        />
       </nav>
 
       {/* Footer */}
