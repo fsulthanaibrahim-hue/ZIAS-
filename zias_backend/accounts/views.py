@@ -6,6 +6,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
+from .permissions import IsStudentOwner
 from django.utils.crypto import get_random_string
 from datetime import timedelta
 from .models import PasswordResetToken
@@ -21,10 +22,11 @@ from .serializers import (
 # ----------------------------
 # STUDENT VIEWSET
 # ----------------------------
+
 class StudentViewSet(viewsets.ModelViewSet):
     queryset = Student.objects.all()
     serializer_class = StudentSerializer
-    permission_classes = [IsAdminUser]   # admin only for list/create/update/delete
+    permission_classes = [IsStudentOwner]   # replaces [IsAdminUser]
 
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
     def me(self, request):
@@ -33,8 +35,7 @@ class StudentViewSet(viewsets.ModelViewSet):
             serializer = self.get_serializer(student)
             return Response(serializer.data)
         except Student.DoesNotExist:
-            return Response({"detail": "Student profile not found"}, status=status.HTTP_404_NOT_FOUND)
-# ----------------------------
+            return Response({"detail": "Student profile not found"}, status=status.HTTP_404_NOT_FOUND)# ----------------------------
 # MENTOR VIEWSET
 # ----------------------------
 class MentorViewSet(viewsets.ModelViewSet):

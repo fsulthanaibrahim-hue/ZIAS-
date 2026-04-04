@@ -25,21 +25,21 @@ function StudentProfile() {
           return;
         }
         const studentRes = await API.get("students/me/");
-        if (studentRes.data.length > 0) {
-          const student = studentRes.data;
-          setProfile(student);
-          setFormData({
-            course: student.course || "",
-            batch: student.batch || "",
-            phone: student.phone || "",
-            date_of_birth: student.date_of_birth || "",
-          });
-        } else {
-          setMessage({ text: "Student profile not found.", type: "error" });
-        }
+        const student = studentRes.data;
+        setProfile(student);
+        setFormData({
+          course: student.course || "",
+          batch: student.batch || "",
+          phone: student.phone || "",
+          date_of_birth: student.date_of_birth || "",
+        });
       } catch (err) {
         console.error(err);
-        setMessage({ text: "Failed to load profile.", type: "error" });
+        if (err.response?.status === 404) {
+          setMessage({ text: "Student profile not found. Please contact admin.", type: "error" });
+        } else {
+          setMessage({ text: "Failed to load profile.", type: "error" });
+        }
       } finally {
         setLoading(false);
       }
@@ -63,7 +63,6 @@ function StudentProfile() {
         date_of_birth: formData.date_of_birth,
       });
       setMessage({ text: "Profile updated successfully.", type: "success" });
-      // Refresh profile data
       setProfile({ ...profile, ...formData });
     } catch (err) {
       setMessage({ text: "Failed to update profile.", type: "error" });
@@ -80,7 +79,6 @@ function StudentProfile() {
       <div className="max-w-2xl mx-auto bg-[#1a2538] rounded-xl p-6 border border-white/10">
         <h1 className="text-2xl font-bold mb-6">My Profile</h1>
         <form onSubmit={handleSave} className="space-y-4">
-          {/* Read‑only fields */}
           <div>
             <label className="block text-white/70 mb-1">Username</label>
             <p className="text-white bg-[#0f1623] px-4 py-2 rounded-lg border border-white/10">
@@ -93,8 +91,6 @@ function StudentProfile() {
               {profile.user?.email || profile.email}
             </p>
           </div>
-
-          {/* Editable fields */}
           <div>
             <label className="block text-white/70 mb-1">Course</label>
             <input
@@ -138,8 +134,6 @@ function StudentProfile() {
               className="w-full bg-[#0f1623] border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500"
             />
           </div>
-
-          {/* Buttons */}
           <div className="flex gap-4 pt-2">
             <button
               type="submit"
@@ -156,7 +150,6 @@ function StudentProfile() {
             </Link>
           </div>
         </form>
-
         {message.text && (
           <div className={`mt-4 p-3 rounded-lg ${message.type === "success" ? "bg-green-600/20 text-green-400" : "bg-red-600/20 text-red-400"}`}>
             {message.text}

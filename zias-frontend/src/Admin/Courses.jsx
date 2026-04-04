@@ -13,21 +13,26 @@ function Courses() {
   const [enrolledStudentIds, setEnrolledStudentIds] = useState([]);
   const [enrollSearchTerm, setEnrollSearchTerm] = useState("");
 
-  // Module modal state
-  const [showModulesModal, setShowModulesModal] = useState(false);
+  // Module management modal state
+  const [showContentModal, setShowContentModal] = useState(false);
   const [modules, setModules] = useState([]);
-  const [moduleForm, setModuleForm] = useState({ title: "", content: "", order: 0 });
+  const [selectedCourseForContent, setSelectedCourseForContent] = useState(null);
+  const [newModuleTitle, setNewModuleTitle] = useState("");
+  const [newModuleOrder, setNewModuleOrder] = useState(0);
   const [editingModuleId, setEditingModuleId] = useState(null);
-  const [showModuleForm, setShowModuleForm] = useState(false);
-  const [viewingModule, setViewingModule] = useState(null);
-  const [expandedModuleId, setExpandedModuleId] = useState(null);
+  const [editingModuleTitle, setEditingModuleTitle] = useState("");
+  const [editingModuleOrder, setEditingModuleOrder] = useState(0);
+  const [editingModuleContent, setEditingModuleContent] = useState("");
 
-  // Day management state
-  const [selectedModule, setSelectedModule] = useState(null);
-  const [showDayForm, setShowDayForm] = useState(false);
-  const [dayForm, setDayForm] = useState({ title: "", content: "", order: 0 });
+  // Day management (inline)
+  const [newDayTitle, setNewDayTitle] = useState("");
+  const [newDayContent, setNewDayContent] = useState("");
+  const [newDayOrder, setNewDayOrder] = useState(0);
+  const [selectedModuleForDay, setSelectedModuleForDay] = useState(null);
   const [editingDayId, setEditingDayId] = useState(null);
-  const [viewingDay, setViewingDay] = useState(null);
+  const [editingDayTitle, setEditingDayTitle] = useState("");
+  const [editingDayContent, setEditingDayContent] = useState("");
+  const [editingDayOrder, setEditingDayOrder] = useState(0);
 
   const fetchCourses = () => API.get("courses/").then(res => setCourses(res.data));
   const fetchStudents = () => API.get("students/").then(res => setStudents(res.data));
@@ -66,7 +71,7 @@ function Courses() {
     setShowForm(true);
   };
 
-  // Enrollment functions
+  // Enrollment functions (unchanged)
   const openEnrollModal = async (course) => {
     setCurrentCourse(course);
     setEnrollSearchTerm("");
@@ -109,97 +114,112 @@ function Courses() {
     );
   };
 
-  // Module management
-  const openModulesModal = async (course) => {
-    setCurrentCourse(course);
+  // Module management functions
+  const openContentModal = async (course) => {
+    setSelectedCourseForContent(course);
     await fetchModules(course.id);
-    setExpandedModuleId(null);
-    setShowModulesModal(true);
-  };
-  const handleModuleSubmit = async (e) => {
-    e.preventDefault();
-    const payload = {
-      course: currentCourse.id,
-      title: moduleForm.title,
-      content: moduleForm.content,
-      order: moduleForm.order,
-    };
-    try {
-      if (editingModuleId) {
-        await API.patch(`modules/${editingModuleId}/`, payload);
-      } else {
-        await API.post("modules/", payload);
-      }
-      setModuleForm({ title: "", content: "", order: 0 });
-      setEditingModuleId(null);
-      setShowModuleForm(false);
-      await fetchModules(currentCourse.id);
-    } catch (err) {
-      alert("Error saving module");
-    }
-  };
-  const editModule = (mod) => {
-    setEditingModuleId(mod.id);
-    setModuleForm({ title: mod.title, content: mod.content, order: mod.order });
-    setShowModuleForm(true);
-  };
-  const deleteModule = async (modId) => {
-    if (window.confirm("Delete this module? All its days will also be deleted.")) {
-      await API.delete(`modules/${modId}/`);
-      await fetchModules(currentCourse.id);
-      if (expandedModuleId === modId) setExpandedModuleId(null);
-    }
-  };
-  const viewModuleContent = (mod) => {
-    setViewingModule(mod);
+    setShowContentModal(true);
   };
 
-  // Day management
-  const openDayForm = (module) => {
-    setSelectedModule(module);
-    setEditingDayId(null);
-    setDayForm({ title: "", content: "", order: 0 });
-    setShowDayForm(true);
-  };
-  const editDay = (day, module) => {
-    setSelectedModule(module);
-    setEditingDayId(day.id);
-    setDayForm({ title: day.title, content: day.content, order: day.order });
-    setShowDayForm(true);
-  };
-  const handleDaySubmit = async (e) => {
-    e.preventDefault();
-    const payload = {
-      module: selectedModule.id,
-      title: dayForm.title,
-      content: dayForm.content,
-      order: dayForm.order,
-    };
+  const addModule = async () => {
+    if (!newModuleTitle.trim()) return;
     try {
-      if (editingDayId) {
-        await API.patch(`days/${editingDayId}/`, payload);
-      } else {
-        await API.post("days/", payload);
-      }
-      setShowDayForm(false);
-      setEditingDayId(null);
-      setDayForm({ title: "", content: "", order: 0 });
-      await fetchModules(currentCourse.id);
+      await API.post("modules/", {
+        course: selectedCourseForContent.id,
+        title: newModuleTitle,
+        content: "",
+        order: newModuleOrder,
+      });
+      setNewModuleTitle("");
+      setNewModuleOrder(0);
+      await fetchModules(selectedCourseForContent.id);
     } catch (err) {
-      alert("Error saving day");
+      alert("Error adding module");
     }
   };
+
+  const startEditModule = (mod) => {
+    setEditingModuleId(mod.id);
+    setEditingModuleTitle(mod.title);
+    setEditingModuleOrder(mod.order);
+    setEditingModuleContent(mod.content);
+  };
+
+  const saveEditModule = async () => {
+    try {
+      await API.patch(`modules/${editingModuleId}/`, {
+        title: editingModuleTitle,
+        content: editingModuleContent,
+        order: editingModuleOrder,
+      });
+      setEditingModuleId(null);
+      await fetchModules(selectedCourseForContent.id);
+    } catch (err) {
+      alert("Error updating module");
+    }
+  };
+
+  const cancelEditModule = () => {
+    setEditingModuleId(null);
+  };
+
+  const deleteModule = async (modId) => {
+    if (window.confirm("Delete this module and all its days?")) {
+      await API.delete(`modules/${modId}/`);
+      await fetchModules(selectedCourseForContent.id);
+    }
+  };
+
+  // Day management functions
+  const addDay = async (moduleId) => {
+    if (!newDayTitle.trim()) return;
+    try {
+      await API.post("days/", {
+        module: moduleId,
+        title: newDayTitle,
+        content: newDayContent,
+        order: newDayOrder,
+      });
+      setNewDayTitle("");
+      setNewDayContent("");
+      setNewDayOrder(0);
+      setSelectedModuleForDay(null);
+      await fetchModules(selectedCourseForContent.id);
+    } catch (err) {
+      alert("Error adding day");
+    }
+  };
+
+  const startEditDay = (day) => {
+    setEditingDayId(day.id);
+    setEditingDayTitle(day.title);
+    setEditingDayContent(day.content);
+    setEditingDayOrder(day.order);
+  };
+
+  const saveEditDay = async () => {
+    try {
+      await API.patch(`days/${editingDayId}/`, {
+        title: editingDayTitle,
+        content: editingDayContent,
+        order: editingDayOrder,
+      });
+      setEditingDayId(null);
+      await fetchModules(selectedCourseForContent.id);
+    } catch (err) {
+      alert("Error updating day");
+    }
+  };
+
+  const cancelEditDay = () => {
+    setEditingDayId(null);
+  };
+
   const deleteDay = async (dayId) => {
     if (window.confirm("Delete this day?")) {
       await API.delete(`days/${dayId}/`);
-      await fetchModules(currentCourse.id);
+      await fetchModules(selectedCourseForContent.id);
     }
-  };
-  const viewDayContent = (day) => {
-    setViewingDay(day);
-  };
-  const toggleModule = (moduleId) => {
-    setExpandedModuleId(expandedModuleId === moduleId ? null : moduleId);
   };
 
   return (
@@ -224,7 +244,7 @@ function Courses() {
         </div>
       </div>
 
-      {/* Course Form Modal */}
+      {/* Course Form Modal (unchanged) */}
       {showForm && (
         <div
           className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
@@ -302,7 +322,7 @@ function Courses() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                     </svg>
                   </button>
-                  <button onClick={() => openModulesModal(c)} className="text-purple-400 hover:text-purple-300 mr-3 transition" title="Modules">
+                  <button onClick={() => openContentModal(c)} className="text-purple-400 hover:text-purple-300 mr-3 transition" title="Content">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                     </svg>
@@ -324,7 +344,7 @@ function Courses() {
         </table>
       </div>
 
-      {/* Enrollment Modal */}
+      {/* Enrollment Modal (unchanged) */}
       {showEnrollModal && currentCourse && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowEnrollModal(false)}>
           <div className="bg-[#1a2538] rounded-xl p-6 w-full max-w-3xl border border-white/10" onClick={e => e.stopPropagation()}>
@@ -363,154 +383,178 @@ function Courses() {
         </div>
       )}
 
-      {/* Modules Modal with Days */}
-      {showModulesModal && currentCourse && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowModulesModal(false)}>
-          <div className="bg-[#1a2538] rounded-xl p-6 w-full max-w-4xl border border-white/10 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+      {/* New Module Content Modal (clean, separate) */}
+      {showContentModal && selectedCourseForContent && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowContentModal(false)}>
+          <div className="bg-[#1a2538] rounded-xl p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto border border-white/10" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-white">Course Content – {currentCourse.name}</h3>
-              <button
-                onClick={() => { setShowModuleForm(true); setEditingModuleId(null); setModuleForm({ title: "", content: "", order: 0 }); }}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm flex items-center gap-1"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                Add Week
-              </button>
+              <h2 className="text-xl font-bold text-white">Course Content – {selectedCourseForContent.name}</h2>
+              <button onClick={() => setShowContentModal(false)} className="text-white/50 hover:text-white">✖</button>
             </div>
 
-            {showModuleForm && (
-              <form onSubmit={handleModuleSubmit} className="mb-6 p-4 bg-[#0f1623] rounded-lg border border-white/10">
-                <h4 className="text-white mb-3">{editingModuleId ? "Edit Week" : "New Week"}</h4>
-                <input type="text" placeholder="Week Title (e.g., Week 2)" value={moduleForm.title} onChange={e => setModuleForm({ ...moduleForm, title: e.target.value })} required className="w-full bg-[#0f1623] border border-white/10 rounded-lg px-4 py-2 text-white mb-3" />
-                <input type="number" placeholder="Order (0,1,2...)" value={moduleForm.order} onChange={e => setModuleForm({ ...moduleForm, order: parseInt(e.target.value) || 0 })} className="w-full bg-[#0f1623] border border-white/10 rounded-lg px-4 py-2 text-white mb-3" />
-                <textarea placeholder="Week Overview (HTML allowed)" value={moduleForm.content} onChange={e => setModuleForm({ ...moduleForm, content: e.target.value })} rows="6" className="w-full bg-[#0f1623] border border-white/10 rounded-lg px-4 py-2 text-white font-mono mb-3" />
-                <div className="flex gap-2">
-                  <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">Save</button>
-                  <button type="button" onClick={() => { setShowModuleForm(false); setEditingModuleId(null); }} className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded">Cancel</button>
-                </div>
-              </form>
-            )}
+            {/* Add Module Form */}
+            <div className="mb-6 p-4 bg-[#0f1623] rounded-lg border border-white/10">
+              <h3 className="text-white font-medium mb-2">Add New Week</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <input
+                  type="text"
+                  placeholder="Week title (e.g., Week 2)"
+                  value={newModuleTitle}
+                  onChange={e => setNewModuleTitle(e.target.value)}
+                  className="bg-[#0f1623] border border-white/10 rounded-lg px-3 py-2 text-white"
+                />
+                <input
+                  type="number"
+                  placeholder="Order (0,1,2...)"
+                  value={newModuleOrder}
+                  onChange={e => setNewModuleOrder(parseInt(e.target.value) || 0)}
+                  className="bg-[#0f1623] border border-white/10 rounded-lg px-3 py-2 text-white"
+                />
+              </div>
+              <button onClick={addModule} className="mt-3 bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg text-sm">Add Week</button>
+            </div>
 
-            <div className="space-y-4">
+            {/* List of Modules */}
+            <div className="space-y-6">
               {modules.map(mod => (
-                <div key={mod.id} className="bg-[#0f1623] rounded-lg border border-white/10">
-                  <div
-                    className="flex justify-between items-center p-4 cursor-pointer hover:bg-white/5"
-                    onClick={() => toggleModule(mod.id)}
-                  >
+                <div key={mod.id} className="bg-[#0f1623] rounded-lg border border-white/10 p-4">
+                  {editingModuleId === mod.id ? (
+                    // Edit Module Form
                     <div>
-                      <h4 className="text-white font-semibold">{mod.title} (Order: {mod.order})</h4>
+                      <input
+                        type="text"
+                        value={editingModuleTitle}
+                        onChange={e => setEditingModuleTitle(e.target.value)}
+                        className="w-full bg-[#0f1623] border border-white/10 rounded-lg px-3 py-2 text-white mb-2"
+                      />
+                      <input
+                        type="number"
+                        value={editingModuleOrder}
+                        onChange={e => setEditingModuleOrder(parseInt(e.target.value) || 0)}
+                        className="w-full bg-[#0f1623] border border-white/10 rounded-lg px-3 py-2 text-white mb-2"
+                      />
+                      <textarea
+                        placeholder="Week overview (HTML allowed)"
+                        value={editingModuleContent}
+                        onChange={e => setEditingModuleContent(e.target.value)}
+                        rows="4"
+                        className="w-full bg-[#0f1623] border border-white/10 rounded-lg px-3 py-2 text-white font-mono text-sm mb-3"
+                      />
+                      <div className="flex gap-2">
+                        <button onClick={saveEditModule} className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-sm">Save</button>
+                        <button onClick={cancelEditModule} className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg text-sm">Cancel</button>
+                      </div>
                     </div>
-                    <div className="flex gap-3" onClick={e => e.stopPropagation()}>
-                      <button onClick={() => viewModuleContent(mod)} className="text-blue-400 hover:text-blue-300 transition" title="View">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                        </svg>
-                      </button>
-                      <button onClick={() => editModule(mod)} className="text-yellow-400 hover:text-yellow-300 transition" title="Edit">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                      </button>
-                      <button onClick={() => deleteModule(mod.id)} className="text-red-400 hover:text-red-300 transition" title="Delete">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                      <button onClick={() => openDayForm(mod)} className="text-green-400 hover:text-green-300 transition" title="Add Day">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                  {expandedModuleId === mod.id && (
-                    <div className="p-4 pt-0 border-t border-white/10 mt-2">
-                      <h5 className="text-white/70 text-sm mb-2">Days</h5>
-                      {mod.days && mod.days.length > 0 ? (
-                        <ul className="space-y-2">
-                          {mod.days.map(day => (
-                            <li key={day.id} className="flex justify-between items-center bg-[#0f1623] p-2 rounded">
-                              <span className="text-white">{day.title}</span>
-                              <div className="flex gap-2">
-                                <button onClick={() => viewDayContent(day)} className="text-blue-400 hover:text-blue-300 transition" title="View">
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                  </svg>
-                                </button>
-                                <button onClick={() => editDay(day, mod)} className="text-yellow-400 hover:text-yellow-300 transition" title="Edit">
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                  </svg>
-                                </button>
-                                <button onClick={() => deleteDay(day.id)} className="text-red-400 hover:text-red-300 transition" title="Delete">
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                  </svg>
-                                </button>
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="text-white/40 text-sm">No days yet. Click "+ Day" to add.</p>
-                      )}
+                  ) : (
+                    // View Module
+                    <div>
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h3 className="text-white font-semibold">{mod.title} (Order: {mod.order})</h3>
+                          {mod.content && <p className="text-white/50 text-sm mt-1 line-clamp-2">{mod.content.substring(0, 100)}...</p>}
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={() => startEditModule(mod)} className="text-yellow-400 hover:text-yellow-300 text-sm">Edit</button>
+                          <button onClick={() => deleteModule(mod.id)} className="text-red-400 hover:text-red-300 text-sm">Delete</button>
+                        </div>
+                      </div>
+
+                      {/* Days for this module */}
+                      <div className="mt-4 pl-4 border-l border-white/10">
+                        <h4 className="text-white/70 text-sm mb-2">Days</h4>
+                        {mod.days && mod.days.length > 0 ? (
+                          <ul className="space-y-2">
+                            {mod.days.map(day => (
+                              <li key={day.id} className="bg-[#0f1623] p-2 rounded flex justify-between items-center">
+                                {editingDayId === day.id ? (
+                                  <div className="flex-1">
+                                    <input
+                                      type="text"
+                                      value={editingDayTitle}
+                                      onChange={e => setEditingDayTitle(e.target.value)}
+                                      className="w-full bg-[#0f1623] border border-white/10 rounded px-2 py-1 text-white text-sm mb-1"
+                                    />
+                                    <input
+                                      type="number"
+                                      value={editingDayOrder}
+                                      onChange={e => setEditingDayOrder(parseInt(e.target.value) || 0)}
+                                      className="w-full bg-[#0f1623] border border-white/10 rounded px-2 py-1 text-white text-sm mb-1"
+                                    />
+                                    <textarea
+                                      value={editingDayContent}
+                                      onChange={e => setEditingDayContent(e.target.value)}
+                                      rows="2"
+                                      className="w-full bg-[#0f1623] border border-white/10 rounded px-2 py-1 text-white text-sm"
+                                    />
+                                    <div className="flex gap-2 mt-2">
+                                      <button onClick={saveEditDay} className="bg-green-600 text-white px-2 py-0.5 rounded text-xs">Save</button>
+                                      <button onClick={cancelEditDay} className="bg-gray-600 text-white px-2 py-0.5 rounded text-xs">Cancel</button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <span className="text-white text-sm">{day.title}</span>
+                                    <div className="flex gap-2">
+                                      <button onClick={() => startEditDay(day)} className="text-yellow-400 hover:text-yellow-300 text-xs">Edit</button>
+                                      <button onClick={() => deleteDay(day.id)} className="text-red-400 hover:text-red-300 text-xs">Delete</button>
+                                    </div>
+                                  </>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-white/40 text-sm">No days yet.</p>
+                        )}
+                        {/* Add day form for this module */}
+                        {selectedModuleForDay === mod.id ? (
+                          <div className="mt-3 p-3 bg-[#0f1623] rounded border border-white/10">
+                            <input
+                              type="text"
+                              placeholder="Day title"
+                              value={newDayTitle}
+                              onChange={e => setNewDayTitle(e.target.value)}
+                              className="w-full bg-[#0f1623] border border-white/10 rounded px-2 py-1 text-white text-sm mb-2"
+                            />
+                            <input
+                              type="number"
+                              placeholder="Order"
+                              value={newDayOrder}
+                              onChange={e => setNewDayOrder(parseInt(e.target.value) || 0)}
+                              className="w-full bg-[#0f1623] border border-white/10 rounded px-2 py-1 text-white text-sm mb-2"
+                            />
+                            <textarea
+                              placeholder="Day content (HTML or plain text with '- ' for bullet points)"
+                              value={newDayContent}
+                              onChange={e => setNewDayContent(e.target.value)}
+                              rows="3"
+                              className="w-full bg-[#0f1623] border border-white/10 rounded px-2 py-1 text-white text-sm mb-2"
+                            />
+                            <div className="flex gap-2">
+                              <button onClick={() => addDay(mod.id)} className="bg-blue-600 text-white px-3 py-1 rounded text-sm">Add Day</button>
+                              <button onClick={() => setSelectedModuleForDay(null)} className="bg-gray-600 text-white px-3 py-1 rounded text-sm">Cancel</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              setSelectedModuleForDay(mod.id);
+                              setNewDayTitle("");
+                              setNewDayContent("");
+                              setNewDayOrder(0);
+                            }}
+                            className="mt-2 text-blue-400 hover:text-blue-300 text-sm"
+                          >
+                            + Add Day
+                          </button>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
               ))}
-              {modules.length === 0 && <p className="text-white/40">No weeks yet. Click "Add Week" to create one.</p>}
+              {modules.length === 0 && <p className="text-white/40 text-center">No weeks yet. Add a week above.</p>}
             </div>
-
-            <button onClick={() => setShowModulesModal(false)} className="mt-6 bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg">Close</button>
-          </div>
-        </div>
-      )}
-
-      {/* Day Form Modal */}
-      {showDayForm && selectedModule && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowDayForm(false)}>
-          <form onSubmit={handleDaySubmit} className="bg-[#1a2538] rounded-xl p-6 w-full max-w-2xl border border-white/10" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-white mb-4">{editingDayId ? "Edit Day" : "New Day"} – {selectedModule.title}</h3>
-            <input type="text" placeholder="Day Title (e.g., Day 1)" value={dayForm.title} onChange={e => setDayForm({ ...dayForm, title: e.target.value })} required className="w-full bg-[#0f1623] border border-white/10 rounded-lg px-4 py-2 text-white mb-3" />
-            <input type="number" placeholder="Order (0,1,2...)" value={dayForm.order} onChange={e => setDayForm({ ...dayForm, order: parseInt(e.target.value) || 0 })} className="w-full bg-[#0f1623] border border-white/10 rounded-lg px-4 py-2 text-white mb-3" />
-            <textarea placeholder="Day Content (HTML allowed)" value={dayForm.content} onChange={e => setDayForm({ ...dayForm, content: e.target.value })} rows="8" className="w-full bg-[#0f1623] border border-white/10 rounded-lg px-4 py-2 text-white font-mono mb-4" />
-            <div className="flex gap-3">
-              <button type="submit" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg">Save</button>
-              <button type="button" onClick={() => setShowDayForm(false)} className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-lg">Cancel</button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* Module Content View Modal */}
-      {viewingModule && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setViewingModule(null)}>
-          <div className="bg-[#1a2538] rounded-xl p-6 w-full max-w-4xl border border-white/10 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold text-white">{viewingModule.title}</h3>
-              <button onClick={() => setViewingModule(null)} className="text-white/50 hover:text-white">✖</button>
-            </div>
-            <div className="prose prose-invert max-w-none text-white/90" dangerouslySetInnerHTML={{ __html: viewingModule.content }} />
-            <button onClick={() => setViewingModule(null)} className="mt-4 bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg">Close</button>
-          </div>
-        </div>
-      )}
-
-      {/* Day Content View Modal */}
-      {viewingDay && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setViewingDay(null)}>
-          <div className="bg-[#1a2538] rounded-xl p-6 w-full max-w-4xl border border-white/10 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold text-white">{viewingDay.title}</h3>
-              <button onClick={() => setViewingDay(null)} className="text-white/50 hover:text-white">✖</button>
-            </div>
-            <div className="prose prose-invert max-w-none text-white/90" dangerouslySetInnerHTML={{ __html: viewingDay.content }} />
-            <button onClick={() => setViewingDay(null)} className="mt-4 bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg">Close</button>
           </div>
         </div>
       )}
