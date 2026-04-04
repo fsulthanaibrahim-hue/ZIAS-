@@ -5,6 +5,7 @@ from .permissions import IsAdminOrReadOnly
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.filters import BaseFilterBackend
 from django.utils import timezone
 from .permissions import IsStudentOwner
 from django.utils.crypto import get_random_string
@@ -20,13 +21,22 @@ from .serializers import (
 )
 
 # ----------------------------
+# Custom Filter Backend for filtering modules by course
+# ----------------------------
+class CourseFilterBackend(BaseFilterBackend):
+    def filter_queryset(self, request, queryset, view):
+        course_id = request.query_params.get('course')
+        if course_id:
+            return queryset.filter(course_id=course_id)
+        return queryset
+
+# ----------------------------
 # STUDENT VIEWSET
 # ----------------------------
-
 class StudentViewSet(viewsets.ModelViewSet):
     queryset = Student.objects.all()
     serializer_class = StudentSerializer
-    permission_classes = [IsStudentOwner]   # replaces [IsAdminUser]
+    permission_classes = [IsStudentOwner]
 
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
     def me(self, request):
@@ -35,7 +45,9 @@ class StudentViewSet(viewsets.ModelViewSet):
             serializer = self.get_serializer(student)
             return Response(serializer.data)
         except Student.DoesNotExist:
-            return Response({"detail": "Student profile not found"}, status=status.HTTP_404_NOT_FOUND)# ----------------------------
+            return Response({"detail": "Student profile not found"}, status=status.HTTP_404_NOT_FOUND)
+
+# ----------------------------
 # MENTOR VIEWSET
 # ----------------------------
 class MentorViewSet(viewsets.ModelViewSet):
@@ -90,11 +102,12 @@ class EnrollmentViewSet(viewsets.ModelViewSet):
             return Response({"detail": "Student profile not found"}, status=status.HTTP_404_NOT_FOUND)
 
 # ----------------------------
-# MODULE VIEWSET
+# MODULE VIEWSET (now with CourseFilterBackend)
 # ----------------------------
 class ModuleViewSet(viewsets.ModelViewSet):
     queryset = Module.objects.all()
     serializer_class = ModuleSerializer
+    filter_backends = [CourseFilterBackend]
     permission_classes = [IsAdminOrReadOnly]
 
 # ----------------------------
@@ -175,7 +188,6 @@ class SendBulkEmailView(APIView):
         except Exception as e:
             return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
-
 # ----------------------------
 # PASSWORD RESET VIEWS
 # ----------------------------
@@ -256,7 +268,7 @@ class RecentMessagesView(APIView):
             'id': m.id,
             'name': m.name,
             'email': m.email,
-            'phone': m.phone,          # ✅ phone field added
+            'phone': m.phone,
             'subject': m.subject,
             'message': m.message,
             'created_at': m.created_at,

@@ -1,6 +1,29 @@
 import { useEffect, useState } from "react";
 import API from "../api/api";
 
+// Simple Toast Component (auto-dismiss after 3 seconds)
+function Toast({ message, type, onClose }) {
+  useEffect(() => {
+    const timer = setTimeout(onClose, 3000);
+    return () => clearTimeout(timer);
+  }, [onClose]);
+
+  const bgColor = type === "success" 
+    ? "bg-emerald-500/90" 
+    : type === "error" 
+    ? "bg-red-500/90" 
+    : "bg-blue-500/90";
+  const icon = type === "success" ? "✓" : type === "error" ? "✕" : "ℹ";
+
+  return (
+    <div className={`fixed top-5 right-5 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl backdrop-blur-md ${bgColor} text-white text-sm font-medium animate-in slide-in-from-top-2`}>
+      <span className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold">{icon}</span>
+      <span>{message}</span>
+      <button onClick={onClose} className="ml-2 text-white/70 hover:text-white">×</button>
+    </div>
+  );
+}
+
 function Reviewers() {
   const [reviewers, setReviewers] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -12,10 +35,18 @@ function Reviewers() {
     department: ""
   });
 
+  // Toast state
+  const [toast, setToast] = useState(null);
+  const showToast = (message, type = "success") => setToast({ message, type });
+  const hideToast = () => setToast(null);
+
   const fetchReviewers = () => {
     API.get("reviewers/")
       .then(res => setReviewers(res.data))
-      .catch(err => console.error(err));
+      .catch(err => {
+        console.error(err);
+        showToast("Failed to load reviewers", "error");
+      });
   };
 
   useEffect(() => { fetchReviewers(); }, []);
@@ -23,8 +54,14 @@ function Reviewers() {
   const handleDelete = (id) => {
     if (window.confirm("Are you sure?")) {
       API.delete(`reviewers/${id}/`)
-        .then(() => fetchReviewers())
-        .catch(err => console.error(err));
+        .then(() => {
+          fetchReviewers();
+          showToast("Reviewer deleted successfully", "success");
+        })
+        .catch(err => {
+          console.error(err);
+          showToast("Failed to delete reviewer", "error");
+        });
     }
   };
 
@@ -38,8 +75,10 @@ function Reviewers() {
     try {
       if (editingId) {
         await API.patch(`reviewers/${editingId}/`, payload);
+        showToast("Reviewer updated successfully", "success");
       } else {
         await API.post("reviewers/", payload);
+        showToast("Reviewer added successfully", "success");
       }
       setShowForm(false);
       setEditingId(null);
@@ -47,9 +86,11 @@ function Reviewers() {
       fetchReviewers();
     } catch (error) {
       if (error.response) {
-        alert(`Error ${error.response.status}:\n${JSON.stringify(error.response.data, null, 2)}`);
+        const errorMsg = Object.values(error.response.data).flat().join(", ");
+        showToast(`Error: ${errorMsg || error.response.statusText}`, "error");
+        console.error(error.response.data);
       } else {
-        alert(error.message);
+        showToast(error.message, "error");
       }
     }
   };
@@ -98,7 +139,15 @@ function Reviewers() {
         .shine { position:relative; overflow:hidden; }
         .shine::after { content:''; position:absolute; top:0; left:-100%; width:60%; height:100%; background:linear-gradient(90deg,transparent,rgba(255,255,255,0.04),transparent); animation: shine 3s infinite; }
         @keyframes shine { to { left:150%; } }
+        @keyframes slide-in-from-top-2 {
+          from { opacity:0; transform:translateY(-1rem); }
+          to { opacity:1; transform:translateY(0); }
+        }
+        .animate-in { animation: slide-in-from-top-2 0.2s ease-out; }
       `}</style>
+
+      {/* Toast notification */}
+      {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
 
       <div className="max-w-[1400px] mx-auto px-6 py-8">
 

@@ -1,6 +1,29 @@
 import { useEffect, useState } from "react";
 import API from "../api/api";
 
+// Simple Toast Component (auto-dismiss after 3 seconds)
+function Toast({ message, type, onClose }) {
+  useEffect(() => {
+    const timer = setTimeout(onClose, 3000);
+    return () => clearTimeout(timer);
+  }, [onClose]);
+
+  const bgColor = type === "success" 
+    ? "bg-emerald-500/90" 
+    : type === "error" 
+    ? "bg-red-500/90" 
+    : "bg-blue-500/90";
+  const icon = type === "success" ? "✓" : type === "error" ? "✕" : "ℹ";
+
+  return (
+    <div className={`fixed top-5 right-5 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl backdrop-blur-md ${bgColor} text-white text-sm font-medium animate-in slide-in-from-top-2`}>
+      <span className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold">{icon}</span>
+      <span>{message}</span>
+      <button onClick={onClose} className="ml-2 text-white/70 hover:text-white">×</button>
+    </div>
+  );
+}
+
 function Students() {
   const [students, setStudents] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -15,10 +38,18 @@ function Students() {
     date_of_birth: "",
   });
 
+  // Toast state
+  const [toast, setToast] = useState(null);
+  const showToast = (message, type = "success") => setToast({ message, type });
+  const hideToast = () => setToast(null);
+
   const fetchStudents = () => {
     API.get("students/")
       .then((res) => setStudents(res.data))
-      .catch((err) => console.error(err));
+      .catch((err) => {
+        console.error(err);
+        showToast("Failed to load students", "error");
+      });
   };
 
   useEffect(() => {
@@ -28,8 +59,14 @@ function Students() {
   const handleDelete = (id) => {
     if (window.confirm("Are you sure you want to delete this student?")) {
       API.delete(`students/${id}/`)
-        .then(() => fetchStudents())
-        .catch((err) => console.error(err));
+        .then(() => {
+          fetchStudents();
+          showToast("Student deleted successfully", "success");
+        })
+        .catch((err) => {
+          console.error(err);
+          showToast("Failed to delete student", "error");
+        });
     }
   };
 
@@ -46,8 +83,10 @@ function Students() {
     try {
       if (editingId) {
         await API.patch(`students/${editingId}/`, payload);
+        showToast("Student updated successfully", "success");
       } else {
         await API.post("students/", payload);
+        showToast("Student added successfully", "success");
       }
       setShowForm(false);
       setEditingId(null);
@@ -55,10 +94,11 @@ function Students() {
       fetchStudents();
     } catch (error) {
       if (error.response) {
-        alert(`Error ${error.response.status}:\n${JSON.stringify(error.response.data, null, 2)}`);
+        const errorMsg = Object.values(error.response.data).flat().join(", ");
+        showToast(`Error: ${errorMsg || error.response.statusText}`, "error");
         console.error(error.response.data);
       } else {
-        alert(error.message);
+        showToast(error.message, "error");
       }
     }
   };
@@ -95,8 +135,8 @@ function Students() {
     transition-all duration-200 text-sm font-mono
   `;
 
-  // Avatar initials helper
-  const getInitials = (name) => (name || "?")[0].toUpperCase();
+  // Avatar helpers
+  const getInitial = (name) => name ? name.charAt(0).toUpperCase() : "?";
   const avatarColors = [
     "from-blue-500 to-blue-700",
     "from-violet-500 to-violet-700",
@@ -117,7 +157,15 @@ function Students() {
         .shine { position:relative; overflow:hidden; }
         .shine::after { content:''; position:absolute; top:0; left:-100%; width:60%; height:100%; background:linear-gradient(90deg,transparent,rgba(255,255,255,0.04),transparent); animation: shine 3s infinite; }
         @keyframes shine { to { left:150%; } }
+        @keyframes slide-in-from-top-2 {
+          from { opacity:0; transform:translateY(-1rem); }
+          to { opacity:1; transform:translateY(0); }
+        }
+        .animate-in { animation: slide-in-from-top-2 0.2s ease-out; }
       `}</style>
+
+      {/* Toast notification */}
+      {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
 
       <div className="max-w-[1400px] mx-auto px-6 py-8">
 
@@ -262,17 +310,16 @@ function Students() {
                     {h}
                   </th>
                 ))}
-              </tr>
+               </tr>
             </thead>
             <tbody className="bg-[#0d1117] divide-y divide-[#21262d]">
               {filteredStudents.length > 0 ? (
                 filteredStudents.map((s) => (
                   <tr key={s.id} className="table-row-hover transition-colors duration-150 group">
-                    {/* Student name + avatar */}
                     <td className="px-4 py-3.5">
                       <div className="flex items-center gap-3">
                         <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${getColor(s.username)} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
-                          {getInitials(s.username)}
+                          {getInitial(s.username)}
                         </div>
                         <span className="text-[#e6edf3] text-sm font-medium">{s.username}</span>
                       </div>
@@ -303,7 +350,6 @@ function Students() {
                         <span className="text-[#484f58] text-sm">—</span>
                       )}
                     </td>
-                    {/* Actions */}
                     <td className="px-4 py-3.5">
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
                         <button

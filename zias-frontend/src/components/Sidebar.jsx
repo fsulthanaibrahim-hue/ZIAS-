@@ -58,6 +58,11 @@ function NavLink({ to, label, active, badge }) {
             <path d="M2 2h12v1H2V2zm0 2h12v1H2V4zm0 2h12v1H2V6zm0 2h12v1H2V8zm0 2h12v1H2v-1zm0 2h12v1H2v-1zM2 0h12v1H2V0z" />
           </svg>
         )}
+        {label === "Modules" && (
+          <svg viewBox="0 0 16 16" fill="currentColor" width="16" height="16">
+            <path d="M2 2h4v4H2V2zm6 0h4v4H8V2zM2 8h4v4H2V8zm6 0h4v4H8V8z" />
+          </svg>
+        )}
         {label === "Messages" && (
           <svg viewBox="0 0 16 16" fill="currentColor" width="16" height="16">
             <path d="M14.5 2h-13A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h13a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 14.5 2zM1.5 3h13a.5.5 0 0 1 .5.5v.5L8 7.939 1 4v-.5a.5.5 0 0 1 .5-.5zm13 10h-13a.5.5 0 0 1-.5-.5V5.5l6.5 4.5 6.5-4.5v7a.5.5 0 0 1-.5.5z" />
@@ -199,6 +204,11 @@ function Sidebar() {
           to="/admin/courses"
           label="Courses"
           active={isActive("/admin/courses")}
+        />
+        <NavLink
+          to="/admin/modules"
+          label="Modules"
+          active={isActive("/admin/modules")}
         />
         <NavLink
           to="/admin/messages"

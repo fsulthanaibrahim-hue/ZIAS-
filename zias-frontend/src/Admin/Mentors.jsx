@@ -1,6 +1,29 @@
 import { useEffect, useState } from "react";
 import API from "../api/api";
 
+// Simple Toast Component (auto-dismiss after 3 seconds)
+function Toast({ message, type, onClose }) {
+  useEffect(() => {
+    const timer = setTimeout(onClose, 3000);
+    return () => clearTimeout(timer);
+  }, [onClose]);
+
+  const bgColor = type === "success" 
+    ? "bg-emerald-500/90" 
+    : type === "error" 
+    ? "bg-red-500/90" 
+    : "bg-blue-500/90";
+  const icon = type === "success" ? "✓" : type === "error" ? "✕" : "ℹ";
+
+  return (
+    <div className={`fixed top-5 right-5 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl backdrop-blur-md ${bgColor} text-white text-sm font-medium animate-in slide-in-from-top-2`}>
+      <span className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold">{icon}</span>
+      <span>{message}</span>
+      <button onClick={onClose} className="ml-2 text-white/70 hover:text-white">×</button>
+    </div>
+  );
+}
+
 function Mentors() {
   const [mentors, setMentors] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -13,10 +36,18 @@ function Mentors() {
     expertise: ""
   });
 
+  // Toast state
+  const [toast, setToast] = useState(null);
+  const showToast = (message, type = "success") => setToast({ message, type });
+  const hideToast = () => setToast(null);
+
   const fetchMentors = () => {
     API.get("mentors/")
       .then(res => setMentors(res.data))
-      .catch(err => console.error(err));
+      .catch(err => {
+        console.error(err);
+        showToast("Failed to load mentors", "error");
+      });
   };
 
   useEffect(() => { fetchMentors(); }, []);
@@ -24,8 +55,14 @@ function Mentors() {
   const handleDelete = (id) => {
     if (window.confirm("Are you sure?")) {
       API.delete(`mentors/${id}/`)
-        .then(() => fetchMentors())
-        .catch(err => console.error(err));
+        .then(() => {
+          fetchMentors();
+          showToast("Mentor deleted successfully", "success");
+        })
+        .catch(err => {
+          console.error(err);
+          showToast("Failed to delete mentor", "error");
+        });
     }
   };
 
@@ -40,8 +77,10 @@ function Mentors() {
     try {
       if (editingId) {
         await API.patch(`mentors/${editingId}/`, payload);
+        showToast("Mentor updated successfully", "success");
       } else {
         await API.post("mentors/", payload);
+        showToast("Mentor added successfully", "success");
       }
       setShowForm(false);
       setEditingId(null);
@@ -49,9 +88,11 @@ function Mentors() {
       fetchMentors();
     } catch (error) {
       if (error.response) {
-        alert(`Error ${error.response.status}:\n${JSON.stringify(error.response.data, null, 2)}`);
+        const errorMsg = Object.values(error.response.data).flat().join(", ");
+        showToast(`Error: ${errorMsg || error.response.statusText}`, "error");
+        console.error(error.response.data);
       } else {
-        alert(error.message);
+        showToast(error.message, "error");
       }
     }
   };
@@ -102,7 +143,15 @@ function Mentors() {
         .shine { position:relative; overflow:hidden; }
         .shine::after { content:''; position:absolute; top:0; left:-100%; width:60%; height:100%; background:linear-gradient(90deg,transparent,rgba(255,255,255,0.04),transparent); animation: shine 3s infinite; }
         @keyframes shine { to { left:150%; } }
+        @keyframes slide-in-from-top-2 {
+          from { opacity:0; transform:translateY(-1rem); }
+          to { opacity:1; transform:translateY(0); }
+        }
+        .animate-in { animation: slide-in-from-top-2 0.2s ease-out; }
       `}</style>
+
+      {/* Toast notification */}
+      {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
 
       <div className="max-w-[1400px] mx-auto px-6 py-8">
 
@@ -245,7 +294,6 @@ function Mentors() {
               {filteredMentors.length > 0 ? (
                 filteredMentors.map((m) => (
                   <tr key={m.id} className="table-row-hover transition-colors duration-150 group">
-                    {/* Mentor name + avatar */}
                     <td className="px-4 py-3.5">
                       <div className="flex items-center gap-3">
                         <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${getColor(m.username)} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
@@ -254,18 +302,13 @@ function Mentors() {
                         <span className="text-[#e6edf3] text-sm font-medium">{m.username}</span>
                       </div>
                     </td>
-
                     <td className="px-4 py-3.5 text-[#7d8590] text-sm font-mono">{m.email}</td>
                     <td className="px-4 py-3.5 text-[#7d8590] text-sm font-mono">{m.phone}</td>
-
-                    {/* Expertise badge */}
                     <td className="px-4 py-3.5">
                       <span className="inline-flex items-center gap-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-medium px-2.5 py-1 rounded-full">
                         {m.expertise}
                       </span>
                     </td>
-
-                    {/* Actions */}
                     <td className="px-4 py-3.5">
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
                         <button

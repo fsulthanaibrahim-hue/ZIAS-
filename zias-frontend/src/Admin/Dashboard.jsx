@@ -148,7 +148,7 @@ function Dashboard() {
       <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <p className="text-white/50 text-sm font-medium">{greeting()},</p>
-          <h1 className="text-2xl font-bold text-white">{adminName} 👋</h1>
+          <h1 className="text-2xl font-bold text-white">{adminName}</h1>
           <p className="text-white/40 text-xs mt-0.5 font-medium">Admin Dashboard</p>
         </div>
         <div className="flex items-center gap-4">

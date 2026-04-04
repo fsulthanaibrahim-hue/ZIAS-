@@ -1,7 +1,7 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import AdminLogin from "./Admin/Login";
 import UserLogin from "./pages/UserLogin";
-import StudentDashboard from "./pages/StudentDashboard";   // ✅ changed
+import StudentDashboard from "./pages/StudentDashboard";
 import StudentProfile from "./pages/StudentProfile";
 import CourseDetail from "./pages/CourseDetail";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -13,6 +13,7 @@ import Students from "./Admin/Students";
 import Mentors from "./Admin/Mentors";
 import Reviewers from "./Admin/Reviewers";
 import CoursesAdmin from "./Admin/Courses";
+import ModulesAdmin from "./Admin/Modules";        // ✅ new import
 import ContactMessages from "./Admin/ContactMessages";
 import Navbar from "./components/Navbar";
 import Home from "./pages/Home";
@@ -57,6 +58,7 @@ function App() {
       <Route path="/admin/mentors" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Mentors /></div></AdminRoute>} />
       <Route path="/admin/reviewers" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Reviewers /></div></AdminRoute>} />
       <Route path="/admin/courses" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><CoursesAdmin /></div></AdminRoute>} />
+      <Route path="/admin/modules" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><ModulesAdmin /></div></AdminRoute>} />  {/* ✅ new route */}
       <Route path="/admin/messages" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><ContactMessages /></div></AdminRoute>} />
 
       {/* 404 */}

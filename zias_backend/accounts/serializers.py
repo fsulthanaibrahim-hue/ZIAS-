@@ -47,11 +47,11 @@ class DaySerializer(serializers.ModelSerializer):
 # MODULE SERIALIZER (includes days and is_public)
 # ----------------------------
 class ModuleSerializer(serializers.ModelSerializer):
-    days = DaySerializer(many=True, read_only=True)
+    course_name = serializers.CharField(source='course.name', read_only=True)
 
     class Meta:
         model = Module
-        fields = ['id', 'course', 'title', 'content', 'order', 'days', 'is_public']
+        fields = ['id', 'course', 'course_name', 'title', 'order', 'content', 'is_common']
 
 # ----------------------------
 # ENROLLMENT SERIALIZER

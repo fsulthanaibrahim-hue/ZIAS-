@@ -110,7 +110,9 @@ function ContactMessages() {
     return date.toLocaleDateString([], { day: "2-digit", month: "short", year: "numeric" });
   };
 
-  const getInitials = (name) => (name || "??").slice(0, 2).toUpperCase();
+  // ✅ Changed to single letter initial (first character only)
+  const getInitial = (name) => (name ? name.charAt(0).toUpperCase() : "?");
+
   const avatarPalette = [
     ["#3b82f6","#1d4ed8"], ["#8b5cf6","#6d28d9"], ["#10b981","#065f46"],
     ["#f59e0b","#b45309"], ["#ef4444","#b91c1c"], ["#06b6d4","#0e7490"],
@@ -217,12 +219,12 @@ function ContactMessages() {
                     {/* Card Top */}
                     <div className="flex items-start gap-4 p-4">
 
-                      {/* Avatar */}
+                      {/* Avatar - now single letter */}
                       <div
                         className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0 mt-0.5"
                         style={{ background: `linear-gradient(135deg, ${c1}, ${c2})` }}
                       >
-                        {getInitials(msg.name)}
+                        {getInitial(msg.name)}
                       </div>
 
                       {/* Content */}

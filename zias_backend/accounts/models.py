@@ -81,16 +81,24 @@ class Enrollment(models.Model):
 # ----------------------------
 # MODULE MODEL (Week)
 # ----------------------------
+# models.py
 class Module(models.Model):
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='modules')
     title = models.CharField(max_length=200)
-    content = models.TextField(help_text="HTML or Markdown content for the module")
+    content = models.TextField(blank=True)
     order = models.IntegerField(default=0)
-    is_public = models.BooleanField(default=False)
+    is_common = models.BooleanField(default=True)   # True = weeks 1-5, False = template for custom
+
+class StudentModule(models.Model):
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='custom_modules')
+    module = models.ForeignKey(Module, on_delete=models.CASCADE)
+    order = models.IntegerField(default=0)
+    is_completed = models.BooleanField(default=False)
+    completed_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        ordering = ['order', 'id']
-
+        unique_together = ['student', 'module']
+        
     def __str__(self):
         return f"{self.course.name} - {self.title}"
 
