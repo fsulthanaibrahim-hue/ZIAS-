@@ -95,8 +95,8 @@ function Students() {
     transition-all duration-200 text-sm font-mono
   `;
 
-  // ✅ Avatar: single letter (first character)
-  const getInitial = (name) => name ? name.charAt(0).toUpperCase() : "?";
+  // Avatar initials helper
+  const getInitials = (name) => (name || "?")[0].toUpperCase();
   const avatarColors = [
     "from-blue-500 to-blue-700",
     "from-violet-500 to-violet-700",
@@ -176,7 +176,7 @@ function Students() {
           </div>
         </div>
 
-        {/* ── Modal ── (unchanged) */}
+        {/* ── Modal ── */}
         {showForm && (
           <div
             className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 backdrop-blur-md"
@@ -268,10 +268,11 @@ function Students() {
               {filteredStudents.length > 0 ? (
                 filteredStudents.map((s) => (
                   <tr key={s.id} className="table-row-hover transition-colors duration-150 group">
+                    {/* Student name + avatar */}
                     <td className="px-4 py-3.5">
                       <div className="flex items-center gap-3">
                         <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${getColor(s.username)} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
-                          {getInitial(s.username)}
+                          {getInitials(s.username)}
                         </div>
                         <span className="text-[#e6edf3] text-sm font-medium">{s.username}</span>
                       </div>
@@ -302,6 +303,7 @@ function Students() {
                         <span className="text-[#484f58] text-sm">—</span>
                       )}
                     </td>
+                    {/* Actions */}
                     <td className="px-4 py-3.5">
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
                         <button
