@@ -4,7 +4,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .views import (
     StudentViewSet, MentorViewSet, ReviewerViewSet, CurrentUserView,
     ChangePasswordView, SendBulkEmailView, CourseViewSet, EnrollmentViewSet,
-    ModuleViewSet, DayViewSet, RequestPasswordResetView, ConfirmPasswordResetView,
+    ModuleViewSet, DayViewSet, TaskViewSet, RequestPasswordResetView, ConfirmPasswordResetView,
     ContactMessageView, UnreadMessagesCountView, RecentMessagesView, ContactMessageDetailView
 )
 
@@ -16,6 +16,7 @@ router.register('courses', CourseViewSet)
 router.register('enrollments', EnrollmentViewSet)
 router.register('modules', ModuleViewSet)
 router.register('days', DayViewSet)
+router.register('tasks', TaskViewSet)   # <-- NEW: register Task viewset
 
 urlpatterns = [
     path('api/', include(router.urls)),

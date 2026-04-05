@@ -13,10 +13,10 @@ from datetime import timedelta
 from .models import PasswordResetToken
 from django.core.mail import send_mail
 from django.conf import settings
-from .models import User, Student, Mentor, Reviewer, Course, Enrollment, Module, Day, PasswordResetToken, ContactMessage
+from .models import User, Student, Mentor, Reviewer, Course, Enrollment, Module, Day, Task, Batch, PasswordResetToken, ContactMessage
 from .serializers import (
     StudentSerializer, MentorSerializer, ReviewerSerializer, UserSerializer,
-    CourseSerializer, EnrollmentSerializer, ModuleSerializer, DaySerializer,
+    CourseSerializer, EnrollmentSerializer, ModuleSerializer, DaySerializer, TaskSerializer, BatchSerializer,
     ContactMessageSerializer
 )
 
@@ -29,6 +29,24 @@ class CourseFilterBackend(BaseFilterBackend):
         if course_id:
             return queryset.filter(course_id=course_id)
         return queryset
+
+# ----------------------------
+# Custom Filter Backend for filtering tasks by day
+# ----------------------------
+class DayFilterBackend(BaseFilterBackend):
+    def filter_queryset(self, request, queryset, view):
+        day_id = request.query_params.get('day')
+        if day_id:
+            return queryset.filter(day_id=day_id)
+        return queryset
+
+# ----------------------------
+# BATCH VIEWSET (NEW)
+# ----------------------------
+class BatchViewSet(viewsets.ModelViewSet):
+    queryset = Batch.objects.all()
+    serializer_class = BatchSerializer
+    permission_classes = [IsAdminUser]
 
 # ----------------------------
 # STUDENT VIEWSET
@@ -102,7 +120,7 @@ class EnrollmentViewSet(viewsets.ModelViewSet):
             return Response({"detail": "Student profile not found"}, status=status.HTTP_404_NOT_FOUND)
 
 # ----------------------------
-# MODULE VIEWSET (now with CourseFilterBackend)
+# MODULE VIEWSET
 # ----------------------------
 class ModuleViewSet(viewsets.ModelViewSet):
     queryset = Module.objects.all()
@@ -119,7 +137,16 @@ class DayViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
 
 # ----------------------------
-# GET CURRENT USER INFO (for frontend role detection)
+# TASK VIEWSET
+# ----------------------------
+class TaskViewSet(viewsets.ModelViewSet):
+    queryset = Task.objects.all()
+    serializer_class = TaskSerializer
+    filter_backends = [DayFilterBackend]
+    permission_classes = [IsAdminOrReadOnly]
+
+# ----------------------------
+# GET CURRENT USER INFO
 # ----------------------------
 class CurrentUserView(APIView):
     permission_classes = [IsAuthenticated]
@@ -235,7 +262,7 @@ class ConfirmPasswordResetView(APIView):
         return Response({"detail": "Password reset successful."}, status=status.HTTP_200_OK)
 
 # ----------------------------
-# CONTACT MESSAGE VIEWS (for admin notifications)
+# CONTACT MESSAGE VIEWS
 # ----------------------------
 class ContactMessageView(APIView):
     permission_classes = []
@@ -288,3 +315,5 @@ class ContactMessageDetailView(APIView):
             return Response({"detail": "Marked as read"})
         except ContactMessage.DoesNotExist:
             return Response({"detail": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+        
+        

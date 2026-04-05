@@ -13,6 +13,29 @@ import {
 } from "react-icons/fa";
 import Footer from "../components/Footer";
 
+// Toast Component
+function Toast({ message, type, onClose }) {
+  React.useEffect(() => {
+    const timer = setTimeout(onClose, 3000);
+    return () => clearTimeout(timer);
+  }, [onClose]);
+
+  const bgColor = type === "success" 
+    ? "bg-emerald-500/90" 
+    : type === "error" 
+    ? "bg-red-500/90" 
+    : "bg-blue-500/90";
+  const icon = type === "success" ? "✓" : type === "error" ? "✕" : "ℹ";
+
+  return (
+    <div className={`fixed top-5 right-5 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl backdrop-blur-md ${bgColor} text-white text-sm font-medium animate-in slide-in-from-top-2`}>
+      <span className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold">{icon}</span>
+      <span>{message}</span>
+      <button onClick={onClose} className="ml-2 text-white/70 hover:text-white">×</button>
+    </div>
+  );
+}
+
 const Contact = () => {
   // Form state
   const [formData, setFormData] = useState({
@@ -25,6 +48,11 @@ const Contact = () => {
 
   // Validation errors
   const [errors, setErrors] = useState({});
+
+  // Toast state
+  const [toast, setToast] = useState(null);
+  const showToast = (message, type = "success") => setToast({ message, type });
+  const hideToast = () => setToast(null);
 
   // Handle input changes
   const handleChange = (e) => {
@@ -72,7 +100,7 @@ const Contact = () => {
     // Send to backend API
     try {
       const res = await axios.post("http://127.0.0.1:8000/api/contact/", formData);
-      alert(res.data.detail);
+      showToast(res.data.detail, "success");
       // Reset form on success
       setFormData({
         name: "",
@@ -83,12 +111,24 @@ const Contact = () => {
       });
       setErrors({});
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to send message. Please try again.");
+      const errorMsg = err.response?.data?.detail || "Failed to send message. Please try again.";
+      showToast(errorMsg, "error");
     }
   };
 
   return (
     <div className="bg-white min-h-screen font-sans text-gray-900">
+      {/* Toast */}
+      {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
+
+      <style>{`
+        @keyframes slide-in-from-top-2 {
+          from { opacity:0; transform:translateY(-1rem); }
+          to { opacity:1; transform:translateY(0); }
+        }
+        .animate-in { animation: slide-in-from-top-2 0.2s ease-out; }
+      `}</style>
+
       {/* Hero Section */}
       <section className="bg-gradient-to-r from-green-50 to-emerald-50 py-20">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">

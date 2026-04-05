@@ -4,7 +4,7 @@ from django.core.mail import send_mail
 from django.conf import settings
 from django.db import IntegrityError
 from rest_framework import serializers
-from .models import User, Student, Mentor, Reviewer, Course, Enrollment, Module, Day, ContactMessage
+from .models import User, Student, Mentor, Reviewer, Course, Enrollment, Module, Day, Task, Batch, ContactMessage
 
 def generate_random_password(length=10):
     alphabet = string.ascii_letters + string.digits
@@ -17,13 +17,21 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'is_admin', 'is_student', 'is_mentor', 'is_reviewer']
-        extra_kwargs = {
-            'password': {'write_only': True, 'required': False}
-        }
+        extra_kwargs = {'password': {'write_only': True, 'required': False}}
 
     def update(self, instance, validated_data):
         validated_data.pop('password', None)
         return super().update(instance, validated_data)
+
+# ----------------------------
+# BATCH SERIALIZER (ADD THIS)
+# ----------------------------
+class BatchSerializer(serializers.ModelSerializer):
+    student_count = serializers.IntegerField(source='students.count', read_only=True)
+
+    class Meta:
+        model = Batch
+        fields = ['id', 'name', 'start_date', 'end_date', 'is_active', 'created_at', 'student_count']
 
 # ----------------------------
 # COURSE SERIALIZER
@@ -36,15 +44,23 @@ class CourseSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'description', 'duration', 'created_at', 'student_count']
 
 # ----------------------------
-# DAY SERIALIZER (nested inside Module)
+# DAY SERIALIZER
 # ----------------------------
 class DaySerializer(serializers.ModelSerializer):
     class Meta:
         model = Day
-        fields = ['id', 'module', 'title', 'content', 'order']
+        fields = ['id', 'module', 'title', 'content', 'order', 'is_completed']
 
 # ----------------------------
-# MODULE SERIALIZER (includes days and is_public)
+# TASK SERIALIZER
+# ----------------------------
+class TaskSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Task
+        fields = ['id', 'day', 'title', 'description', 'order']
+
+# ----------------------------
+# MODULE SERIALIZER
 # ----------------------------
 class ModuleSerializer(serializers.ModelSerializer):
     course_name = serializers.CharField(source='course.name', read_only=True)
@@ -65,7 +81,7 @@ class EnrollmentSerializer(serializers.ModelSerializer):
         fields = ['id', 'student', 'course', 'student_name', 'course_name', 'enrolled_at', 'status']
 
 # ----------------------------
-# STUDENT SERIALIZER (with courses and auto-enrollment)
+# STUDENT SERIALIZER (without batch - clean version)
 # ----------------------------
 class StudentSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username')
@@ -89,9 +105,7 @@ class StudentSerializer(serializers.ModelSerializer):
                 password=random_password
             )
         except IntegrityError:
-            raise serializers.ValidationError(
-                {"username": "A user with this username already exists."}
-            )
+            raise serializers.ValidationError({"username": "A user with this username already exists."})
 
         user.is_student = True
         user.save()
@@ -164,9 +178,7 @@ class MentorSerializer(serializers.ModelSerializer):
                 password=random_password
             )
         except IntegrityError:
-            raise serializers.ValidationError(
-                {"username": "A user with this username already exists."}
-            )
+            raise serializers.ValidationError({"username": "A user with this username already exists."})
 
         user.is_mentor = True
         user.save()
@@ -232,9 +244,7 @@ class ReviewerSerializer(serializers.ModelSerializer):
                 password=random_password
             )
         except IntegrityError:
-            raise serializers.ValidationError(
-                {"username": "A user with this username already exists."}
-            )
+            raise serializers.ValidationError({"username": "A user with this username already exists."})
 
         user.is_reviewer = True
         user.save()
@@ -286,4 +296,5 @@ class ContactMessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = ContactMessage
         fields = '__all__'
+
         

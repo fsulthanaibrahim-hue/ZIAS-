@@ -8,17 +8,30 @@ class User(AbstractUser):
     is_student = models.BooleanField(default=False)
     is_mentor = models.BooleanField(default=False)
     is_reviewer = models.BooleanField(default=False)
-    # Track when the password was last changed (for expiry)
     password_changed_at = models.DateTimeField(default=timezone.now, null=True, blank=True)
 
     def set_password(self, raw_password):
-        """Override to update password_changed_at whenever password is set."""
         super().set_password(raw_password)
         self.password_changed_at = timezone.now()
-        # Note: do not call save() here – the caller will save the user.
 
     def __str__(self):
         return self.username
+
+# ----------------------------
+# BATCH MODEL (ADD THIS)
+# ----------------------------
+class Batch(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    start_date = models.DateField(null=True, blank=True)
+    end_date = models.DateField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return self.name
 
 # Student Profile
 class Student(models.Model):
@@ -27,6 +40,7 @@ class Student(models.Model):
     )
     course = models.CharField(max_length=100)
     batch = models.CharField(max_length=50)
+    student_batch = models.ForeignKey(Batch, on_delete=models.SET_NULL, null=True, blank=True, related_name='students')
     phone = models.CharField(max_length=15, blank=True, null=True)
     date_of_birth = models.DateField(null=True, blank=True)
 
@@ -81,13 +95,18 @@ class Enrollment(models.Model):
 # ----------------------------
 # MODULE MODEL (Week)
 # ----------------------------
-# models.py
 class Module(models.Model):
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='modules')
     title = models.CharField(max_length=200)
     content = models.TextField(blank=True)
     order = models.IntegerField(default=0)
-    is_common = models.BooleanField(default=True)   # True = weeks 1-5, False = template for custom
+    is_common = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['order']
+
+    def __str__(self):
+        return f"{self.course.name} - {self.title}"
 
 class StudentModule(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='custom_modules')
@@ -98,24 +117,42 @@ class StudentModule(models.Model):
 
     class Meta:
         unique_together = ['student', 'module']
-        
+
     def __str__(self):
-        return f"{self.course.name} - {self.title}"
+        return f"{self.student.user.username} - {self.module.course.name} - {self.module.title}"
 
 # ----------------------------
-# DAY MODEL (Daily breakdown inside a Module)
+# DAY MODEL
 # ----------------------------
 class Day(models.Model):
     module = models.ForeignKey(Module, on_delete=models.CASCADE, related_name='days')
     title = models.CharField(max_length=100)
     content = models.TextField(help_text="HTML content for the day")
     order = models.IntegerField(default=0)
+    is_completed = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['order', 'id']
 
     def __str__(self):
         return f"{self.module.title} - {self.title}"
+
+# ----------------------------
+# TASK MODEL
+# ----------------------------
+class Task(models.Model):
+    day = models.ForeignKey(Day, on_delete=models.CASCADE, related_name='tasks')
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    order = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['order']
+
+    def __str__(self):
+        return self.title
 
 # ----------------------------
 # PASSWORD RESET TOKEN MODEL
@@ -146,4 +183,3 @@ class ContactMessage(models.Model):
 
     def __str__(self):
         return f"{self.name} - {self.subject}"
-    
