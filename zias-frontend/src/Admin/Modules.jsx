@@ -30,7 +30,7 @@ function Modules() {
   const [courses, setCourses] = useState([]);
   const [showModuleModal, setShowModuleModal] = useState(false);
   const [editingModule, setEditingModule] = useState(null);
-  const [moduleForm, setModuleForm] = useState({ course: "", title: "", order: 0, content: "" });
+  const [moduleForm, setModuleForm] = useState({ course: "", title: "", order: 0, content: "", is_common: true });
   const [searchTerm, setSearchTerm] = useState("");
 
   // Days state (per module)
@@ -100,14 +100,20 @@ function Modules() {
   }, [expandedDayId]);
 
   // ---------- Helpers ----------
-  const resetModuleForm = () => setModuleForm({ course: "", title: "", order: 0, content: "" });
+  const resetModuleForm = () => setModuleForm({ course: "", title: "", order: 0, content: "", is_common: true });
   const resetDayForm = () => setDayForm({ module: "", title: "", content: "", order: 0 });
   const resetTaskForm = () => setTaskForm({ day: "", title: "", description: "", order: 0 });
 
   // ---------- Module CRUD ----------
   const handleModuleSubmit = async (e) => {
     e.preventDefault();
-    const payload = { ...moduleForm, order: parseInt(moduleForm.order) };
+    const payload = { 
+      course: moduleForm.course, 
+      title: moduleForm.title, 
+      order: parseInt(moduleForm.order), 
+      content: moduleForm.content,
+      is_common: moduleForm.is_common
+    };
     try {
       if (editingModule) {
         await API.patch(`modules/${editingModule.id}/`, payload);
@@ -131,6 +137,7 @@ function Modules() {
       title: mod.title,
       order: mod.order,
       content: mod.content || "",
+      is_common: mod.is_common ?? true,
     });
     setShowModuleModal(true);
   };
@@ -341,6 +348,21 @@ function Modules() {
                 <input type="text" placeholder="Title" value={moduleForm.title} onChange={e => setModuleForm({ ...moduleForm, title: e.target.value })} required className={inputClass} />
                 <input type="number" placeholder="Order" value={moduleForm.order} onChange={e => setModuleForm({ ...moduleForm, order: e.target.value })} required className={inputClass} />
                 <textarea placeholder="Content (optional)" value={moduleForm.content} onChange={e => setModuleForm({ ...moduleForm, content: e.target.value })} rows="3" className={`${inputClass} resize-none`} />
+                
+                {/* is_common checkbox - IMPORTANT for Foundation modules */}
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="is_common"
+                    checked={moduleForm.is_common}
+                    onChange={(e) => setModuleForm({ ...moduleForm, is_common: e.target.checked })}
+                    className="w-4 h-4 rounded bg-[#0d1117] border-[#30363d] accent-blue-500"
+                  />
+                  <label htmlFor="is_common" className="text-sm text-[#c9d1d9]">
+                    Common Module (visible to all students - Foundation Weeks)
+                  </label>
+                </div>
+                <p className="text-[#484f58] text-xs -mt-2">✅ Check this for weeks 1-8 (Foundation modules)</p>
               </div>
               <div className="flex gap-2 px-6 py-4 border-t border-[#21262d]">
                 <button type="submit" className="flex-1 bg-[#238636] hover:bg-[#2ea043] text-white py-2 rounded-lg">Save</button>
@@ -350,7 +372,7 @@ function Modules() {
           </div>
         )}
 
-        {/* Day Form Modal */}
+        {/* Day Form Modal (same as before) */}
         {showDayModal && (
           <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 backdrop-blur-md" onClick={() => setShowDayModal(false)}>
             <form onSubmit={handleDaySubmit} className="modal-enter bg-[#161b22] rounded-2xl w-full max-w-md border border-[#30363d] shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -371,7 +393,7 @@ function Modules() {
           </div>
         )}
 
-        {/* Task Form Modal */}
+        {/* Task Form Modal (same as before) */}
         {showTaskModal && (
           <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 backdrop-blur-md" onClick={() => setShowTaskModal(false)}>
             <form onSubmit={handleTaskSubmit} className="modal-enter bg-[#161b22] rounded-2xl w-full max-w-md border border-[#30363d] shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -392,7 +414,7 @@ function Modules() {
           </div>
         )}
 
-        {/* Modules Table */}
+        {/* Modules Table (same as before - includes Type column) */}
         <div className="rounded-xl border border-[#21262d] overflow-hidden shadow-xl shadow-black/20">
           <table className="w-full">
             <thead>
@@ -400,6 +422,7 @@ function Modules() {
                 <th className="px-4 py-3 text-left text-[#7d8590] text-xs font-semibold uppercase">Course</th>
                 <th className="px-4 py-3 text-left text-[#7d8590] text-xs font-semibold uppercase">Title</th>
                 <th className="px-4 py-3 text-left text-[#7d8590] text-xs font-semibold uppercase">Order</th>
+                <th className="px-4 py-3 text-left text-[#7d8590] text-xs font-semibold uppercase">Type</th>
                 <th className="px-4 py-3 text-left text-[#7d8590] text-xs font-semibold uppercase">Content</th>
                 <th className="px-4 py-3 text-left text-[#7d8590] text-xs font-semibold uppercase">Actions</th>
               </tr>
@@ -411,6 +434,13 @@ function Modules() {
                     <td className="px-4 py-3.5 text-[#e6edf3] text-sm">{mod.course_name || mod.course?.name || "—"}</td>
                     <td className="px-4 py-3.5 text-[#c9d1d9] text-sm">{mod.title}</td>
                     <td className="px-4 py-3.5"><span className="inline-flex bg-[#21262d] text-[#7d8590] border border-[#30363d] text-xs px-2.5 py-1 rounded-full">{mod.order}</span></td>
+                    <td className="px-4 py-3.5">
+                      {mod.is_common ? (
+                        <span className="inline-flex bg-blue-500/10 text-blue-400 border border-blue-500/20 text-xs px-2 py-1 rounded-full">Foundation (Common)</span>
+                      ) : (
+                        <span className="inline-flex bg-purple-500/10 text-purple-400 border border-purple-500/20 text-xs px-2 py-1 rounded-full">Custom</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3.5 text-[#7d8590] text-sm truncate max-w-xs">{mod.content || "—"}</td>
                     <td className="px-4 py-3.5">
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
@@ -421,10 +451,10 @@ function Modules() {
                     </td>
                   </tr>
 
-                  {/* Expanded Days Row */}
+                  {/* Expanded Days Row (same as before) */}
                   {expandedModuleId === mod.id && (
                     <tr>
-                      <td colSpan="5" className="px-4 py-3 bg-[#0d1117]/80">
+                      <td colSpan="6" className="px-4 py-3 bg-[#0d1117]/80">
                         <div className="bg-[#161b22] rounded-lg border border-[#21262d] p-4">
                           {mod.content && (
                             <div className="mb-4 pb-3 border-b border-[#21262d]">
@@ -500,7 +530,7 @@ function Modules() {
                 </React.Fragment>
               ))}
               {paginatedModules.length === 0 && (
-                <tr><td colSpan="5" className="text-center py-20 text-[#7d8590]">No modules found</td></tr>
+                <tr><td colSpan="6" className="text-center py-20 text-[#7d8590]">No modules found</td></tr>
               )}
             </tbody>
           </table>

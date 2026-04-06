@@ -18,7 +18,7 @@ class User(AbstractUser):
         return self.username
 
 # ----------------------------
-# BATCH MODEL (ADD THIS)
+# BATCH MODEL
 # ----------------------------
 class Batch(models.Model):
     name = models.CharField(max_length=100, unique=True)
@@ -33,7 +33,9 @@ class Batch(models.Model):
     def __str__(self):
         return self.name
 
-# Student Profile
+# ----------------------------
+# STUDENT PROFILE
+# ----------------------------
 class Student(models.Model):
     user = models.OneToOneField(
         User, on_delete=models.CASCADE, related_name='student_profile'
@@ -47,7 +49,9 @@ class Student(models.Model):
     def __str__(self):
         return self.user.username
 
-# Mentor Profile
+# ----------------------------
+# MENTOR PROFILE
+# ----------------------------
 class Mentor(models.Model):
     user = models.OneToOneField(
         User, on_delete=models.CASCADE, related_name='mentor_profile'
@@ -58,7 +62,9 @@ class Mentor(models.Model):
     def __str__(self):
         return self.user.username
 
-# Reviewer Profile
+# ----------------------------
+# REVIEWER PROFILE
+# ----------------------------
 class Reviewer(models.Model):
     user = models.OneToOneField(
         User, on_delete=models.CASCADE, related_name='reviewer_profile'
@@ -100,7 +106,7 @@ class Module(models.Model):
     title = models.CharField(max_length=200)
     content = models.TextField(blank=True)
     order = models.IntegerField(default=0)
-    is_common = models.BooleanField(default=True)
+    is_common = models.BooleanField(default=True)   # True = common modules (weeks 1-8), False = custom templates
 
     class Meta:
         ordering = ['order']
@@ -108,6 +114,9 @@ class Module(models.Model):
     def __str__(self):
         return f"{self.course.name} - {self.title}"
 
+# ----------------------------
+# STUDENT MODULE (Personalized modules for weeks 9+)
+# ----------------------------
 class StudentModule(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='custom_modules')
     module = models.ForeignKey(Module, on_delete=models.CASCADE)
@@ -183,3 +192,4 @@ class ContactMessage(models.Model):
 
     def __str__(self):
         return f"{self.name} - {self.subject}"
+    

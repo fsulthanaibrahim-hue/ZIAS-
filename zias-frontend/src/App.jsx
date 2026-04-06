@@ -20,6 +20,7 @@ import Home from "./pages/Home";
 import Courses from "./pages/Courses";
 import About from "./pages/About";
 import Contact from "./pages/Contact";
+import ChangePassword from "./pages/ChangePassword";
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem("access_token");
@@ -45,6 +46,7 @@ function App() {
       <Route path="/admin/login" element={<AdminLogin />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password/:token" element={<ResetPassword />} />
+      <Route path="/change-password" element={<PrivateRoute><ChangePassword /></PrivateRoute>} />
 
       {/* Protected user routes */}
       <Route path="/user/dashboard" element={<PrivateRoute><StudentDashboard /></PrivateRoute>} />

@@ -13,11 +13,11 @@ from datetime import timedelta
 from .models import PasswordResetToken
 from django.core.mail import send_mail
 from django.conf import settings
-from .models import User, Student, Mentor, Reviewer, Course, Enrollment, Module, Day, Task, Batch, PasswordResetToken, ContactMessage
+from .models import User, Student, Mentor, Reviewer, Course, Enrollment, Module, Day, Task, Batch, StudentModule, PasswordResetToken, ContactMessage
 from .serializers import (
     StudentSerializer, MentorSerializer, ReviewerSerializer, UserSerializer,
     CourseSerializer, EnrollmentSerializer, ModuleSerializer, DaySerializer, TaskSerializer, BatchSerializer,
-    ContactMessageSerializer
+    ContactMessageSerializer, StudentModuleSerializer
 )
 
 # ----------------------------
@@ -41,7 +41,7 @@ class DayFilterBackend(BaseFilterBackend):
         return queryset
 
 # ----------------------------
-# BATCH VIEWSET (NEW)
+# BATCH VIEWSET
 # ----------------------------
 class BatchViewSet(viewsets.ModelViewSet):
     queryset = Batch.objects.all()
@@ -49,22 +49,23 @@ class BatchViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
 
 # ----------------------------
-# STUDENT VIEWSET
+# STUDENT VIEWSET (with me action)
 # ----------------------------
 class StudentViewSet(viewsets.ModelViewSet):
     queryset = Student.objects.all()
     serializer_class = StudentSerializer
     permission_classes = [IsStudentOwner]
 
-    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
-    def me(self, request):
+    @action(detail=False, methods=['get'], url_path='me', permission_classes=[IsAuthenticated])
+    def get_me(self, request):
         try:
             student = Student.objects.get(user=request.user)
             serializer = self.get_serializer(student)
             return Response(serializer.data)
         except Student.DoesNotExist:
             return Response({"detail": "Student profile not found"}, status=status.HTTP_404_NOT_FOUND)
-
+        
+                
 # ----------------------------
 # MENTOR VIEWSET
 # ----------------------------
@@ -109,8 +110,9 @@ class EnrollmentViewSet(viewsets.ModelViewSet):
     serializer_class = EnrollmentSerializer
     permission_classes = [IsAdminUser]
 
-    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
-    def me(self, request):
+    @action(detail=False, methods=['get'], url_path='me', permission_classes=[IsAuthenticated])
+    def get_my_enrollments(self, request):
+        """Get enrollments for the current student"""
         try:
             student = Student.objects.get(user=request.user)
             enrollments = Enrollment.objects.filter(student=student)
@@ -120,7 +122,7 @@ class EnrollmentViewSet(viewsets.ModelViewSet):
             return Response({"detail": "Student profile not found"}, status=status.HTTP_404_NOT_FOUND)
 
 # ----------------------------
-# MODULE VIEWSET
+# MODULE VIEWSET (with for_course method)
 # ----------------------------
 class ModuleViewSet(viewsets.ModelViewSet):
     queryset = Module.objects.all()
@@ -128,13 +130,55 @@ class ModuleViewSet(viewsets.ModelViewSet):
     filter_backends = [CourseFilterBackend]
     permission_classes = [IsAdminOrReadOnly]
 
+    @action(detail=False, methods=['get'], url_path='for-course')
+    def for_course(self, request):
+        course_id = request.query_params.get('course_id')
+        if not course_id:
+            return Response({"error": "course_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get common modules (is_common=True)
+        common_modules = Module.objects.filter(is_common=True)
+        
+        # Get modules specific to this course (is_common=False)
+        course_modules = Module.objects.filter(course_id=course_id, is_common=False)
+        
+        # Combine and sort by order
+        all_modules = list(common_modules) + list(course_modules)
+        all_modules.sort(key=lambda x: x.order)
+        
+        serializer = self.get_serializer(all_modules, many=True)
+        return Response(serializer.data)
+
+# ----------------------------
+# STUDENT MODULE VIEWSET
+# ----------------------------
+class StudentModuleViewSet(viewsets.ModelViewSet):
+    serializer_class = ModuleSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        if self.request.user.is_admin:
+            return Module.objects.filter(is_common=False)
+        try:
+            student = Student.objects.get(user=self.request.user)
+            student_modules = StudentModule.objects.filter(student=student)
+            module_ids = [sm.module.id for sm in student_modules]
+            return Module.objects.filter(id__in=module_ids, is_common=False)
+        except Student.DoesNotExist:
+            return Module.objects.none()
+
+    def list(self, request):
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
 # ----------------------------
 # DAY VIEWSET
 # ----------------------------
 class DayViewSet(viewsets.ModelViewSet):
     queryset = Day.objects.all()
     serializer_class = DaySerializer
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAuthenticated]   # was [IsAdminUser] or [IsAdminOrReadOnly]
 
 # ----------------------------
 # TASK VIEWSET
@@ -315,5 +359,3 @@ class ContactMessageDetailView(APIView):
             return Response({"detail": "Marked as read"})
         except ContactMessage.DoesNotExist:
             return Response({"detail": "Not found"}, status=status.HTTP_404_NOT_FOUND)
-        
-        

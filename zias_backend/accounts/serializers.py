@@ -4,7 +4,7 @@ from django.core.mail import send_mail
 from django.conf import settings
 from django.db import IntegrityError
 from rest_framework import serializers
-from .models import User, Student, Mentor, Reviewer, Course, Enrollment, Module, Day, Task, Batch, ContactMessage
+from .models import User, Student, Mentor, Reviewer, Course, Enrollment, Module, Day, Task, Batch, StudentModule, ContactMessage
 
 def generate_random_password(length=10):
     alphabet = string.ascii_letters + string.digits
@@ -24,7 +24,7 @@ class UserSerializer(serializers.ModelSerializer):
         return super().update(instance, validated_data)
 
 # ----------------------------
-# BATCH SERIALIZER (ADD THIS)
+# BATCH SERIALIZER
 # ----------------------------
 class BatchSerializer(serializers.ModelSerializer):
     student_count = serializers.IntegerField(source='students.count', read_only=True)
@@ -81,7 +81,7 @@ class EnrollmentSerializer(serializers.ModelSerializer):
         fields = ['id', 'student', 'course', 'student_name', 'course_name', 'enrolled_at', 'status']
 
 # ----------------------------
-# STUDENT SERIALIZER (without batch - clean version)
+# STUDENT SERIALIZER
 # ----------------------------
 class StudentSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username')
@@ -297,4 +297,13 @@ class ContactMessageSerializer(serializers.ModelSerializer):
         model = ContactMessage
         fields = '__all__'
 
-        
+# ----------------------------
+# STUDENT MODULE SERIALIZER
+# ----------------------------
+class StudentModuleSerializer(serializers.ModelSerializer):
+    module_title = serializers.CharField(source='module.title', read_only=True)
+    module_content = serializers.CharField(source='module.content', read_only=True)
+    
+    class Meta:
+        model = StudentModule
+        fields = ['id', 'student', 'module', 'module_title', 'module_content', 'order', 'is_completed', 'completed_at']

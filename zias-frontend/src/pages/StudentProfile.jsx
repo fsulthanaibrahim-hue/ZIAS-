@@ -22,13 +22,7 @@ function getAvatarColor(username = "") {
   return avatarColors[idx];
 }
 
-const fields = [
-  { name: "course", label: "Course", type: "text", placeholder: "e.g. Full Stack Bootcamp", icon: "🎓" },
-  { name: "batch", label: "Batch", type: "text", placeholder: "e.g. Batch 1", icon: "📅" },
-  { name: "phone", label: "Phone", type: "tel", placeholder: "Your mobile number", icon: "📞" },
-  { name: "date_of_birth", label: "Date of Birth", type: "date", placeholder: "", icon: "🎂" },
-];
-
+// Read-only field component
 function ReadOnly({ label, value }) {
   return (
     <div style={s.roField}>
@@ -38,13 +32,23 @@ function ReadOnly({ label, value }) {
   );
 }
 
+// Read-only field with icon (for personal details)
+function ReadOnlyField({ label, value, icon }) {
+  return (
+    <div style={s.fieldWrap}>
+      <label style={s.label}>{label}</label>
+      <div style={s.readOnlyWrap}>
+        <span style={{ fontSize: 14, flexShrink: 0, opacity: 0.65 }}>{icon}</span>
+        <span style={s.readOnlyValue}>{value || "—"}</span>
+      </div>
+    </div>
+  );
+}
+
 function StudentProfile() {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [formData, setFormData] = useState({ course: "", batch: "", phone: "", date_of_birth: "" });
-  const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ text: "", type: "" });
-  const [focused, setFocused] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -52,16 +56,13 @@ function StudentProfile() {
       try {
         const userRes = await API.get("users/me/");
         const user = userRes.data;
-        if (!user.is_student) { navigate("/login"); return; }
+        if (!user.is_student) {
+          navigate("/login");
+          return;
+        }
         const studentRes = await API.get("students/me/");
         const student = studentRes.data;
         setProfile(student);
-        setFormData({
-          course: student.course || "",
-          batch: student.batch || "",
-          phone: student.phone || "",
-          date_of_birth: student.date_of_birth || "",
-        });
       } catch (err) {
         console.error(err);
         setMessage({
@@ -77,26 +78,11 @@ function StudentProfile() {
     fetchProfile();
   }, [navigate]);
 
-  const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
-
-  const handleSave = async (e) => {
-    e.preventDefault();
-    setSaving(true);
-    setMessage({ text: "", type: "" });
-    try {
-      await API.patch(`students/${profile.id}/`, {
-        course: formData.course,
-        batch: formData.batch,
-        phone: formData.phone,
-        date_of_birth: formData.date_of_birth,
-      });
-      setMessage({ text: "Profile updated successfully.", type: "success" });
-      setProfile({ ...profile, ...formData });
-    } catch {
-      setMessage({ text: "Failed to update profile.", type: "error" });
-    } finally {
-      setSaving(false);
-    }
+  const handleLogout = () => {
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("refresh_token");
+    localStorage.removeItem("user");
+    navigate("/login");
   };
 
   if (loading) {
@@ -120,16 +106,20 @@ function StudentProfile() {
 
   const [bgColor, accentColor] = getAvatarColor(username);
 
+  // Personal details fields (read-only)
+  const personalFields = [
+    { name: "course", label: "Course", icon: "🎓", value: profile.course },
+    { name: "batch", label: "Batch", icon: "📅", value: profile.batch },
+    { name: "phone", label: "Phone", icon: "📞", value: profile.phone },
+    { name: "date_of_birth", label: "Date of Birth", icon: "🎂", value: profile.date_of_birth },
+  ];
+
   return (
     <div style={s.page}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-        .sp-input::placeholder { color: #2e4a68; }
-        .sp-input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.4); cursor: pointer; }
-        .sp-btn-primary:hover:not(:disabled) { opacity: 0.88; transform: translateY(-1px); }
-        .sp-btn-secondary:hover { background: rgba(255,255,255,0.07) !important; color: #c0d8f0 !important; }
       `}</style>
 
       <div style={{ ...s.card, animation: "fadeIn 0.4s ease both" }}>
@@ -150,60 +140,49 @@ function StudentProfile() {
 
         {/* Body */}
         <div style={s.body}>
-          <form onSubmit={handleSave}>
 
-            {/* Read-only */}
-            <div style={s.roGrid}>
-              <ReadOnly label="Username" value={username} />
-              <ReadOnly label="Email" value={email} />
-            </div>
+          {/* Read-only Account Info */}
+          <div style={s.roGrid}>
+            <ReadOnly label="Username" value={username} />
+            <ReadOnly label="Email" value={email} />
+          </div>
 
-            <div style={s.divider} />
-            <p style={s.sectionLabel}>Personal Details</p>
+          <div style={s.divider} />
+          <p style={s.sectionLabel}>Personal Details</p>
 
-            {/* Editable fields */}
-            <div style={s.fieldGrid}>
-              {fields.map(({ name, label, type, placeholder, icon }) => (
-                <div key={name} style={s.fieldWrap}>
-                  <label style={s.label}>{label}</label>
-                  <div style={{
-                    ...s.inputWrap,
-                    ...(focused === name ? s.inputWrapFocused : {}),
-                  }}>
-                    <span style={{ fontSize: 14, flexShrink: 0, opacity: 0.65 }}>{icon}</span>
-                    <input
-                      className="sp-input"
-                      type={type}
-                      name={name}
-                      value={formData[name]}
-                      onChange={handleChange}
-                      onFocus={() => setFocused(name)}
-                      onBlur={() => setFocused(null)}
-                      placeholder={placeholder}
-                      style={s.input}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
+          {/* Read-only Personal Details Fields */}
+          <div style={s.fieldGrid}>
+            {personalFields.map(({ name, label, icon, value }) => (
+              <ReadOnlyField key={name} label={label} value={value} icon={icon} />
+            ))}
+          </div>
 
-            <div style={s.actions}>
-              <button
-                type="submit"
-                disabled={saving}
-                className="sp-btn-primary"
-                style={{ ...s.btnPrimary, ...(saving ? { opacity: 0.6, cursor: "not-allowed" } : {}) }}
-              >
-                {saving
-                  ? <><span style={s.btnSpinner} />Saving...</>
-                  : "Save Changes"}
-              </button>
-              <Link to="/change-password" className="sp-btn-secondary" style={s.btnSecondary}>
-                Change Password
-              </Link>
-            </div>
-          </form>
+          {/* Note for student */}
+          <div style={s.noteBox}>
+            <p style={s.noteText}>
+              📝 For any changes to your profile information, please contact your administrator.
+            </p>
+          </div>
 
+          {/* Actions */}
+          <div style={s.actions}>
+            <Link to="/change-password" style={s.btnSecondary}>
+              Change Password
+            </Link>
+            <Link to="/user/dashboard" style={s.btnDashboard}>
+              Back to Dashboard
+            </Link>
+            <button onClick={handleLogout} style={s.btnLogout}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 8 }}>
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+              Logout
+            </button>
+          </div>
+
+          {/* Message Toast */}
           {message.text && (
             <div style={{
               ...s.toast,
@@ -349,7 +328,7 @@ const s = {
     display: "grid",
     gridTemplateColumns: "1fr 1fr",
     gap: 14,
-    marginBottom: 26,
+    marginBottom: 16,
   },
   fieldWrap: {
     display: "flex",
@@ -361,59 +340,38 @@ const s = {
     fontWeight: 500,
     color: "#5a7a9a",
   },
-  inputWrap: {
+  readOnlyWrap: {
     display: "flex",
     alignItems: "center",
     background: "#0d1625",
     border: "1px solid rgba(255,255,255,0.07)",
     borderRadius: 10,
-    padding: "0 12px",
+    padding: "11px 12px",
     gap: 8,
-    transition: "border-color 0.2s, box-shadow 0.2s",
   },
-  inputWrapFocused: {
-    borderColor: "rgba(74,158,255,0.45)",
-    boxShadow: "0 0 0 3px rgba(74,158,255,0.07)",
-  },
-  input: {
+  readOnlyValue: {
     flex: 1,
-    background: "transparent",
-    border: "none",
-    outline: "none",
     color: "#cce0f5",
     fontSize: 14,
-    padding: "11px 0",
-    width: "100%",
-    colorScheme: "dark",
-    fontFamily: "inherit",
+  },
+  noteBox: {
+    background: "rgba(74,158,255,0.05)",
+    border: "1px solid rgba(74,158,255,0.1)",
+    borderRadius: 10,
+    padding: "12px 16px",
+    marginBottom: 24,
+  },
+  noteText: {
+    margin: 0,
+    fontSize: 12,
+    color: "#5a7a9a",
+    textAlign: "center",
   },
   actions: {
     display: "flex",
-    gap: 10,
+    gap: 12,
     alignItems: "center",
-  },
-  btnPrimary: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 8,
-    background: "linear-gradient(135deg, #2563eb 0%, #1e50cc 100%)",
-    color: "#fff",
-    border: "none",
-    borderRadius: 10,
-    padding: "11px 26px",
-    fontSize: 14,
-    fontWeight: 600,
-    cursor: "pointer",
-    letterSpacing: 0.1,
-    transition: "opacity 0.2s, transform 0.15s",
-  },
-  btnSpinner: {
-    display: "inline-block",
-    width: 12, height: 12,
-    border: "2px solid rgba(255,255,255,0.25)",
-    borderTop: "2px solid #fff",
-    borderRadius: "50%",
-    animation: "spin 0.7s linear infinite",
+    justifyContent: "center",
   },
   btnSecondary: {
     display: "inline-flex",
@@ -422,9 +380,36 @@ const s = {
     color: "#7a9cbf",
     border: "1px solid rgba(255,255,255,0.08)",
     borderRadius: 10,
-    padding: "11px 20px",
+    padding: "11px 24px",
     fontSize: 14,
     fontWeight: 500,
+    textDecoration: "none",
+    transition: "background 0.2s, color 0.2s",
+  },
+  btnDashboard: {
+    display: "inline-flex",
+    alignItems: "center",
+    background: "#1e2d45",
+    color: "#7a9cbf",
+    border: "1px solid rgba(255,255,255,0.08)",
+    borderRadius: 10,
+    padding: "11px 24px",
+    fontSize: 14,
+    fontWeight: 500,
+    textDecoration: "none",
+    transition: "background 0.2s, color 0.2s",
+  },
+  btnLogout: {
+    display: "inline-flex",
+    alignItems: "center",
+    background: "rgba(226,75,74,0.15)",
+    color: "#e24b4a",
+    border: "1px solid rgba(226,75,74,0.3)",
+    borderRadius: 10,
+    padding: "11px 24px",
+    fontSize: 14,
+    fontWeight: 500,
+    cursor: "pointer",
     textDecoration: "none",
     transition: "background 0.2s, color 0.2s",
   },
