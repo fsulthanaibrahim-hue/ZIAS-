@@ -3,6 +3,7 @@ import AdminLogin from "./Admin/Login";
 import UserLogin from "./pages/UserLogin";
 import StudentDashboard from "./pages/StudentDashboard";
 import StudentProfile from "./pages/StudentProfile";
+import StudentReviewSheet from "./pages/StudentReviewSheet";   // ✅ new import
 import CourseDetail from "./pages/CourseDetail";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
@@ -13,7 +14,7 @@ import Students from "./Admin/Students";
 import Mentors from "./Admin/Mentors";
 import Reviewers from "./Admin/Reviewers";
 import CoursesAdmin from "./Admin/Courses";
-import ModulesAdmin from "./Admin/Modules";        // ✅ new import
+import ModulesAdmin from "./Admin/Modules";
 import ContactMessages from "./Admin/ContactMessages";
 import Navbar from "./components/Navbar";
 import Home from "./pages/Home";
@@ -51,6 +52,7 @@ function App() {
       {/* Protected user routes */}
       <Route path="/user/dashboard" element={<PrivateRoute><StudentDashboard /></PrivateRoute>} />
       <Route path="/user/profile" element={<PrivateRoute><StudentProfile /></PrivateRoute>} />
+      <Route path="/user/review-sheet" element={<PrivateRoute><StudentReviewSheet /></PrivateRoute>} />   {/* ✅ new route */}
       <Route path="/course/:courseId" element={<PrivateRoute><CourseDetail /></PrivateRoute>} />
       <Route path="/module/:moduleId" element={<PrivateRoute><ModuleView /></PrivateRoute>} />
 
@@ -60,7 +62,7 @@ function App() {
       <Route path="/admin/mentors" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Mentors /></div></AdminRoute>} />
       <Route path="/admin/reviewers" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Reviewers /></div></AdminRoute>} />
       <Route path="/admin/courses" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><CoursesAdmin /></div></AdminRoute>} />
-      <Route path="/admin/modules" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><ModulesAdmin /></div></AdminRoute>} />  {/* ✅ new route */}
+      <Route path="/admin/modules" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><ModulesAdmin /></div></AdminRoute>} />
       <Route path="/admin/messages" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><ContactMessages /></div></AdminRoute>} />
 
       {/* 404 */}

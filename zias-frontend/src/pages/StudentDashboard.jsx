@@ -74,9 +74,20 @@ function StudentDashboard() {
             <h1 className="text-2xl font-bold">Student Dashboard</h1>
             <p className="text-[#7d8590] mt-1">Welcome back, {student?.username || 'Student'}!</p>
           </div>
-          <Link to="/user/profile" className="bg-[#21262d] hover:bg-[#30363d] px-4 py-2 rounded-lg text-sm">
-            My Profile
-          </Link>
+          <div className="flex gap-3">
+            <Link
+              to="/user/review-sheet"
+              className="bg-[#1f3a5c] hover:bg-[#2a4a74] px-4 py-2 rounded-lg text-sm transition"
+            >
+              📋 Review Sheet
+            </Link>
+            <Link
+              to="/user/profile"
+              className="bg-[#21262d] hover:bg-[#30363d] px-4 py-2 rounded-lg text-sm transition"
+            >
+              My Profile
+            </Link>
+          </div>
         </div>
 
         {/* Course Selector */}
