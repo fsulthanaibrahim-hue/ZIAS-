@@ -75,7 +75,7 @@ class Reviewer(models.Model):
         return self.user.username
 
 # ----------------------------
-# COURSE MANAGEMENT MODELS
+# COURSE MODEL (no Enrollment)
 # ----------------------------
 class Course(models.Model):
     name = models.CharField(max_length=100)
@@ -86,18 +86,6 @@ class Course(models.Model):
     def __str__(self):
         return self.name
 
-class Enrollment(models.Model):
-    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='enrollments')
-    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='enrollments')
-    enrolled_at = models.DateTimeField(auto_now_add=True)
-    status = models.CharField(max_length=20, default='active')
-
-    class Meta:
-        unique_together = ('student', 'course')
-
-    def __str__(self):
-        return f"{self.student.user.username} -> {self.course.name}"
-
 # ----------------------------
 # MODULE MODEL (Week)
 # ----------------------------
@@ -106,7 +94,7 @@ class Module(models.Model):
     title = models.CharField(max_length=200)
     content = models.TextField(blank=True)
     order = models.IntegerField(default=0)
-    is_common = models.BooleanField(default=True)   # True = common modules (weeks 1-8), False = custom templates
+    is_common = models.BooleanField(default=True)
 
     class Meta:
         ordering = ['order']
@@ -192,4 +180,6 @@ class ContactMessage(models.Model):
 
     def __str__(self):
         return f"{self.name} - {self.subject}"
+    
+
     

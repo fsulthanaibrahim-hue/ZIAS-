@@ -13,15 +13,15 @@ from datetime import timedelta
 from .models import PasswordResetToken
 from django.core.mail import send_mail
 from django.conf import settings
-from .models import User, Student, Mentor, Reviewer, Course, Enrollment, Module, Day, Task, Batch, StudentModule, PasswordResetToken, ContactMessage
+from .models import User, Student, Mentor, Reviewer, Course, Module, Day, Task, Batch, StudentModule, PasswordResetToken, ContactMessage
 from .serializers import (
     StudentSerializer, MentorSerializer, ReviewerSerializer, UserSerializer,
-    CourseSerializer, EnrollmentSerializer, ModuleSerializer, DaySerializer, TaskSerializer, BatchSerializer,
+    CourseSerializer, ModuleSerializer, DaySerializer, TaskSerializer, BatchSerializer,
     ContactMessageSerializer, StudentModuleSerializer
 )
 
 # ----------------------------
-# Custom Filter Backend for filtering modules by course
+# Custom Filter Backends
 # ----------------------------
 class CourseFilterBackend(BaseFilterBackend):
     def filter_queryset(self, request, queryset, view):
@@ -30,9 +30,6 @@ class CourseFilterBackend(BaseFilterBackend):
             return queryset.filter(course_id=course_id)
         return queryset
 
-# ----------------------------
-# Custom Filter Backend for filtering tasks by day
-# ----------------------------
 class DayFilterBackend(BaseFilterBackend):
     def filter_queryset(self, request, queryset, view):
         day_id = request.query_params.get('day')
@@ -49,7 +46,7 @@ class BatchViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
 
 # ----------------------------
-# STUDENT VIEWSET (with me action)
+# STUDENT VIEWSET
 # ----------------------------
 class StudentViewSet(viewsets.ModelViewSet):
     queryset = Student.objects.all()
@@ -64,8 +61,7 @@ class StudentViewSet(viewsets.ModelViewSet):
             return Response(serializer.data)
         except Student.DoesNotExist:
             return Response({"detail": "Student profile not found"}, status=status.HTTP_404_NOT_FOUND)
-        
-                
+
 # ----------------------------
 # MENTOR VIEWSET
 # ----------------------------
@@ -79,6 +75,15 @@ class MentorViewSet(viewsets.ModelViewSet):
         user = mentor.user
         user.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    def me(self, request):
+        try:
+            mentor = Mentor.objects.get(user=request.user)
+            serializer = self.get_serializer(mentor)
+            return Response(serializer.data)
+        except Mentor.DoesNotExist:
+            return Response({"detail": "Mentor profile not found"}, status=status.HTTP_404_NOT_FOUND)
 
 # ----------------------------
 # REVIEWER VIEWSET
@@ -94,6 +99,15 @@ class ReviewerViewSet(viewsets.ModelViewSet):
         user.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    def me(self, request):
+        try:
+            reviewer = Reviewer.objects.get(user=request.user)
+            serializer = self.get_serializer(reviewer)
+            return Response(serializer.data)
+        except Reviewer.DoesNotExist:
+            return Response({"detail": "Reviewer profile not found"}, status=status.HTTP_404_NOT_FOUND)
+
 # ----------------------------
 # COURSE VIEWSET
 # ----------------------------
@@ -103,26 +117,7 @@ class CourseViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminOrReadOnly]
 
 # ----------------------------
-# ENROLLMENT VIEWSET
-# ----------------------------
-class EnrollmentViewSet(viewsets.ModelViewSet):
-    queryset = Enrollment.objects.all()
-    serializer_class = EnrollmentSerializer
-    permission_classes = [IsAdminUser]
-
-    @action(detail=False, methods=['get'], url_path='me', permission_classes=[IsAuthenticated])
-    def get_my_enrollments(self, request):
-        """Get enrollments for the current student"""
-        try:
-            student = Student.objects.get(user=request.user)
-            enrollments = Enrollment.objects.filter(student=student)
-            serializer = self.get_serializer(enrollments, many=True)
-            return Response(serializer.data)
-        except Student.DoesNotExist:
-            return Response({"detail": "Student profile not found"}, status=status.HTTP_404_NOT_FOUND)
-
-# ----------------------------
-# MODULE VIEWSET (with for_course method)
+# MODULE VIEWSET
 # ----------------------------
 class ModuleViewSet(viewsets.ModelViewSet):
     queryset = Module.objects.all()
@@ -134,18 +129,11 @@ class ModuleViewSet(viewsets.ModelViewSet):
     def for_course(self, request):
         course_id = request.query_params.get('course_id')
         if not course_id:
-            return Response({"error": "course_id is required"}, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Get common modules (is_common=True)
+            return Response({"error": "course_id is required"}, status=400)
         common_modules = Module.objects.filter(is_common=True)
-        
-        # Get modules specific to this course (is_common=False)
         course_modules = Module.objects.filter(course_id=course_id, is_common=False)
-        
-        # Combine and sort by order
         all_modules = list(common_modules) + list(course_modules)
         all_modules.sort(key=lambda x: x.order)
-        
         serializer = self.get_serializer(all_modules, many=True)
         return Response(serializer.data)
 
@@ -178,7 +166,7 @@ class StudentModuleViewSet(viewsets.ModelViewSet):
 class DayViewSet(viewsets.ModelViewSet):
     queryset = Day.objects.all()
     serializer_class = DaySerializer
-    permission_classes = [IsAuthenticated]   # was [IsAdminUser] or [IsAdminOrReadOnly]
+    permission_classes = [IsAuthenticated]   # allow students to read/update days
 
 # ----------------------------
 # TASK VIEWSET
@@ -359,3 +347,4 @@ class ContactMessageDetailView(APIView):
             return Response({"detail": "Marked as read"})
         except ContactMessage.DoesNotExist:
             return Response({"detail": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+        

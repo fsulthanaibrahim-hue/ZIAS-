@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import API from "../api/api";
 
-// Toast Component
+// Toast Component (same as Students page)
 function Toast({ message, type, onClose }) {
   useEffect(() => {
     const timer = setTimeout(onClose, 3000);
@@ -26,15 +26,10 @@ function Toast({ message, type, onClose }) {
 
 function Courses() {
   const [courses, setCourses] = useState([]);
-  const [students, setStudents] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
   const [formData, setFormData] = useState({ name: "", description: "", duration: "" });
-  const [showEnrollModal, setShowEnrollModal] = useState(false);
-  const [currentCourse, setCurrentCourse] = useState(null);
-  const [availableStudents, setAvailableStudents] = useState([]);
-  const [enrolledStudentIds, setEnrolledStudentIds] = useState([]);
-  const [enrollSearchTerm, setEnrollSearchTerm] = useState("");
 
   // Toast state
   const [toast, setToast] = useState(null);
@@ -46,16 +41,17 @@ function Courses() {
       .then(res => setCourses(res.data))
       .catch(() => showToast("Failed to load courses", "error"));
   };
-  const fetchStudents = () => {
-    API.get("students/")
-      .then(res => setStudents(res.data))
-      .catch(() => showToast("Failed to load students", "error"));
-  };
 
   useEffect(() => {
     fetchCourses();
-    fetchStudents();
   }, []);
+
+  // Filter courses by search term
+  const filteredCourses = courses.filter(c =>
+    c.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    c.duration?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    c.description?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   // Course CRUD
   const handleDelete = (id) => {
@@ -98,65 +94,30 @@ function Courses() {
     setShowForm(true);
   };
 
-  // Enrollment functions
-  const openEnrollModal = async (course) => {
-    setCurrentCourse(course);
-    setEnrollSearchTerm("");
-    try {
-      const enrollmentsRes = await API.get(`enrollments/?course=${course.id}`);
-      const enrolled = enrollmentsRes.data.map(e => e.student);
-      setEnrolledStudentIds(enrolled);
-      const available = students
-        .filter(s => !enrolled.includes(s.id))
-        .sort((a, b) => a.username.localeCompare(b.username));
-      setAvailableStudents(available);
-      setShowEnrollModal(true);
-    } catch (err) {
-      showToast("Failed to load enrollments", "error");
-    }
-  };
+  // Input class (matches Students page)
+  const inputClass = `
+    w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-4 py-2.5 text-[#e6edf3]
+    placeholder-[#484f58] focus:outline-none focus:border-[#388bfd] focus:ring-1 focus:ring-[#388bfd]/30
+    transition-all duration-200 text-sm font-mono
+  `;
 
-  const enrollStudent = async (studentId) => {
-    try {
-      await API.post("enrollments/", { student: studentId, course: currentCourse.id });
-      showToast("Student enrolled successfully", "success");
-      await openEnrollModal(currentCourse);
-      fetchCourses();
-    } catch (err) {
-      showToast("Enrollment failed", "error");
-    }
-  };
-
-  const unenrollStudent = async (studentId) => {
-    try {
-      const enrollments = await API.get(`enrollments/?student=${studentId}&course=${currentCourse.id}`);
-      const enrollmentId = enrollments.data[0]?.id;
-      if (enrollmentId) {
-        await API.delete(`enrollments/${enrollmentId}/`);
-        showToast("Student unenrolled successfully", "success");
-        await openEnrollModal(currentCourse);
-        fetchCourses();
-      }
-    } catch (err) {
-      showToast("Failed to unenroll student", "error");
-    }
-  };
-
-  const getFilteredEnrolled = () => {
-    return students
-      .filter(s => enrolledStudentIds.includes(s.id))
-      .filter(s => s.username.toLowerCase().includes(enrollSearchTerm.toLowerCase()))
-      .sort((a, b) => a.username.localeCompare(b.username));
-  };
-  const getFilteredAvailable = () => {
-    return availableStudents.filter(s =>
-      s.username.toLowerCase().includes(enrollSearchTerm.toLowerCase())
-    );
-  };
+  // Course icon (simple book icon)
+  const CourseIcon = () => (
+    <svg className="w-5 h-5 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+    </svg>
+  );
 
   return (
-    <div className="min-h-screen w-screen bg-[#0f1623] text-white p-8">
+    <div className="min-h-screen w-screen bg-[#0d1117] text-[#e6edf3]" style={{ fontFamily: "'Geist', 'SF Pro Display', system-ui, sans-serif" }}>
       <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&display=swap');
+        .table-row-hover:hover { background: rgba(56,139,253,0.04); }
+        .modal-enter { animation: modalIn 0.2s cubic-bezier(0.16,1,0.3,1); }
+        @keyframes modalIn { from { opacity:0; transform:scale(0.96) translateY(8px); } to { opacity:1; transform:scale(1) translateY(0); } }
+        .shine { position:relative; overflow:hidden; }
+        .shine::after { content:''; position:absolute; top:0; left:-100%; width:60%; height:100%; background:linear-gradient(90deg,transparent,rgba(255,255,255,0.04),transparent); animation: shine 3s infinite; }
+        @keyframes shine { to { left:150%; } }
         @keyframes slide-in-from-top-2 {
           from { opacity:0; transform:translateY(-1rem); }
           to { opacity:1; transform:translateY(0); }
@@ -166,159 +127,236 @@ function Courses() {
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
 
-      {/* Header */}
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Courses</h1>
-          <p className="text-white/50 text-sm">Manage all courses and enrollments</p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => {
-              setEditingId(null);
-              setFormData({ name: "", description: "", duration: "" });
-              setShowForm(true);
-            }}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
-          >
-            + Add Course
-          </button>
-        </div>
-      </div>
+      <div className="max-w-[1400px] mx-auto px-6 py-8">
 
-      {/* Course Form Modal */}
-      {showForm && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-          onClick={() => setShowForm(false)}
-        >
-          <form
-            onSubmit={handleSubmit}
-            className="bg-[#1a2538] rounded-xl p-6 w-full max-w-md border border-white/10"
-            onClick={e => e.stopPropagation()}
-          >
-            <h3 className="text-lg font-semibold text-white mb-4">
-              {editingId ? "Edit Course" : "New Course"}
-            </h3>
-            <input
-              type="text"
-              name="name"
-              placeholder="Course Name"
-              value={formData.name}
-              onChange={e => setFormData({ ...formData, name: e.target.value })}
-              required
-              className="w-full bg-[#0f1623] border border-white/10 rounded-lg px-4 py-2 text-white mb-3"
-            />
-            <input
-              type="text"
-              name="duration"
-              placeholder="Duration (e.g., 6 months)"
-              value={formData.duration}
-              onChange={e => setFormData({ ...formData, duration: e.target.value })}
-              className="w-full bg-[#0f1623] border border-white/10 rounded-lg px-4 py-2 text-white mb-3"
-            />
-            <textarea
-              name="description"
-              placeholder="Description"
-              value={formData.description}
-              onChange={e => setFormData({ ...formData, description: e.target.value })}
-              rows="3"
-              className="w-full bg-[#0f1623] border border-white/10 rounded-lg px-4 py-2 text-white mb-4"
-            />
-            <div className="flex gap-3">
-              <button type="submit" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg">
-                Save
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowForm(false)}
-                className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-lg"
-              >
-                Cancel
-              </button>
+        {/* Top Bar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center">
+              <CourseIcon />
             </div>
-          </form>
-        </div>
-      )}
+            <div>
+              <h1 className="text-xl font-semibold text-[#e6edf3] tracking-tight">Courses</h1>
+              <p className="text-[#7d8590] text-xs mt-0.5">
+                {courses.length} total · {filteredCourses.length} shown
+              </p>
+            </div>
+          </div>
 
-      {/* Courses Table */}
-      <div className="overflow-x-auto">
-        <table className="w-full bg-[#1a2538] rounded-xl border border-white/10">
-          <thead>
-            <tr className="border-b border-white/10">
-              <th className="p-4 text-white/60 text-left">Name</th>
-              <th className="p-4 text-white/60 text-left">Duration</th>
-              <th className="p-4 text-white/60 text-left">Students</th>
-              <th className="p-4 text-white/60 text-left">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {courses.map(c => (
-              <tr key={c.id} className="border-b border-white/5 hover:bg-white/5 transition">
-                <td className="p-4 text-white">{c.name}</td>
-                <td className="p-4 text-white/80">{c.duration || '-'}</td>
-                <td className="p-4 text-white/80">{c.student_count}</td>
-                <td className="p-4">
-                  <button onClick={() => handleEdit(c)} className="text-blue-400 hover:text-blue-300 mr-3 transition" title="Edit">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                  </button>
-                  <button onClick={() => openEnrollModal(c)} className="text-green-400 hover:text-green-300 mr-3 transition" title="Enroll">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                    </svg>
-                  </button>
-                  <button onClick={() => handleDelete(c.id)} className="text-red-400 hover:text-red-300 transition" title="Delete">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+          <div className="flex items-center gap-3">
+            {/* Search */}
+            <div className="relative">
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#484f58]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
+              </svg>
+              <input
+                type="text"
+                placeholder="Search courses..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="bg-[#161b22] border border-[#30363d] rounded-lg pl-9 pr-4 py-2 text-[#e6edf3] placeholder-[#484f58] focus:outline-none focus:border-[#388bfd] focus:ring-1 focus:ring-[#388bfd]/20 transition-all text-sm w-64"
+              />
+              {searchTerm && (
+                <button onClick={() => setSearchTerm("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#484f58] hover:text-[#7d8590] transition">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
 
-      {/* Enrollment Modal */}
-      {showEnrollModal && currentCourse && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowEnrollModal(false)}>
-          <div className="bg-[#1a2538] rounded-xl p-6 w-full max-w-3xl border border-white/10" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-white mb-4">Manage Enrollments – {currentCourse.name}</h3>
-            <div className="mb-4">
-              <input type="text" placeholder="Search by student name..." value={enrollSearchTerm} onChange={(e) => setEnrollSearchTerm(e.target.value)} className="w-full bg-[#0f1623] border border-white/10 rounded-lg px-4 py-2 text-white placeholder-white/30 focus:outline-none focus:border-blue-500" />
-            </div>
-            <div className="grid md:grid-cols-2 gap-4">
-              <div>
-                <h4 className="text-white/70 mb-2">Enrolled Students ({enrolledStudentIds.length})</h4>
-                <ul className="space-y-2 max-h-60 overflow-y-auto">
-                  {getFilteredEnrolled().map(s => (
-                    <li key={s.id} className="flex justify-between items-center bg-[#0f1623] p-2 rounded">
-                      <span className="text-white">{s.username}</span>
-                      <button onClick={() => unenrollStudent(s.id)} className="text-red-400 text-sm">Remove</button>
-                    </li>
-                  ))}
-                  {getFilteredEnrolled().length === 0 && <p className="text-white/40">No matching students enrolled.</p>}
-                </ul>
-              </div>
-              <div>
-                <h4 className="text-white/70 mb-2">Available Students</h4>
-                <ul className="space-y-2 max-h-60 overflow-y-auto">
-                  {getFilteredAvailable().map(s => (
-                    <li key={s.id} className="flex justify-between items-center bg-[#0f1623] p-2 rounded">
-                      <span className="text-white">{s.username}</span>
-                      <button onClick={() => enrollStudent(s.id)} className="text-blue-400 text-sm">Enroll</button>
-                    </li>
-                  ))}
-                  {getFilteredAvailable().length === 0 && <p className="text-white/40">No matching students available.</p>}
-                </ul>
-              </div>
-            </div>
-            <button onClick={() => setShowEnrollModal(false)} className="mt-4 bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg">Close</button>
+            {/* Add Button */}
+            <button
+              onClick={() => {
+                setEditingId(null);
+                setFormData({ name: "", description: "", duration: "" });
+                setShowForm(true);
+              }}
+              className="shine flex items-center gap-2 bg-[#238636] hover:bg-[#2ea043] border border-[#2ea043]/40 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 shadow-lg shadow-[#238636]/20"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Add Course
+            </button>
           </div>
         </div>
-      )}
+
+        {/* Course Form Modal */}
+        {showForm && (
+          <div
+            className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 backdrop-blur-md"
+            onClick={() => setShowForm(false)}
+          >
+            <form
+              onSubmit={handleSubmit}
+              className="modal-enter bg-[#161b22] rounded-2xl w-full max-w-md border border-[#30363d] shadow-2xl shadow-black/60"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="flex justify-between items-center px-6 py-4 border-b border-[#21262d]">
+                <div className="flex items-center gap-3">
+                  <div className="w-7 h-7 rounded-lg bg-violet-500/10 border border-violet-500/20 flex items-center justify-center">
+                    <CourseIcon />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-[#e6edf3]">{editingId ? "Edit Course" : "New Course"}</h3>
+                    <p className="text-[#7d8590] text-xs">{editingId ? "Update course details" : "Create a new course"}</p>
+                  </div>
+                </div>
+                <button type="button" onClick={() => setShowForm(false)} className="text-[#484f58] hover:text-[#7d8590] transition p-1.5 rounded-lg hover:bg-[#21262d]">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="px-6 py-5 space-y-4">
+                <div>
+                  <label className="block text-[#7d8590] text-xs font-medium mb-1.5 uppercase tracking-wider">Course Name</label>
+                  <input
+                    type="text"
+                    name="name"
+                    placeholder="e.g. Full Stack Development"
+                    value={formData.name}
+                    onChange={e => setFormData({ ...formData, name: e.target.value })}
+                    required
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[#7d8590] text-xs font-medium mb-1.5 uppercase tracking-wider">Duration</label>
+                  <input
+                    type="text"
+                    name="duration"
+                    placeholder="e.g. 6 months"
+                    value={formData.duration}
+                    onChange={e => setFormData({ ...formData, duration: e.target.value })}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[#7d8590] text-xs font-medium mb-1.5 uppercase tracking-wider">Description</label>
+                  <textarea
+                    name="description"
+                    placeholder="Course description..."
+                    value={formData.description}
+                    onChange={e => setFormData({ ...formData, description: e.target.value })}
+                    rows="3"
+                    className={`${inputClass} resize-none`}
+                  />
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="flex gap-2 px-6 py-4 border-t border-[#21262d]">
+                <button type="submit" className="flex-1 bg-[#238636] hover:bg-[#2ea043] border border-[#2ea043]/40 text-white py-2 rounded-lg transition-all text-sm font-medium shadow-md shadow-[#238636]/20">
+                  {editingId ? "Save Changes" : "Add Course"}
+                </button>
+                <button type="button" onClick={() => setShowForm(false)} className="flex-1 bg-[#21262d] hover:bg-[#30363d] border border-[#30363d] text-[#7d8590] hover:text-[#e6edf3] py-2 rounded-lg transition-all text-sm font-medium">
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* Courses Table */}
+        <div className="rounded-xl border border-[#21262d] overflow-hidden shadow-xl shadow-black/20">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-[#161b22] border-b border-[#21262d]">
+                {["Course", "Duration", "Description", ""].map((h, i) => (
+                  <th key={i} className="text-left px-4 py-3 text-[#7d8590] text-xs font-semibold uppercase tracking-widest whitespace-nowrap">
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="bg-[#0d1117] divide-y divide-[#21262d]">
+              {filteredCourses.length > 0 ? (
+                filteredCourses.map((c) => (
+                  <tr key={c.id} className="table-row-hover transition-colors duration-150 group">
+                    <td className="px-4 py-3.5">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-violet-500/10 border border-violet-500/20 flex items-center justify-center shrink-0">
+                          <CourseIcon />
+                        </div>
+                        <span className="text-[#e6edf3] text-sm font-medium">{c.name}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3.5">
+                      {c.duration ? (
+                        <span className="inline-flex items-center gap-1.5 bg-violet-500/10 text-violet-400 border border-violet-500/20 text-xs font-medium px-2.5 py-1 rounded-full">
+                          {c.duration}
+                        </span>
+                      ) : <span className="text-[#484f58]">—</span>}
+                    </td>
+                    <td className="px-4 py-3.5 text-[#7d8590] text-sm truncate max-w-md">
+                      {c.description || "—"}
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                        <button
+                          onClick={() => handleEdit(c)}
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[#7d8590] hover:text-[#388bfd] hover:bg-[#388bfd]/10 border border-transparent hover:border-[#388bfd]/20 transition-all text-xs font-medium"
+                          title="Edit"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDelete(c.id)}
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[#7d8590] hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all text-xs font-medium"
+                          title="Delete"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="4" className="text-center py-20">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="w-12 h-12 rounded-2xl bg-[#161b22] border border-[#30363d] flex items-center justify-center">
+                        <CourseIcon />
+                      </div>
+                      <p className="text-[#7d8590] text-sm font-medium">
+                        {searchTerm ? "No courses match your search" : "No courses yet"}
+                      </p>
+                      <p className="text-[#484f58] text-xs">
+                        {searchTerm ? "Try a different keyword" : "Click 'Add Course' to get started"}
+                      </p>
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+
+          {/* Table Footer */}
+          {filteredCourses.length > 0 && (
+            <div className="bg-[#161b22] border-t border-[#21262d] px-4 py-2.5 flex items-center justify-between">
+              <p className="text-[#484f58] text-xs">
+                Showing <span className="text-[#7d8590] font-medium">{filteredCourses.length}</span> of <span className="text-[#7d8590] font-medium">{courses.length}</span> courses
+              </p>
+              {searchTerm && (
+                <button onClick={() => setSearchTerm("")} className="text-[#388bfd] hover:text-blue-300 text-xs font-medium transition">
+                  Clear filter
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

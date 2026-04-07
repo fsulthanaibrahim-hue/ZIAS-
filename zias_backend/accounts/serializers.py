@@ -4,7 +4,7 @@ from django.core.mail import send_mail
 from django.conf import settings
 from django.db import IntegrityError
 from rest_framework import serializers
-from .models import User, Student, Mentor, Reviewer, Course, Enrollment, Module, Day, Task, Batch, StudentModule, ContactMessage
+from .models import User, Student, Mentor, Reviewer, Course, Module, Day, Task, Batch, StudentModule, ContactMessage
 
 def generate_random_password(length=10):
     alphabet = string.ascii_letters + string.digits
@@ -34,14 +34,12 @@ class BatchSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'start_date', 'end_date', 'is_active', 'created_at', 'student_count']
 
 # ----------------------------
-# COURSE SERIALIZER
+# COURSE SERIALIZER (without student_count)
 # ----------------------------
 class CourseSerializer(serializers.ModelSerializer):
-    student_count = serializers.IntegerField(source='enrollments.count', read_only=True)
-
     class Meta:
         model = Course
-        fields = ['id', 'name', 'description', 'duration', 'created_at', 'student_count']
+        fields = ['id', 'name', 'description', 'duration', 'created_at']
 
 # ----------------------------
 # DAY SERIALIZER
@@ -70,30 +68,15 @@ class ModuleSerializer(serializers.ModelSerializer):
         fields = ['id', 'course', 'course_name', 'title', 'order', 'content', 'is_common']
 
 # ----------------------------
-# ENROLLMENT SERIALIZER
-# ----------------------------
-class EnrollmentSerializer(serializers.ModelSerializer):
-    student_name = serializers.CharField(source='student.user.username', read_only=True)
-    course_name = serializers.CharField(source='course.name', read_only=True)
-
-    class Meta:
-        model = Enrollment
-        fields = ['id', 'student', 'course', 'student_name', 'course_name', 'enrolled_at', 'status']
-
-# ----------------------------
-# STUDENT SERIALIZER
+# STUDENT SERIALIZER (without courses/enrollment)
 # ----------------------------
 class StudentSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username')
     email = serializers.EmailField(source='user.email')
-    courses = serializers.SerializerMethodField()
 
     class Meta:
         model = Student
-        fields = ['id', 'username', 'email', 'course', 'batch', 'phone', 'date_of_birth', 'courses']
-
-    def get_courses(self, obj):
-        return [{'id': e.course.id, 'name': e.course.name} for e in obj.enrollments.all()]
+        fields = ['id', 'username', 'email', 'course', 'batch', 'student_batch', 'phone', 'date_of_birth']
 
     def create(self, validated_data):
         user_data = validated_data.pop('user')
@@ -129,11 +112,7 @@ ZIAS Team
 
         student = Student.objects.create(user=user, **validated_data)
 
-        course_name = validated_data.get('course')
-        if course_name:
-            course, created = Course.objects.get_or_create(name=course_name)
-            Enrollment.objects.get_or_create(student=student, course=course)
-
+        # (Optional: auto-assign course? Not needed anymore)
         return student
 
     def update(self, instance, validated_data):
@@ -290,14 +269,6 @@ ZIAS Team
         return super().update(instance, validated_data)
 
 # ----------------------------
-# CONTACT MESSAGE SERIALIZER
-# ----------------------------
-class ContactMessageSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ContactMessage
-        fields = '__all__'
-
-# ----------------------------
 # STUDENT MODULE SERIALIZER
 # ----------------------------
 class StudentModuleSerializer(serializers.ModelSerializer):
@@ -307,3 +278,13 @@ class StudentModuleSerializer(serializers.ModelSerializer):
     class Meta:
         model = StudentModule
         fields = ['id', 'student', 'module', 'module_title', 'module_content', 'order', 'is_completed', 'completed_at']
+
+# ----------------------------
+# CONTACT MESSAGE SERIALIZER
+# ----------------------------
+class ContactMessageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ContactMessage
+        fields = '__all__'
+
+        

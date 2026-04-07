@@ -125,8 +125,7 @@ function Students() {
     s.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
     s.course.toLowerCase().includes(searchTerm.toLowerCase()) ||
     s.batch.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    s.phone.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (s.courses && s.courses.some(c => c.name.toLowerCase().includes(searchTerm.toLowerCase())))
+    s.phone.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const inputClass = `
@@ -305,12 +304,12 @@ function Students() {
           <table className="w-full">
             <thead>
               <tr className="bg-[#161b22] border-b border-[#21262d]">
-                {["Student", "Email", "Course", "Batch", "Phone", "Date of Birth", "Enrolled Courses", ""].map((h, i) => (
+                {["Student", "Email", "Course", "Batch", "Phone", "Date of Birth", ""].map((h, i) => (
                   <th key={i} className="text-left px-4 py-3 text-[#7d8590] text-xs font-semibold uppercase tracking-widest whitespace-nowrap">
                     {h}
                   </th>
                 ))}
-               </tr>
+              </tr>
             </thead>
             <tbody className="bg-[#0d1117] divide-y divide-[#21262d]">
               {filteredStudents.length > 0 ? (
@@ -337,19 +336,6 @@ function Students() {
                     </td>
                     <td className="px-4 py-3.5 text-[#7d8590] text-sm font-mono">{s.phone}</td>
                     <td className="px-4 py-3.5 text-[#7d8590] text-sm font-mono">{s.date_of_birth || "—"}</td>
-                    <td className="px-4 py-3.5">
-                      {s.courses && s.courses.length > 0 ? (
-                        <div className="flex flex-wrap gap-1">
-                          {s.courses.map(c => (
-                            <span key={c.id} className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-medium px-2 py-0.5 rounded-full">
-                              {c.name}
-                            </span>
-                          ))}
-                        </div>
-                      ) : (
-                        <span className="text-[#484f58] text-sm">—</span>
-                      )}
-                    </td>
                     <td className="px-4 py-3.5">
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
                         <button
@@ -378,7 +364,7 @@ function Students() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan="8" className="text-center py-20">
+                  <td colSpan="7" className="text-center py-20">
                     <div className="flex flex-col items-center gap-3">
                       <div className="w-12 h-12 rounded-2xl bg-[#161b22] border border-[#30363d] flex items-center justify-center">
                         <svg className="w-6 h-6 text-[#484f58]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
