@@ -22,17 +22,23 @@ function UserLogin() {
       localStorage.setItem("access_token", accessToken);
       localStorage.setItem("refresh_token", tokenRes.data.refresh);
 
-      
       const userRes = await axios.get("http://127.0.0.1:8000/api/users/me/", {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       const user = userRes.data;
       localStorage.setItem("user", JSON.stringify(user));
 
+      // Role‑based redirection
       if (user.is_admin) {
         navigate("/admin/dashboard");
-      } else {
+      } else if (user.is_student) {
         navigate("/user/dashboard");
+      } else if (user.is_mentor) {
+        navigate("/mentor/dashboard");
+      } else if (user.is_reviewer) {
+        navigate("/reviewer/dashboard");
+      } else {
+        navigate("/");
       }
     } catch (err) {
       setError("Invalid username or password");
@@ -57,16 +63,8 @@ function UserLogin() {
 
   return (
     <div className="min-h-screen bg-[#0f1623] flex items-center justify-center p-4">
-      {/* Subtle background glow */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background: "radial-gradient(ellipse 60% 50% at 50% 40%, rgba(59,130,246,0.07) 0%, transparent 70%)",
-        }}
-      />
-
+      <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 60% 50% at 50% 40%, rgba(59,130,246,0.07) 0%, transparent 70%)" }} />
       <div className="relative w-full max-w-sm">
-        {/* Logo / brand mark */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-blue-600/20 border border-blue-500/30 mb-4">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="#60a5fa" className="w-6 h-6">
@@ -76,18 +74,13 @@ function UserLogin() {
           <h1 className="text-xl font-semibold text-white">Welcome back</h1>
           <p className="text-white/40 text-sm mt-1">Sign in to your account</p>
         </div>
-
-        {/* Card */}
         <div className="bg-[#1a2538] rounded-2xl border border-white/10 p-6 shadow-2xl">
-          {/* Error */}
           {error && (
             <div className="mb-4 px-4 py-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
               {error}
             </div>
           )}
-
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Username */}
             <div>
               <label className="block text-white/60 text-sm mb-1.5">Username</label>
               <input
@@ -99,8 +92,6 @@ function UserLogin() {
                 required
               />
             </div>
-
-            {/* Password */}
             <div>
               <label className="block text-white/60 text-sm mb-1.5">Password</label>
               <div className="relative">
@@ -121,18 +112,11 @@ function UserLogin() {
                 </button>
               </div>
             </div>
-
-            {/* Forgot password */}
             <div className="flex justify-end">
-              <Link
-                to="/forgot-password"
-                className="text-xs text-blue-400/70 hover:text-blue-400 transition-colors"
-              >
+              <Link to="/forgot-password" className="text-xs text-blue-400/70 hover:text-blue-400 transition-colors">
                 Forgot password?
               </Link>
             </div>
-
-            {/* Submit */}
             <button
               type="submit"
               disabled={loading}

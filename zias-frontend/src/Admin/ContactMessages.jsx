@@ -110,7 +110,6 @@ function ContactMessages() {
     return date.toLocaleDateString([], { day: "2-digit", month: "short", year: "numeric" });
   };
 
-  // ✅ Changed to single letter initial (first character only)
   const getInitial = (name) => (name ? name.charAt(0).toUpperCase() : "?");
 
   const avatarPalette = [
@@ -129,14 +128,15 @@ function ContactMessages() {
         @keyframes bodyIn { from { opacity:0; max-height:0; } to { opacity:1; max-height:500px; } }
       `}</style>
 
-      <div className="max-w-4xl mx-auto px-6 py-8">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
 
         {/* ── Header ── */}
-        <div className="mb-8">
-          <div className="flex items-start justify-between mb-5">
+        <div className="mb-6 sm:mb-8">
+          {/* Title and action button: stack on mobile, row on larger */}
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-5">
             <div>
               <div className="flex items-center gap-3 mb-1">
-                <h1 className="text-2xl font-bold text-[#e6edf3] tracking-tight">Inbox</h1>
+                <h1 className="text-xl sm:text-2xl font-bold text-[#e6edf3] tracking-tight">Inbox</h1>
                 {unreadCount > 0 && (
                   <span className="bg-[#388bfd] text-white text-xs font-bold px-2 py-0.5 rounded-full">
                     {unreadCount} new
@@ -150,7 +150,7 @@ function ContactMessages() {
             {unreadCount > 0 && (
               <button
                 onClick={markAllAsRead}
-                className="flex items-center gap-2 text-sm text-[#7d8590] hover:text-[#e6edf3] bg-[#161b22] hover:bg-[#21262d] border border-[#30363d] px-3.5 py-2 rounded-lg transition-all font-medium"
+                className="flex items-center justify-center gap-2 text-sm text-[#7d8590] hover:text-[#e6edf3] bg-[#161b22] hover:bg-[#21262d] border border-[#30363d] px-3.5 py-2 rounded-lg transition-all font-medium w-full sm:w-auto"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -160,8 +160,8 @@ function ContactMessages() {
             )}
           </div>
 
-          {/* Filter tabs */}
-          <div className="flex items-center gap-1 p-1 bg-[#161b22] border border-[#21262d] rounded-xl w-fit">
+          {/* Filter tabs – wrap on mobile */}
+          <div className="flex flex-wrap items-center gap-1 p-1 bg-[#161b22] border border-[#21262d] rounded-xl w-fit">
             {[
               { key: "all",    label: "All",    count: messages.length },
               { key: "unread", label: "Unread", count: unreadCount },
@@ -170,7 +170,7 @@ function ContactMessages() {
               <button
                 key={tab.key}
                 onClick={() => setFilter(tab.key)}
-                className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-150 ${
+                className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-150 ${
                   filter === tab.key
                     ? "bg-[#0d1117] text-[#e6edf3] shadow-sm border border-[#30363d]"
                     : "text-[#7d8590] hover:text-[#c9d1d9]"
@@ -189,9 +189,9 @@ function ContactMessages() {
 
         {/* ── Messages Cards ── */}
         {paginatedMessages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 gap-4">
-            <div className="w-16 h-16 rounded-2xl bg-[#161b22] border border-[#21262d] flex items-center justify-center">
-              <svg className="w-7 h-7 text-[#30363d]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="flex flex-col items-center justify-center py-16 sm:py-24 gap-4">
+            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-[#161b22] border border-[#21262d] flex items-center justify-center">
+              <svg className="w-6 h-6 sm:w-7 sm:h-7 text-[#30363d]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0l-4-4m-8 4l4-4m0 0l4 4m-4-4v9" />
               </svg>
             </div>
@@ -216,20 +216,22 @@ function ContactMessages() {
                         : "bg-[#161b22] border-[#21262d] hover:border-[#30363d]"
                     }`}
                   >
-                    {/* Card Top */}
-                    <div className="flex items-start gap-4 p-4">
-
-                      {/* Avatar - now single letter */}
-                      <div
-                        className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0 mt-0.5"
-                        style={{ background: `linear-gradient(135deg, ${c1}, ${c2})` }}
-                      >
-                        {getInitial(msg.name)}
+                    {/* Card Top – responsive layout */}
+                    <div className="flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4 p-3 sm:p-4">
+                      {/* Avatar - single letter */}
+                      <div className="flex sm:flex-col items-center gap-3 sm:gap-0">
+                        <div
+                          className="w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-white text-xs sm:text-sm font-bold shrink-0"
+                          style={{ background: `linear-gradient(135deg, ${c1}, ${c2})` }}
+                        >
+                          {getInitial(msg.name)}
+                        </div>
+                        {/* Status badge moves to top-right on mobile? Actually keep here or move? We'll keep original position but adjust layout */}
                       </div>
 
-                      {/* Content */}
+                      {/* Content area – takes full width on mobile */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-3 mb-1">
+                        <div className="flex flex-wrap items-start justify-between gap-2 mb-1">
                           <div className="flex items-center gap-2.5 min-w-0">
                             <span className={`text-sm font-semibold truncate ${!msg.is_read ? "text-[#e6edf3]" : "text-[#c9d1d9]"}`}>
                               {msg.name}
@@ -254,8 +256,8 @@ function ContactMessages() {
                         )}
                       </div>
 
-                      {/* Right: status + chevron */}
-                      <div className="flex flex-col items-end gap-2 shrink-0">
+                      {/* Status and chevron – row on mobile, column on desktop? We'll keep as flex row on small screens */}
+                      <div className="flex flex-row sm:flex-col items-center justify-between sm:justify-start gap-2 sm:gap-2 shrink-0">
                         {msg.is_read ? (
                           <span className="inline-flex items-center gap-1 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide">
                             Read
@@ -274,13 +276,14 @@ function ContactMessages() {
                       </div>
                     </div>
 
-                    {/* Expanded body */}
+                    {/* Expanded body – responsive padding */}
                     {isExpanded && (
-                      <div className="msg-body px-4 pb-4 pt-0 ml-14">
-                        <div className="bg-[#0d1117] border border-[#21262d] rounded-xl p-4 mb-3">
+                      <div className="msg-body px-3 sm:px-4 pb-4 pt-0 sm:ml-14">
+                        <div className="bg-[#0d1117] border border-[#21262d] rounded-xl p-3 sm:p-4 mb-3">
                           <p className="text-[#c9d1d9] text-sm leading-relaxed whitespace-pre-wrap">{msg.message}</p>
                         </div>
-                        <div className="flex items-center gap-3">
+                        {/* Action buttons – wrap on mobile */}
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                           <a
                             href={`mailto:${msg.email}?subject=Re: ${encodeURIComponent(msg.subject)}`}
                             onClick={e => e.stopPropagation()}
@@ -306,7 +309,7 @@ function ContactMessages() {
                           {!msg.is_read && (
                             <button
                               onClick={(e) => markAsRead(msg.id, e)}
-                              className="flex items-center gap-1.5 bg-[#21262d] hover:bg-emerald-500/10 border border-[#30363d] hover:border-emerald-500/25 text-[#7d8590] hover:text-emerald-400 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all ml-auto"
+                              className="flex items-center gap-1.5 bg-[#21262d] hover:bg-emerald-500/10 border border-[#30363d] hover:border-emerald-500/25 text-[#7d8590] hover:text-emerald-400 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all ml-auto sm:ml-auto"
                             >
                               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -324,10 +327,10 @@ function ContactMessages() {
           </div>
         )}
 
-        {/* ── Pagination Controls ── */}
+        {/* ── Pagination Controls (already responsive) ── */}
         {totalPages > 1 && (
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-8 pt-2 border-t border-[#21262d]">
-            <div className="text-[#484f58] text-xs">
+            <div className="text-[#484f58] text-xs text-center sm:text-left">
               Showing{" "}
               <span className="text-[#7d8590] font-medium">
                 {totalFiltered === 0 ? 0 : startIndex + 1}
@@ -340,8 +343,7 @@ function ContactMessages() {
               <span className="text-[#7d8590] font-medium">{totalFiltered}</span> messages
             </div>
 
-            <div className="flex items-center gap-1">
-              {/* Previous */}
+            <div className="flex items-center justify-center gap-1">
               <button
                 onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                 disabled={currentPage === 1}
@@ -356,7 +358,6 @@ function ContactMessages() {
                 </svg>
               </button>
 
-              {/* Page numbers */}
               {getPageNumbers().map((page, idx) =>
                 page === "..." ? (
                   <span key={`ellipsis-${idx}`} className="px-2 py-1.5 text-[#484f58] text-sm">
@@ -377,7 +378,6 @@ function ContactMessages() {
                 )
               )}
 
-              {/* Next */}
               <button
                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                 disabled={currentPage === totalPages}

@@ -137,7 +137,7 @@ ZIAS Team
         return super().update(instance, validated_data)
 
 # ----------------------------
-# MENTOR SERIALIZER
+# MENTOR SERIALIZER (with batch)
 # ----------------------------
 class MentorSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username')
@@ -145,7 +145,7 @@ class MentorSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Mentor
-        fields = ['id', 'username', 'email', 'phone', 'expertise']
+        fields = ['id', 'username', 'email', 'phone', 'expertise', 'batch']   # added batch
 
     def create(self, validated_data):
         user_data = validated_data.pop('user')
@@ -203,7 +203,7 @@ ZIAS Team
         return super().update(instance, validated_data)
 
 # ----------------------------
-# REVIEWER SERIALIZER
+# REVIEWER SERIALIZER (with batch)
 # ----------------------------
 class ReviewerSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username')
@@ -211,7 +211,7 @@ class ReviewerSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Reviewer
-        fields = ['id', 'username', 'email', 'department']
+        fields = ['id', 'username', 'email', 'department', 'batch']   # added batch
 
     def create(self, validated_data):
         user_data = validated_data.pop('user')
@@ -287,4 +287,3 @@ class ContactMessageSerializer(serializers.ModelSerializer):
         model = ContactMessage
         fields = '__all__'
 
-        

@@ -22,7 +22,6 @@ function getAvatarColor(username = "") {
   return avatarColors[idx];
 }
 
-// Read-only field component
 function ReadOnly({ label, value }) {
   return (
     <div style={s.roField}>
@@ -32,7 +31,6 @@ function ReadOnly({ label, value }) {
   );
 }
 
-// Read-only field with icon (for personal details)
 function ReadOnlyField({ label, value, icon }) {
   return (
     <div style={s.fieldWrap}>
@@ -106,7 +104,6 @@ function StudentProfile() {
 
   const [bgColor, accentColor] = getAvatarColor(username);
 
-  // Personal details fields (read-only)
   const personalFields = [
     { name: "course", label: "Course", icon: "🎓", value: profile.course },
     { name: "batch", label: "Batch", icon: "📅", value: profile.batch },
@@ -124,7 +121,6 @@ function StudentProfile() {
 
       <div style={{ ...s.card, animation: "fadeIn 0.4s ease both" }}>
 
-        {/* Banner */}
         <div style={{ ...s.banner, background: `linear-gradient(135deg, ${bgColor} 0%, #0e1828 100%)` }}>
           <div style={s.dotPattern} />
           <div style={{ ...s.avatar, border: `2.5px solid ${accentColor}`, boxShadow: `0 0 24px ${accentColor}30` }}>
@@ -138,10 +134,7 @@ function StudentProfile() {
           </div>
         </div>
 
-        {/* Body */}
         <div style={s.body}>
-
-          {/* Read-only Account Info */}
           <div style={s.roGrid}>
             <ReadOnly label="Username" value={username} />
             <ReadOnly label="Email" value={email} />
@@ -150,21 +143,18 @@ function StudentProfile() {
           <div style={s.divider} />
           <p style={s.sectionLabel}>Personal Details</p>
 
-          {/* Read-only Personal Details Fields */}
           <div style={s.fieldGrid}>
             {personalFields.map(({ name, label, icon, value }) => (
               <ReadOnlyField key={name} label={label} value={value} icon={icon} />
             ))}
           </div>
 
-          {/* Note for student */}
           <div style={s.noteBox}>
             <p style={s.noteText}>
               📝 For any changes to your profile information, please contact your administrator.
             </p>
           </div>
 
-          {/* Actions */}
           <div style={s.actions}>
             <Link to="/change-password" style={s.btnSecondary}>
               Change Password
@@ -182,7 +172,6 @@ function StudentProfile() {
             </button>
           </div>
 
-          {/* Message Toast */}
           {message.text && (
             <div style={{
               ...s.toast,
@@ -436,3 +425,5 @@ const s = {
 };
 
 export default StudentProfile;
+
+

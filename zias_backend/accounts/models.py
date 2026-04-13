@@ -41,7 +41,7 @@ class Student(models.Model):
         User, on_delete=models.CASCADE, related_name='student_profile'
     )
     course = models.CharField(max_length=100)
-    batch = models.CharField(max_length=50)
+    batch = models.CharField(max_length=50)  # legacy text field
     student_batch = models.ForeignKey(Batch, on_delete=models.SET_NULL, null=True, blank=True, related_name='students')
     phone = models.CharField(max_length=15, blank=True, null=True)
     date_of_birth = models.DateField(null=True, blank=True)
@@ -50,7 +50,7 @@ class Student(models.Model):
         return self.user.username
 
 # ----------------------------
-# MENTOR PROFILE
+# MENTOR PROFILE (with batch)
 # ----------------------------
 class Mentor(models.Model):
     user = models.OneToOneField(
@@ -58,18 +58,20 @@ class Mentor(models.Model):
     )
     phone = models.CharField(max_length=20, blank=True, null=True)
     expertise = models.CharField(max_length=100)
+    batch = models.ForeignKey(Batch, on_delete=models.SET_NULL, null=True, blank=True, related_name='mentors')
 
     def __str__(self):
         return self.user.username
 
 # ----------------------------
-# REVIEWER PROFILE
+# REVIEWER PROFILE (with batch)
 # ----------------------------
 class Reviewer(models.Model):
     user = models.OneToOneField(
         User, on_delete=models.CASCADE, related_name='reviewer_profile'
     )
     department = models.CharField(max_length=100)
+    batch = models.ForeignKey(Batch, on_delete=models.SET_NULL, null=True, blank=True, related_name='reviewers')
 
     def __str__(self):
         return self.user.username
@@ -181,5 +183,4 @@ class ContactMessage(models.Model):
     def __str__(self):
         return f"{self.name} - {self.subject}"
     
-
     

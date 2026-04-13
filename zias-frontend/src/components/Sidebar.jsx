@@ -128,7 +128,6 @@ function Sidebar() {
         fontFamily: "'DM Sans', 'Segoe UI', sans-serif",
       }}
     >
-      {/* Brand Header with Notification Bell */}
       <div
         style={{
           padding: "24px 20px 20px",
@@ -174,50 +173,18 @@ function Sidebar() {
         </div>
       </div>
 
-      {/* Navigation */}
       <nav style={{ flex: 1, padding: "12px 10px" }}>
         <span style={sectionLabel}>Overview</span>
-        <NavLink
-          to="/admin/dashboard"
-          label="Dashboard"
-          active={isActive("/admin/dashboard")}
-          badge="Live"
-        />
-
+        <NavLink to="/admin/dashboard" label="Dashboard" active={isActive("/admin/dashboard")} badge="Live" />
         <span style={{ ...sectionLabel, marginTop: "8px" }}>Management</span>
-        <NavLink
-          to="/admin/students"
-          label="Students"
-          active={isActive("/admin/students")}
-        />
-        <NavLink
-          to="/admin/mentors"
-          label="Mentors"
-          active={isActive("/admin/mentors")}
-        />
-        <NavLink
-          to="/admin/reviewers"
-          label="Reviewers"
-          active={isActive("/admin/reviewers")}
-        />
-        <NavLink
-          to="/admin/courses"
-          label="Courses"
-          active={isActive("/admin/courses")}
-        />
-        <NavLink
-          to="/admin/modules"
-          label="Modules"
-          active={isActive("/admin/modules")}
-        />
-        <NavLink
-          to="/admin/messages"
-          label="Messages"
-          active={isActive("/admin/messages")}
-        />
+        <NavLink to="/admin/students" label="Students" active={isActive("/admin/students")} />
+        <NavLink to="/admin/mentors" label="Mentors" active={isActive("/admin/mentors")} />
+        <NavLink to="/admin/reviewers" label="Reviewers" active={isActive("/admin/reviewers")} />
+        <NavLink to="/admin/courses" label="Courses" active={isActive("/admin/courses")} />
+        <NavLink to="/admin/modules" label="Modules" active={isActive("/admin/modules")} />
+        <NavLink to="/admin/messages" label="Messages" active={isActive("/admin/messages")} />
       </nav>
 
-      {/* Footer (unchanged) */}
       <div
         style={{
           padding: "12px 10px 16px",
@@ -308,3 +275,5 @@ function Sidebar() {
 }
 
 export default Sidebar;
+
+

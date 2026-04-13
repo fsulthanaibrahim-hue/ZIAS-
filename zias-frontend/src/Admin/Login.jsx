@@ -15,20 +15,17 @@ function Login() {
     setError("");
 
     try {
-      // 1. Get JWT tokens
       const tokenRes = await axios.post("http://127.0.0.1:8000/api/token/", { username, password });
       const accessToken = tokenRes.data.access;
       localStorage.setItem("access_token", accessToken);
       localStorage.setItem("refresh_token", tokenRes.data.refresh);
 
-      // 2. Fetch current user info (role)
       const userRes = await axios.get("http://127.0.0.1:8000/api/users/me/", {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
       const user = userRes.data;
       localStorage.setItem("user", JSON.stringify(user));
 
-      // 3. Redirect based on role
       if (user.is_admin) {
         navigate("/admin/dashboard");
       } else {
@@ -42,7 +39,6 @@ function Login() {
     }
   };
 
-  // Styling (unchanged – keep your existing styles)
   const inputStyle = {
     width: "100%",
     padding: "10px 14px",
@@ -71,7 +67,6 @@ function Login() {
         overflow: "hidden",
       }}
     >
-      {/* Background grid */}
       <div
         style={{
           position: "absolute",
@@ -82,8 +77,6 @@ function Login() {
           pointerEvents: "none",
         }}
       />
-
-      {/* Glow blob */}
       <div
         style={{
           position: "absolute",
@@ -96,8 +89,6 @@ function Login() {
           pointerEvents: "none",
         }}
       />
-
-      {/* Card */}
       <div
         style={{
           width: "100%",
@@ -110,14 +101,11 @@ function Login() {
           zIndex: 1,
         }}
       >
-        {/* Top bar dots */}
         <div style={{ display: "flex", gap: "6px", marginBottom: "28px" }}>
           <span style={{ width: "10px", height: "10px", borderRadius: "50%", background: "#ff5f57" }} />
           <span style={{ width: "10px", height: "10px", borderRadius: "50%", background: "#febc2e" }} />
           <span style={{ width: "10px", height: "10px", borderRadius: "50%", background: "#28c840" }} />
         </div>
-
-        {/* Terminal prompt header */}
         <div
           style={{
             fontFamily: "'DM Mono', 'Fira Code', 'Courier New', monospace",
@@ -129,22 +117,8 @@ function Login() {
         >
           zias-admin <span style={{ color: "#3b6eff" }}>~</span> $ authenticate
         </div>
-
-        <h1
-          style={{
-            fontSize: "22px",
-            fontWeight: "600",
-            color: "#e6edf3",
-            margin: "0 0 4px",
-          }}
-        >
-          Admin Login
-        </h1>
-        <p style={{ fontSize: "13px", color: "rgba(255,255,255,0.35)", margin: "0 0 28px" }}>
-          ZIAS Portal — Authorized access only
-        </p>
-
-        {/* Error */}
+        <h1 style={{ fontSize: "22px", fontWeight: "600", color: "#e6edf3", margin: "0 0 4px" }}>Admin Login</h1>
+        <p style={{ fontSize: "13px", color: "rgba(255,255,255,0.35)", margin: "0 0 28px" }}>ZIAS Portal — Authorized access only</p>
         {error && (
           <div
             style={{
@@ -166,9 +140,7 @@ function Login() {
             {error}
           </div>
         )}
-
         <form onSubmit={handleSubmit}>
-          {/* Username */}
           <div style={{ marginBottom: "16px" }}>
             <label
               style={{
@@ -194,8 +166,6 @@ function Login() {
               onBlur={(e) => (e.target.style.borderColor = "rgba(255,255,255,0.1)")}
             />
           </div>
-
-          {/* Password */}
           <div style={{ marginBottom: "24px" }}>
             <label
               style={{
@@ -221,8 +191,6 @@ function Login() {
               onBlur={(e) => (e.target.style.borderColor = "rgba(255,255,255,0.1)")}
             />
           </div>
-
-          {/* Submit */}
           <button
             type="submit"
             disabled={loading}
@@ -243,24 +211,12 @@ function Login() {
               gap: "8px",
               transition: "background 0.2s",
             }}
-            onMouseEnter={(e) => {
-              if (!loading) e.currentTarget.style.background = "#2d5ce0";
-            }}
-            onMouseLeave={(e) => {
-              if (!loading) e.currentTarget.style.background = "#3b6eff";
-            }}
+            onMouseEnter={(e) => { if (!loading) e.currentTarget.style.background = "#2d5ce0"; }}
+            onMouseLeave={(e) => { if (!loading) e.currentTarget.style.background = "#3b6eff"; }}
           >
             {loading ? (
               <>
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  width="16"
-                  height="16"
-                  style={{ animation: "spin 0.8s linear infinite" }}
-                >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16" style={{ animation: "spin 0.8s linear infinite" }}>
                   <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
                 </svg>
                 Authenticating...
@@ -275,21 +231,10 @@ function Login() {
             )}
           </button>
         </form>
-
-        {/* Footer */}
-        <p
-          style={{
-            marginTop: "24px",
-            fontSize: "11px",
-            color: "rgba(255,255,255,0.2)",
-            textAlign: "center",
-            fontFamily: "'DM Mono', 'Fira Code', monospace",
-          }}
-        >
+        <p style={{ marginTop: "24px", fontSize: "11px", color: "rgba(255,255,255,0.2)", textAlign: "center", fontFamily: "'DM Mono', 'Fira Code', monospace" }}>
           © {new Date().getFullYear()} ZIAS · Secure session
         </p>
       </div>
-
       <style>{`
         @keyframes spin {
           from { transform: rotate(0deg); }
