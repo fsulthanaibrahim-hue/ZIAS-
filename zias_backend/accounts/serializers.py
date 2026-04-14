@@ -1,10 +1,11 @@
 import secrets
 import string
-from django.core.mail import send_mail
+from django.utils import timezone
 from django.conf import settings
 from django.db import IntegrityError
 from rest_framework import serializers
 from .models import User, Student, Mentor, Reviewer, Course, Module, Day, Task, Batch, StudentModule, ContactMessage
+from .tasks import send_student_welcome_email   # Celery task
 
 def generate_random_password(length=10):
     alphabet = string.ascii_letters + string.digits
@@ -34,7 +35,7 @@ class BatchSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'start_date', 'end_date', 'is_active', 'created_at', 'student_count']
 
 # ----------------------------
-# COURSE SERIALIZER (without student_count)
+# COURSE SERIALIZER
 # ----------------------------
 class CourseSerializer(serializers.ModelSerializer):
     class Meta:
@@ -68,7 +69,7 @@ class ModuleSerializer(serializers.ModelSerializer):
         fields = ['id', 'course', 'course_name', 'title', 'order', 'content', 'is_common']
 
 # ----------------------------
-# STUDENT SERIALIZER (without courses/enrollment)
+# STUDENT SERIALIZER (cleaned + Celery)
 # ----------------------------
 class StudentSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username')
@@ -76,7 +77,13 @@ class StudentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Student
-        fields = ['id', 'username', 'email', 'course', 'batch', 'student_batch', 'phone', 'date_of_birth']
+        fields = [
+            'id', 'username', 'email', 'course', 'batch', 'student_batch',
+            'phone', 'date_of_birth', 'full_name', 'age', 'gender',
+            'fathers_name', 'fathers_contact', 'mothers_name', 'mothers_contact',
+            'address', 'educational_qualification', 'college_school',
+            'parent_name', 'parent_phone', 'emergency_contact'   # legacy
+        ]
 
     def create(self, validated_data):
         user_data = validated_data.pop('user')
@@ -91,28 +98,17 @@ class StudentSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"username": "A user with this username already exists."})
 
         user.is_student = True
+        user.password_changed_at = timezone.now()
         user.save()
 
-        subject = 'Your ZIAS Account Credentials'
-        message = f"""
-Dear {user_data['username']},
-
-Your account has been created successfully.
-
-Login credentials:
-Username: {user_data['username']}
-Password: {random_password}
-
-Please change your password after first login (recommended).
-
-Best regards,
-ZIAS Team
-"""
-        send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [user_data['email']], fail_silently=False)
+        # Send email asynchronously using Celery
+        send_student_welcome_email.delay(
+            user_email=user_data['email'],
+            username=user_data['username'],
+            random_password=random_password
+        )
 
         student = Student.objects.create(user=user, **validated_data)
-
-        # (Optional: auto-assign course? Not needed anymore)
         return student
 
     def update(self, instance, validated_data):
@@ -137,7 +133,7 @@ ZIAS Team
         return super().update(instance, validated_data)
 
 # ----------------------------
-# MENTOR SERIALIZER (with batch)
+# MENTOR SERIALIZER (unchanged)
 # ----------------------------
 class MentorSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username')
@@ -145,7 +141,7 @@ class MentorSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Mentor
-        fields = ['id', 'username', 'email', 'phone', 'expertise', 'batch']   # added batch
+        fields = ['id', 'username', 'email', 'phone', 'expertise', 'batch']
 
     def create(self, validated_data):
         user_data = validated_data.pop('user')
@@ -203,7 +199,7 @@ ZIAS Team
         return super().update(instance, validated_data)
 
 # ----------------------------
-# REVIEWER SERIALIZER (with batch)
+# REVIEWER SERIALIZER (unchanged)
 # ----------------------------
 class ReviewerSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username')
@@ -211,7 +207,7 @@ class ReviewerSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Reviewer
-        fields = ['id', 'username', 'email', 'department', 'batch']   # added batch
+        fields = ['id', 'username', 'email', 'department', 'batch']
 
     def create(self, validated_data):
         user_data = validated_data.pop('user')
@@ -238,7 +234,7 @@ Login credentials:
 Username: {user_data['username']}
 Password: {random_password}
 
-Please change your password after first login (recommended).
+Please change your password within 3 days.
 
 Best regards,
 ZIAS Team
@@ -286,4 +282,3 @@ class ContactMessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = ContactMessage
         fields = '__all__'
-

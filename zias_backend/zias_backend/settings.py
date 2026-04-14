@@ -162,3 +162,18 @@ EMAIL_HOST_USER = 'fsulthanaibrahim@gmail.com'    # your actual Gmail
 EMAIL_HOST_PASSWORD = 'gsoxdcilnfvuinxh'          # App Password (no spaces)
 DEFAULT_FROM_EMAIL = 'ZIAS <fsulthanaibrahim@gmail.com>'   # must match EMAIL_HOST_USER
 ADMIN_EMAIL = 'admin@gmail.com'
+
+
+
+AUTHENTICATION_BACKENDS = [
+    'your_app.authentication.PasswordExpiryBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
+
+
+
+CELERY_BROKER_URL = 'redis://localhost:6379'      # or 'amqp://localhost' for RabbitMQ
+CELERY_RESULT_BACKEND = 'redis://localhost:6379'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+

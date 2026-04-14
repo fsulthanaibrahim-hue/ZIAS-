@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.utils import timezone
+from django.contrib.auth.models import User
 
 # Custom User model
 class User(AbstractUser):
@@ -34,23 +35,50 @@ class Batch(models.Model):
         return self.name
 
 # ----------------------------
-# STUDENT PROFILE
+# STUDENT PROFILE (CLEANED – only required fields)
 # ----------------------------
 class Student(models.Model):
     user = models.OneToOneField(
         User, on_delete=models.CASCADE, related_name='student_profile'
     )
+    # Basic fields
     course = models.CharField(max_length=100)
     batch = models.CharField(max_length=50)  # legacy text field
     student_batch = models.ForeignKey(Batch, on_delete=models.SET_NULL, null=True, blank=True, related_name='students')
     phone = models.CharField(max_length=15, blank=True, null=True)
     date_of_birth = models.DateField(null=True, blank=True)
 
+    # Personal details
+    full_name = models.CharField(max_length=150, blank=True, null=True)
+    age = models.PositiveIntegerField(blank=True, null=True)
+    gender = models.CharField(
+        max_length=10, blank=True, null=True,
+        choices=[('Male', 'Male'), ('Female', 'Female'), ('Other', 'Other')]
+    )
+
+    # Parents
+    fathers_name = models.CharField(max_length=150, blank=True, null=True)
+    fathers_contact = models.CharField(max_length=15, blank=True, null=True)
+    mothers_name = models.CharField(max_length=150, blank=True, null=True)
+    mothers_contact = models.CharField(max_length=15, blank=True, null=True)
+
+    # Address
+    address = models.TextField(blank=True, null=True)
+
+    # Education
+    educational_qualification = models.CharField(max_length=200, blank=True, null=True)
+    college_school = models.CharField(max_length=200, blank=True, null=True)
+
+    # Legacy compatibility fields (optional, keep for existing data)
+    parent_name = models.CharField(max_length=100, blank=True, null=True)
+    parent_phone = models.CharField(max_length=15, blank=True, null=True)
+    emergency_contact = models.CharField(max_length=15, blank=True, null=True)
+
     def __str__(self):
         return self.user.username
 
 # ----------------------------
-# MENTOR PROFILE (with batch)
+# MENTOR PROFILE
 # ----------------------------
 class Mentor(models.Model):
     user = models.OneToOneField(
@@ -64,7 +92,7 @@ class Mentor(models.Model):
         return self.user.username
 
 # ----------------------------
-# REVIEWER PROFILE (with batch)
+# REVIEWER PROFILE
 # ----------------------------
 class Reviewer(models.Model):
     user = models.OneToOneField(
@@ -77,7 +105,7 @@ class Reviewer(models.Model):
         return self.user.username
 
 # ----------------------------
-# COURSE MODEL (no Enrollment)
+# COURSE MODEL
 # ----------------------------
 class Course(models.Model):
     name = models.CharField(max_length=100)
@@ -89,7 +117,7 @@ class Course(models.Model):
         return self.name
 
 # ----------------------------
-# MODULE MODEL (Week)
+# MODULE MODEL
 # ----------------------------
 class Module(models.Model):
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='modules')
@@ -105,7 +133,7 @@ class Module(models.Model):
         return f"{self.course.name} - {self.title}"
 
 # ----------------------------
-# STUDENT MODULE (Personalized modules for weeks 9+)
+# STUDENT MODULE
 # ----------------------------
 class StudentModule(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='custom_modules')
