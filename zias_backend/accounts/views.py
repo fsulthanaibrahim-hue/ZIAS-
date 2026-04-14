@@ -4,7 +4,7 @@ from .permissions import IsAdminUser
 from .permissions import IsAdminOrReadOnly  
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.filters import BaseFilterBackend
 from django.utils import timezone
 from .permissions import IsStudentOwner
@@ -13,12 +13,15 @@ from datetime import timedelta
 from .models import PasswordResetToken
 from django.core.mail import send_mail
 from django.conf import settings
+from django.contrib.auth import authenticate
 from .models import User, Student, Mentor, Reviewer, Course, Module, Day, Task, Batch, StudentModule, PasswordResetToken, ContactMessage
 from .serializers import (
     StudentSerializer, MentorSerializer, ReviewerSerializer, UserSerializer,
     CourseSerializer, ModuleSerializer, DaySerializer, TaskSerializer, BatchSerializer,
     ContactMessageSerializer, StudentModuleSerializer
 )
+from rest_framework_simplejwt.tokens import RefreshToken, TokenError
+from rest_framework_simplejwt.views import TokenObtainPairView
 
 # ----------------------------
 # Custom Filter Backends
@@ -347,4 +350,46 @@ class ContactMessageDetailView(APIView):
             return Response({"detail": "Marked as read"})
         except ContactMessage.DoesNotExist:
             return Response({"detail": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+
+# ----------------------------
+# CUSTOM LOGIN VIEW (returns JWT + user data)
+# ----------------------------
+class CustomLoginView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        username = request.data.get('username')
+        password = request.data.get('password')
+        user = authenticate(username=username, password=password)
+        if not user:
+            return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        refresh = RefreshToken.for_user(user)
+        access = refresh.access_token
+
+        user_serializer = UserSerializer(user)
+
+        return Response({
+            'refresh': str(refresh),
+            'access': str(access),
+            'user': user_serializer.data,
+        })
+
+# ----------------------------
+# LOGOUT VIEW (blacklists refresh token)
+# ----------------------------
+class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            refresh_token = request.data.get('refresh')
+            if not refresh_token:
+                return Response({'error': 'Refresh token required'}, status=status.HTTP_400_BAD_REQUEST)
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+            return Response({'message': 'Logged out successfully'}, status=status.HTTP_200_OK)
+        except TokenError:
+            return Response({'error': 'Invalid token'}, status=status.HTTP_400_BAD_REQUEST)
+        
         

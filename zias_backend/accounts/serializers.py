@@ -1,11 +1,14 @@
 import secrets
 import string
+from django.core.mail import send_mail
 from django.utils import timezone
 from django.conf import settings
 from django.db import IntegrityError
 from rest_framework import serializers
 from .models import User, Student, Mentor, Reviewer, Course, Module, Day, Task, Batch, StudentModule, ContactMessage
-from .tasks import send_student_welcome_email   # Celery task
+
+# Optional: Celery task (comment out if not used)
+from .tasks import send_student_welcome_email
 
 def generate_random_password(length=10):
     alphabet = string.ascii_letters + string.digits
@@ -69,7 +72,7 @@ class ModuleSerializer(serializers.ModelSerializer):
         fields = ['id', 'course', 'course_name', 'title', 'order', 'content', 'is_common']
 
 # ----------------------------
-# STUDENT SERIALIZER (cleaned + Celery)
+# STUDENT SERIALIZER (cleaned + Celery + phone validation)
 # ----------------------------
 class StudentSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username')
@@ -82,8 +85,16 @@ class StudentSerializer(serializers.ModelSerializer):
             'phone', 'date_of_birth', 'full_name', 'age', 'gender',
             'fathers_name', 'fathers_contact', 'mothers_name', 'mothers_contact',
             'address', 'educational_qualification', 'college_school',
-            'parent_name', 'parent_phone', 'emergency_contact'   # legacy
+            'parent_name', 'parent_phone', 'emergency_contact'
         ]
+
+    def validate_phone(self, value):
+        if value:
+            if not value.isdigit():
+                raise serializers.ValidationError("Phone number must contain only digits.")
+            if len(value) != 10:
+                raise serializers.ValidationError("Phone number must be exactly 10 digits.")
+        return value
 
     def create(self, validated_data):
         user_data = validated_data.pop('user')
@@ -101,7 +112,7 @@ class StudentSerializer(serializers.ModelSerializer):
         user.password_changed_at = timezone.now()
         user.save()
 
-        # Send email asynchronously using Celery
+        # Send email asynchronously (or synchronously if Celery not configured)
         send_student_welcome_email.delay(
             user_email=user_data['email'],
             username=user_data['username'],
@@ -133,7 +144,7 @@ class StudentSerializer(serializers.ModelSerializer):
         return super().update(instance, validated_data)
 
 # ----------------------------
-# MENTOR SERIALIZER (unchanged)
+# MENTOR SERIALIZER
 # ----------------------------
 class MentorSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username')
@@ -199,7 +210,7 @@ ZIAS Team
         return super().update(instance, validated_data)
 
 # ----------------------------
-# REVIEWER SERIALIZER (unchanged)
+# REVIEWER SERIALIZER
 # ----------------------------
 class ReviewerSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username')

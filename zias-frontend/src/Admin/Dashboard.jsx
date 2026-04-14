@@ -135,7 +135,7 @@ function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0f1623] text-white p-4 sm:p-6 md:p-8 overflow-x-hidden">
+    <div className="min-h-screen w-screen bg-[#0f1623] text-white p-4 sm:p-6 md:p-8 overflow-x-hidden">
       {/* Toast */}
       {notification && (
         <div className="fixed top-6 right-6 z-50 bg-violet-600/90 text-white px-4 py-2.5 rounded-xl shadow-2xl text-sm font-semibold backdrop-blur">

@@ -31,8 +31,9 @@ function Students() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [viewingStudent, setViewingStudent] = useState(null);
+  const [phoneError, setPhoneError] = useState("");
   const [formData, setFormData] = useState({
-    // Basic
     username: "",
     full_name: "",
     email: "",
@@ -42,24 +43,13 @@ function Students() {
     date_of_birth: "",
     age: "",
     gender: "",
-    // Parents & Guardian
     fathers_name: "",
     fathers_contact: "",
     mothers_name: "",
     mothers_contact: "",
-    guardian_name: "",
-    guardian_relation: "",
-    // Address
     address: "",
-    village: "",
-    taluk: "",
-    // Education
     educational_qualification: "",
     college_school: "",
-    // Government ID
-    govt_id_type: "",
-    govt_id_number: "",
-    govt_id_address: "",
   });
 
   const [toast, setToast] = useState(null);
@@ -122,11 +112,29 @@ function Students() {
     }
   }, [formData.date_of_birth]);
 
+  const generateUniqueUsername = (baseUsername) => {
+    const timestamp = Date.now().toString().slice(-6);
+    return `${baseUsername}_${timestamp}`;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Phone number validation (must be 10 digits if provided)
+    if (formData.phone && !/^\d{10}$/.test(formData.phone)) {
+      showToast("Phone number must be exactly 10 digits", "error");
+      setPhoneError("Phone number must be exactly 10 digits");
+      return;
+    }
+    setPhoneError("");
+    
+    let finalUsername = formData.username.trim();
+    if (!editingId && finalUsername) {
+      finalUsername = generateUniqueUsername(finalUsername);
+    }
+    
     const payload = {
-      // Basic
-      username: formData.username,
+      username: finalUsername,
       full_name: formData.full_name || null,
       email: formData.email,
       course: formData.course,
@@ -135,41 +143,31 @@ function Students() {
       date_of_birth: formData.date_of_birth || null,
       age: formData.age || null,
       gender: formData.gender || null,
-      // Parents & Guardian
       fathers_name: formData.fathers_name || null,
       fathers_contact: formData.fathers_contact || null,
       mothers_name: formData.mothers_name || null,
       mothers_contact: formData.mothers_contact || null,
-      guardian_name: formData.guardian_name || null,
-      guardian_relation: formData.guardian_relation || null,
-      // Address
       address: formData.address || null,
-      village: formData.village || null,
-      taluk: formData.taluk || null,
-      // Education
       educational_qualification: formData.educational_qualification || null,
       college_school: formData.college_school || null,
-      // Government ID
-      govt_id_type: formData.govt_id_type || null,
-      govt_id_number: formData.govt_id_number || null,
-      govt_id_address: formData.govt_id_address || null,
     };
+    
     try {
       if (editingId) {
         await API.patch(`students/${editingId}/`, payload);
         showToast("Student updated successfully", "success");
       } else {
         await API.post("students/", payload);
-        showToast("Student added successfully", "success");
+        showToast(`Student added successfully! Username: ${finalUsername}`, "success");
       }
       setShowForm(false);
       setEditingId(null);
       setFormData({
         username: "", full_name: "", email: "", course: "", batch: "", phone: "", date_of_birth: "", age: "", gender: "",
-        fathers_name: "", fathers_contact: "", mothers_name: "", mothers_contact: "", guardian_name: "", guardian_relation: "",
-        address: "", village: "", taluk: "", educational_qualification: "", college_school: "",
-        govt_id_type: "", govt_id_number: "", govt_id_address: "",
+        fathers_name: "", fathers_contact: "", mothers_name: "", mothers_contact: "",
+        address: "", educational_qualification: "", college_school: "",
       });
+      setPhoneError("");
       fetchStudents();
     } catch (error) {
       if (error.response) {
@@ -190,7 +188,7 @@ function Students() {
       email: student.email,
       course: student.course,
       batch: student.batch,
-      phone: student.phone,
+      phone: student.phone || "",
       date_of_birth: student.date_of_birth || "",
       age: student.age || "",
       gender: student.gender || "",
@@ -198,22 +196,28 @@ function Students() {
       fathers_contact: student.fathers_contact || "",
       mothers_name: student.mothers_name || "",
       mothers_contact: student.mothers_contact || "",
-      guardian_name: student.guardian_name || "",
-      guardian_relation: student.guardian_relation || "",
       address: student.address || "",
-      village: student.village || "",
-      taluk: student.taluk || "",
       educational_qualification: student.educational_qualification || "",
       college_school: student.college_school || "",
-      govt_id_type: student.govt_id_type || "",
-      govt_id_number: student.govt_id_number || "",
-      govt_id_address: student.govt_id_address || "",
     });
+    setPhoneError("");
     setShowForm(true);
   };
 
   const handleChange = (e) => {
-    setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    const { name, value } = e.target;
+    if (name === 'phone') {
+      // Allow only digits, max 10 characters
+      const digits = value.replace(/\D/g, '').slice(0, 10);
+      setFormData(prev => ({ ...prev, phone: digits }));
+      if (digits.length > 0 && digits.length !== 10) {
+        setPhoneError('Phone number must be exactly 10 digits');
+      } else {
+        setPhoneError('');
+      }
+    } else {
+      setFormData((prev) => ({ ...prev, [name]: value }));
+    }
   };
 
   const filteredStudents = students.filter((s) =>
@@ -228,6 +232,10 @@ function Students() {
     w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-4 py-2.5 text-[#e6edf3]
     placeholder-[#484f58] focus:outline-none focus:border-[#388bfd] focus:ring-1 focus:ring-[#388bfd]/30
     transition-all duration-200 text-sm font-mono
+  `;
+  const readOnlyClass = `
+    w-full bg-[#0d1117]/50 border border-[#30363d]/50 rounded-lg px-4 py-2.5 text-[#7d8590]
+    cursor-not-allowed text-sm font-mono
   `;
 
   const getInitial = (name) => name ? name.charAt(0).toUpperCase() : "?";
@@ -303,10 +311,10 @@ function Students() {
                 setEditingId(null);
                 setFormData({
                   username: "", full_name: "", email: "", course: "", batch: "", phone: "", date_of_birth: "", age: "", gender: "",
-                  fathers_name: "", fathers_contact: "", mothers_name: "", mothers_contact: "", guardian_name: "", guardian_relation: "",
-                  address: "", village: "", taluk: "", educational_qualification: "", college_school: "",
-                  govt_id_type: "", govt_id_number: "", govt_id_address: "",
+                  fathers_name: "", fathers_contact: "", mothers_name: "", mothers_contact: "",
+                  address: "", educational_qualification: "", college_school: "",
                 });
+                setPhoneError("");
                 setShowForm(true);
               }}
               className="shine flex items-center justify-center gap-2 bg-[#238636] hover:bg-[#2ea043] border border-[#2ea043]/40 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 shadow-lg shadow-[#238636]/20"
@@ -319,7 +327,7 @@ function Students() {
           </div>
         </div>
 
-        {/* Modal – with all sections */}
+        {/* Add/Edit Modal (with phone error display) */}
         {showForm && (
           <div
             className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 backdrop-blur-md p-4"
@@ -327,10 +335,9 @@ function Students() {
           >
             <form
               onSubmit={handleSubmit}
-              className="modal-enter bg-[#161b22] rounded-2xl w-full max-w-4xl border border-[#30363d] shadow-2xl shadow-black/60 max-h-[90vh] overflow-y-auto"
+              className="modal-enter bg-[#161b22] rounded-2xl w-full max-w-3xl border border-[#30363d] shadow-2xl shadow-black/60 max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Sticky Header */}
               <div className="sticky top-0 bg-[#161b22] z-10 flex justify-between items-center px-4 sm:px-6 py-4 border-b border-[#21262d]">
                 <div className="flex items-center gap-3">
                   <div className="w-7 h-7 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
@@ -351,159 +358,57 @@ function Students() {
               </div>
 
               <div className="px-4 sm:px-6 py-5 space-y-6">
-                {/* SECTION 1: Basic Information */}
+                {/* Basic Information */}
                 <div>
                   <h4 className="text-xs font-semibold text-[#388bfd] uppercase tracking-wider mb-3">Basic Information</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-[#7d8590] text-xs font-medium mb-1.5 uppercase tracking-wider">Username *</label>
-                      <input type="text" name="username" placeholder="Username" value={formData.username} onChange={handleChange} required className={inputClass} />
+                      <label className="block text-[#7d8590] text-xs font-medium mb-1.5">Username *</label>
+                      <input type="text" name="username" value={formData.username} onChange={handleChange} required className={inputClass} />
+                      {!editingId && <p className="text-[#484f58] text-xs mt-1">A timestamp will be added to ensure uniqueness.</p>}
                     </div>
+                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Full Name</label><input type="text" name="full_name" value={formData.full_name} onChange={handleChange} className={inputClass} /></div>
+                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Email *</label><input type="email" name="email" value={formData.email} onChange={handleChange} required className={inputClass} /></div>
+                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Course *</label><select name="course" value={formData.course} onChange={handleChange} required className={inputClass}><option value="">Select a course</option>{coursesList.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select></div>
+                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Batch *</label><select name="batch" value={formData.batch} onChange={handleChange} required className={inputClass}><option value="">Select a batch</option>{batchesList.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}</select></div>
                     <div>
-                      <label className="block text-[#7d8590] text-xs font-medium mb-1.5 uppercase tracking-wider">Full Name</label>
-                      <input type="text" name="full_name" placeholder="Full Name" value={formData.full_name} onChange={handleChange} className={inputClass} />
+                      <label className="block text-[#7d8590] text-xs font-medium mb-1.5">Phone</label>
+                      <input type="text" name="phone" value={formData.phone} onChange={handleChange} className={inputClass} />
+                      {phoneError && <p className="text-red-400 text-xs mt-1">{phoneError}</p>}
                     </div>
-                    <div>
-                      <label className="block text-[#7d8590] text-xs font-medium mb-1.5 uppercase tracking-wider">Email *</label>
-                      <input type="email" name="email" placeholder="Email" value={formData.email} onChange={handleChange} required className={inputClass} />
-                    </div>
-                    <div>
-                      <label className="block text-[#7d8590] text-xs font-medium mb-1.5 uppercase tracking-wider">Course *</label>
-                      <select name="course" value={formData.course} onChange={handleChange} required className={inputClass}>
-                        <option value="">Select a course</option>
-                        {coursesList.map((course) => (
-                          <option key={course.id} value={course.name}>{course.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[#7d8590] text-xs font-medium mb-1.5 uppercase tracking-wider">Batch *</label>
-                      <select name="batch" value={formData.batch} onChange={handleChange} required className={inputClass}>
-                        <option value="">Select a batch</option>
-                        {batchesList.map((batch) => (
-                          <option key={batch.id} value={batch.name}>{batch.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[#7d8590] text-xs font-medium mb-1.5 uppercase tracking-wider">Phone</label>
-                      <input type="text" name="phone" placeholder="Mobile number" value={formData.phone} onChange={handleChange} className={inputClass} />
-                    </div>
-                    <div>
-                      <label className="block text-[#7d8590] text-xs font-medium mb-1.5 uppercase tracking-wider">Date of Birth</label>
-                      <input type="date" name="date_of_birth" value={formData.date_of_birth} onChange={handleChange} className={inputClass} style={{ colorScheme: "dark" }} />
-                    </div>
-                    <div>
-                      <label className="block text-[#7d8590] text-xs font-medium mb-1.5 uppercase tracking-wider">Age</label>
-                      <input type="text" name="age" placeholder="Auto-calculated" value={formData.age} readOnly className={`${inputClass} cursor-not-allowed opacity-80`} />
-                    </div>
-                    <div>
-                      <label className="block text-[#7d8590] text-xs font-medium mb-1.5 uppercase tracking-wider">Gender</label>
-                      <select name="gender" value={formData.gender} onChange={handleChange} className={inputClass}>
-                        <option value="">Select</option>
-                        <option value="Male">Male</option>
-                        <option value="Female">Female</option>
-                        <option value="Other">Other</option>
-                      </select>
-                    </div>
+                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Date of Birth</label><input type="date" name="date_of_birth" value={formData.date_of_birth} onChange={handleChange} className={inputClass} style={{ colorScheme: "dark" }} /></div>
+                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Age</label><input type="text" name="age" value={formData.age} readOnly className={`${inputClass} cursor-not-allowed opacity-80`} /></div>
+                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Gender</label><select name="gender" value={formData.gender} onChange={handleChange} className={inputClass}><option value="">Select</option><option>Male</option><option>Female</option><option>Other</option></select></div>
                   </div>
                 </div>
 
-                {/* SECTION 2: Parents & Guardian */}
+                {/* Parents */}
                 <div className="border-t border-[#21262d] pt-4">
-                  <h4 className="text-xs font-semibold text-[#f59e0b] uppercase tracking-wider mb-3">Parents & Guardian</h4>
+                  <h4 className="text-xs font-semibold text-[#f59e0b] uppercase tracking-wider mb-3">Parents</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[#7d8590] text-xs font-medium mb-1.5">Father's Name</label>
-                      <input type="text" name="fathers_name" placeholder="Father's Name" value={formData.fathers_name} onChange={handleChange} className={inputClass} />
-                    </div>
-                    <div>
-                      <label className="block text-[#7d8590] text-xs font-medium mb-1.5">Father's Contact</label>
-                      <input type="text" name="fathers_contact" placeholder="Father's Contact" value={formData.fathers_contact} onChange={handleChange} className={inputClass} />
-                    </div>
-                    <div>
-                      <label className="block text-[#7d8590] text-xs font-medium mb-1.5">Mother's Name</label>
-                      <input type="text" name="mothers_name" placeholder="Mother's Name" value={formData.mothers_name} onChange={handleChange} className={inputClass} />
-                    </div>
-                    <div>
-                      <label className="block text-[#7d8590] text-xs font-medium mb-1.5">Mother's Contact</label>
-                      <input type="text" name="mothers_contact" placeholder="Mother's Contact" value={formData.mothers_contact} onChange={handleChange} className={inputClass} />
-                    </div>
-                    <div>
-                      <label className="block text-[#7d8590] text-xs font-medium mb-1.5">Guardian Name</label>
-                      <input type="text" name="guardian_name" placeholder="Guardian Name (if different)" value={formData.guardian_name} onChange={handleChange} className={inputClass} />
-                    </div>
-                    <div>
-                      <label className="block text-[#7d8590] text-xs font-medium mb-1.5">Relationship with Guardian</label>
-                      <input type="text" name="guardian_relation" placeholder="e.g. Father, Mother, Uncle" value={formData.guardian_relation} onChange={handleChange} className={inputClass} />
-                    </div>
+                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Father's Name</label><input type="text" name="fathers_name" value={formData.fathers_name} onChange={handleChange} className={inputClass} /></div>
+                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Father's Contact</label><input type="text" name="fathers_contact" value={formData.fathers_contact} onChange={handleChange} className={inputClass} /></div>
+                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Mother's Name</label><input type="text" name="mothers_name" value={formData.mothers_name} onChange={handleChange} className={inputClass} /></div>
+                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Mother's Contact</label><input type="text" name="mothers_contact" value={formData.mothers_contact} onChange={handleChange} className={inputClass} /></div>
                   </div>
                 </div>
 
-                {/* SECTION 3: Address */}
+                {/* Address */}
                 <div className="border-t border-[#21262d] pt-4">
                   <h4 className="text-xs font-semibold text-[#f59e0b] uppercase tracking-wider mb-3">Address</h4>
-                  <div className="grid grid-cols-1 gap-4">
-                    <div>
-                      <label className="block text-[#7d8590] text-xs font-medium mb-1.5">Address</label>
-                      <textarea name="address" rows="2" placeholder="Full address" value={formData.address} onChange={handleChange} className={`${inputClass} resize-none`} />
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-[#7d8590] text-xs font-medium mb-1.5">Village / City</label>
-                        <input type="text" name="village" placeholder="Village / City" value={formData.village} onChange={handleChange} className={inputClass} />
-                      </div>
-                      <div>
-                        <label className="block text-[#7d8590] text-xs font-medium mb-1.5">Taluk / District</label>
-                        <input type="text" name="taluk" placeholder="Taluk / District" value={formData.taluk} onChange={handleChange} className={inputClass} />
-                      </div>
-                    </div>
-                  </div>
+                  <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Address</label><textarea name="address" rows="2" value={formData.address} onChange={handleChange} className={`${inputClass} resize-none`} /></div>
                 </div>
 
-                {/* SECTION 4: Education */}
+                {/* Education */}
                 <div className="border-t border-[#21262d] pt-4">
                   <h4 className="text-xs font-semibold text-[#f59e0b] uppercase tracking-wider mb-3">Education</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[#7d8590] text-xs font-medium mb-1.5">Educational Qualification</label>
-                      <input type="text" name="educational_qualification" placeholder="e.g. Plus Two, Degree" value={formData.educational_qualification} onChange={handleChange} className={inputClass} />
-                    </div>
-                    <div>
-                      <label className="block text-[#7d8590] text-xs font-medium mb-1.5">College / School Name</label>
-                      <input type="text" name="college_school" placeholder="College / School Name" value={formData.college_school} onChange={handleChange} className={inputClass} />
-                    </div>
-                  </div>
-                </div>
-
-                {/* SECTION 5: Government ID */}
-                <div className="border-t border-[#21262d] pt-4">
-                  <h4 className="text-xs font-semibold text-[#f59e0b] uppercase tracking-wider mb-3">Government ID Card</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[#7d8590] text-xs font-medium mb-1.5">ID Type</label>
-                      <select name="govt_id_type" value={formData.govt_id_type} onChange={handleChange} className={inputClass}>
-                        <option value="">Select ID Type</option>
-                        <option value="Aadhaar">Aadhaar</option>
-                        <option value="Driving License">Driving License</option>
-                        <option value="Passport">Passport</option>
-                        <option value="Voter ID">Voter ID</option>
-                        <option value="PAN Card">PAN Card</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[#7d8590] text-xs font-medium mb-1.5">ID Number</label>
-                      <input type="text" name="govt_id_number" placeholder="ID Number" value={formData.govt_id_number} onChange={handleChange} className={inputClass} />
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label className="block text-[#7d8590] text-xs font-medium mb-1.5">Address on ID Card</label>
-                      <textarea name="govt_id_address" rows="2" placeholder="Address as per ID card (if any)" value={formData.govt_id_address} onChange={handleChange} className={`${inputClass} resize-none`} />
-                    </div>
+                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Educational Qualification</label><input type="text" name="educational_qualification" value={formData.educational_qualification} onChange={handleChange} className={inputClass} /></div>
+                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">College / School Name</label><input type="text" name="college_school" value={formData.college_school} onChange={handleChange} className={inputClass} /></div>
                   </div>
                 </div>
               </div>
 
-              {/* Footer – Only Submit button */}
               <div className="sticky bottom-0 bg-[#161b22] px-4 sm:px-6 py-4 border-t border-[#21262d]">
                 <button type="submit" className="w-full bg-[#238636] hover:bg-[#2ea043] border border-[#2ea043]/40 text-white py-2.5 rounded-lg transition-all text-sm font-medium shadow-md shadow-[#238636]/20">
                   {editingId ? "Save Changes" : "Add Student"}
@@ -513,7 +418,89 @@ function Students() {
           </div>
         )}
 
-        {/* Responsive Table (unchanged) */}
+        {/* View Details Modal (read‑only) */}
+        {viewingStudent && (
+          <div
+            className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 backdrop-blur-md p-4"
+            onClick={() => setViewingStudent(null)}
+          >
+            <div
+              className="bg-[#161b22] rounded-2xl w-full max-w-3xl border border-[#30363d] shadow-2xl shadow-black/60 max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="sticky top-0 bg-[#161b22] z-10 flex justify-between items-center px-4 sm:px-6 py-4 border-b border-[#21262d]">
+                <div className="flex items-center gap-3">
+                  <div className="w-7 h-7 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
+                    <svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-[#e6edf3]">Student Details</h3>
+                    <p className="text-[#7d8590] text-xs">View all information</p>
+                  </div>
+                </div>
+                <button type="button" onClick={() => setViewingStudent(null)} className="text-[#484f58] hover:text-[#7d8590] transition p-1.5 rounded-lg hover:bg-[#21262d]">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="px-4 sm:px-6 py-5 space-y-6">
+                {/* Basic Information */}
+                <div>
+                  <h4 className="text-xs font-semibold text-[#388bfd] uppercase tracking-wider mb-3">Basic Information</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Username</label><input type="text" value={viewingStudent.username} readOnly className={readOnlyClass} /></div>
+                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Full Name</label><input type="text" value={viewingStudent.full_name || "—"} readOnly className={readOnlyClass} /></div>
+                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Email</label><input type="text" value={viewingStudent.email} readOnly className={readOnlyClass} /></div>
+                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Course</label><input type="text" value={viewingStudent.course} readOnly className={readOnlyClass} /></div>
+                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Batch</label><input type="text" value={viewingStudent.batch} readOnly className={readOnlyClass} /></div>
+                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Phone</label><input type="text" value={viewingStudent.phone || "—"} readOnly className={readOnlyClass} /></div>
+                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Date of Birth</label><input type="text" value={viewingStudent.date_of_birth || "—"} readOnly className={readOnlyClass} /></div>
+                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Age</label><input type="text" value={viewingStudent.age || "—"} readOnly className={readOnlyClass} /></div>
+                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Gender</label><input type="text" value={viewingStudent.gender || "—"} readOnly className={readOnlyClass} /></div>
+                  </div>
+                </div>
+
+                {/* Parents */}
+                <div className="border-t border-[#21262d] pt-4">
+                  <h4 className="text-xs font-semibold text-[#f59e0b] uppercase tracking-wider mb-3">Parents</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Father's Name</label><input type="text" value={viewingStudent.fathers_name || "—"} readOnly className={readOnlyClass} /></div>
+                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Father's Contact</label><input type="text" value={viewingStudent.fathers_contact || "—"} readOnly className={readOnlyClass} /></div>
+                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Mother's Name</label><input type="text" value={viewingStudent.mothers_name || "—"} readOnly className={readOnlyClass} /></div>
+                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Mother's Contact</label><input type="text" value={viewingStudent.mothers_contact || "—"} readOnly className={readOnlyClass} /></div>
+                  </div>
+                </div>
+
+                {/* Address */}
+                <div className="border-t border-[#21262d] pt-4">
+                  <h4 className="text-xs font-semibold text-[#f59e0b] uppercase tracking-wider mb-3">Address</h4>
+                  <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Address</label><textarea rows="2" value={viewingStudent.address || "—"} readOnly className={`${readOnlyClass} resize-none`} /></div>
+                </div>
+
+                {/* Education */}
+                <div className="border-t border-[#21262d] pt-4">
+                  <h4 className="text-xs font-semibold text-[#f59e0b] uppercase tracking-wider mb-3">Education</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Educational Qualification</label><input type="text" value={viewingStudent.educational_qualification || "—"} readOnly className={readOnlyClass} /></div>
+                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">College / School Name</label><input type="text" value={viewingStudent.college_school || "—"} readOnly className={readOnlyClass} /></div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="sticky bottom-0 bg-[#161b22] px-4 sm:px-6 py-4 border-t border-[#21262d] flex justify-end">
+                <button onClick={() => setViewingStudent(null)} className="bg-[#21262d] hover:bg-[#30363d] border border-[#30363d] text-[#7d8590] hover:text-[#e6edf3] px-5 py-2 rounded-lg transition-all text-sm font-medium">
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Students Table */}
         <div className="overflow-x-auto rounded-xl border border-[#21262d] shadow-xl shadow-black/20">
           <table className="min-w-full">
             <thead>
@@ -530,7 +517,12 @@ function Students() {
                     <td className="px-3 sm:px-4 py-2.5 sm:py-3.5">
                       <div className="flex items-center gap-2 sm:gap-3">
                         <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br ${getColor(s.username)} flex items-center justify-center text-white text-[10px] sm:text-xs font-bold shrink-0`}>{getInitial(s.username)}</div>
-                        <span className="text-[#e6edf3] text-xs sm:text-sm font-medium truncate max-w-[100px] sm:max-w-none">{s.username}</span>
+                        <button
+                          onClick={() => setViewingStudent(s)}
+                          className="text-[#e6edf3] text-xs sm:text-sm font-medium truncate max-w-[100px] sm:max-w-none hover:text-blue-400 transition-colors cursor-pointer text-left"
+                        >
+                          {s.username}
+                        </button>
                       </div>
                     </td>
                     <td className="px-3 sm:px-4 py-2.5 sm:py-3.5 text-[#7d8590] text-xs sm:text-sm font-mono truncate max-w-[120px] sm:max-w-none">{s.email}</td>
@@ -547,7 +539,7 @@ function Students() {
                   </tr>
                 ))
               ) : (
-                <tr><td colSpan="7" className="text-center py-16 sm:py-20 text-[#7d8590]">No students found. Click 'Add Student' to create one.</td></tr>
+                <tr><td colSpan="7" className="text-center py-16 sm:py-20 text-[#7d8590]">No students found. Click 'Add Student' to create one. </td></tr>
               )}
             </tbody>
           </table>
@@ -564,3 +556,4 @@ function Students() {
 }
 
 export default Students;
+
