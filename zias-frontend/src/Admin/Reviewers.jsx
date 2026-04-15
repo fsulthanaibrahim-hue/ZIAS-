@@ -2,7 +2,6 @@
 import { useEffect, useState } from "react";
 import API from "../api/api";
 
-// Toast Component
 function Toast({ message, type, onClose }) {
   useEffect(() => {
     const timer = setTimeout(onClose, 3000);
@@ -27,7 +26,6 @@ function Toast({ message, type, onClose }) {
 
 function Reviewers() {
   const [reviewers, setReviewers] = useState([]);
-  const [batchesList, setBatchesList] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -35,7 +33,6 @@ function Reviewers() {
     username: "",
     email: "",
     department: "",
-    batch: ""
   });
 
   const [toast, setToast] = useState(null);
@@ -51,15 +48,8 @@ function Reviewers() {
       });
   };
 
-  const fetchBatches = () => {
-    API.get("batches/")
-      .then(res => setBatchesList(res.data))
-      .catch(() => showToast("Failed to load batches", "error"));
-  };
-
   useEffect(() => {
     fetchReviewers();
-    fetchBatches();
   }, []);
 
   const handleDelete = (id) => {
@@ -82,7 +72,6 @@ function Reviewers() {
       username: formData.username,
       email: formData.email,
       department: formData.department,
-      batch: formData.batch || null,
     };
     try {
       if (editingId) {
@@ -94,7 +83,7 @@ function Reviewers() {
       }
       setShowForm(false);
       setEditingId(null);
-      setFormData({ username: "", email: "", department: "", batch: "" });
+      setFormData({ username: "", email: "", department: "" });
       fetchReviewers();
     } catch (error) {
       if (error.response) {
@@ -113,7 +102,6 @@ function Reviewers() {
       username: reviewer.username,
       email: reviewer.email,
       department: reviewer.department,
-      batch: reviewer.batch || "",
     });
     setShowForm(true);
   };
@@ -142,11 +130,6 @@ function Reviewers() {
   ];
   const getColor = (name) => avatarColors[(name?.charCodeAt(0) || 0) % avatarColors.length];
 
-  const getBatchName = (batchId) => {
-    const batch = batchesList.find(b => b.id === batchId);
-    return batch ? batch.name : "—";
-  };
-
   return (
     <div className="min-h-screen w-screen bg-[#0d1117] text-[#e6edf3]"
       style={{ fontFamily: "'Geist', 'SF Pro Display', system-ui, sans-serif" }}>
@@ -168,7 +151,7 @@ function Reviewers() {
 
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-6 sm:py-8">
 
-        {/* Top Bar – responsive stacking */}
+        {/* Top Bar */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
@@ -185,7 +168,6 @@ function Reviewers() {
           </div>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            {/* Search */}
             <div className="relative">
               <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#484f58]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
@@ -206,11 +188,10 @@ function Reviewers() {
               )}
             </div>
 
-            {/* Add Button */}
             <button
               onClick={() => {
                 setEditingId(null);
-                setFormData({ username: "", email: "", department: "", batch: "" });
+                setFormData({ username: "", email: "", department: "" });
                 setShowForm(true);
               }}
               className="shine flex items-center justify-center gap-2 bg-[#238636] hover:bg-[#2ea043] border border-[#2ea043]/40 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 shadow-lg shadow-[#238636]/20"
@@ -223,7 +204,7 @@ function Reviewers() {
           </div>
         </div>
 
-        {/* Modal – already responsive, keep as is */}
+        {/* Modal – no batch field */}
         {showForm && (
           <div
             className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 backdrop-blur-md p-4"
@@ -266,15 +247,6 @@ function Reviewers() {
                   <label className="block text-[#7d8590] text-xs font-medium mb-1.5 uppercase tracking-wider">Department</label>
                   <input type="text" name="department" placeholder="e.g. Engineering" value={formData.department} onChange={handleChange} required className={inputClass} />
                 </div>
-                <div>
-                  <label className="block text-[#7d8590] text-xs font-medium mb-1.5 uppercase tracking-wider">Batch</label>
-                  <select name="batch" value={formData.batch} onChange={handleChange} className={inputClass}>
-                    <option value="">Select a batch</option>
-                    {batchesList.map((batch) => (
-                      <option key={batch.id} value={batch.id}>{batch.name}</option>
-                    ))}
-                  </select>
-                </div>
               </div>
 
               <div className="flex gap-2 px-4 sm:px-6 py-4 border-t border-[#21262d]">
@@ -289,12 +261,12 @@ function Reviewers() {
           </div>
         )}
 
-        {/* Responsive Table – horizontal scroll on mobile */}
+        {/* Table – no batch column */}
         <div className="overflow-x-auto rounded-xl border border-[#21262d] shadow-xl shadow-black/20">
           <table className="min-w-full">
             <thead>
               <tr className="bg-[#161b22] border-b border-[#21262d]">
-                {["Reviewer", "Email", "Department", "Batch", ""].map((h, i) => (
+                {["Reviewer", "Email", "Department", ""].map((h, i) => (
                   <th key={i} className="text-left px-3 sm:px-4 py-3 text-[#7d8590] text-xs font-semibold uppercase tracking-widest whitespace-nowrap">
                     {h}
                   </th>
@@ -320,13 +292,6 @@ function Reviewers() {
                       </span>
                     </td>
                     <td className="px-3 sm:px-4 py-2.5 sm:py-3.5">
-                      {r.batch ? (
-                        <span className="inline-flex items-center gap-1.5 bg-purple-500/10 text-purple-400 border border-purple-500/20 text-[10px] sm:text-xs font-medium px-2 py-0.5 sm:py-1 rounded-full whitespace-nowrap">
-                          {getBatchName(r.batch)}
-                        </span>
-                      ) : <span className="text-[#484f58] text-xs">—</span>}
-                    </td>
-                    <td className="px-3 sm:px-4 py-2.5 sm:py-3.5">
                       <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-150">
                         <button onClick={() => handleEdit(r)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-[#7d8590] hover:text-[#388bfd] hover:bg-[#388bfd]/10 border border-transparent hover:border-[#388bfd]/20 transition-all text-xs font-medium">
                           <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -346,7 +311,7 @@ function Reviewers() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan="5" className="text-center py-16 sm:py-20">
+                  <td colSpan="4" className="text-center py-16 sm:py-20">
                     <div className="flex flex-col items-center gap-3">
                       <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-[#161b22] border border-[#30363d] flex items-center justify-center">
                         <svg className="w-5 h-5 sm:w-6 sm:h-6 text-[#484f58]" fill="none" stroke="currentColor" viewBox="0 0 24 24">

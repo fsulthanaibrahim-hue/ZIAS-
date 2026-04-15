@@ -167,9 +167,15 @@ class StudentModuleViewSet(viewsets.ModelViewSet):
 # DAY VIEWSET
 # ----------------------------
 class DayViewSet(viewsets.ModelViewSet):
-    queryset = Day.objects.all()
     serializer_class = DaySerializer
-    permission_classes = [IsAuthenticated]   # allow students to read/update days
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = Day.objects.all()
+        module_id = self.request.query_params.get('module')
+        if module_id:
+            queryset = queryset.filter(module_id=module_id)
+        return queryset
 
 # ----------------------------
 # TASK VIEWSET

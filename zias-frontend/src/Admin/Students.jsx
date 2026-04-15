@@ -28,17 +28,22 @@ function Students() {
   const [students, setStudents] = useState([]);
   const [coursesList, setCoursesList] = useState([]);
   const [batchesList, setBatchesList] = useState([]);
+  const [mentorsList, setMentorsList] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [viewingStudent, setViewingStudent] = useState(null);
   const [phoneError, setPhoneError] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
   const [formData, setFormData] = useState({
     username: "",
     full_name: "",
     email: "",
     course: "",
     batch: "",
+    mentor: "",
     phone: "",
     date_of_birth: "",
     age: "",
@@ -75,12 +80,26 @@ function Students() {
       .then((res) => setBatchesList(res.data))
       .catch(() => showToast("Failed to load batches", "error"));
   };
+  const fetchMentors = () => {
+    API.get("mentors/")
+      .then((res) => setMentorsList(res.data))
+      .catch(() => showToast("Failed to load mentors", "error"));
+  };
 
   useEffect(() => {
     fetchStudents();
     fetchCourses();
     fetchBatches();
+    fetchMentors();
   }, []);
+
+  // Refresh batches when modal opens (to show newly added batches)
+  useEffect(() => {
+    if (showForm) {
+      fetchBatches();
+      fetchCourses();
+    }
+  }, [showForm]);
 
   const handleDelete = (id) => {
     if (window.confirm("Are you sure you want to delete this student?")) {
@@ -112,15 +131,9 @@ function Students() {
     }
   }, [formData.date_of_birth]);
 
-  const generateUniqueUsername = (baseUsername) => {
-    const timestamp = Date.now().toString().slice(-6);
-    return `${baseUsername}_${timestamp}`;
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Phone number validation (must be 10 digits if provided)
     if (formData.phone && !/^\d{10}$/.test(formData.phone)) {
       showToast("Phone number must be exactly 10 digits", "error");
       setPhoneError("Phone number must be exactly 10 digits");
@@ -128,17 +141,13 @@ function Students() {
     }
     setPhoneError("");
     
-    let finalUsername = formData.username.trim();
-    if (!editingId && finalUsername) {
-      finalUsername = generateUniqueUsername(finalUsername);
-    }
-    
     const payload = {
-      username: finalUsername,
+      username: formData.username.trim(),
       full_name: formData.full_name || null,
       email: formData.email,
       course: formData.course,
       batch: formData.batch,
+      mentor: formData.mentor || null,
       phone: formData.phone,
       date_of_birth: formData.date_of_birth || null,
       age: formData.age || null,
@@ -158,17 +167,18 @@ function Students() {
         showToast("Student updated successfully", "success");
       } else {
         await API.post("students/", payload);
-        showToast(`Student added successfully! Username: ${finalUsername}`, "success");
+        showToast(`Student added successfully! Username: ${payload.username}`, "success");
       }
       setShowForm(false);
       setEditingId(null);
       setFormData({
-        username: "", full_name: "", email: "", course: "", batch: "", phone: "", date_of_birth: "", age: "", gender: "",
+        username: "", full_name: "", email: "", course: "", batch: "", mentor: "", phone: "", date_of_birth: "", age: "", gender: "",
         fathers_name: "", fathers_contact: "", mothers_name: "", mothers_contact: "",
         address: "", educational_qualification: "", college_school: "",
       });
       setPhoneError("");
       fetchStudents();
+      setCurrentPage(1);
     } catch (error) {
       if (error.response) {
         const errorMsg = Object.values(error.response.data).flat().join(", ");
@@ -188,6 +198,7 @@ function Students() {
       email: student.email,
       course: student.course,
       batch: student.batch,
+      mentor: student.mentor || "",
       phone: student.phone || "",
       date_of_birth: student.date_of_birth || "",
       age: student.age || "",
@@ -207,7 +218,6 @@ function Students() {
   const handleChange = (e) => {
     const { name, value } = e.target;
     if (name === 'phone') {
-      // Allow only digits, max 10 characters
       const digits = value.replace(/\D/g, '').slice(0, 10);
       setFormData(prev => ({ ...prev, phone: digits }));
       if (digits.length > 0 && digits.length !== 10) {
@@ -227,6 +237,42 @@ function Students() {
     s.batch?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     s.phone?.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // Pagination logic
+  const totalFiltered = filteredStudents.length;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / itemsPerPage));
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedStudents = filteredStudents.slice(startIndex, startIndex + itemsPerPage);
+
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxVisible = 5;
+    if (totalPages <= maxVisible) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      if (currentPage <= 3) {
+        for (let i = 1; i <= 4; i++) pages.push(i);
+        pages.push("...");
+        pages.push(totalPages);
+      } else if (currentPage >= totalPages - 2) {
+        pages.push(1);
+        pages.push("...");
+        for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i);
+      } else {
+        pages.push(1);
+        pages.push("...");
+        for (let i = currentPage - 1; i <= currentPage + 1; i++) pages.push(i);
+        pages.push("...");
+        pages.push(totalPages);
+      }
+    }
+    return pages;
+  };
+
+  // Reset to first page when search term changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
 
   const inputClass = `
     w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-4 py-2.5 text-[#e6edf3]
@@ -310,7 +356,7 @@ function Students() {
               onClick={() => {
                 setEditingId(null);
                 setFormData({
-                  username: "", full_name: "", email: "", course: "", batch: "", phone: "", date_of_birth: "", age: "", gender: "",
+                  username: "", full_name: "", email: "", course: "", batch: "", mentor: "", phone: "", date_of_birth: "", age: "", gender: "",
                   fathers_name: "", fathers_contact: "", mothers_name: "", mothers_contact: "",
                   address: "", educational_qualification: "", college_school: "",
                 });
@@ -327,7 +373,7 @@ function Students() {
           </div>
         </div>
 
-        {/* Add/Edit Modal (with phone error display) */}
+        {/* Add/Edit Modal (unchanged) */}
         {showForm && (
           <div
             className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 backdrop-blur-md p-4"
@@ -338,6 +384,7 @@ function Students() {
               className="modal-enter bg-[#161b22] rounded-2xl w-full max-w-3xl border border-[#30363d] shadow-2xl shadow-black/60 max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
+              {/* Modal content same as before – omitted for brevity */}
               <div className="sticky top-0 bg-[#161b22] z-10 flex justify-between items-center px-4 sm:px-6 py-4 border-b border-[#21262d]">
                 <div className="flex items-center gap-3">
                   <div className="w-7 h-7 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
@@ -365,12 +412,18 @@ function Students() {
                     <div>
                       <label className="block text-[#7d8590] text-xs font-medium mb-1.5">Username *</label>
                       <input type="text" name="username" value={formData.username} onChange={handleChange} required className={inputClass} />
-                      {!editingId && <p className="text-[#484f58] text-xs mt-1">A timestamp will be added to ensure uniqueness.</p>}
                     </div>
                     <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Full Name</label><input type="text" name="full_name" value={formData.full_name} onChange={handleChange} className={inputClass} /></div>
                     <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Email *</label><input type="email" name="email" value={formData.email} onChange={handleChange} required className={inputClass} /></div>
                     <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Course *</label><select name="course" value={formData.course} onChange={handleChange} required className={inputClass}><option value="">Select a course</option>{coursesList.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select></div>
                     <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Batch *</label><select name="batch" value={formData.batch} onChange={handleChange} required className={inputClass}><option value="">Select a batch</option>{batchesList.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}</select></div>
+                    <div>
+                      <label className="block text-[#7d8590] text-xs font-medium mb-1.5">Mentor (optional)</label>
+                      <select name="mentor" value={formData.mentor} onChange={handleChange} className={inputClass}>
+                        <option value="">Select a mentor</option>
+                        {mentorsList.map(mentor => <option key={mentor.id} value={mentor.id}>{mentor.username} ({mentor.expertise || "No expertise"})</option>)}
+                      </select>
+                    </div>
                     <div>
                       <label className="block text-[#7d8590] text-xs font-medium mb-1.5">Phone</label>
                       <input type="text" name="phone" value={formData.phone} onChange={handleChange} className={inputClass} />
@@ -418,7 +471,7 @@ function Students() {
           </div>
         )}
 
-        {/* View Details Modal (read‑only) */}
+        {/* View Details Modal (unchanged – omitted for brevity) */}
         {viewingStudent && (
           <div
             className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 backdrop-blur-md p-4"
@@ -457,6 +510,7 @@ function Students() {
                     <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Email</label><input type="text" value={viewingStudent.email} readOnly className={readOnlyClass} /></div>
                     <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Course</label><input type="text" value={viewingStudent.course} readOnly className={readOnlyClass} /></div>
                     <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Batch</label><input type="text" value={viewingStudent.batch} readOnly className={readOnlyClass} /></div>
+                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Mentor</label><input type="text" value={viewingStudent.mentor_name || "—"} readOnly className={readOnlyClass} /></div>
                     <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Phone</label><input type="text" value={viewingStudent.phone || "—"} readOnly className={readOnlyClass} /></div>
                     <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Date of Birth</label><input type="text" value={viewingStudent.date_of_birth || "—"} readOnly className={readOnlyClass} /></div>
                     <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Age</label><input type="text" value={viewingStudent.age || "—"} readOnly className={readOnlyClass} /></div>
@@ -500,7 +554,7 @@ function Students() {
           </div>
         )}
 
-        {/* Students Table */}
+        {/* Students Table with Pagination */}
         <div className="overflow-x-auto rounded-xl border border-[#21262d] shadow-xl shadow-black/20">
           <table className="min-w-full">
             <thead>
@@ -511,8 +565,8 @@ function Students() {
               </tr>
             </thead>
             <tbody className="bg-[#0d1117] divide-y divide-[#21262d]">
-              {filteredStudents.length > 0 ? (
-                filteredStudents.map((s) => (
+              {paginatedStudents.length > 0 ? (
+                paginatedStudents.map((s) => (
                   <tr key={s.id} className="table-row-hover group">
                     <td className="px-3 sm:px-4 py-2.5 sm:py-3.5">
                       <div className="flex items-center gap-2 sm:gap-3">
@@ -543,10 +597,46 @@ function Students() {
               )}
             </tbody>
           </table>
-          {filteredStudents.length > 0 && (
-            <div className="bg-[#161b22] border-t border-[#21262d] px-3 sm:px-4 py-2.5 flex flex-col sm:flex-row items-center justify-between gap-2">
-              <p className="text-[#484f58] text-xs">Showing {filteredStudents.length} of {students.length} students</p>
-              {searchTerm && <button onClick={() => setSearchTerm("")} className="text-[#388bfd] hover:text-blue-300 text-xs">Clear filter</button>}
+
+          {/* Pagination Controls */}
+          {totalFiltered > 0 && (
+            <div className="bg-[#161b22] border-t border-[#21262d] px-3 sm:px-4 py-3 flex flex-col sm:flex-row justify-between gap-3 items-center">
+              <div className="text-[#484f58] text-xs">
+                Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, totalFiltered)} of {totalFiltered} students
+              </div>
+              <div className="flex gap-1 flex-wrap justify-center">
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="px-2.5 py-1.5 rounded-lg text-sm disabled:text-[#484f58] text-[#7d8590] hover:bg-[#21262d] disabled:hover:bg-transparent"
+                >
+                  ←
+                </button>
+                {getPageNumbers().map((page, idx) =>
+                  page === "..." ? (
+                    <span key={idx} className="px-2 py-1.5 text-[#484f58]">...</span>
+                  ) : (
+                    <button
+                      key={page}
+                      onClick={() => setCurrentPage(page)}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                        currentPage === page
+                          ? "bg-[#388bfd] text-white shadow-md shadow-[#388bfd]/20"
+                          : "text-[#7d8590] hover:text-[#e6edf3] hover:bg-[#21262d]"
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  )
+                )}
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  className="px-2.5 py-1.5 rounded-lg text-sm disabled:text-[#484f58] text-[#7d8590] hover:bg-[#21262d] disabled:hover:bg-transparent"
+                >
+                  →
+                </button>
+              </div>
             </div>
           )}
         </div>

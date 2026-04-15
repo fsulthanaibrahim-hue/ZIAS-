@@ -35,7 +35,7 @@ class Batch(models.Model):
         return self.name
 
 # ----------------------------
-# STUDENT PROFILE (CLEANED – only required fields)
+# STUDENT PROFILE (with mentor field)
 # ----------------------------
 class Student(models.Model):
     user = models.OneToOneField(
@@ -45,6 +45,7 @@ class Student(models.Model):
     course = models.CharField(max_length=100)
     batch = models.CharField(max_length=50)  # legacy text field
     student_batch = models.ForeignKey(Batch, on_delete=models.SET_NULL, null=True, blank=True, related_name='students')
+    mentor = models.ForeignKey('Mentor', on_delete=models.SET_NULL, null=True, blank=True, related_name='students')  # ✅ added
     phone = models.CharField(max_length=15, blank=True, null=True)
     date_of_birth = models.DateField(null=True, blank=True)
 
