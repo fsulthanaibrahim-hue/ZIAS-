@@ -162,8 +162,8 @@ EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'fsulthanaibrahim@gmail.com'    # your actual Gmail
-EMAIL_HOST_PASSWORD = 'gsoxdcilnfvuinxh'          # App Password (no spaces)
+EMAIL_HOST_USER = 'fsulthanaibrahim@gmail.com'    
+EMAIL_HOST_PASSWORD = 'gsoxdcilnfvuinxh'          # App Password
 DEFAULT_FROM_EMAIL = 'ZIAS <fsulthanaibrahim@gmail.com>'   # must match EMAIL_HOST_USER
 ADMIN_EMAIL = 'admin@gmail.com'
 
@@ -176,8 +176,12 @@ AUTHENTICATION_BACKENDS = [
 
 
 
-CELERY_BROKER_URL = 'redis://localhost:6379'      # or 'amqp://localhost' for RabbitMQ
+CELERY_BROKER_URL = 'redis://localhost:6379'      
 CELERY_RESULT_BACKEND = 'redis://localhost:6379'
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_TASK_ALWAYS_EAGER = True
+
+
+# Password expiry period (days)
+PASSWORD_EXPIRY_DAYS = 3

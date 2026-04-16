@@ -1,4 +1,3 @@
-// src/pages/About.jsx
 import about from "../assets/images/about.jpg";
 import Footer from "../components/Footer";
 import { Link } from "react-router-dom";

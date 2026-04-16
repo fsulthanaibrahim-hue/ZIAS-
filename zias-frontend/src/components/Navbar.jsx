@@ -1,8 +1,7 @@
-// src/components/Navbar.jsx
 import { useState } from "react";
 import { FiMenu, FiX } from "react-icons/fi";
 import { Link } from "react-router-dom";
-import logo from "../assets/images/logo.png"; // adjust path if needed
+import logo from "../assets/images/logo.png"; 
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);

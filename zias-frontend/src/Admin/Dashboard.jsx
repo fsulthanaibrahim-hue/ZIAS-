@@ -5,7 +5,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell,
 } from "recharts";
 
-// ── Stat Card ────────────────────────────────────────────────────────────────
+// ── Stat Card ───
 const StatCard = ({ label, value, icon, color }) => {
   const colors = {
     blue:   { bg: "bg-blue-500/10",    border: "border-blue-500/20",    text: "text-blue-400",    icon: "bg-blue-500/20"    },
@@ -27,7 +27,7 @@ const StatCard = ({ label, value, icon, color }) => {
   );
 };
 
-// ── Quick Action Button ───────────────────────────────────────────────────────
+// ── Quick Action Button ────
 const ActionBtn = ({ label, icon, onClick, color = "blue" }) => {
   const colors = {
     blue:   "bg-blue-600/20 hover:bg-blue-600/40 border-blue-500/30 text-blue-300",
@@ -46,7 +46,7 @@ const ActionBtn = ({ label, icon, onClick, color = "blue" }) => {
   );
 };
 
-// ── Custom Tooltip ────────────────────────────────────────────────────────────
+// ── Custom Tooltip ───
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
     return (
@@ -59,12 +59,12 @@ const CustomTooltip = ({ active, payload, label }) => {
   return null;
 };
 
-// ── Status Dot ────────────────────────────────────────────────────────────────
+// ── Status Dot ───
 const StatusDot = ({ ok }) => (
   <span className={`inline-block w-2 h-2 rounded-full ${ok ? "bg-emerald-400" : "bg-red-400"}`} />
 );
 
-// ── Main Component ────────────────────────────────────────────────────────────
+// ── Main Component ───
 function Dashboard() {
   const [stats, setStats]                   = useState({ students: 0, mentors: 0, reviewers: 0 });
   const [unreadMessages, setUnreadMessages] = useState(0);

@@ -1,4 +1,3 @@
-// src/Admin/Students.jsx
 import { useEffect, useState } from "react";
 import API from "../api/api";
 

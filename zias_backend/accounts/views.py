@@ -22,6 +22,7 @@ from .serializers import (
 )
 from rest_framework_simplejwt.tokens import RefreshToken, TokenError
 from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
 
 # ----------------------------
 # Custom Filter Backends
@@ -197,7 +198,7 @@ class CurrentUserView(APIView):
         return Response(serializer.data)
 
 # ----------------------------
-# CHANGE PASSWORD ENDPOINT
+# CHANGE PASSWORD ENDPOINT (UPDATED with token blacklist)
 # ----------------------------
 class ChangePasswordView(APIView):
     permission_classes = [IsAuthenticated]
@@ -219,6 +220,10 @@ class ChangePasswordView(APIView):
         user.set_password(new_password)
         user.password_changed_at = timezone.now()
         user.save()
+
+        # Invalidate all existing JWT tokens for this user (forces re-login)
+        OutstandingToken.objects.filter(user=user).delete()
+
         return Response({"detail": "Password changed successfully."}, status=status.HTTP_200_OK)
 
 # ----------------------------
@@ -397,5 +402,4 @@ class LogoutView(APIView):
             return Response({'message': 'Logged out successfully'}, status=status.HTTP_200_OK)
         except TokenError:
             return Response({'error': 'Invalid token'}, status=status.HTTP_400_BAD_REQUEST)
-        
         

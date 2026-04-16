@@ -1,19 +1,20 @@
-# students/tasks.py
 from celery import shared_task
 from django.core.mail import send_mail
 from django.conf import settings
 from django.utils import timezone
+from datetime import timedelta
+from .models import User
 
 @shared_task
 def send_student_welcome_email(user_email, username, random_password):
     subject = '🎓 Welcome to ZIAS – Your Account Credentials'
+    expiry_days = settings.PASSWORD_EXPIRY_DAYS
     html_message = f"""
     <!DOCTYPE html>
     <html>
     <head>
         <meta charset="UTF-8">
         <style>
-            /* same styles as before – include all CSS */
             body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7fc; margin: 0; padding: 0; }}
             .container {{ max-width: 550px; margin: 20px auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.1); border: 1px solid #e0e7ef; }}
             .header {{ background: linear-gradient(135deg, #0f2b3d 0%, #1b4a6e 100%); padding: 30px 20px; text-align: center; color: white; }}
@@ -42,8 +43,8 @@ def send_student_welcome_email(user_email, username, random_password):
                         🔑 <strong>Password:</strong> <span style="background:#e2e8f0; padding:2px 6px; border-radius:6px;">{random_password}</span>
                     </div>
                     <div class="warning">
-                        ⚠️ <strong>Password expires in 3 days!</strong><br>
-                        For security reasons, you must change your password within 3 days of your first login.
+                        ⚠️ <strong>Password expires in {expiry_days} days!</strong><br>
+                        For security reasons, you must change your password within {expiry_days} days of your first login.
                         After that, the password will no longer work.
                     </div>
                     <p style="margin-top:12px; font-size:13px;">👉 Click the button below to access your dashboard:</p>
@@ -70,7 +71,7 @@ Login credentials:
 Username: {username}
 Password: {random_password}
 
-IMPORTANT: Your password will expire in 3 days. Please log in and change your password within 3 days.
+IMPORTANT: Your password will expire in {expiry_days} days. Please log in and change your password within {expiry_days} days.
 
 Click the link below to log in:
 https://YOUR_DOMAIN.com/login
@@ -86,3 +87,18 @@ ZIAS Team
         html_message=html_message,
         fail_silently=False,
     )
+
+@shared_task
+def check_expired_passwords():
+    """Run daily to notify users whose passwords have expired."""
+    expiry_days = settings.PASSWORD_EXPIRY_DAYS
+    threshold = timezone.now() - timedelta(days=expiry_days)
+    expired_users = User.objects.filter(password_changed_at__lte=threshold, is_active=True)
+    for user in expired_users:
+        send_mail(
+            "Your password has expired",
+            f"Hi {user.username},\n\nYour password expired on {user.password_changed_at + timedelta(days=expiry_days)}. Please reset it using the 'Forgot Password' link on the login page.\n\nZIAS Team",
+            settings.DEFAULT_FROM_EMAIL,
+            [user.email],
+            fail_silently=True,
+        )

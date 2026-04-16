@@ -1,7 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.utils import timezone
-from django.contrib.auth.models import User
 
 # Custom User model
 class User(AbstractUser):
@@ -14,6 +13,7 @@ class User(AbstractUser):
     def set_password(self, raw_password):
         super().set_password(raw_password)
         self.password_changed_at = timezone.now()
+        self.save()
 
     def __str__(self):
         return self.username
@@ -35,42 +35,31 @@ class Batch(models.Model):
         return self.name
 
 # ----------------------------
-# STUDENT PROFILE (with mentor field)
+# STUDENT PROFILE
 # ----------------------------
 class Student(models.Model):
     user = models.OneToOneField(
         User, on_delete=models.CASCADE, related_name='student_profile'
     )
-    # Basic fields
     course = models.CharField(max_length=100)
-    batch = models.CharField(max_length=50)  # legacy text field
+    batch = models.CharField(max_length=50)
     student_batch = models.ForeignKey(Batch, on_delete=models.SET_NULL, null=True, blank=True, related_name='students')
-    mentor = models.ForeignKey('Mentor', on_delete=models.SET_NULL, null=True, blank=True, related_name='students')  # ✅ added
+    mentor = models.ForeignKey('Mentor', on_delete=models.SET_NULL, null=True, blank=True, related_name='students')
     phone = models.CharField(max_length=15, blank=True, null=True)
     date_of_birth = models.DateField(null=True, blank=True)
-
-    # Personal details
     full_name = models.CharField(max_length=150, blank=True, null=True)
     age = models.PositiveIntegerField(blank=True, null=True)
     gender = models.CharField(
         max_length=10, blank=True, null=True,
         choices=[('Male', 'Male'), ('Female', 'Female'), ('Other', 'Other')]
     )
-
-    # Parents
     fathers_name = models.CharField(max_length=150, blank=True, null=True)
     fathers_contact = models.CharField(max_length=15, blank=True, null=True)
     mothers_name = models.CharField(max_length=150, blank=True, null=True)
     mothers_contact = models.CharField(max_length=15, blank=True, null=True)
-
-    # Address
     address = models.TextField(blank=True, null=True)
-
-    # Education
     educational_qualification = models.CharField(max_length=200, blank=True, null=True)
     college_school = models.CharField(max_length=200, blank=True, null=True)
-
-    # Legacy compatibility fields (optional, keep for existing data)
     parent_name = models.CharField(max_length=100, blank=True, null=True)
     parent_phone = models.CharField(max_length=15, blank=True, null=True)
     emergency_contact = models.CharField(max_length=15, blank=True, null=True)
@@ -212,4 +201,5 @@ class ContactMessage(models.Model):
     def __str__(self):
         return f"{self.name} - {self.subject}"
     
+
     

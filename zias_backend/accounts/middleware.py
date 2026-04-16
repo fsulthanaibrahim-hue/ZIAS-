@@ -1,20 +1,20 @@
-from django.shortcuts import redirect
-from django.urls import reverse
 from django.utils import timezone
 from datetime import timedelta
+from django.conf import settings
+from rest_framework.response import Response
+from rest_framework import status
 
 class PasswordExpiryMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
-        # Only check if user attribute exists and user is authenticated
-        if hasattr(request, 'user') and request.user.is_authenticated:
-            # Skip for the change password page and logout
-            if request.path not in ['/change-password/', '/logout/']:
-                if request.user.password_changed_at is None:
-                    return redirect('/change-password/')
-                expiry_days = 7
+        if request.user.is_authenticated:
+            expiry_days = settings.PASSWORD_EXPIRY_DAYS
+            if request.user.password_changed_at:
                 if timezone.now() - request.user.password_changed_at > timedelta(days=expiry_days):
-                    return redirect('/change-password/')
+                    return Response(
+                        {"detail": "Your password has expired. Please change it.", "code": "password_expired"},
+                        status=status.HTTP_401_UNAUTHORIZED
+                    )
         return self.get_response(request)

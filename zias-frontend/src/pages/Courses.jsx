@@ -1,4 +1,3 @@
-// src/pages/Courses.jsx
 import {
   FaCode, FaCloud, FaMobileAlt, FaRobot,
   FaComments, FaProjectDiagram, FaUserTie,

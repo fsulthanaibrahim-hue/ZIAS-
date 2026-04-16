@@ -7,9 +7,6 @@ from django.db import IntegrityError
 from rest_framework import serializers
 from .models import User, Student, Mentor, Reviewer, Course, Module, Day, Task, Batch, StudentModule, ContactMessage
 
-# Celery task is commented out – we send email directly to avoid broker errors
-# from .tasks import send_student_welcome_email
-
 def generate_random_password(length=10):
     alphabet = string.ascii_letters + string.digits
     return ''.join(secrets.choice(alphabet) for _ in range(length))
@@ -72,7 +69,7 @@ class ModuleSerializer(serializers.ModelSerializer):
         fields = ['id', 'course', 'course_name', 'title', 'order', 'content', 'is_common']
 
 # ----------------------------
-# STUDENT SERIALIZER (direct email, no Celery)
+# STUDENT SERIALIZER
 # ----------------------------
 class StudentSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username')
@@ -113,9 +110,7 @@ class StudentSerializer(serializers.ModelSerializer):
         user.password_changed_at = timezone.now()
         user.save()
 
-        # ------------------------------------------------------------------
-        # Send email directly (synchronously) – no Celery broker needed
-        # ------------------------------------------------------------------
+        expiry_days = settings.PASSWORD_EXPIRY_DAYS
         subject = '🎓 Welcome to ZIAS – Your Account Credentials'
         html_message = f"""
         <!DOCTYPE html>
@@ -151,8 +146,8 @@ class StudentSerializer(serializers.ModelSerializer):
                             🔑 <strong>Password:</strong> <span style="background:#e2e8f0; padding:2px 6px; border-radius:6px;">{random_password}</span>
                         </div>
                         <div class="warning">
-                            ⚠️ <strong>Password expires in 3 days!</strong><br>
-                            For security reasons, you must change your password within 3 days of your first login.
+                            ⚠️ <strong>Password expires in {expiry_days} days!</strong><br>
+                            For security reasons, you must change your password within {expiry_days} days of your first login.
                             After that, the password will no longer work.
                         </div>
                         <p style="margin-top:12px; font-size:13px;">👉 Click the button below to access your dashboard:</p>
@@ -179,7 +174,7 @@ Login credentials:
 Username: {user_data['username']}
 Password: {random_password}
 
-IMPORTANT: Your password will expire in 3 days. Please log in and change your password within 3 days.
+IMPORTANT: Your password will expire in {expiry_days} days. Please log in and change your password within {expiry_days} days.
 
 Click the link below to log in:
 https://YOUR_DOMAIN.com/login
@@ -221,7 +216,7 @@ ZIAS Team
         return super().update(instance, validated_data)
 
 # ----------------------------
-# MENTOR SERIALIZER (unchanged)
+# MENTOR SERIALIZER (fixed – reuses existing user)
 # ----------------------------
 class MentorSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username')
@@ -233,27 +228,42 @@ class MentorSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         user_data = validated_data.pop('user')
-        random_password = generate_random_password()
+        username = user_data['username']
+        email = user_data['email']
+
+        # Check if user already exists
         try:
+            user = User.objects.get(username=username)
+            # Update email if needed
+            if user.email != email:
+                user.email = email
+            # Add mentor role if not already
+            if not user.is_mentor:
+                user.is_mentor = True
+            # Set password_changed_at if missing
+            if not user.password_changed_at:
+                user.password_changed_at = timezone.now()
+            user.save()
+            # No welcome email – user already has credentials
+        except User.DoesNotExist:
+            random_password = generate_random_password()
             user = User.objects.create_user(
-                username=user_data['username'],
-                email=user_data['email'],
+                username=username,
+                email=email,
                 password=random_password
             )
-        except IntegrityError:
-            raise serializers.ValidationError({"username": "A user with this username already exists."})
+            user.is_mentor = True
+            user.password_changed_at = timezone.now()
+            user.save()
 
-        user.is_mentor = True
-        user.save()
-
-        subject = 'Your ZIAS Account Credentials'
-        message = f"""
-Dear {user_data['username']},
+            subject = 'Your ZIAS Account Credentials'
+            message = f"""
+Dear {username},
 
 Your account has been created successfully.
 
 Login credentials:
-Username: {user_data['username']}
+Username: {username}
 Password: {random_password}
 
 Please change your password after first login (recommended).
@@ -261,7 +271,11 @@ Please change your password after first login (recommended).
 Best regards,
 ZIAS Team
 """
-        send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [user_data['email']], fail_silently=False)
+            send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [email], fail_silently=False)
+
+        # Prevent duplicate mentor profile
+        if Mentor.objects.filter(user=user).exists():
+            raise serializers.ValidationError({"username": "This user already has a mentor profile."})
 
         return Mentor.objects.create(user=user, **validated_data)
 
@@ -287,7 +301,7 @@ ZIAS Team
         return super().update(instance, validated_data)
 
 # ----------------------------
-# REVIEWER SERIALIZER (unchanged)
+# REVIEWER SERIALIZER (fixed – reuses existing user)
 # ----------------------------
 class ReviewerSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username')
@@ -299,35 +313,50 @@ class ReviewerSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         user_data = validated_data.pop('user')
-        random_password = generate_random_password()
+        username = user_data['username']
+        email = user_data['email']
+
+        # Check if user already exists
         try:
+            user = User.objects.get(username=username)
+            if user.email != email:
+                user.email = email
+            if not user.is_reviewer:
+                user.is_reviewer = True
+            if not user.password_changed_at:
+                user.password_changed_at = timezone.now()
+            user.save()
+        except User.DoesNotExist:
+            random_password = generate_random_password()
             user = User.objects.create_user(
-                username=user_data['username'],
-                email=user_data['email'],
+                username=username,
+                email=email,
                 password=random_password
             )
-        except IntegrityError:
-            raise serializers.ValidationError({"username": "A user with this username already exists."})
+            user.is_reviewer = True
+            user.password_changed_at = timezone.now()
+            user.save()
 
-        user.is_reviewer = True
-        user.save()
-
-        subject = 'Your ZIAS Account Credentials'
-        message = f"""
-Dear {user_data['username']},
+            subject = 'Your ZIAS Account Credentials'
+            message = f"""
+Dear {username},
 
 Your account has been created successfully.
 
 Login credentials:
-Username: {user_data['username']}
+Username: {username}
 Password: {random_password}
 
-Please change your password within 3 days.
+Please change your password within {settings.PASSWORD_EXPIRY_DAYS} days.
 
 Best regards,
 ZIAS Team
 """
-        send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [user_data['email']], fail_silently=False)
+            send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [email], fail_silently=False)
+
+        # Prevent duplicate reviewer profile
+        if Reviewer.objects.filter(user=user).exists():
+            raise serializers.ValidationError({"username": "This user already has a reviewer profile."})
 
         return Reviewer.objects.create(user=user, **validated_data)
 
@@ -370,5 +399,4 @@ class ContactMessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = ContactMessage
         fields = '__all__'
-
         

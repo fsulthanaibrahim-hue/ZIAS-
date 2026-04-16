@@ -5,8 +5,8 @@ function ContactMessages() {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState(null);
-  const [filter, setFilter] = useState("all"); // all | unread | read
-
+  const [filter, setFilter] = useState("all"); 
+  
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6; // messages per page
