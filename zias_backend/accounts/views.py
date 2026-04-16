@@ -121,7 +121,7 @@ class CourseViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminOrReadOnly]
 
 # ----------------------------
-# MODULE VIEWSET
+# MODULE VIEWSET (updated with prerequisite logic and is_locked filter)
 # ----------------------------
 class ModuleViewSet(viewsets.ModelViewSet):
     queryset = Module.objects.all()
@@ -140,6 +140,80 @@ class ModuleViewSet(viewsets.ModelViewSet):
         all_modules.sort(key=lambda x: x.order)
         serializer = self.get_serializer(all_modules, many=True)
         return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], url_path='student-modules', permission_classes=[IsAuthenticated])
+    def student_modules(self, request):
+        user = request.user
+        if not user.is_student:
+            return Response({"detail": "Access denied. Students only."}, status=status.HTTP_403_FORBIDDEN)
+        
+        try:
+            student = Student.objects.get(user=user)
+        except Student.DoesNotExist:
+            return Response({"detail": "Student profile not found."}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Get common unlocked modules (always accessible)
+        common_modules = Module.objects.filter(is_common=True)
+        
+        # Get course-specific unlocked modules
+        course_modules = Module.objects.filter(course__name=student.course, is_common=False).order_by('order')
+        
+        # Build accessible list based on prerequisite completion
+        accessible_course_modules = []
+        for mod in course_modules:
+            # Find previous module in this course (lower order)
+            prev_module = course_modules.filter(order__lt=mod.order).last()
+            if prev_module is None:
+                # First module – always accessible
+                accessible_course_modules.append(mod)
+            else:
+                # Check if previous module is completed by this student
+                try:
+                    student_module = StudentModule.objects.get(student=student, module=prev_module)
+                    if student_module.is_completed:
+                        accessible_course_modules.append(mod)
+                    else:
+                        # Stop chain – later modules also inaccessible
+                        break
+                except StudentModule.DoesNotExist:
+                    # Previous module not started – cannot access this one
+                    break
+        
+        # Combine common and accessible course modules
+        all_modules = list(common_modules) + accessible_course_modules
+        all_modules.sort(key=lambda x: x.order)
+        
+        serializer = self.get_serializer(all_modules, many=True)
+        return Response(serializer.data)
+
+# ----------------------------
+# COMPLETE MODULE VIEW (called when student finishes a module)
+# ----------------------------
+class CompleteModuleView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, module_id):
+        user = request.user
+        if not user.is_student:
+            return Response({"detail": "Only students can complete modules."}, status=403)
+        
+        try:
+            student = Student.objects.get(user=user)
+        except Student.DoesNotExist:
+            return Response({"detail": "Student profile not found."}, status=404)
+        
+        try:
+            module = Module.objects.get(id=module_id)
+        except Module.DoesNotExist:
+            return Response({"detail": "Module not found."}, status=404)
+        
+        # Create or update StudentModule
+        student_module, created = StudentModule.objects.get_or_create(student=student, module=module)
+        student_module.is_completed = True
+        student_module.completed_at = timezone.now()
+        student_module.save()
+        
+        return Response({"detail": f"Module '{module.title}' marked as completed."}, status=200)
 
 # ----------------------------
 # STUDENT MODULE VIEWSET
@@ -402,4 +476,15 @@ class LogoutView(APIView):
             return Response({'message': 'Logged out successfully'}, status=status.HTTP_200_OK)
         except TokenError:
             return Response({'error': 'Invalid token'}, status=status.HTTP_400_BAD_REQUEST)
-        
+
+# ----------------------------
+# UPDATE DASHBOARD ACCESS VIEW (for weekly lock)
+# ----------------------------
+class UpdateDashboardAccessView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        user.last_dashboard_access = timezone.now()
+        user.save(update_fields=['last_dashboard_access'])
+        return Response({"detail": "Dashboard access updated."}, status=status.HTTP_200_OK)

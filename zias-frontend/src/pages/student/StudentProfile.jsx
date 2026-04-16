@@ -1,6 +1,7 @@
+// src/pages/student/StudentProfile.jsx
 import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import API from "../api/api";
+import API from "../../api/api";
 
 const avatarColors = [
   ["#1a3a5c", "#4a9eff"],
@@ -156,10 +157,10 @@ function StudentProfile() {
           </div>
 
           <div style={s.actions}>
-            <Link to="/change-password" style={s.btnSecondary}>
+            <Link to="/student/change-password" style={s.btnSecondary}>
               Change Password
             </Link>
-            <Link to="/user/dashboard" style={s.btnDashboard}>
+            <Link to="/student/dashboard" style={s.btnDashboard}>
               Back to Dashboard
             </Link>
             <button onClick={handleLogout} style={s.btnLogout}>
@@ -425,5 +426,3 @@ const s = {
 };
 
 export default StudentProfile;
-
-

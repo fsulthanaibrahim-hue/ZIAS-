@@ -3,13 +3,16 @@ import { useEffect } from "react";
 import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import AdminLogin from "./Admin/Login";
 import UserLogin from "./pages/UserLogin";
-import StudentDashboard from "./pages/StudentDashboard";
-import StudentProfile from "./pages/StudentProfile";
-import StudentReviewSheet from "./pages/StudentReviewSheet";
-import CourseDetail from "./pages/CourseDetail";
-import ForgotPassword from "./pages/ForgotPassword";
-import ResetPassword from "./pages/ResetPassword";
-import ModuleView from "./pages/ModuleView";
+// Student pages – all inside pages/student/
+import StudentDashboard from "./pages/student/StudentDashboard";
+import StudentProfile from "./pages/student/StudentProfile";
+import StudentReviewSheet from "./pages/student/StudentReviewSheet";        // main spreadsheet view
+import StudentWeekView from "./pages/student/StudentWeekView";              // week detail page
+import CourseDetail from "./pages/student/CourseDetail";
+import ModuleView from "./pages/student/ModuleView";
+import ChangePassword from "./pages/student/ChangePassword";
+import DashboardLock from "./pages/student/DashboardLock";
+// Common pages
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./Admin/Dashboard";
 import Students from "./Admin/Students";
@@ -24,7 +27,8 @@ import Home from "./pages/Home";
 import Courses from "./pages/Courses";
 import About from "./pages/About";
 import Contact from "./pages/Contact";
-import ChangePassword from "./pages/ChangePassword";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem("access_token");
@@ -42,40 +46,30 @@ function App() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Auto‑redirect logged‑in users away from login & password‑reset pages only.
-  // The home page ("/") is NEVER redirected – you will always see it first.
   useEffect(() => {
     const token = localStorage.getItem("access_token");
     const userStr = localStorage.getItem("user");
     const user = userStr ? JSON.parse(userStr) : null;
 
-    // Never redirect from the actual login pages – let the user decide.
     if (location.pathname === "/login" || location.pathname === "/admin/login") {
       return;
     }
 
-    // If logged in and on a password‑reset page, send to the appropriate dashboard.
     if (token && user) {
       const resetPaths = ["/forgot-password", "/reset-password/:token"];
       const isResetPath = resetPaths.some(path => location.pathname === path);
       if (isResetPath) {
-        if (user.is_admin) {
-          navigate("/admin/dashboard", { replace: true });
-        } else if (user.is_student) {
-          navigate("/user/dashboard", { replace: true });
-        } else if (user.is_mentor) {
-          navigate("/mentor/dashboard", { replace: true });
-        } else if (user.is_reviewer) {
-          navigate("/reviewer/dashboard", { replace: true });
-        }
+        if (user.is_admin) navigate("/admin/dashboard", { replace: true });
+        else if (user.is_student) navigate("/student/dashboard", { replace: true });
+        else if (user.is_mentor) navigate("/mentor/dashboard", { replace: true });
+        else if (user.is_reviewer) navigate("/reviewer/dashboard", { replace: true });
       }
     }
-    // ✅ No redirection from "/" – the home page remains accessible.
   }, [location.pathname, navigate]);
 
   return (
     <Routes>
-      {/* Public routes – home page is always visible */}
+      {/* Public routes */}
       <Route path="/" element={<><Navbar /><Home /></>} />
       <Route path="/courses" element={<><Navbar /><Courses /></>} />
       <Route path="/about" element={<><Navbar /><About /></>} />
@@ -84,14 +78,25 @@ function App() {
       <Route path="/admin/login" element={<AdminLogin />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password/:token" element={<ResetPassword />} />
-      <Route path="/change-password" element={<PrivateRoute><ChangePassword /></PrivateRoute>} />
 
-      {/* Student / user routes */}
-      <Route path="/user/dashboard" element={<PrivateRoute><StudentDashboard /></PrivateRoute>} />
-      <Route path="/user/profile" element={<PrivateRoute><StudentProfile /></PrivateRoute>} />
-      <Route path="/user/review-sheet" element={<PrivateRoute><StudentReviewSheet /></PrivateRoute>} />
-      <Route path="/course/:courseId" element={<PrivateRoute><CourseDetail /></PrivateRoute>} />
-      <Route path="/module/:moduleId" element={<PrivateRoute><ModuleView /></PrivateRoute>} />
+      {/* Redirect old /user/* paths to new /student/* */}
+      <Route path="/user/dashboard" element={<Navigate to="/student/dashboard" replace />} />
+      <Route path="/user/profile" element={<Navigate to="/student/profile" replace />} />
+      <Route path="/user/review-sheet" element={<Navigate to="/student/review-sheet" replace />} />
+      <Route path="/user/change-password" element={<Navigate to="/student/change-password" replace />} />
+
+      {/* Redirect any /student/detailed-review to the new review sheet */}
+      <Route path="/student/detailed-review" element={<Navigate to="/student/review-sheet" replace />} />
+
+      {/* Student routes – all under /student */}
+      <Route path="/student/dashboard" element={<PrivateRoute><StudentDashboard /></PrivateRoute>} />
+      <Route path="/student/profile" element={<PrivateRoute><StudentProfile /></PrivateRoute>} />
+      <Route path="/student/review-sheet" element={<PrivateRoute><StudentReviewSheet /></PrivateRoute>} />
+      <Route path="/student/week/:weekId" element={<PrivateRoute><StudentWeekView /></PrivateRoute>} />
+      <Route path="/student/course/:courseId" element={<PrivateRoute><CourseDetail /></PrivateRoute>} />
+      <Route path="/student/module/:moduleId" element={<PrivateRoute><ModuleView /></PrivateRoute>} />
+      <Route path="/student/change-password" element={<PrivateRoute><ChangePassword /></PrivateRoute>} />
+      <Route path="/student/dashboard-lock" element={<PrivateRoute><DashboardLock /></PrivateRoute>} />
 
       {/* Admin routes */}
       <Route path="/admin/dashboard" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Dashboard /></div></AdminRoute>} />
@@ -104,11 +109,13 @@ function App() {
       <Route path="/admin/batches" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Batches /></div></AdminRoute>} />
 
       {/* 404 page */}
-      <Route path="*" element={<h1 className="text-white text-center mt-10">404 - Page Not Found</h1>} />
+      <Route path="*" element={
+        <div className="min-h-screen bg-[#0d1117] flex items-center justify-center">
+          <h1 className="text-white text-2xl">404 - Page Not Found</h1>
+        </div>
+      } />
     </Routes>
   );
 }
 
 export default App;
-
-

@@ -1,10 +1,10 @@
+// src/pages/student/CourseDetail.jsx
 import { useEffect, useState } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
-import API from "../api/api";
+import { useParams, Link } from "react-router-dom";
+import API from "../../api/api";
 
 function CourseDetail() {
   const { courseId } = useParams();
-  const navigate = useNavigate();
   const [course, setCourse] = useState(null);
   const [modules, setModules] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -34,7 +34,9 @@ function CourseDetail() {
   return (
     <div className="min-h-screen bg-[#0f1623] text-white p-8">
       <div className="max-w-4xl mx-auto">
-        <button onClick={() => navigate(-1)} className="text-blue-400 hover:text-blue-300 mb-4">← Back</button>
+        <Link to="/student/dashboard" className="text-blue-400 hover:text-blue-300 mb-4 inline-block">
+          ← Back to Dashboard
+        </Link>
         <div className="bg-[#1a2538] rounded-xl p-6 border border-white/10 mb-6">
           <h1 className="text-3xl font-bold mb-2">{course.name}</h1>
           <p className="text-white/60 mb-2">Duration: {course.duration || "Not specified"}</p>
@@ -46,7 +48,7 @@ function CourseDetail() {
             <div key={mod.id} className="bg-[#1a2538] rounded-lg p-4 border border-white/10 flex justify-between items-center">
               <span className="text-white">{mod.title}</span>
               {mod.is_public ? (
-                <Link to={`/module/${mod.id}`} className="text-green-400 hover:text-green-300">View</Link>
+                <Link to={`/student/module/${mod.id}`} className="text-green-400 hover:text-green-300">View</Link>
               ) : (
                 <span className="text-gray-500" title="You need to be enrolled in this course">🔒 Locked</span>
               )}

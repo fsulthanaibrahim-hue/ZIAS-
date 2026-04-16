@@ -1,18 +1,15 @@
-import { useState } from "react";
+// src/pages/student/ChangePassword.jsx
+import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import API from "../api/api";
+import API from "../../api/api";
 
 function Toast({ message, type, onClose }) {
-  useState(() => {
+  useEffect(() => {
     const timer = setTimeout(onClose, 3000);
     return () => clearTimeout(timer);
-  });
+  }, [onClose]);
 
-  const bgColor = type === "success" 
-    ? "bg-emerald-500/90" 
-    : type === "error" 
-    ? "bg-red-500/90" 
-    : "bg-blue-500/90";
+  const bgColor = type === "success" ? "bg-emerald-500/90" : type === "error" ? "bg-red-500/90" : "bg-blue-500/90";
   const icon = type === "success" ? "✓" : type === "error" ? "✕" : "ℹ";
 
   return (
@@ -71,7 +68,7 @@ function ChangePassword() {
       });
       showToast("Password changed successfully!", "success");
       setTimeout(() => {
-        navigate("/user/profile");
+        navigate("/student/profile");
       }, 2000);
     } catch (err) {
       const errorMsg = err.response?.data?.detail || "Failed to change password. Please try again.";
@@ -213,9 +210,7 @@ function ChangePassword() {
 
             {/* Password Hint */}
             <div className="bg-[#0d1117] border border-[#21262d] rounded-lg p-3">
-              <p className="text-[#484f58] text-xs">
-                🔒 Password must be at least 6 characters long.
-              </p>
+              <p className="text-[#484f58] text-xs">🔒 Password must be at least 6 characters long.</p>
             </div>
 
             {/* Buttons */}
@@ -240,7 +235,7 @@ function ChangePassword() {
                 )}
               </button>
               <Link
-                to="/user/profile"
+                to="/student/profile"
                 className="flex-1 flex items-center justify-center gap-2 bg-[#21262d] hover:bg-[#30363d] border border-[#30363d] text-[#7d8590] hover:text-[#e6edf3] px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

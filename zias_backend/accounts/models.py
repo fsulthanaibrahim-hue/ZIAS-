@@ -9,6 +9,7 @@ class User(AbstractUser):
     is_mentor = models.BooleanField(default=False)
     is_reviewer = models.BooleanField(default=False)
     password_changed_at = models.DateTimeField(default=timezone.now, null=True, blank=True)
+    last_dashboard_access = models.DateTimeField(default=timezone.now, null=True, blank=True)   # NEW
 
     def set_password(self, raw_password):
         super().set_password(raw_password)
@@ -115,6 +116,9 @@ class Module(models.Model):
     content = models.TextField(blank=True)
     order = models.IntegerField(default=0)
     is_common = models.BooleanField(default=True)
+    is_locked = models.BooleanField(default=True)   # start locked
+    unlock_date = models.DateField(null=True, blank=True)  # optional auto-unlock
+    prerequisite = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='next_modules')
 
     class Meta:
         ordering = ['order']
@@ -201,5 +205,4 @@ class ContactMessage(models.Model):
     def __str__(self):
         return f"{self.name} - {self.subject}"
     
-
     

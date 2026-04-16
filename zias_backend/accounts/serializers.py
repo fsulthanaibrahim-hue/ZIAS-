@@ -66,7 +66,7 @@ class ModuleSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Module
-        fields = ['id', 'course', 'course_name', 'title', 'order', 'content', 'is_common']
+        fields = ['id', 'course', 'course_name', 'title', 'order', 'content', 'is_common', 'is_locked', 'unlock_date']
 
 # ----------------------------
 # STUDENT SERIALIZER

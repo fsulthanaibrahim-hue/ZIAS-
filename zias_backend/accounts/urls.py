@@ -7,7 +7,8 @@ from .views import (
     ModuleViewSet, DayViewSet, TaskViewSet, BatchViewSet, StudentModuleViewSet,
     RequestPasswordResetView, ConfirmPasswordResetView,
     ContactMessageView, UnreadMessagesCountView, RecentMessagesView, ContactMessageDetailView,
-    CustomLoginView, LogoutView
+    CustomLoginView, LogoutView, UpdateDashboardAccessView,
+    CompleteModuleView   # NEW import
 )
 
 router = DefaultRouter()
@@ -35,10 +36,9 @@ urlpatterns = [
     path('api/unread-messages/', UnreadMessagesCountView.as_view(), name='unread_messages'),
     path('api/recent-messages/', RecentMessagesView.as_view(), name='recent_messages'),
     path('api/contact-messages/<int:pk>/', ContactMessageDetailView.as_view(), name='contact_message_detail'),
-
-    # New custom login and logout endpoints
     path('api/login/', CustomLoginView.as_view(), name='custom_login'),
     path('api/logout/', LogoutView.as_view(), name='logout'),
+    path('api/update-dashboard-access/', UpdateDashboardAccessView.as_view(), name='update-dashboard-access'),
+    path('api/modules/<int:module_id>/complete/', CompleteModuleView.as_view(), name='complete-module'),   # NEW
 ]
-
 

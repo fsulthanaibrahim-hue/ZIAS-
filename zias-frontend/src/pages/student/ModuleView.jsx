@@ -1,6 +1,7 @@
+// src/pages/student/ModuleView.jsx
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import API from "../api/api";
+import API from "../../api/api";
 
 function Toast({ message, type, onClose }) {
   useEffect(() => {
@@ -31,7 +32,6 @@ function ModuleView() {
   const showToast = (msg, type) => setToast({ message: msg, type });
   const hideToast = () => setToast(null);
 
-  // Fetch module details
   const fetchModule = async () => {
     try {
       const res = await API.get(`modules/${moduleId}/`);
@@ -41,7 +41,6 @@ function ModuleView() {
     }
   };
 
-  // Fetch days for this module
   const fetchDays = async () => {
     try {
       const res = await API.get(`days/?module=${moduleId}`);
@@ -51,7 +50,6 @@ function ModuleView() {
     }
   };
 
-  // Fetch tasks for a specific day
   const fetchTasks = async (dayId) => {
     try {
       const res = await API.get(`tasks/?day=${dayId}`);
@@ -61,24 +59,20 @@ function ModuleView() {
     }
   };
 
-  // Toggle day completion
   const toggleDayCompletion = async (dayId, completed) => {
     try {
       await API.patch(`days/${dayId}/`, { is_completed: completed });
       showToast(completed ? "Day marked as completed" : "Day marked as incomplete", "success");
-      // Refresh days to update checkbox
       fetchDays();
     } catch (err) {
       showToast("Failed to update", "error");
     }
   };
 
-  // Toggle task completion (if you add is_completed to Task model)
   const toggleTaskCompletion = async (taskId, completed) => {
     try {
       await API.patch(`tasks/${taskId}/`, { is_completed: completed });
       showToast(completed ? "Task completed" : "Task uncompleted", "success");
-      // Refresh tasks for the current expanded day
       if (expandedDayId) fetchTasks(expandedDayId);
     } catch (err) {
       showToast("Failed to update task", "error");
@@ -95,7 +89,6 @@ function ModuleView() {
     loadData();
   }, [moduleId]);
 
-  // When a day is expanded, fetch its tasks
   useEffect(() => {
     if (expandedDayId) {
       fetchTasks(expandedDayId);
@@ -124,7 +117,7 @@ function ModuleView() {
 
       <div className="max-w-4xl mx-auto">
         {/* Back button */}
-        <Link to="/user/dashboard" className="inline-flex items-center gap-2 text-[#7d8590] hover:text-[#e6edf3] mb-6 transition">
+        <Link to="/student/dashboard" className="inline-flex items-center gap-2 text-[#7d8590] hover:text-[#e6edf3] mb-6 transition">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
           </svg>
@@ -152,7 +145,7 @@ function ModuleView() {
           <div className="space-y-4">
             {days.map((day) => (
               <div key={day.id} className="bg-[#161b22] rounded-xl border border-[#21262d] overflow-hidden">
-                {/* Day Header (click to expand) */}
+                {/* Day Header */}
                 <div
                   className="p-4 flex items-center justify-between cursor-pointer hover:bg-[#1a2538] transition"
                   onClick={() => setExpandedDayId(expandedDayId === day.id ? null : day.id)}
@@ -180,10 +173,9 @@ function ModuleView() {
                   </svg>
                 </div>
 
-                {/* Expanded content: Day content + Tasks */}
+                {/* Expanded content */}
                 {expandedDayId === day.id && (
                   <div className="p-4 pt-0 border-t border-[#21262d] bg-[#0d1117]/50">
-                    {/* Day content */}
                     {day.content && (
                       <div className="mb-4 p-3 bg-[#0d1117] rounded-lg border border-[#21262d]">
                         <div className="text-xs font-semibold text-[#7d8590] uppercase mb-1">Day Content</div>
@@ -191,7 +183,6 @@ function ModuleView() {
                       </div>
                     )}
 
-                    {/* Tasks */}
                     <div>
                       <h4 className="text-sm font-semibold text-[#7d8590] uppercase tracking-wider mb-2">Tasks</h4>
                       {(tasksByDay[day.id] || []).length === 0 ? (
