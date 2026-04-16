@@ -9,7 +9,7 @@ class User(AbstractUser):
     is_mentor = models.BooleanField(default=False)
     is_reviewer = models.BooleanField(default=False)
     password_changed_at = models.DateTimeField(default=timezone.now, null=True, blank=True)
-    last_dashboard_access = models.DateTimeField(default=timezone.now, null=True, blank=True)   # NEW
+    last_dashboard_access = models.DateTimeField(default=timezone.now, null=True, blank=True)
 
     def set_password(self, raw_password):
         super().set_password(raw_password)
@@ -116,8 +116,8 @@ class Module(models.Model):
     content = models.TextField(blank=True)
     order = models.IntegerField(default=0)
     is_common = models.BooleanField(default=True)
-    is_locked = models.BooleanField(default=True)   # start locked
-    unlock_date = models.DateField(null=True, blank=True)  # optional auto-unlock
+    is_locked = models.BooleanField(default=True)
+    unlock_date = models.DateField(null=True, blank=True)
     prerequisite = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='next_modules')
 
     class Meta:
@@ -204,5 +204,37 @@ class ContactMessage(models.Model):
 
     def __str__(self):
         return f"{self.name} - {self.subject}"
+
+# ----------------------------
+# STUDENT WEEK REVIEW MODEL (for reviewer feedback)
+# ----------------------------
+class StudentWeekReview(models.Model):
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='week_reviews')
+    module = models.ForeignKey(Module, on_delete=models.CASCADE, related_name='student_reviews')
     
+    reviewer_name = models.CharField(max_length=100, blank=True)
+    advisor_name = models.CharField(max_length=100, blank=True)
+    review_date = models.DateField(null=True, blank=True)
+    task_status = models.CharField(
+        max_length=50, blank=True,
+        choices=[
+            ('Not Started', 'Not Started'),
+            ('In Progress', 'In Progress'),
+            ('Completed', 'Completed'),
+            ('Needs Improvement', 'Needs Improvement'),
+        ]
+    )
+    feedback = models.TextField(blank=True)
+    extra_workouts = models.TextField(blank=True, help_text="YouTube video links or descriptions")
+    english_review = models.TextField(blank=True)
+    star_rating = models.PositiveSmallIntegerField(null=True, blank=True, choices=[(i, i) for i in range(1, 6)])
+    total_score = models.PositiveSmallIntegerField(null=True, blank=True)
+    
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ['student', 'module']
+    
+    def __str__(self):
+        return f"{self.student.user.username} - {self.module.title}"
     

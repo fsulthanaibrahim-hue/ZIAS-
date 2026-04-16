@@ -5,7 +5,7 @@ from django.utils import timezone
 from django.conf import settings
 from django.db import IntegrityError
 from rest_framework import serializers
-from .models import User, Student, Mentor, Reviewer, Course, Module, Day, Task, Batch, StudentModule, ContactMessage
+from .models import User, Student, Mentor, Reviewer, Course, Module, Day, Task, Batch, StudentModule, ContactMessage, StudentWeekReview
 
 def generate_random_password(length=10):
     alphabet = string.ascii_letters + string.digits
@@ -216,7 +216,7 @@ ZIAS Team
         return super().update(instance, validated_data)
 
 # ----------------------------
-# MENTOR SERIALIZER (fixed – reuses existing user)
+# MENTOR SERIALIZER
 # ----------------------------
 class MentorSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username')
@@ -231,20 +231,15 @@ class MentorSerializer(serializers.ModelSerializer):
         username = user_data['username']
         email = user_data['email']
 
-        # Check if user already exists
         try:
             user = User.objects.get(username=username)
-            # Update email if needed
             if user.email != email:
                 user.email = email
-            # Add mentor role if not already
             if not user.is_mentor:
                 user.is_mentor = True
-            # Set password_changed_at if missing
             if not user.password_changed_at:
                 user.password_changed_at = timezone.now()
             user.save()
-            # No welcome email – user already has credentials
         except User.DoesNotExist:
             random_password = generate_random_password()
             user = User.objects.create_user(
@@ -273,7 +268,6 @@ ZIAS Team
 """
             send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [email], fail_silently=False)
 
-        # Prevent duplicate mentor profile
         if Mentor.objects.filter(user=user).exists():
             raise serializers.ValidationError({"username": "This user already has a mentor profile."})
 
@@ -301,7 +295,7 @@ ZIAS Team
         return super().update(instance, validated_data)
 
 # ----------------------------
-# REVIEWER SERIALIZER (fixed – reuses existing user)
+# REVIEWER SERIALIZER
 # ----------------------------
 class ReviewerSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username')
@@ -316,7 +310,6 @@ class ReviewerSerializer(serializers.ModelSerializer):
         username = user_data['username']
         email = user_data['email']
 
-        # Check if user already exists
         try:
             user = User.objects.get(username=username)
             if user.email != email:
@@ -354,7 +347,6 @@ ZIAS Team
 """
             send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [email], fail_silently=False)
 
-        # Prevent duplicate reviewer profile
         if Reviewer.objects.filter(user=user).exists():
             raise serializers.ValidationError({"username": "This user already has a reviewer profile."})
 
@@ -399,4 +391,15 @@ class ContactMessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = ContactMessage
         fields = '__all__'
-        
+
+# ----------------------------
+# STUDENT WEEK REVIEW SERIALIZER
+# ----------------------------
+class StudentWeekReviewSerializer(serializers.ModelSerializer):
+    student_name = serializers.CharField(source='student.user.username', read_only=True)
+    module_title = serializers.CharField(source='module.title', read_only=True)
+    
+    class Meta:
+        model = StudentWeekReview
+        fields = '__all__'
+        read_only_fields = ['id', 'student', 'module', 'updated_at']

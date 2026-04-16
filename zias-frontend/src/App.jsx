@@ -6,8 +6,8 @@ import UserLogin from "./pages/UserLogin";
 // Student pages – all inside pages/student/
 import StudentDashboard from "./pages/student/StudentDashboard";
 import StudentProfile from "./pages/student/StudentProfile";
-import StudentReviewSheet from "./pages/student/StudentReviewSheet";        // main spreadsheet view
-import StudentWeekView from "./pages/student/StudentWeekView";              // week detail page
+import StudentReviewSheet from "./pages/student/StudentReviewSheet";
+import StudentWeekView from "./pages/student/StudentWeekView";
 import CourseDetail from "./pages/student/CourseDetail";
 import ModuleView from "./pages/student/ModuleView";
 import ChangePassword from "./pages/student/ChangePassword";
@@ -88,7 +88,7 @@ function App() {
       {/* Redirect any /student/detailed-review to the new review sheet */}
       <Route path="/student/detailed-review" element={<Navigate to="/student/review-sheet" replace />} />
 
-      {/* Student routes – all under /student */}
+      {/* Student routes */}
       <Route path="/student/dashboard" element={<PrivateRoute><StudentDashboard /></PrivateRoute>} />
       <Route path="/student/profile" element={<PrivateRoute><StudentProfile /></PrivateRoute>} />
       <Route path="/student/review-sheet" element={<PrivateRoute><StudentReviewSheet /></PrivateRoute>} />
@@ -108,7 +108,7 @@ function App() {
       <Route path="/admin/messages" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><ContactMessages /></div></AdminRoute>} />
       <Route path="/admin/batches" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Batches /></div></AdminRoute>} />
 
-      {/* 404 page */}
+      {/* 404 */}
       <Route path="*" element={
         <div className="min-h-screen bg-[#0d1117] flex items-center justify-center">
           <h1 className="text-white text-2xl">404 - Page Not Found</h1>

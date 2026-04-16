@@ -1,28 +1,29 @@
 from rest_framework import viewsets, status
 from rest_framework.views import APIView
-from .permissions import IsAdminUser
-from .permissions import IsAdminOrReadOnly  
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.filters import BaseFilterBackend
+from rest_framework import generics
 from django.utils import timezone
-from .permissions import IsStudentOwner
 from django.utils.crypto import get_random_string
 from datetime import timedelta
-from .models import PasswordResetToken
 from django.core.mail import send_mail
 from django.conf import settings
 from django.contrib.auth import authenticate
-from .models import User, Student, Mentor, Reviewer, Course, Module, Day, Task, Batch, StudentModule, PasswordResetToken, ContactMessage
+from rest_framework_simplejwt.tokens import RefreshToken, TokenError
+from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
+
+from .models import (
+    User, Student, Mentor, Reviewer, Course, Module, Day, Task, Batch,
+    StudentModule, PasswordResetToken, ContactMessage, StudentWeekReview
+)
 from .serializers import (
     StudentSerializer, MentorSerializer, ReviewerSerializer, UserSerializer,
     CourseSerializer, ModuleSerializer, DaySerializer, TaskSerializer, BatchSerializer,
-    ContactMessageSerializer, StudentModuleSerializer
+    ContactMessageSerializer, StudentModuleSerializer, StudentWeekReviewSerializer
 )
-from rest_framework_simplejwt.tokens import RefreshToken, TokenError
-from rest_framework_simplejwt.views import TokenObtainPairView
-from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
+from .permissions import IsAdminUser, IsAdminOrReadOnly, IsStudentOwner
 
 # ----------------------------
 # Custom Filter Backends
@@ -121,7 +122,7 @@ class CourseViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminOrReadOnly]
 
 # ----------------------------
-# MODULE VIEWSET (updated with prerequisite logic and is_locked filter)
+# MODULE VIEWSET
 # ----------------------------
 class ModuleViewSet(viewsets.ModelViewSet):
     queryset = Module.objects.all()
@@ -152,42 +153,31 @@ class ModuleViewSet(viewsets.ModelViewSet):
         except Student.DoesNotExist:
             return Response({"detail": "Student profile not found."}, status=status.HTTP_404_NOT_FOUND)
         
-        # Get common unlocked modules (always accessible)
         common_modules = Module.objects.filter(is_common=True)
-        
-        # Get course-specific unlocked modules
         course_modules = Module.objects.filter(course__name=student.course, is_common=False).order_by('order')
         
-        # Build accessible list based on prerequisite completion
         accessible_course_modules = []
         for mod in course_modules:
-            # Find previous module in this course (lower order)
             prev_module = course_modules.filter(order__lt=mod.order).last()
             if prev_module is None:
-                # First module – always accessible
                 accessible_course_modules.append(mod)
             else:
-                # Check if previous module is completed by this student
                 try:
                     student_module = StudentModule.objects.get(student=student, module=prev_module)
                     if student_module.is_completed:
                         accessible_course_modules.append(mod)
                     else:
-                        # Stop chain – later modules also inaccessible
                         break
                 except StudentModule.DoesNotExist:
-                    # Previous module not started – cannot access this one
                     break
         
-        # Combine common and accessible course modules
         all_modules = list(common_modules) + accessible_course_modules
         all_modules.sort(key=lambda x: x.order)
-        
         serializer = self.get_serializer(all_modules, many=True)
         return Response(serializer.data)
 
 # ----------------------------
-# COMPLETE MODULE VIEW (called when student finishes a module)
+# COMPLETE MODULE VIEW
 # ----------------------------
 class CompleteModuleView(APIView):
     permission_classes = [IsAuthenticated]
@@ -207,7 +197,6 @@ class CompleteModuleView(APIView):
         except Module.DoesNotExist:
             return Response({"detail": "Module not found."}, status=404)
         
-        # Create or update StudentModule
         student_module, created = StudentModule.objects.get_or_create(student=student, module=module)
         student_module.is_completed = True
         student_module.completed_at = timezone.now()
@@ -272,7 +261,7 @@ class CurrentUserView(APIView):
         return Response(serializer.data)
 
 # ----------------------------
-# CHANGE PASSWORD ENDPOINT (UPDATED with token blacklist)
+# CHANGE PASSWORD ENDPOINT
 # ----------------------------
 class ChangePasswordView(APIView):
     permission_classes = [IsAuthenticated]
@@ -295,13 +284,11 @@ class ChangePasswordView(APIView):
         user.password_changed_at = timezone.now()
         user.save()
 
-        # Invalidate all existing JWT tokens for this user (forces re-login)
         OutstandingToken.objects.filter(user=user).delete()
-
         return Response({"detail": "Password changed successfully."}, status=status.HTTP_200_OK)
 
 # ----------------------------
-# SEND BULK EMAIL TO ALL USERS (Admin only)
+# SEND BULK EMAIL
 # ----------------------------
 class SendBulkEmailView(APIView):
     permission_classes = [IsAuthenticated]
@@ -334,7 +321,7 @@ class SendBulkEmailView(APIView):
             return Response({"detail": f"Email sent to {len(recipient_list)} users."}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
+
 # ----------------------------
 # PASSWORD RESET VIEWS
 # ----------------------------
@@ -437,7 +424,7 @@ class ContactMessageDetailView(APIView):
             return Response({"detail": "Not found"}, status=status.HTTP_404_NOT_FOUND)
 
 # ----------------------------
-# CUSTOM LOGIN VIEW (returns JWT + user data)
+# CUSTOM LOGIN VIEW
 # ----------------------------
 class CustomLoginView(APIView):
     permission_classes = [AllowAny]
@@ -461,7 +448,7 @@ class CustomLoginView(APIView):
         })
 
 # ----------------------------
-# LOGOUT VIEW (blacklists refresh token)
+# LOGOUT VIEW
 # ----------------------------
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
@@ -478,7 +465,7 @@ class LogoutView(APIView):
             return Response({'error': 'Invalid token'}, status=status.HTTP_400_BAD_REQUEST)
 
 # ----------------------------
-# UPDATE DASHBOARD ACCESS VIEW (for weekly lock)
+# UPDATE DASHBOARD ACCESS VIEW
 # ----------------------------
 class UpdateDashboardAccessView(APIView):
     permission_classes = [IsAuthenticated]
@@ -488,3 +475,28 @@ class UpdateDashboardAccessView(APIView):
         user.last_dashboard_access = timezone.now()
         user.save(update_fields=['last_dashboard_access'])
         return Response({"detail": "Dashboard access updated."}, status=status.HTTP_200_OK)
+
+# ----------------------------
+# STUDENT WEEK REVIEW VIEW
+# ----------------------------
+class StudentWeekReviewView(generics.RetrieveUpdateAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = StudentWeekReviewSerializer
+
+    def get_object(self):
+        module_id = self.kwargs.get('module_id')
+        user = self.request.user
+
+        if user.is_student:
+            # Students can only view their own review
+            student = Student.objects.get(user=user)
+        else:
+            # Reviewer (admin/mentor) – require student_id in query params
+            student_id = self.request.query_params.get('student_id')
+            if not student_id:
+                from rest_framework.exceptions import ValidationError
+                raise ValidationError({"detail": "student_id required for reviewer"})
+            student = Student.objects.get(id=student_id)
+
+        obj, created = StudentWeekReview.objects.get_or_create(student=student, module_id=module_id)
+        return obj
