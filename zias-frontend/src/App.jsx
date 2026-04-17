@@ -3,16 +3,19 @@ import { useEffect } from "react";
 import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import AdminLogin from "./Admin/Login";
 import UserLogin from "./pages/UserLogin";
-// Student pages – all inside pages/student/
+// Student pages
 import StudentDashboard from "./pages/student/StudentDashboard";
 import StudentProfile from "./pages/student/StudentProfile";
 import StudentReviewSheet from "./pages/student/StudentReviewSheet";
 import StudentWeekView from "./pages/student/StudentWeekView";
 import CourseDetail from "./pages/student/CourseDetail";
 import ModuleView from "./pages/student/ModuleView";
-import ChangePassword from "./pages/student/ChangePassword";
+import ChangePassword from "./pages/ChangePassword";
 import DashboardLock from "./pages/student/DashboardLock";
-// Common pages
+// Reviewer pages
+import ReviewerDashboard from "./pages/reviewer/ReviewerDashboard";
+import ReviewerProfile from "./pages/reviewer/ReviewerProfile";
+// Admin pages
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./Admin/Dashboard";
 import Students from "./Admin/Students";
@@ -22,6 +25,8 @@ import CoursesAdmin from "./Admin/Courses";
 import ModulesAdmin from "./Admin/Modules";
 import ContactMessages from "./Admin/ContactMessages";
 import Batches from "./Admin/Batches";
+import ReviewSheets from "./Admin/ReviewSheets";   // NEW
+// Common pages
 import Navbar from "./components/Navbar";
 import Home from "./pages/Home";
 import Courses from "./pages/Courses";
@@ -83,7 +88,7 @@ function App() {
       <Route path="/user/dashboard" element={<Navigate to="/student/dashboard" replace />} />
       <Route path="/user/profile" element={<Navigate to="/student/profile" replace />} />
       <Route path="/user/review-sheet" element={<Navigate to="/student/review-sheet" replace />} />
-      <Route path="/user/change-password" element={<Navigate to="/student/change-password" replace />} />
+      <Route path="/user/change-password" element={<Navigate to="/change-password" replace />} />
 
       {/* Redirect any /student/detailed-review to the new review sheet */}
       <Route path="/student/detailed-review" element={<Navigate to="/student/review-sheet" replace />} />
@@ -98,6 +103,13 @@ function App() {
       <Route path="/student/change-password" element={<PrivateRoute><ChangePassword /></PrivateRoute>} />
       <Route path="/student/dashboard-lock" element={<PrivateRoute><DashboardLock /></PrivateRoute>} />
 
+      {/* Generic change password route (for all roles) */}
+      <Route path="/change-password" element={<PrivateRoute><ChangePassword /></PrivateRoute>} />
+
+      {/* Reviewer routes */}
+      <Route path="/reviewer/dashboard" element={<PrivateRoute><ReviewerDashboard /></PrivateRoute>} />
+      <Route path="/reviewer/profile" element={<PrivateRoute><ReviewerProfile /></PrivateRoute>} />
+
       {/* Admin routes */}
       <Route path="/admin/dashboard" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Dashboard /></div></AdminRoute>} />
       <Route path="/admin/students" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Students /></div></AdminRoute>} />
@@ -107,8 +119,9 @@ function App() {
       <Route path="/admin/modules" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><ModulesAdmin /></div></AdminRoute>} />
       <Route path="/admin/messages" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><ContactMessages /></div></AdminRoute>} />
       <Route path="/admin/batches" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Batches /></div></AdminRoute>} />
+      <Route path="/admin/review-sheets" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><ReviewSheets /></div></AdminRoute>} />   {/* NEW */}
 
-      {/* 404 */}
+      {/* 404 page */}
       <Route path="*" element={
         <div className="min-h-screen bg-[#0d1117] flex items-center justify-center">
           <h1 className="text-white text-2xl">404 - Page Not Found</h1>

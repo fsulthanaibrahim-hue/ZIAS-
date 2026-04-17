@@ -1,6 +1,8 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.utils import timezone
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 
 # Custom User model
 class User(AbstractUser):
@@ -237,4 +239,27 @@ class StudentWeekReview(models.Model):
     
     def __str__(self):
         return f"{self.student.user.username} - {self.module.title}"
-    
+
+
+# ----------------------------
+# SIGNAL: Auto-create StudentWeekReview entries when a Student is created
+# ----------------------------
+@receiver(post_save, sender=Student)
+def create_student_week_reviews(sender, instance, created, **kwargs):
+    """
+    When a new Student is created, automatically create StudentWeekReview
+    entries for all modules (or only those matching the student's course).
+    """
+    if created:
+        # If student has a course, fetch modules for that course; otherwise all modules.
+        if instance.course:
+            # Since Student.course is a CharField, we need to filter Course by name.
+            # We assume the course name exactly matches a Course object's name.
+            modules = Module.objects.filter(course__name=instance.course)
+        else:
+            modules = Module.objects.all()
+        
+        for module in modules:
+            StudentWeekReview.objects.get_or_create(student=instance, module=module)
+
+            

@@ -145,17 +145,31 @@ class ModuleViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='student-modules', permission_classes=[IsAuthenticated])
     def student_modules(self, request):
         user = request.user
-        if not user.is_student:
-            return Response({"detail": "Access denied. Students only."}, status=status.HTTP_403_FORBIDDEN)
-        
-        try:
+        student_id = request.query_params.get('student_id')
+
+        # Determine which student to use
+        if user.is_admin or user.is_mentor:
+            if student_id:
+                try:
+                    student = Student.objects.get(id=student_id)
+                except Student.DoesNotExist:
+                    return Response({"detail": "Student not found."}, status=404)
+            else:
+                # If admin/mentor but no student_id, default to themselves if they are a student
+                if user.is_student:
+                    student = Student.objects.get(user=user)
+                else:
+                    return Response({"detail": "Provide student_id for reviewer."}, status=400)
+        else:
+            # Normal student: only own data
+            if not user.is_student:
+                return Response({"detail": "Access denied."}, status=403)
             student = Student.objects.get(user=user)
-        except Student.DoesNotExist:
-            return Response({"detail": "Student profile not found."}, status=status.HTTP_404_NOT_FOUND)
-        
+
+        # Rest of the logic unchanged
         common_modules = Module.objects.filter(is_common=True)
         course_modules = Module.objects.filter(course__name=student.course, is_common=False).order_by('order')
-        
+
         accessible_course_modules = []
         for mod in course_modules:
             prev_module = course_modules.filter(order__lt=mod.order).last()
@@ -170,7 +184,7 @@ class ModuleViewSet(viewsets.ModelViewSet):
                         break
                 except StudentModule.DoesNotExist:
                     break
-        
+
         all_modules = list(common_modules) + accessible_course_modules
         all_modules.sort(key=lambda x: x.order)
         serializer = self.get_serializer(all_modules, many=True)
@@ -477,6 +491,19 @@ class UpdateDashboardAccessView(APIView):
         return Response({"detail": "Dashboard access updated."}, status=status.HTTP_200_OK)
 
 # ----------------------------
+# STUDENT LIST VIEW (for admin/mentor dropdown)
+# ----------------------------
+class StudentListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not (request.user.is_admin or request.user.is_mentor):
+            return Response({"detail": "Not authorized"}, status=403)
+        students = Student.objects.select_related('user').all()
+        data = [{"id": s.id, "name": s.full_name or s.user.username, "username": s.user.username, "email": s.user.email, "course": s.course, "batch": s.batch} for s in students]
+        return Response(data)
+
+# ----------------------------
 # STUDENT WEEK REVIEW VIEW
 # ----------------------------
 class StudentWeekReviewView(generics.RetrieveUpdateAPIView):
@@ -486,17 +513,18 @@ class StudentWeekReviewView(generics.RetrieveUpdateAPIView):
     def get_object(self):
         module_id = self.kwargs.get('module_id')
         user = self.request.user
+        student_id = self.request.query_params.get('student_id')
 
-        if user.is_student:
-            # Students can only view their own review
-            student = Student.objects.get(user=user)
-        else:
-            # Reviewer (admin/mentor) – require student_id in query params
-            student_id = self.request.query_params.get('student_id')
+        if user.is_admin or user.is_mentor:
             if not student_id:
                 from rest_framework.exceptions import ValidationError
                 raise ValidationError({"detail": "student_id required for reviewer"})
             student = Student.objects.get(id=student_id)
+        else:
+            # Student: only own review
+            if not user.is_student:
+                raise PermissionError("Access denied")
+            student = Student.objects.get(user=user)
 
         obj, created = StudentWeekReview.objects.get_or_create(student=student, module_id=module_id)
         return obj

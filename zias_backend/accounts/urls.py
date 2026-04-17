@@ -8,7 +8,7 @@ from .views import (
     RequestPasswordResetView, ConfirmPasswordResetView,
     ContactMessageView, UnreadMessagesCountView, RecentMessagesView, ContactMessageDetailView,
     CustomLoginView, LogoutView, UpdateDashboardAccessView,
-    CompleteModuleView, StudentWeekReviewView
+    CompleteModuleView, StudentWeekReviewView, StudentListView
 )
 
 router = DefaultRouter()
@@ -23,8 +23,14 @@ router.register('batches', BatchViewSet)
 router.register('student-modules', StudentModuleViewSet, basename='student-module')
 
 urlpatterns = [
-    path('api/', include(router.urls)),
+    # Custom student list endpoint – MUST come BEFORE the router include
+    path('api/students/list/', StudentListView.as_view(), name='student-list'),
     path('api/students/me/', StudentViewSet.as_view({'get': 'get_me'}), name='student-me'),
+    
+    # Router (handles /api/students/, /api/mentors/, etc.)
+    path('api/', include(router.urls)),
+    
+    # JWT and other custom endpoints
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/users/me/', CurrentUserView.as_view(), name='current_user'),

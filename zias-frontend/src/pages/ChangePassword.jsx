@@ -1,7 +1,7 @@
-// src/pages/student/ChangePassword.jsx
+// src/pages/ChangePassword.jsx
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import API from "../../api/api";
+import API from "../api/api";
 
 function Toast({ message, type, onClose }) {
   useEffect(() => {
@@ -32,13 +32,41 @@ function ChangePassword() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [toast, setToast] = useState(null);
+  const [userRole, setUserRole] = useState(null);
   const navigate = useNavigate();
+
+  // Fetch user role on mount
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const res = await API.get("users/me/");
+        const user = res.data;
+        if (user.is_admin) setUserRole("admin");
+        else if (user.is_mentor) setUserRole("mentor");
+        else if (user.is_reviewer) setUserRole("reviewer");
+        else setUserRole("student");
+      } catch (err) {
+        console.error(err);
+        navigate("/login");
+      }
+    };
+    fetchUser();
+  }, [navigate]);
 
   const showToast = (message, type = "success") => setToast({ message, type });
   const hideToast = () => setToast(null);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const getProfilePath = () => {
+    switch (userRole) {
+      case "admin": return "/admin/dashboard";
+      case "mentor": return "/mentor/dashboard";
+      case "reviewer": return "/reviewer/profile";
+      default: return "/student/profile";
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -68,7 +96,7 @@ function ChangePassword() {
       });
       showToast("Password changed successfully!", "success");
       setTimeout(() => {
-        navigate("/student/profile");
+        navigate(getProfilePath());
       }, 2000);
     } catch (err) {
       const errorMsg = err.response?.data?.detail || "Failed to change password. Please try again.";
@@ -94,9 +122,7 @@ function ChangePassword() {
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
 
       <div className="max-w-md mx-auto px-6 py-16">
-        {/* Card */}
         <div className="bg-[#161b22] rounded-2xl border border-[#21262d] overflow-hidden shadow-xl shadow-black/20">
-          {/* Header */}
           <div className="bg-gradient-to-r from-blue-600/20 to-violet-600/20 px-8 py-6 border-b border-[#21262d] text-center">
             <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
               <svg className="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -107,13 +133,10 @@ function ChangePassword() {
             <p className="text-[#7d8590] text-sm mt-1">Update your account password</p>
           </div>
 
-          {/* Form */}
           <form onSubmit={handleSubmit} className="px-8 py-6 space-y-5">
             {/* Old Password */}
             <div>
-              <label className="block text-[#7d8590] text-xs font-medium mb-1.5 uppercase tracking-wider">
-                Current Password
-              </label>
+              <label className="block text-[#7d8590] text-xs font-medium mb-1.5 uppercase tracking-wider">Current Password</label>
               <div className="relative">
                 <input
                   type={showOldPassword ? "text" : "password"}
@@ -144,9 +167,7 @@ function ChangePassword() {
 
             {/* New Password */}
             <div>
-              <label className="block text-[#7d8590] text-xs font-medium mb-1.5 uppercase tracking-wider">
-                New Password
-              </label>
+              <label className="block text-[#7d8590] text-xs font-medium mb-1.5 uppercase tracking-wider">New Password</label>
               <div className="relative">
                 <input
                   type={showNewPassword ? "text" : "password"}
@@ -177,9 +198,7 @@ function ChangePassword() {
 
             {/* Confirm Password */}
             <div>
-              <label className="block text-[#7d8590] text-xs font-medium mb-1.5 uppercase tracking-wider">
-                Confirm New Password
-              </label>
+              <label className="block text-[#7d8590] text-xs font-medium mb-1.5 uppercase tracking-wider">Confirm New Password</label>
               <div className="relative">
                 <input
                   type={showConfirmPassword ? "text" : "password"}
@@ -208,12 +227,10 @@ function ChangePassword() {
               </div>
             </div>
 
-            {/* Password Hint */}
             <div className="bg-[#0d1117] border border-[#21262d] rounded-lg p-3">
               <p className="text-[#484f58] text-xs">🔒 Password must be at least 6 characters long.</p>
             </div>
 
-            {/* Buttons */}
             <div className="flex gap-3 pt-2">
               <button
                 type="submit"
@@ -235,7 +252,7 @@ function ChangePassword() {
                 )}
               </button>
               <Link
-                to="/student/profile"
+                to={getProfilePath()}
                 className="flex-1 flex items-center justify-center gap-2 bg-[#21262d] hover:bg-[#30363d] border border-[#30363d] text-[#7d8590] hover:text-[#e6edf3] px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -1,3 +1,4 @@
+// src/components/Sidebar.jsx
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import NotificationBell from "./NotificationBell";
 
@@ -66,6 +67,11 @@ function NavLink({ to, label, active, badge }) {
         {label === "Messages" && (
           <svg viewBox="0 0 16 16" fill="currentColor" width="16" height="16">
             <path d="M14.5 2h-13A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h13a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 14.5 2zM1.5 3h13a.5.5 0 0 1 .5.5v.5L8 7.939 1 4v-.5a.5.5 0 0 1 .5-.5zm13 10h-13a.5.5 0 0 1-.5-.5V5.5l6.5 4.5 6.5-4.5v7a.5.5 0 0 1-.5.5z" />
+          </svg>
+        )}
+        {label === "Review Sheets" && (
+          <svg viewBox="0 0 16 16" fill="currentColor" width="16" height="16">
+            <path d="M2 2h12v12H2V2zm1 1v10h10V3H3zm2 2h6v1H5V5zm0 2h6v1H5V7zm0 2h6v1H5V9z" />
           </svg>
         )}
       </span>
@@ -183,6 +189,7 @@ function Sidebar() {
         <NavLink to="/admin/courses" label="Courses" active={isActive("/admin/courses")} />
         <NavLink to="/admin/modules" label="Modules" active={isActive("/admin/modules")} />
         <NavLink to="/admin/messages" label="Messages" active={isActive("/admin/messages")} />
+        <NavLink to="/admin/review-sheets" label="Review Sheets" active={isActive("/admin/review-sheets")} />   {/* NEW */}
       </nav>
 
       <div
@@ -275,5 +282,3 @@ function Sidebar() {
 }
 
 export default Sidebar;
-
-
