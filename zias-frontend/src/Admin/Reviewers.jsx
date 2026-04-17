@@ -1,3 +1,4 @@
+// src/Admin/Reviewers.jsx
 import { useEffect, useState } from "react";
 import API from "../api/api";
 
@@ -25,13 +26,18 @@ function Toast({ message, type, onClose }) {
 
 function Reviewers() {
   const [reviewers, setReviewers] = useState([]);
+  const [batchesList, setBatchesList] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [phoneError, setPhoneError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     username: "",
     email: "",
+    phone: "",
     department: "",
+    batch: ""
   });
 
   const [toast, setToast] = useState(null);
@@ -47,8 +53,15 @@ function Reviewers() {
       });
   };
 
+  const fetchBatches = () => {
+    API.get("batches/")
+      .then(res => setBatchesList(res.data))
+      .catch(() => showToast("Failed to load batches", "error"));
+  };
+
   useEffect(() => {
     fetchReviewers();
+    fetchBatches();
   }, []);
 
   const handleDelete = (id) => {
@@ -67,10 +80,22 @@ function Reviewers() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Phone validation (optional, but if provided must be 10 digits)
+    if (formData.phone && !/^\d{10}$/.test(formData.phone)) {
+      showToast("Phone number must be exactly 10 digits", "error");
+      setPhoneError("Phone number must be exactly 10 digits");
+      return;
+    }
+    setPhoneError("");
+    setSubmitting(true);
+
     const payload = {
       username: formData.username,
       email: formData.email,
+      phone: formData.phone,
       department: formData.department,
+      batch: formData.batch || null,
     };
     try {
       if (editingId) {
@@ -82,16 +107,20 @@ function Reviewers() {
       }
       setShowForm(false);
       setEditingId(null);
-      setFormData({ username: "", email: "", department: "" });
+      setFormData({ username: "", email: "", phone: "", department: "", batch: "" });
       fetchReviewers();
     } catch (error) {
       if (error.response) {
-        const errorMsg = Object.values(error.response.data).flat().join(", ");
-        showToast(`Error: ${errorMsg || error.response.statusText}`, "error");
+        const errorMsg = error.response.data?.username 
+          ? error.response.data.username 
+          : Object.values(error.response.data).flat().join(", ");
+        showToast(`Error: ${errorMsg}`, "error");
         console.error(error.response.data);
       } else {
         showToast(error.message, "error");
       }
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -100,19 +129,34 @@ function Reviewers() {
     setFormData({
       username: reviewer.username,
       email: reviewer.email,
+      phone: reviewer.phone || "",
       department: reviewer.department,
+      batch: reviewer.batch || "",
     });
+    setPhoneError("");
     setShowForm(true);
   };
 
   const handleChange = (e) => {
-    setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    const { name, value } = e.target;
+    if (name === "phone") {
+      const digits = value.replace(/\D/g, "").slice(0, 10);
+      setFormData(prev => ({ ...prev, phone: digits }));
+      if (digits.length > 0 && digits.length !== 10) {
+        setPhoneError("Phone number must be exactly 10 digits");
+      } else {
+        setPhoneError("");
+      }
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
   };
 
-  const filteredReviewers = reviewers.filter((r) =>
-    r.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    r.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    r.department.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredReviewers = reviewers.filter(r =>
+    r.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    r.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    r.phone?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    r.department?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const inputClass = `
@@ -128,6 +172,11 @@ function Reviewers() {
     "from-rose-500 to-rose-700", "from-cyan-500 to-cyan-700",
   ];
   const getColor = (name) => avatarColors[(name?.charCodeAt(0) || 0) % avatarColors.length];
+
+  const getBatchName = (batchId) => {
+    const batch = batchesList.find(b => b.id === batchId);
+    return batch ? batch.name : "—";
+  };
 
   return (
     <div className="min-h-screen w-screen bg-[#0d1117] text-[#e6edf3]"
@@ -153,9 +202,9 @@ function Reviewers() {
         {/* Top Bar */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
           <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
-              <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            <div className="w-10 h-10 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center">
+              <svg className="w-5 h-5 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
             </div>
             <div>
@@ -167,6 +216,7 @@ function Reviewers() {
           </div>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            {/* Search */}
             <div className="relative">
               <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#484f58]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
@@ -187,10 +237,12 @@ function Reviewers() {
               )}
             </div>
 
+            {/* Add Button */}
             <button
               onClick={() => {
                 setEditingId(null);
-                setFormData({ username: "", email: "", department: "" });
+                setFormData({ username: "", email: "", phone: "", department: "", batch: "" });
+                setPhoneError("");
                 setShowForm(true);
               }}
               className="shine flex items-center justify-center gap-2 bg-[#238636] hover:bg-[#2ea043] border border-[#2ea043]/40 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 shadow-lg shadow-[#238636]/20"
@@ -203,7 +255,7 @@ function Reviewers() {
           </div>
         </div>
 
-        {/* Modal – no batch field */}
+        {/* Add/Edit Modal */}
         {showForm && (
           <div
             className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 backdrop-blur-md p-4"
@@ -216,8 +268,8 @@ function Reviewers() {
             >
               <div className="flex justify-between items-center px-4 sm:px-6 py-4 border-b border-[#21262d]">
                 <div className="flex items-center gap-3">
-                  <div className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
-                    <svg className="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="w-7 h-7 rounded-lg bg-violet-500/10 border border-violet-500/20 flex items-center justify-center">
+                    <svg className="w-3.5 h-3.5 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={editingId ? "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" : "M12 4v16m8-8H4"} />
                     </svg>
                   </div>
@@ -242,15 +294,38 @@ function Reviewers() {
                   <label className="block text-[#7d8590] text-xs font-medium mb-1.5 uppercase tracking-wider">Email</label>
                   <input type="email" name="email" placeholder="john@example.com" value={formData.email} onChange={handleChange} required className={inputClass} />
                 </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[#7d8590] text-xs font-medium mb-1.5 uppercase tracking-wider">Phone</label>
+                    <input
+                      type="tel"
+                      name="phone"
+                      placeholder="10-digit mobile number"
+                      value={formData.phone}
+                      onChange={handleChange}
+                      className={`${inputClass} ${phoneError ? "border-red-500 focus:border-red-500" : ""}`}
+                    />
+                    {phoneError && <p className="text-red-400 text-xs mt-1">{phoneError}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-[#7d8590] text-xs font-medium mb-1.5 uppercase tracking-wider">Department</label>
+                    <input type="text" name="department" placeholder="e.g. Academics, Placement" value={formData.department} onChange={handleChange} required className={inputClass} />
+                  </div>
+                </div>
                 <div>
-                  <label className="block text-[#7d8590] text-xs font-medium mb-1.5 uppercase tracking-wider">Department</label>
-                  <input type="text" name="department" placeholder="e.g. Engineering" value={formData.department} onChange={handleChange} required className={inputClass} />
+                  <label className="block text-[#7d8590] text-xs font-medium mb-1.5 uppercase tracking-wider">Batch</label>
+                  <select name="batch" value={formData.batch} onChange={handleChange} className={inputClass}>
+                    <option value="">Select a batch</option>
+                    {batchesList.map((batch) => (
+                      <option key={batch.id} value={batch.id}>{batch.name}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
               <div className="flex gap-2 px-4 sm:px-6 py-4 border-t border-[#21262d]">
-                <button type="submit" className="flex-1 bg-[#238636] hover:bg-[#2ea043] border border-[#2ea043]/40 text-white py-2 rounded-lg transition-all text-sm font-medium shadow-md shadow-[#238636]/20">
-                  {editingId ? "Save Changes" : "Add Reviewer"}
+                <button type="submit" disabled={submitting} className="flex-1 bg-[#238636] hover:bg-[#2ea043] border border-[#2ea043]/40 text-white py-2 rounded-lg transition-all text-sm font-medium shadow-md shadow-[#238636]/20 disabled:opacity-50 disabled:cursor-not-allowed">
+                  {submitting ? (editingId ? "Updating..." : "Adding...") : (editingId ? "Save Changes" : "Add Reviewer")}
                 </button>
                 <button type="button" onClick={() => setShowForm(false)} className="flex-1 bg-[#21262d] hover:bg-[#30363d] border border-[#30363d] text-[#7d8590] hover:text-[#e6edf3] py-2 rounded-lg transition-all text-sm font-medium">
                   Cancel
@@ -260,12 +335,12 @@ function Reviewers() {
           </div>
         )}
 
-        {/* Table – no batch column */}
+        {/* Reviewers Table */}
         <div className="overflow-x-auto rounded-xl border border-[#21262d] shadow-xl shadow-black/20">
           <table className="min-w-full">
             <thead>
               <tr className="bg-[#161b22] border-b border-[#21262d]">
-                {["Reviewer", "Email", "Department", ""].map((h, i) => (
+                {["Reviewer", "Email", "Phone", "Department", "Batch", ""].map((h, i) => (
                   <th key={i} className="text-left px-3 sm:px-4 py-3 text-[#7d8590] text-xs font-semibold uppercase tracking-widest whitespace-nowrap">
                     {h}
                   </th>
@@ -285,10 +360,18 @@ function Reviewers() {
                       </div>
                     </td>
                     <td className="px-3 sm:px-4 py-2.5 sm:py-3.5 text-[#7d8590] text-xs sm:text-sm font-mono truncate max-w-[120px] sm:max-w-none">{r.email}</td>
+                    <td className="px-3 sm:px-4 py-2.5 sm:py-3.5 text-[#7d8590] text-xs sm:text-sm font-mono">{r.phone || "—"}</td>
                     <td className="px-3 sm:px-4 py-2.5 sm:py-3.5">
-                      <span className="inline-flex items-center gap-1.5 bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] sm:text-xs font-medium px-2 py-0.5 sm:py-1 rounded-full whitespace-nowrap">
+                      <span className="inline-flex items-center gap-1.5 bg-violet-500/10 text-violet-400 border border-violet-500/20 text-[10px] sm:text-xs font-medium px-2 py-0.5 sm:py-1 rounded-full whitespace-nowrap">
                         {r.department}
                       </span>
+                    </td>
+                    <td className="px-3 sm:px-4 py-2.5 sm:py-3.5">
+                      {r.batch ? (
+                        <span className="inline-flex items-center gap-1.5 bg-purple-500/10 text-purple-400 border border-purple-500/20 text-[10px] sm:text-xs font-medium px-2 py-0.5 sm:py-1 rounded-full whitespace-nowrap">
+                          {getBatchName(r.batch)}
+                        </span>
+                      ) : <span className="text-[#484f58] text-xs">—</span>}
                     </td>
                     <td className="px-3 sm:px-4 py-2.5 sm:py-3.5">
                       <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-150">
@@ -310,11 +393,11 @@ function Reviewers() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan="4" className="text-center py-16 sm:py-20">
+                  <td colSpan="6" className="text-center py-16 sm:py-20">
                     <div className="flex flex-col items-center gap-3">
                       <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-[#161b22] border border-[#30363d] flex items-center justify-center">
                         <svg className="w-5 h-5 sm:w-6 sm:h-6 text-[#484f58]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
                       </div>
                       <p className="text-[#7d8590] text-sm font-medium">
@@ -330,6 +413,7 @@ function Reviewers() {
             </tbody>
           </table>
 
+          {/* Footer */}
           {filteredReviewers.length > 0 && (
             <div className="bg-[#161b22] border-t border-[#21262d] px-3 sm:px-4 py-2.5 flex flex-col sm:flex-row items-center justify-between gap-2">
               <p className="text-[#484f58] text-xs">

@@ -23,8 +23,8 @@ function ReviewSheets() {
   }, []);
 
   const filteredStudents = students.filter(s =>
-    s.name.toLowerCase().includes(search.toLowerCase()) ||
-    s.username.toLowerCase().includes(search.toLowerCase())
+    s.name?.toLowerCase().includes(search.toLowerCase()) ||
+    s.username?.toLowerCase().includes(search.toLowerCase())
   );
 
   if (loading) {

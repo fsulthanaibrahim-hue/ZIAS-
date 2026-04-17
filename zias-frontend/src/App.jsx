@@ -15,6 +15,9 @@ import DashboardLock from "./pages/student/DashboardLock";
 // Reviewer pages
 import ReviewerDashboard from "./pages/reviewer/ReviewerDashboard";
 import ReviewerProfile from "./pages/reviewer/ReviewerProfile";
+// Mentor pages
+import MentorDashboard from "./pages/mentor/MentorDashboard";
+import MentorProfile from "./pages/mentor/MentorProfile";
 // Admin pages
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./Admin/Dashboard";
@@ -25,7 +28,7 @@ import CoursesAdmin from "./Admin/Courses";
 import ModulesAdmin from "./Admin/Modules";
 import ContactMessages from "./Admin/ContactMessages";
 import Batches from "./Admin/Batches";
-import ReviewSheets from "./Admin/ReviewSheets";   // NEW
+import ReviewSheets from "./Admin/ReviewSheets";
 // Common pages
 import Navbar from "./components/Navbar";
 import Home from "./pages/Home";
@@ -110,6 +113,10 @@ function App() {
       <Route path="/reviewer/dashboard" element={<PrivateRoute><ReviewerDashboard /></PrivateRoute>} />
       <Route path="/reviewer/profile" element={<PrivateRoute><ReviewerProfile /></PrivateRoute>} />
 
+      {/* Mentor routes */}
+      <Route path="/mentor/dashboard" element={<PrivateRoute><MentorDashboard /></PrivateRoute>} />
+      <Route path="/mentor/profile" element={<PrivateRoute><MentorProfile /></PrivateRoute>} />
+
       {/* Admin routes */}
       <Route path="/admin/dashboard" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Dashboard /></div></AdminRoute>} />
       <Route path="/admin/students" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Students /></div></AdminRoute>} />
@@ -119,7 +126,7 @@ function App() {
       <Route path="/admin/modules" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><ModulesAdmin /></div></AdminRoute>} />
       <Route path="/admin/messages" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><ContactMessages /></div></AdminRoute>} />
       <Route path="/admin/batches" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Batches /></div></AdminRoute>} />
-      <Route path="/admin/review-sheets" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><ReviewSheets /></div></AdminRoute>} />   {/* NEW */}
+      <Route path="/admin/review-sheets" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><ReviewSheets /></div></AdminRoute>} />
 
       {/* 404 page */}
       <Route path="*" element={

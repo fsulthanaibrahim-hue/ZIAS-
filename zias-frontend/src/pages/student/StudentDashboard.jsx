@@ -7,7 +7,7 @@ function StudentDashboard() {
   const [modules, setModules] = useState([]);
   const [loading, setLoading] = useState(true);
   const [student, setStudent] = useState(null);
-  const [reviews, setReviews] = useState({}); // store review by module id
+  const [reviews, setReviews] = useState({});
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -21,13 +21,13 @@ function StudentDashboard() {
         const modulesData = modulesRes.data;
         setModules(modulesData);
 
-        // Fetch review for each module to get total_score
+        // Fetch review for each module (to show marks/rating)
         const reviewsData = {};
         for (const mod of modulesData) {
           try {
             const reviewRes = await API.get(`week-review/${mod.id}/`);
             reviewsData[mod.id] = reviewRes.data;
-          } catch (err) {
+          } catch {
             reviewsData[mod.id] = {};
           }
         }
@@ -76,10 +76,15 @@ function StudentDashboard() {
               {modules.map((mod) => {
                 const isLocked = mod.is_locked || false;
                 const review = reviews[mod.id] || {};
-                const totalScore = review.total_score || "—";
+                const totalScore = review.total_score !== undefined ? review.total_score : null;
                 const starRating = review.star_rating || null;
                 return (
-                  <div key={mod.id} className={`relative bg-[#161b22] rounded-xl border border-[#21262d] overflow-hidden transition-all duration-200 ${!isLocked ? 'hover:scale-105 hover:shadow-xl cursor-pointer' : 'opacity-60 cursor-not-allowed'}`}>
+                  <div
+                    key={mod.id}
+                    className={`relative bg-[#161b22] rounded-xl border border-[#21262d] overflow-hidden transition-all duration-200 ${
+                      !isLocked ? 'hover:scale-105 hover:shadow-xl cursor-pointer' : 'opacity-60 cursor-not-allowed'
+                    }`}
+                  >
                     {isLocked ? (
                       <div className="p-5">
                         <div className="flex justify-between items-start">
@@ -99,16 +104,13 @@ function StudentDashboard() {
                             {mod.is_common && (
                               <span className="inline-block mt-3 text-xs bg-blue-500/10 text-blue-400 px-2 py-1 rounded-full">Foundation Module</span>
                             )}
-                            {/* Display mark / total score */}
-                            {totalScore !== "—" && (
+                            {totalScore !== null && (
                               <div className="mt-2 text-sm">
                                 <span className="text-emerald-400 font-semibold">Score: {totalScore}</span>
                               </div>
                             )}
                             {starRating && (
-                              <div className="mt-1 text-sm text-yellow-400">
-                                {"⭐".repeat(starRating)}
-                              </div>
+                              <div className="mt-1 text-sm text-yellow-400">{'⭐'.repeat(starRating)}</div>
                             )}
                           </div>
                           <svg className="w-5 h-5 text-[#7d8590] group-hover:text-[#2ea043] transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -129,5 +131,4 @@ function StudentDashboard() {
 }
 
 export default StudentDashboard;
-
 

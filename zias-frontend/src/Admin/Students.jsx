@@ -1,3 +1,4 @@
+// src/Admin/Students.jsx
 import { useEffect, useState } from "react";
 import API from "../api/api";
 
@@ -23,6 +24,25 @@ function Toast({ message, type, onClose }) {
   );
 }
 
+// Custom confirmation modal for delete
+function ConfirmModal({ isOpen, onClose, onConfirm, studentName }) {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 backdrop-blur-md p-4">
+      <div className="bg-[#161b22] rounded-2xl max-w-md w-full border border-[#30363d] shadow-2xl shadow-black/60 p-6">
+        <h3 className="text-lg font-semibold text-[#e6edf3] mb-2">Confirm Delete</h3>
+        <p className="text-[#7d8590] mb-6">
+          Are you sure you want to delete <span className="text-white font-medium">{studentName}</span>? This action cannot be undone.
+        </p>
+        <div className="flex gap-3 justify-end">
+          <button onClick={onClose} className="px-4 py-2 rounded-lg bg-[#21262d] hover:bg-[#30363d] text-[#7d8590] hover:text-white transition">Cancel</button>
+          <button onClick={onConfirm} className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white transition">Delete</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Students() {
   const [students, setStudents] = useState([]);
   const [coursesList, setCoursesList] = useState([]);
@@ -35,6 +55,10 @@ function Students() {
   const [phoneError, setPhoneError] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+
+  // Delete confirmation modal state
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [studentToDelete, setStudentToDelete] = useState(null);
 
   const [formData, setFormData] = useState({
     username: "",
@@ -92,7 +116,6 @@ function Students() {
     fetchMentors();
   }, []);
 
-  // Refresh batches when modal opens (to show newly added batches)
   useEffect(() => {
     if (showForm) {
       fetchBatches();
@@ -100,17 +123,23 @@ function Students() {
     }
   }, [showForm]);
 
-  const handleDelete = (id) => {
-    if (window.confirm("Are you sure you want to delete this student?")) {
-      API.delete(`students/${id}/`)
-        .then(() => {
-          fetchStudents();
-          showToast("Student deleted successfully", "success");
-        })
-        .catch((err) => {
-          console.error(err);
-          showToast("Failed to delete student", "error");
-        });
+  const handleDeleteClick = (studentId, studentName) => {
+    setStudentToDelete({ id: studentId, name: studentName });
+    setShowConfirmModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!studentToDelete) return;
+    try {
+      await API.delete(`students/${studentToDelete.id}/`);
+      fetchStudents();
+      showToast("Student deleted successfully", "success");
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to delete student", "error");
+    } finally {
+      setShowConfirmModal(false);
+      setStudentToDelete(null);
     }
   };
 
@@ -237,7 +266,6 @@ function Students() {
     s.phone?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Pagination logic
   const totalFiltered = filteredStudents.length;
   const totalPages = Math.max(1, Math.ceil(totalFiltered / itemsPerPage));
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -268,7 +296,6 @@ function Students() {
     return pages;
   };
 
-  // Reset to first page when search term changes
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm]);
@@ -312,6 +339,7 @@ function Students() {
       `}</style>
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
+      <ConfirmModal isOpen={showConfirmModal} onClose={() => setShowConfirmModal(false)} onConfirm={confirmDelete} studentName={studentToDelete?.name} />
 
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* Top Bar */}
@@ -324,9 +352,7 @@ function Students() {
             </div>
             <div>
               <h1 className="text-xl font-semibold text-[#e6edf3] tracking-tight">Students</h1>
-              <p className="text-[#7d8590] text-xs mt-0.5">
-                {students.length} total · {filteredStudents.length} shown
-              </p>
+              <p className="text-[#7d8590] text-xs mt-0.5">{students.length} total · {filteredStudents.length} shown</p>
             </div>
           </div>
 
@@ -372,18 +398,10 @@ function Students() {
           </div>
         </div>
 
-        {/* Add/Edit Modal (unchanged) */}
+        {/* Add/Edit Modal (full) */}
         {showForm && (
-          <div
-            className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 backdrop-blur-md p-4"
-            onClick={() => setShowForm(false)}
-          >
-            <form
-              onSubmit={handleSubmit}
-              className="modal-enter bg-[#161b22] rounded-2xl w-full max-w-3xl border border-[#30363d] shadow-2xl shadow-black/60 max-h-[90vh] overflow-y-auto"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Modal content same as before – omitted for brevity */}
+          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 backdrop-blur-md p-4" onClick={() => setShowForm(false)}>
+            <form onSubmit={handleSubmit} className="modal-enter bg-[#161b22] rounded-2xl w-full max-w-3xl border border-[#30363d] shadow-2xl shadow-black/60 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
               <div className="sticky top-0 bg-[#161b22] z-10 flex justify-between items-center px-4 sm:px-6 py-4 border-b border-[#21262d]">
                 <div className="flex items-center gap-3">
                   <div className="w-7 h-7 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
@@ -404,37 +422,22 @@ function Students() {
               </div>
 
               <div className="px-4 sm:px-6 py-5 space-y-6">
-                {/* Basic Information */}
                 <div>
                   <h4 className="text-xs font-semibold text-[#388bfd] uppercase tracking-wider mb-3">Basic Information</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[#7d8590] text-xs font-medium mb-1.5">Username *</label>
-                      <input type="text" name="username" value={formData.username} onChange={handleChange} required className={inputClass} />
-                    </div>
+                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Username *</label><input type="text" name="username" value={formData.username} onChange={handleChange} required className={inputClass} /></div>
                     <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Full Name</label><input type="text" name="full_name" value={formData.full_name} onChange={handleChange} className={inputClass} /></div>
                     <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Email *</label><input type="email" name="email" value={formData.email} onChange={handleChange} required className={inputClass} /></div>
                     <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Course *</label><select name="course" value={formData.course} onChange={handleChange} required className={inputClass}><option value="">Select a course</option>{coursesList.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select></div>
                     <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Batch *</label><select name="batch" value={formData.batch} onChange={handleChange} required className={inputClass}><option value="">Select a batch</option>{batchesList.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}</select></div>
-                    <div>
-                      <label className="block text-[#7d8590] text-xs font-medium mb-1.5">Mentor (optional)</label>
-                      <select name="mentor" value={formData.mentor} onChange={handleChange} className={inputClass}>
-                        <option value="">Select a mentor</option>
-                        {mentorsList.map(mentor => <option key={mentor.id} value={mentor.id}>{mentor.username} ({mentor.expertise || "No expertise"})</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[#7d8590] text-xs font-medium mb-1.5">Phone</label>
-                      <input type="text" name="phone" value={formData.phone} onChange={handleChange} className={inputClass} />
-                      {phoneError && <p className="text-red-400 text-xs mt-1">{phoneError}</p>}
-                    </div>
+                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Mentor (optional)</label><select name="mentor" value={formData.mentor} onChange={handleChange} className={inputClass}><option value="">Select a mentor</option>{mentorsList.map(mentor => <option key={mentor.id} value={mentor.id}>{mentor.username} ({mentor.expertise || "No expertise"})</option>)}</select></div>
+                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Phone</label><input type="text" name="phone" value={formData.phone} onChange={handleChange} className={inputClass} />{phoneError && <p className="text-red-400 text-xs mt-1">{phoneError}</p>}</div>
                     <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Date of Birth</label><input type="date" name="date_of_birth" value={formData.date_of_birth} onChange={handleChange} className={inputClass} style={{ colorScheme: "dark" }} /></div>
                     <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Age</label><input type="text" name="age" value={formData.age} readOnly className={`${inputClass} cursor-not-allowed opacity-80`} /></div>
                     <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Gender</label><select name="gender" value={formData.gender} onChange={handleChange} className={inputClass}><option value="">Select</option><option>Male</option><option>Female</option><option>Other</option></select></div>
                   </div>
                 </div>
 
-                {/* Parents */}
                 <div className="border-t border-[#21262d] pt-4">
                   <h4 className="text-xs font-semibold text-[#f59e0b] uppercase tracking-wider mb-3">Parents</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -445,13 +448,11 @@ function Students() {
                   </div>
                 </div>
 
-                {/* Address */}
                 <div className="border-t border-[#21262d] pt-4">
                   <h4 className="text-xs font-semibold text-[#f59e0b] uppercase tracking-wider mb-3">Address</h4>
                   <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Address</label><textarea name="address" rows="2" value={formData.address} onChange={handleChange} className={`${inputClass} resize-none`} /></div>
                 </div>
 
-                {/* Education */}
                 <div className="border-t border-[#21262d] pt-4">
                   <h4 className="text-xs font-semibold text-[#f59e0b] uppercase tracking-wider mb-3">Education</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -470,16 +471,10 @@ function Students() {
           </div>
         )}
 
-        {/* View Details Modal (unchanged – omitted for brevity) */}
+        {/* View Details Modal */}
         {viewingStudent && (
-          <div
-            className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 backdrop-blur-md p-4"
-            onClick={() => setViewingStudent(null)}
-          >
-            <div
-              className="bg-[#161b22] rounded-2xl w-full max-w-3xl border border-[#30363d] shadow-2xl shadow-black/60 max-h-[90vh] overflow-y-auto"
-              onClick={(e) => e.stopPropagation()}
-            >
+          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 backdrop-blur-md p-4" onClick={() => setViewingStudent(null)}>
+            <div className="bg-[#161b22] rounded-2xl w-full max-w-3xl border border-[#30363d] shadow-2xl shadow-black/60 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
               <div className="sticky top-0 bg-[#161b22] z-10 flex justify-between items-center px-4 sm:px-6 py-4 border-b border-[#21262d]">
                 <div className="flex items-center gap-3">
                   <div className="w-7 h-7 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
@@ -498,9 +493,7 @@ function Students() {
                   </svg>
                 </button>
               </div>
-
               <div className="px-4 sm:px-6 py-5 space-y-6">
-                {/* Basic Information */}
                 <div>
                   <h4 className="text-xs font-semibold text-[#388bfd] uppercase tracking-wider mb-3">Basic Information</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -516,8 +509,6 @@ function Students() {
                     <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Gender</label><input type="text" value={viewingStudent.gender || "—"} readOnly className={readOnlyClass} /></div>
                   </div>
                 </div>
-
-                {/* Parents */}
                 <div className="border-t border-[#21262d] pt-4">
                   <h4 className="text-xs font-semibold text-[#f59e0b] uppercase tracking-wider mb-3">Parents</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -527,14 +518,10 @@ function Students() {
                     <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Mother's Contact</label><input type="text" value={viewingStudent.mothers_contact || "—"} readOnly className={readOnlyClass} /></div>
                   </div>
                 </div>
-
-                {/* Address */}
                 <div className="border-t border-[#21262d] pt-4">
                   <h4 className="text-xs font-semibold text-[#f59e0b] uppercase tracking-wider mb-3">Address</h4>
                   <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Address</label><textarea rows="2" value={viewingStudent.address || "—"} readOnly className={`${readOnlyClass} resize-none`} /></div>
                 </div>
-
-                {/* Education */}
                 <div className="border-t border-[#21262d] pt-4">
                   <h4 className="text-xs font-semibold text-[#f59e0b] uppercase tracking-wider mb-3">Education</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -543,7 +530,6 @@ function Students() {
                   </div>
                 </div>
               </div>
-
               <div className="sticky bottom-0 bg-[#161b22] px-4 sm:px-6 py-4 border-t border-[#21262d] flex justify-end">
                 <button onClick={() => setViewingStudent(null)} className="bg-[#21262d] hover:bg-[#30363d] border border-[#30363d] text-[#7d8590] hover:text-[#e6edf3] px-5 py-2 rounded-lg transition-all text-sm font-medium">
                   Close
@@ -570,12 +556,7 @@ function Students() {
                     <td className="px-3 sm:px-4 py-2.5 sm:py-3.5">
                       <div className="flex items-center gap-2 sm:gap-3">
                         <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br ${getColor(s.username)} flex items-center justify-center text-white text-[10px] sm:text-xs font-bold shrink-0`}>{getInitial(s.username)}</div>
-                        <button
-                          onClick={() => setViewingStudent(s)}
-                          className="text-[#e6edf3] text-xs sm:text-sm font-medium truncate max-w-[100px] sm:max-w-none hover:text-blue-400 transition-colors cursor-pointer text-left"
-                        >
-                          {s.username}
-                        </button>
+                        <button onClick={() => setViewingStudent(s)} className="text-[#e6edf3] text-xs sm:text-sm font-medium truncate max-w-[100px] sm:max-w-none hover:text-blue-400 transition-colors cursor-pointer text-left">{s.username}</button>
                       </div>
                     </td>
                     <td className="px-3 sm:px-4 py-2.5 sm:py-3.5 text-[#7d8590] text-xs sm:text-sm font-mono truncate max-w-[120px] sm:max-w-none">{s.email}</td>
@@ -585,56 +566,40 @@ function Students() {
                     <td className="px-3 sm:px-4 py-2.5 sm:py-3.5 text-[#7d8590] text-xs sm:text-sm font-mono">{s.date_of_birth || "—"}</td>
                     <td className="px-3 sm:px-4 py-2.5 sm:py-3.5">
                       <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition">
-                        <button onClick={() => handleEdit(s)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-[#7d8590] hover:text-[#388bfd] hover:bg-[#388bfd]/10 text-xs"><svg className="w-3 h-3 sm:w-3.5 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg><span className="hidden sm:inline">Edit</span></button>
-                        <button onClick={() => handleDelete(s.id)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-[#7d8590] hover:text-red-400 hover:bg-red-500/10 text-xs"><svg className="w-3 h-3 sm:w-3.5 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg><span className="hidden sm:inline">Delete</span></button>
+                        <button onClick={() => handleEdit(s)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-[#7d8590] hover:text-[#388bfd] hover:bg-[#388bfd]/10 text-xs">
+                          <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                          <span className="hidden sm:inline">Edit</span>
+                        </button>
+                        <button onClick={() => handleDeleteClick(s.id, s.username)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-[#7d8590] hover:text-red-400 hover:bg-red-500/10 text-xs">
+                          <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                          <span className="hidden sm:inline">Delete</span>
+                        </button>
                       </div>
                     </td>
                   </tr>
                 ))
               ) : (
-                <tr><td colSpan="7" className="text-center py-16 sm:py-20 text-[#7d8590]">No students found. Click 'Add Student' to create one. </td></tr>
+                <tr><td colSpan="7" className="text-center py-16 sm:py-20 text-[#7d8590]">No students found. Click 'Add Student' to create one.</td></tr>
               )}
             </tbody>
           </table>
 
-          {/* Pagination Controls */}
+          {/* Pagination */}
           {totalFiltered > 0 && (
             <div className="bg-[#161b22] border-t border-[#21262d] px-3 sm:px-4 py-3 flex flex-col sm:flex-row justify-between gap-3 items-center">
-              <div className="text-[#484f58] text-xs">
-                Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, totalFiltered)} of {totalFiltered} students
-              </div>
+              <div className="text-[#484f58] text-xs">Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, totalFiltered)} of {totalFiltered} students</div>
               <div className="flex gap-1 flex-wrap justify-center">
-                <button
-                  onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
-                  disabled={currentPage === 1}
-                  className="px-2.5 py-1.5 rounded-lg text-sm disabled:text-[#484f58] text-[#7d8590] hover:bg-[#21262d] disabled:hover:bg-transparent"
-                >
-                  ←
-                </button>
+                <button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1} className="px-2.5 py-1.5 rounded-lg text-sm disabled:text-[#484f58] text-[#7d8590] hover:bg-[#21262d] disabled:hover:bg-transparent">←</button>
                 {getPageNumbers().map((page, idx) =>
-                  page === "..." ? (
-                    <span key={idx} className="px-2 py-1.5 text-[#484f58]">...</span>
-                  ) : (
-                    <button
-                      key={page}
-                      onClick={() => setCurrentPage(page)}
-                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                        currentPage === page
-                          ? "bg-[#388bfd] text-white shadow-md shadow-[#388bfd]/20"
-                          : "text-[#7d8590] hover:text-[#e6edf3] hover:bg-[#21262d]"
-                      }`}
-                    >
-                      {page}
-                    </button>
+                  page === "..." ? <span key={idx} className="px-2 py-1.5 text-[#484f58]">...</span> : (
+                    <button key={page} onClick={() => setCurrentPage(page)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${currentPage === page ? "bg-[#388bfd] text-white shadow-md shadow-[#388bfd]/20" : "text-[#7d8590] hover:text-[#e6edf3] hover:bg-[#21262d]"}`}>{page}</button>
                   )
                 )}
-                <button
-                  onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
-                  disabled={currentPage === totalPages}
-                  className="px-2.5 py-1.5 rounded-lg text-sm disabled:text-[#484f58] text-[#7d8590] hover:bg-[#21262d] disabled:hover:bg-transparent"
-                >
-                  →
-                </button>
+                <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages} className="px-2.5 py-1.5 rounded-lg text-sm disabled:text-[#484f58] text-[#7d8590] hover:bg-[#21262d] disabled:hover:bg-transparent">→</button>
               </div>
             </div>
           )}
@@ -645,4 +610,3 @@ function Students() {
 }
 
 export default Students;
-

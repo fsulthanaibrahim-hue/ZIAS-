@@ -8,7 +8,7 @@ from .views import (
     RequestPasswordResetView, ConfirmPasswordResetView,
     ContactMessageView, UnreadMessagesCountView, RecentMessagesView, ContactMessageDetailView,
     CustomLoginView, LogoutView, UpdateDashboardAccessView,
-    CompleteModuleView, StudentWeekReviewView, StudentListView
+    CompleteModuleView, StudentWeekReviewView, StudentListView, WeeklyToppersView   # ← added WeeklyToppersView
 )
 
 router = DefaultRouter()
@@ -47,4 +47,5 @@ urlpatterns = [
     path('api/update-dashboard-access/', UpdateDashboardAccessView.as_view(), name='update-dashboard-access'),
     path('api/modules/<int:module_id>/complete/', CompleteModuleView.as_view(), name='complete-module'),
     path('api/week-review/<int:module_id>/', StudentWeekReviewView.as_view(), name='week-review'),
+    path('api/weekly-toppers/', WeeklyToppersView.as_view(), name='weekly-toppers'),   # ← NEW
 ]

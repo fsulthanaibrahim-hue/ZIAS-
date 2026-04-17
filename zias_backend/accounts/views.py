@@ -43,12 +43,12 @@ class DayFilterBackend(BaseFilterBackend):
         return queryset
 
 # ----------------------------
-# BATCH VIEWSET
+# BATCH VIEWSET (FIXED: mentors can now view batches)
 # ----------------------------
 class BatchViewSet(viewsets.ModelViewSet):
     queryset = Batch.objects.all()
     serializer_class = BatchSerializer
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAdminOrReadOnly]   # ← changed from [IsAdminUser]
 
 # ----------------------------
 # STUDENT VIEWSET
@@ -147,7 +147,6 @@ class ModuleViewSet(viewsets.ModelViewSet):
         user = request.user
         student_id = request.query_params.get('student_id')
 
-        # Determine which student to use
         if user.is_admin or user.is_mentor:
             if student_id:
                 try:
@@ -155,18 +154,15 @@ class ModuleViewSet(viewsets.ModelViewSet):
                 except Student.DoesNotExist:
                     return Response({"detail": "Student not found."}, status=404)
             else:
-                # If admin/mentor but no student_id, default to themselves if they are a student
                 if user.is_student:
                     student = Student.objects.get(user=user)
                 else:
                     return Response({"detail": "Provide student_id for reviewer."}, status=400)
         else:
-            # Normal student: only own data
             if not user.is_student:
                 return Response({"detail": "Access denied."}, status=403)
             student = Student.objects.get(user=user)
 
-        # Rest of the logic unchanged
         common_modules = Module.objects.filter(is_common=True)
         course_modules = Module.objects.filter(course__name=student.course, is_common=False).order_by('order')
 
@@ -491,17 +487,89 @@ class UpdateDashboardAccessView(APIView):
         return Response({"detail": "Dashboard access updated."}, status=status.HTTP_200_OK)
 
 # ----------------------------
-# STUDENT LIST VIEW (for admin/mentor dropdown)
+# STUDENT LIST VIEW (for admin/mentor dropdown) – UPDATED with fallback
 # ----------------------------
 class StudentListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        if not (request.user.is_admin or request.user.is_mentor):
+        user = request.user
+        if user.is_admin:
+            students = Student.objects.select_related('user', 'student_batch').all()
+        elif user.is_mentor:
+            try:
+                mentor = Mentor.objects.get(user=user)
+                batch = mentor.batch
+                if batch:
+                    # Students linked via foreign key
+                    fk_students = Student.objects.filter(student_batch=batch).select_related('user', 'student_batch')
+                    # Students whose old `batch` CharField matches the batch name (fallback)
+                    text_students = Student.objects.filter(batch=batch.name).exclude(student_batch=batch).select_related('user', 'student_batch')
+                    students = fk_students | text_students
+                else:
+                    students = Student.objects.none()
+            except Mentor.DoesNotExist:
+                students = Student.objects.none()
+        else:
             return Response({"detail": "Not authorized"}, status=403)
-        students = Student.objects.select_related('user').all()
-        data = [{"id": s.id, "name": s.full_name or s.user.username, "username": s.user.username, "email": s.user.email, "course": s.course, "batch": s.batch} for s in students]
+
+        data = [{
+            "id": s.id,
+            "name": s.full_name or s.user.username,
+            "username": s.user.username,
+            "email": s.user.email,
+            "course": s.course,
+            "batch_name": s.student_batch.name if s.student_batch else s.batch,
+            "batch_id": s.student_batch.id if s.student_batch else None,
+            "phone": s.phone,
+            "date_of_birth": s.date_of_birth,
+            "age": s.age,
+            "gender": s.gender,
+            "fathers_name": s.fathers_name,
+            "fathers_contact": s.fathers_contact,
+            "mothers_name": s.mothers_name,
+            "mothers_contact": s.mothers_contact,
+            "address": s.address,
+            "educational_qualification": s.educational_qualification,
+            "college_school": s.college_school,
+        } for s in students]
         return Response(data)
+
+# ----------------------------
+# WEEKLY TOPPERS VIEW (new)
+# ----------------------------
+class WeeklyToppersView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        if not (user.is_admin or user.is_mentor):
+            return Response({"detail": "Not authorized"}, status=403)
+
+        modules = Module.objects.all().order_by('order')
+        toppers_data = []
+
+        for module in modules:
+            reviews = StudentWeekReview.objects.filter(
+                module=module,
+                total_score__isnull=False
+            ).select_related('student', 'student__user').order_by('-total_score')[:3]
+
+            week_toppers = []
+            for idx, review in enumerate(reviews, 1):
+                week_toppers.append({
+                    "rank": idx,
+                    "student_name": review.student.full_name or review.student.user.username,
+                    "score": review.total_score,
+                })
+            toppers_data.append({
+                "week_id": module.id,
+                "week_title": module.title,
+                "week_order": module.order,
+                "toppers": week_toppers,
+            })
+
+        return Response(toppers_data)
 
 # ----------------------------
 # STUDENT WEEK REVIEW VIEW

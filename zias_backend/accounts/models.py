@@ -232,6 +232,11 @@ class StudentWeekReview(models.Model):
     star_rating = models.PositiveSmallIntegerField(null=True, blank=True, choices=[(i, i) for i in range(1, 6)])
     total_score = models.PositiveSmallIntegerField(null=True, blank=True)
     
+    # NEW: role‑specific remark fields (each role can add their own notes)
+    admin_remarks = models.TextField(blank=True)
+    reviewer_remarks = models.TextField(blank=True)
+    mentor_remarks = models.TextField(blank=True)
+    
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:

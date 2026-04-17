@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import API from "../api/api";
 
-// Toast Component
 function Toast({ message, type, onClose }) {
   useEffect(() => {
     const timer = setTimeout(onClose, 3000);
@@ -30,6 +29,7 @@ function Mentors() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [phoneError, setPhoneError] = useState("");
   const [formData, setFormData] = useState({
     username: "",
     email: "",
@@ -78,6 +78,15 @@ function Mentors() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Phone validation
+    if (formData.phone && !/^\d{10}$/.test(formData.phone)) {
+      showToast("Phone number must be exactly 10 digits", "error");
+      setPhoneError("Phone number must be exactly 10 digits");
+      return;
+    }
+    setPhoneError("");
+
     const payload = {
       username: formData.username,
       email: formData.email,
@@ -96,6 +105,7 @@ function Mentors() {
       setShowForm(false);
       setEditingId(null);
       setFormData({ username: "", email: "", phone: "", expertise: "", batch: "" });
+      setPhoneError("");
       fetchMentors();
     } catch (error) {
       if (error.response) {
@@ -117,11 +127,24 @@ function Mentors() {
       expertise: mentor.expertise,
       batch: mentor.batch || "",
     });
+    setPhoneError("");
     setShowForm(true);
   };
 
   const handleChange = (e) => {
-    setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    const { name, value } = e.target;
+    if (name === "phone") {
+      // Only digits, max 10
+      const digits = value.replace(/\D/g, "").slice(0, 10);
+      setFormData(prev => ({ ...prev, phone: digits }));
+      if (digits.length > 0 && digits.length !== 10) {
+        setPhoneError("Phone number must be exactly 10 digits");
+      } else {
+        setPhoneError("");
+      }
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
   };
 
   const filteredMentors = mentors.filter(m =>
@@ -171,7 +194,7 @@ function Mentors() {
 
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-6 sm:py-8">
 
-        {/* Top Bar - Responsive */}
+        {/* Top Bar */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
@@ -214,6 +237,7 @@ function Mentors() {
               onClick={() => {
                 setEditingId(null);
                 setFormData({ username: "", email: "", phone: "", expertise: "", batch: "" });
+                setPhoneError("");
                 setShowForm(true);
               }}
               className="shine flex items-center justify-center gap-2 bg-[#238636] hover:bg-[#2ea043] border border-[#2ea043]/40 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 shadow-lg shadow-[#238636]/20"
@@ -226,7 +250,7 @@ function Mentors() {
           </div>
         </div>
 
-        {/* Modal - Responsive */}
+        {/* Add/Edit Modal */}
         {showForm && (
           <div
             className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 backdrop-blur-md p-4"
@@ -268,7 +292,15 @@ function Mentors() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[#7d8590] text-xs font-medium mb-1.5 uppercase tracking-wider">Phone</label>
-                    <input type="text" name="phone" placeholder="+91 00000 00000" value={formData.phone} onChange={handleChange} required className={inputClass} />
+                    <input
+                      type="tel"
+                      name="phone"
+                      placeholder="10-digit mobile number"
+                      value={formData.phone}
+                      onChange={handleChange}
+                      className={`${inputClass} ${phoneError ? "border-red-500 focus:border-red-500" : ""}`}
+                    />
+                    {phoneError && <p className="text-red-400 text-xs mt-1">{phoneError}</p>}
                   </div>
                   <div>
                     <label className="block text-[#7d8590] text-xs font-medium mb-1.5 uppercase tracking-wider">Expertise</label>
@@ -298,7 +330,7 @@ function Mentors() {
           </div>
         )}
 
-        {/* Responsive Table with horizontal scroll */}
+        {/* Mentors Table */}
         <div className="overflow-x-auto rounded-xl border border-[#21262d] shadow-xl shadow-black/20">
           <table className="min-w-full">
             <thead>
@@ -323,7 +355,7 @@ function Mentors() {
                       </div>
                     </td>
                     <td className="px-3 sm:px-4 py-2.5 sm:py-3.5 text-[#7d8590] text-xs sm:text-sm font-mono truncate max-w-[120px] sm:max-w-none">{m.email}</td>
-                    <td className="px-3 sm:px-4 py-2.5 sm:py-3.5 text-[#7d8590] text-xs sm:text-sm font-mono">{m.phone}</td>
+                    <td className="px-3 sm:px-4 py-2.5 sm:py-3.5 text-[#7d8590] text-xs sm:text-sm font-mono">{m.phone || "—"}</td>
                     <td className="px-3 sm:px-4 py-2.5 sm:py-3.5">
                       <span className="inline-flex items-center gap-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] sm:text-xs font-medium px-2 py-0.5 sm:py-1 rounded-full whitespace-nowrap">
                         {m.expertise}
@@ -376,7 +408,7 @@ function Mentors() {
             </tbody>
           </table>
 
-          {/* Table Footer */}
+          {/* Footer */}
           {filteredMentors.length > 0 && (
             <div className="bg-[#161b22] border-t border-[#21262d] px-3 sm:px-4 py-2.5 flex flex-col sm:flex-row items-center justify-between gap-2">
               <p className="text-[#484f58] text-xs">
