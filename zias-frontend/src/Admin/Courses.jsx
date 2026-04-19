@@ -1,7 +1,8 @@
+// src/Admin/Courses.jsx
 import { useEffect, useState } from "react";
 import API from "../api/api";
 
-// Toast Component (same as Students page)
+// Toast Component
 function Toast({ message, type, onClose }) {
   useEffect(() => {
     const timer = setTimeout(onClose, 3000);
@@ -16,10 +17,10 @@ function Toast({ message, type, onClose }) {
   const icon = type === "success" ? "✓" : type === "error" ? "✕" : "ℹ";
 
   return (
-    <div className={`fixed top-5 right-5 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl backdrop-blur-md ${bgColor} text-white text-sm font-medium animate-in slide-in-from-top-2`}>
+    <div className={`fixed top-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl backdrop-blur-md ${bgColor} text-white text-sm font-medium animate-in slide-in-from-top-2 max-w-[90vw] sm:max-w-md`}>
       <span className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold">{icon}</span>
-      <span>{message}</span>
-      <button onClick={onClose} className="ml-2 text-white/70 hover:text-white">×</button>
+      <span className="flex-1">{message}</span>
+      <button onClick={onClose} className="ml-2 text-white/70 hover:text-white text-lg leading-none">×</button>
     </div>
   );
 }
@@ -29,6 +30,8 @@ function Courses() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
   const [formData, setFormData] = useState({ name: "", description: "", duration: "" });
 
   const [toast, setToast] = useState(null);
@@ -50,6 +53,41 @@ function Courses() {
     c.duration?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     c.description?.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // Pagination logic
+  const totalFiltered = filteredCourses.length;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / itemsPerPage));
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedCourses = filteredCourses.slice(startIndex, startIndex + itemsPerPage);
+
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxVisible = 5;
+    if (totalPages <= maxVisible) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      if (currentPage <= 3) {
+        for (let i = 1; i <= 4; i++) pages.push(i);
+        pages.push("...");
+        pages.push(totalPages);
+      } else if (currentPage >= totalPages - 2) {
+        pages.push(1);
+        pages.push("...");
+        for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i);
+      } else {
+        pages.push(1);
+        pages.push("...");
+        for (let i = currentPage - 1; i <= currentPage + 1; i++) pages.push(i);
+        pages.push("...");
+        pages.push(totalPages);
+      }
+    }
+    return pages;
+  };
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
 
   const handleDelete = (id) => {
     if (window.confirm("Delete this course?")) {
@@ -94,7 +132,7 @@ function Courses() {
   const inputClass = `
     w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-4 py-2.5 text-[#e6edf3]
     placeholder-[#484f58] focus:outline-none focus:border-[#388bfd] focus:ring-1 focus:ring-[#388bfd]/30
-    transition-all duration-200 text-sm font-mono
+    transition-all duration-200 text-sm
   `;
 
   const CourseIcon = () => (
@@ -104,7 +142,7 @@ function Courses() {
   );
 
   return (
-    <div className="min-h-screen w-screen bg-[#0d1117] text-[#e6edf3]" style={{ fontFamily: "'Geist', 'SF Pro Display', system-ui, sans-serif" }}>
+    <div className="min-h-screen w-full bg-[#0d1117] text-[#e6edf3]" style={{ fontFamily: "'Geist', 'SF Pro Display', system-ui, sans-serif" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&display=swap');
         .table-row-hover:hover { background: rgba(56,139,253,0.04); }
@@ -118,16 +156,25 @@ function Courses() {
           to { opacity:1; transform:translateY(0); }
         }
         .animate-in { animation: slide-in-from-top-2 0.2s ease-out; }
+        /* Mobile card layout */
+        @media (max-width: 640px) {
+          .courses-table thead { display: none; }
+          .courses-table tbody tr { display: block; margin-bottom: 1rem; border: 1px solid #21262d; border-radius: 0.75rem; background: #0d1117; }
+          .courses-table tbody td { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; border-bottom: 1px solid #21262d; text-align: right; gap: 1rem; }
+          .courses-table tbody td:last-child { border-bottom: none; }
+          .courses-table tbody td::before { content: attr(data-label); font-weight: 600; color: #7d8590; text-align: left; flex: 1; }
+          .courses-table tbody td .action-buttons { margin-left: auto; display: flex; gap: 0.5rem; }
+        }
       `}</style>
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
 
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-6 sm:py-8">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-4 sm:py-8">
 
         {/* Top Bar - Responsive */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
           <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center shrink-0">
               <CourseIcon />
             </div>
             <div>
@@ -139,8 +186,8 @@ function Courses() {
           </div>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            {/* Search */}
-            <div className="relative">
+            {/* Search - full width on mobile */}
+            <div className="relative w-full sm:w-64">
               <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#484f58]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
               </svg>
@@ -149,7 +196,7 @@ function Courses() {
                 placeholder="Search courses..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="bg-[#161b22] border border-[#30363d] rounded-lg pl-9 pr-4 py-2 text-[#e6edf3] placeholder-[#484f58] focus:outline-none focus:border-[#388bfd] focus:ring-1 focus:ring-[#388bfd]/20 transition-all text-sm w-full sm:w-64"
+                className="w-full bg-[#161b22] border border-[#30363d] rounded-lg pl-9 pr-4 py-2 text-[#e6edf3] placeholder-[#484f58] focus:outline-none focus:border-[#388bfd] focus:ring-1 focus:ring-[#388bfd]/20 transition-all text-sm"
               />
               {searchTerm && (
                 <button onClick={() => setSearchTerm("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#484f58] hover:text-[#7d8590] transition">
@@ -160,14 +207,14 @@ function Courses() {
               )}
             </div>
 
-            {/* Add Button */}
+            {/* Add Button - full width on mobile */}
             <button
               onClick={() => {
                 setEditingId(null);
                 setFormData({ name: "", description: "", duration: "" });
                 setShowForm(true);
               }}
-              className="shine flex items-center justify-center gap-2 bg-[#238636] hover:bg-[#2ea043] border border-[#2ea043]/40 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 shadow-lg shadow-[#238636]/20"
+              className="shine flex items-center justify-center gap-2 bg-[#238636] hover:bg-[#2ea043] border border-[#2ea043]/40 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 shadow-lg shadow-[#238636]/20 w-full sm:w-auto"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -185,10 +232,10 @@ function Courses() {
           >
             <form
               onSubmit={handleSubmit}
-              className="modal-enter bg-[#161b22] rounded-2xl w-full max-w-md border border-[#30363d] shadow-2xl shadow-black/60"
+              className="modal-enter bg-[#161b22] rounded-2xl w-full max-w-md border border-[#30363d] shadow-2xl shadow-black/60 max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex justify-between items-center px-4 sm:px-6 py-4 border-b border-[#21262d]">
+              <div className="sticky top-0 bg-[#161b22] z-10 flex justify-between items-center px-4 sm:px-6 py-4 border-b border-[#21262d]">
                 <div className="flex items-center gap-3">
                   <div className="w-7 h-7 rounded-lg bg-violet-500/10 border border-violet-500/20 flex items-center justify-center">
                     <CourseIcon />
@@ -254,48 +301,47 @@ function Courses() {
           </div>
         )}
 
-        {/* Responsive Table with horizontal scroll */}
-        <div className="overflow-x-auto rounded-xl border border-[#21262d] shadow-xl shadow-black/20">
-          <table className="min-w-full">
-            <thead>
-              <tr className="bg-[#161b22] border-b border-[#21262d]">
-                {["Course", "Duration", "Description", ""].map((h, i) => (
-                  <th key={i} className="text-left px-3 sm:px-4 py-3 text-[#7d8590] text-xs font-semibold uppercase tracking-widest whitespace-nowrap">
-                    {h}
-                  </th>
-                ))}
+        {/* Courses Table with responsive card layout and pagination */}
+        <div className="overflow-hidden rounded-xl border border-[#21262d] shadow-xl shadow-black/20">
+          <table className="courses-table min-w-full">
+            <thead className="bg-[#161b22] border-b border-[#21262d]">
+              <tr>
+                <th className="text-left px-4 py-3 text-[#7d8590] text-xs font-semibold uppercase tracking-widest">Course</th>
+                <th className="text-left px-4 py-3 text-[#7d8590] text-xs font-semibold uppercase tracking-widest">Duration</th>
+                <th className="text-left px-4 py-3 text-[#7d8590] text-xs font-semibold uppercase tracking-widest">Description</th>
+                <th className="text-left px-4 py-3 text-[#7d8590] text-xs font-semibold uppercase tracking-widest">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-[#0d1117] divide-y divide-[#21262d]">
-              {filteredCourses.length > 0 ? (
-                filteredCourses.map((c) => (
+              {paginatedCourses.length > 0 ? (
+                paginatedCourses.map((c) => (
                   <tr key={c.id} className="table-row-hover transition-colors duration-150 group">
-                    <td className="px-3 sm:px-4 py-2.5 sm:py-3.5">
-                      <div className="flex items-center gap-2 sm:gap-3">
-                        <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-lg bg-violet-500/10 border border-violet-500/20 flex items-center justify-center shrink-0">
+                    <td data-label="Course" className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-violet-500/10 border border-violet-500/20 flex items-center justify-center shrink-0">
                           <CourseIcon />
                         </div>
-                        <span className="text-[#e6edf3] text-xs sm:text-sm font-medium truncate max-w-[120px] sm:max-w-none">{c.name}</span>
+                        <span className="text-[#e6edf3] text-sm font-medium">{c.name}</span>
                       </div>
                     </td>
-                    <td className="px-3 sm:px-4 py-2.5 sm:py-3.5">
+                    <td data-label="Duration" className="px-4 py-3">
                       {c.duration ? (
-                        <span className="inline-flex items-center gap-1.5 bg-violet-500/10 text-violet-400 border border-violet-500/20 text-[10px] sm:text-xs font-medium px-2 py-0.5 sm:py-1 rounded-full whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1.5 bg-violet-500/10 text-violet-400 border border-violet-500/20 text-xs font-medium px-2 py-1 rounded-full">
                           {c.duration}
                         </span>
                       ) : <span className="text-[#484f58] text-xs">—</span>}
                     </td>
-                    <td className="px-3 sm:px-4 py-2.5 sm:py-3.5 text-[#7d8590] text-xs sm:text-sm truncate max-w-[150px] sm:max-w-md">
+                    <td data-label="Description" className="px-4 py-3 text-[#7d8590] text-sm break-words">
                       {c.description || "—"}
                     </td>
-                    <td className="px-3 sm:px-4 py-2.5 sm:py-3.5">
-                      <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-150">
+                    <td data-label="Actions" className="px-4 py-3">
+                      <div className="flex items-center gap-2">
                         <button
                           onClick={() => handleEdit(c)}
                           className="flex items-center gap-1 px-2 py-1 rounded-lg text-[#7d8590] hover:text-[#388bfd] hover:bg-[#388bfd]/10 border border-transparent hover:border-[#388bfd]/20 transition-all text-xs font-medium"
                           title="Edit"
                         >
-                          <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                           </svg>
                           <span className="hidden sm:inline">Edit</span>
@@ -305,7 +351,7 @@ function Courses() {
                           className="flex items-center gap-1 px-2 py-1 rounded-lg text-[#7d8590] hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all text-xs font-medium"
                           title="Delete"
                         >
-                          <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                           </svg>
                           <span className="hidden sm:inline">Delete</span>
@@ -316,9 +362,9 @@ function Courses() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan="4" className="text-center py-16 sm:py-20">
+                  <td colSpan="4" className="text-center py-12 sm:py-20">
                     <div className="flex flex-col items-center gap-3">
-                      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-[#161b22] border border-[#30363d] flex items-center justify-center">
+                      <div className="w-12 h-12 rounded-2xl bg-[#161b22] border border-[#30363d] flex items-center justify-center">
                         <CourseIcon />
                       </div>
                       <p className="text-[#7d8590] text-sm font-medium">
@@ -334,17 +380,21 @@ function Courses() {
             </tbody>
           </table>
 
-          {/* Table Footer */}
-          {filteredCourses.length > 0 && (
-            <div className="bg-[#161b22] border-t border-[#21262d] px-3 sm:px-4 py-2.5 flex flex-col sm:flex-row items-center justify-between gap-2">
-              <p className="text-[#484f58] text-xs">
-                Showing <span className="text-[#7d8590] font-medium">{filteredCourses.length}</span> of <span className="text-[#7d8590] font-medium">{courses.length}</span> courses
-              </p>
-              {searchTerm && (
-                <button onClick={() => setSearchTerm("")} className="text-[#388bfd] hover:text-blue-300 text-xs font-medium transition">
-                  Clear filter
-                </button>
-              )}
+          {/* Pagination */}
+          {totalFiltered > 0 && (
+            <div className="bg-[#161b22] border-t border-[#21262d] px-4 py-3 flex flex-col sm:flex-row justify-between gap-3 items-center">
+              <div className="text-[#484f58] text-xs">
+                Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, totalFiltered)} of {totalFiltered} courses
+              </div>
+              <div className="flex gap-1 flex-wrap justify-center">
+                <button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1} className="px-2.5 py-1.5 rounded-lg text-sm disabled:text-[#484f58] text-[#7d8590] hover:bg-[#21262d] disabled:hover:bg-transparent">←</button>
+                {getPageNumbers().map((page, idx) =>
+                  page === "..." ? <span key={idx} className="px-2 py-1.5 text-[#484f58]">...</span> : (
+                    <button key={page} onClick={() => setCurrentPage(page)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${currentPage === page ? "bg-[#388bfd] text-white shadow-md shadow-[#388bfd]/20" : "text-[#7d8590] hover:text-[#e6edf3] hover:bg-[#21262d]"}`}>{page}</button>
+                  )
+                )}
+                <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages} className="px-2.5 py-1.5 rounded-lg text-sm disabled:text-[#484f58] text-[#7d8590] hover:bg-[#21262d] disabled:hover:bg-transparent">→</button>
+              </div>
             </div>
           )}
         </div>

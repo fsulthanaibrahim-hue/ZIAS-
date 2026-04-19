@@ -21,15 +21,38 @@ function Toast({ message, type, onClose }) {
   );
 }
 
+// Custom confirmation modal for delete
+function ConfirmModal({ isOpen, onClose, onConfirm, studentName }) {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 backdrop-blur-md p-4">
+      <div className="bg-[#161b22] rounded-2xl max-w-md w-full border border-[#30363d] shadow-2xl shadow-black/60 p-6">
+        <h3 className="text-lg font-semibold text-[#e6edf3] mb-2">Confirm Delete</h3>
+        <p className="text-[#7d8590] mb-6">
+          Are you sure you want to delete <span className="text-white font-medium">{studentName}</span>? This action cannot be undone.
+        </p>
+        <div className="flex gap-3 justify-end">
+          <button onClick={onClose} className="px-4 py-2 rounded-lg bg-[#21262d] hover:bg-[#30363d] text-[#7d8590] hover:text-white transition">Cancel</button>
+          <button onClick={onConfirm} className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white transition">Delete</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MentorDashboard() {
   const [students, setStudents] = useState([]);
   const [courses, setCourses] = useState([]);
   const [batches, setBatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [viewingStudent, setViewingStudent] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [toast, setToast] = useState(null);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [studentToDelete, setStudentToDelete] = useState(null);
   const [formData, setFormData] = useState({
     username: "",
     full_name: "",
@@ -68,18 +91,14 @@ function MentorDashboard() {
     try {
       const res = await API.get("courses/");
       setCourses(res.data);
-    } catch (err) {
-      console.error(err);
-    }
+    } catch (err) { console.error(err); }
   };
 
   const fetchBatches = async () => {
     try {
       const res = await API.get("batches/");
       setBatches(res.data);
-    } catch (err) {
-      console.error(err);
-    }
+    } catch (err) { console.error(err); }
   };
 
   useEffect(() => {
@@ -88,23 +107,25 @@ function MentorDashboard() {
     fetchBatches();
   }, []);
 
+  // Auto-calculate age from date_of_birth
+  useEffect(() => {
+    if (formData.date_of_birth) {
+      const birthDate = new Date(formData.date_of_birth);
+      const today = new Date();
+      let age = today.getFullYear() - birthDate.getFullYear();
+      const m = today.getMonth() - birthDate.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
+      setFormData(prev => ({ ...prev, age: age.toString() }));
+    } else {
+      setFormData(prev => ({ ...prev, age: "" }));
+    }
+  }, [formData.date_of_birth]);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     if (name === "phone") {
       const digits = value.replace(/\D/g, "").slice(0, 10);
       setFormData(prev => ({ ...prev, phone: digits }));
-    } else if (name === "date_of_birth") {
-      setFormData(prev => ({ ...prev, date_of_birth: value }));
-      if (value) {
-        const birthDate = new Date(value);
-        const today = new Date();
-        let age = today.getFullYear() - birthDate.getFullYear();
-        const m = today.getMonth() - birthDate.getMonth();
-        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
-        setFormData(prev => ({ ...prev, age: age.toString() }));
-      } else {
-        setFormData(prev => ({ ...prev, age: "" }));
-      }
     } else {
       setFormData(prev => ({ ...prev, [name]: value }));
     }
@@ -144,9 +165,15 @@ function MentorDashboard() {
     };
 
     try {
-      await API.post("students/", payload);
-      showToast(`Student "${payload.username}" added successfully!`, "success");
+      if (editingId) {
+        await API.patch(`students/${editingId}/`, payload);
+        showToast("Student updated successfully", "success");
+      } else {
+        await API.post("students/", payload);
+        showToast(`Student "${payload.username}" added successfully!`, "success");
+      }
       setShowForm(false);
+      setEditingId(null);
       setFormData({
         username: "", full_name: "", email: "", course: "", batch: "", phone: "", date_of_birth: "", age: "", gender: "",
         fathers_name: "", fathers_contact: "", mothers_name: "", mothers_contact: "",
@@ -172,10 +199,59 @@ function MentorDashboard() {
     }
   };
 
+  const handleEdit = (student) => {
+    setEditingId(student.id);
+    setFormData({
+      username: student.username,
+      full_name: student.full_name || "",
+      email: student.email,
+      course: student.course,
+      batch: student.batch,
+      phone: student.phone || "",
+      date_of_birth: student.date_of_birth || "",
+      age: student.age || "",
+      gender: student.gender || "",
+      fathers_name: student.fathers_name || "",
+      fathers_contact: student.fathers_contact || "",
+      mothers_name: student.mothers_name || "",
+      mothers_contact: student.mothers_contact || "",
+      address: student.address || "",
+      educational_qualification: student.educational_qualification || "",
+      college_school: student.college_school || "",
+    });
+    setShowForm(true);
+  };
+
+  const handleDeleteClick = (studentId, studentName) => {
+    setStudentToDelete({ id: studentId, name: studentName });
+    setShowConfirmModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!studentToDelete) return;
+    try {
+      await API.delete(`students/${studentToDelete.id}/`);
+      fetchStudents();
+      showToast("Student deleted successfully", "success");
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to delete student", "error");
+    } finally {
+      setShowConfirmModal(false);
+      setStudentToDelete(null);
+    }
+  };
+
   const filteredStudents = students.filter(s =>
     s.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     s.username?.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // Read-only class for view modal
+  const readOnlyClass = `
+    w-full bg-[#0d1117]/50 border border-[#30363d]/50 rounded-lg px-4 py-2.5 text-[#7d8590]
+    cursor-not-allowed text-sm font-mono
+  `;
 
   if (loading) {
     return (
@@ -188,12 +264,22 @@ function MentorDashboard() {
   return (
     <div className="min-h-screen bg-[#0d1117] text-[#e6edf3] p-6">
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
+      <ConfirmModal isOpen={showConfirmModal} onClose={() => setShowConfirmModal(false)} onConfirm={confirmDelete} studentName={studentToDelete?.name} />
+
       <div className="max-w-7xl mx-auto">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">👨‍🏫 My Students</h1>
           <div className="flex gap-3">
             <button
-              onClick={() => setShowForm(!showForm)}
+              onClick={() => {
+                setEditingId(null);
+                setFormData({
+                  username: "", full_name: "", email: "", course: "", batch: "", phone: "", date_of_birth: "", age: "", gender: "",
+                  fathers_name: "", fathers_contact: "", mothers_name: "", mothers_contact: "",
+                  address: "", educational_qualification: "", college_school: "",
+                });
+                setShowForm(!showForm);
+              }}
               className="bg-[#238636] hover:bg-[#2ea043] px-4 py-2 rounded-lg text-sm"
             >
               {showForm ? "Cancel" : "+ Add Student"}
@@ -204,9 +290,10 @@ function MentorDashboard() {
           </div>
         </div>
 
+        {/* Add/Edit Form */}
         {showForm && (
           <div className="bg-[#161b22] rounded-xl border border-[#21262d] p-6 mb-6">
-            <h2 className="text-lg font-semibold mb-4">Add New Student</h2>
+            <h2 className="text-lg font-semibold mb-4">{editingId ? "Edit Student" : "Add New Student"}</h2>
             <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <input name="username" placeholder="Username *" value={formData.username} onChange={handleChange} className="bg-[#0d1117] border border-[#21262d] rounded px-3 py-2" required />
               <input name="email" placeholder="Email *" type="email" value={formData.email} onChange={handleChange} className="bg-[#0d1117] border border-[#21262d] rounded px-3 py-2" required />
@@ -235,9 +322,9 @@ function MentorDashboard() {
               <input name="college_school" placeholder="College / School Name" value={formData.college_school} onChange={handleChange} className="bg-[#0d1117] border border-[#21262d] rounded px-3 py-2" />
               <div className="col-span-full flex gap-3 mt-2">
                 <button type="submit" disabled={submitting} className="bg-[#238636] hover:bg-[#2ea043] px-4 py-2 rounded font-medium">
-                  {submitting ? "Adding..." : "Add Student"}
+                  {submitting ? (editingId ? "Updating..." : "Adding...") : (editingId ? "Save Changes" : "Add Student")}
                 </button>
-                <button type="button" onClick={() => setShowForm(false)} className="bg-[#21262d] hover:bg-[#30363d] px-4 py-2 rounded">
+                <button type="button" onClick={() => { setShowForm(false); setEditingId(null); }} className="bg-[#21262d] hover:bg-[#30363d] px-4 py-2 rounded">
                   Cancel
                 </button>
               </div>
@@ -245,31 +332,121 @@ function MentorDashboard() {
           </div>
         )}
 
+        {/* Search */}
         <div className="mb-6">
           <input type="text" placeholder="Search by name or username..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full sm:w-80 bg-[#161b22] border border-[#21262d] rounded-lg px-4 py-2 text-sm" />
         </div>
 
+        {/* Students Table */}
         <div className="overflow-x-auto rounded-xl border border-[#21262d]">
           <table className="w-full text-sm">
             <thead className="bg-[#161b22] border-b border-[#21262d]">
-              <tr><th className="px-4 py-3 text-left">Student</th><th className="px-4 py-3 text-left">Email</th><th className="px-4 py-3 text-left">Course</th><th className="px-4 py-3 text-left">Batch</th><th className="px-4 py-3 text-left">Phone</th><th className="px-4 py-3 text-left">Actions</th></tr>
+              <tr>
+                <th className="px-4 py-3 text-left">Student</th>
+                <th className="px-4 py-3 text-left">Email</th>
+                <th className="px-4 py-3 text-left">Course</th>
+                <th className="px-4 py-3 text-left">Batch</th>
+                <th className="px-4 py-3 text-left">Phone</th>
+                <th className="px-4 py-3 text-left">Actions</th>
+              </tr>
             </thead>
             <tbody className="divide-y divide-[#21262d]">
               {filteredStudents.map(s => (
                 <tr key={s.id} className="hover:bg-[#161b22]/30">
-                  <td className="px-4 py-3">{s.name}</td>
+                  <td className="px-4 py-3">
+                    <button
+                      onClick={() => setViewingStudent(s)}
+                      className="text-[#e6edf3] hover:text-blue-400 transition-colors cursor-pointer text-left"
+                    >
+                      {s.name}
+                    </button>
+                  </td>
                   <td className="px-4 py-3 text-[#7d8590]">{s.email}</td>
                   <td className="px-4 py-3">{s.course || "—"}</td>
                   <td className="px-4 py-3">{s.batch_name || s.batch || "—"}</td>
                   <td className="px-4 py-3">{s.phone || "—"}</td>
-                  <td className="px-4 py-3"><Link to={`/student/review-sheet?student_id=${s.id}`} className="text-emerald-400 hover:underline">View Review</Link></td>
+                  <td className="px-4 py-3">
+                    <div className="flex gap-2">
+                      <button onClick={() => handleEdit(s)} className="text-blue-400 hover:text-blue-300 text-xs">✎ Edit</button>
+                      <button onClick={() => handleDeleteClick(s.id, s.name)} className="text-red-400 hover:text-red-300 text-xs">🗑 Delete</button>
+                      <Link to={`/student/review-sheet?student_id=${s.id}`} className="text-emerald-400 hover:text-emerald-300 text-xs">📊 Review</Link>
+                    </div>
+                  </td>
                 </tr>
               ))}
-              {filteredStudents.length === 0 && <tr><td colSpan="6" className="text-center py-8">No students found.</td></tr>}
+              {filteredStudents.length === 0 && <tr><td colSpan="6" className="text-center py-8 text-[#7d8590]">No students found. Use "Add Student" to create one. </td></tr>}
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* View Details Modal */}
+      {viewingStudent && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 backdrop-blur-md p-4" onClick={() => setViewingStudent(null)}>
+          <div className="bg-[#161b22] rounded-2xl w-full max-w-3xl border border-[#30363d] shadow-2xl shadow-black/60 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="sticky top-0 bg-[#161b22] z-10 flex justify-between items-center px-4 sm:px-6 py-4 border-b border-[#21262d]">
+              <div className="flex items-center gap-3">
+                <div className="w-7 h-7 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
+                  <svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-[#e6edf3]">Student Details</h3>
+                  <p className="text-[#7d8590] text-xs">View all information</p>
+                </div>
+              </div>
+              <button type="button" onClick={() => setViewingStudent(null)} className="text-[#484f58] hover:text-[#7d8590] transition p-1.5 rounded-lg hover:bg-[#21262d]">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <div className="px-4 sm:px-6 py-5 space-y-6">
+              {/* Basic Information */}
+              <div>
+                <h4 className="text-xs font-semibold text-[#388bfd] uppercase tracking-wider mb-3">Basic Information</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Username</label><input type="text" value={viewingStudent.username} readOnly className={readOnlyClass} /></div>
+                  <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Full Name</label><input type="text" value={viewingStudent.full_name || "—"} readOnly className={readOnlyClass} /></div>
+                  <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Email</label><input type="text" value={viewingStudent.email} readOnly className={readOnlyClass} /></div>
+                  <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Course</label><input type="text" value={viewingStudent.course} readOnly className={readOnlyClass} /></div>
+                  <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Batch</label><input type="text" value={viewingStudent.batch_name || viewingStudent.batch || "—"} readOnly className={readOnlyClass} /></div>
+                  <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Mentor</label><input type="text" value={viewingStudent.mentor_name || "—"} readOnly className={readOnlyClass} /></div>
+                  <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Phone</label><input type="text" value={viewingStudent.phone || "—"} readOnly className={readOnlyClass} /></div>
+                  <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Date of Birth</label><input type="text" value={viewingStudent.date_of_birth || "—"} readOnly className={readOnlyClass} /></div>
+                  <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Age</label><input type="text" value={viewingStudent.age || "—"} readOnly className={readOnlyClass} /></div>
+                  <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Gender</label><input type="text" value={viewingStudent.gender || "—"} readOnly className={readOnlyClass} /></div>
+                </div>
+              </div>
+              {/* Parents */}
+              <div className="border-t border-[#21262d] pt-4">
+                <h4 className="text-xs font-semibold text-[#f59e0b] uppercase tracking-wider mb-3">Parents</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Father's Name</label><input type="text" value={viewingStudent.fathers_name || "—"} readOnly className={readOnlyClass} /></div>
+                  <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Father's Contact</label><input type="text" value={viewingStudent.fathers_contact || "—"} readOnly className={readOnlyClass} /></div>
+                  <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Mother's Name</label><input type="text" value={viewingStudent.mothers_name || "—"} readOnly className={readOnlyClass} /></div>
+                  <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Mother's Contact</label><input type="text" value={viewingStudent.mothers_contact || "—"} readOnly className={readOnlyClass} /></div>
+                </div>
+              </div>
+              {/* Address */}
+              <div className="border-t border-[#21262d] pt-4">
+                <h4 className="text-xs font-semibold text-[#f59e0b] uppercase tracking-wider mb-3">Address</h4>
+                <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Address</label><textarea rows="2" value={viewingStudent.address || "—"} readOnly className={`${readOnlyClass} resize-none`} /></div>
+              </div>
+              {/* Education */}
+              <div className="border-t border-[#21262d] pt-4">
+                <h4 className="text-xs font-semibold text-[#f59e0b] uppercase tracking-wider mb-3">Education</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Educational Qualification</label><input type="text" value={viewingStudent.educational_qualification || "—"} readOnly className={readOnlyClass} /></div>
+                  <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">College / School Name</label><input type="text" value={viewingStudent.college_school || "—"} readOnly className={readOnlyClass} /></div>
+                </div>
+              </div>
+            </div>
+            <div className="sticky bottom-0 bg-[#161b22] px-4 sm:px-6 py-4 border-t border-[#21262d] flex justify-end">
+              <button onClick={() => setViewingStudent(null)} className="bg-[#21262d] hover:bg-[#30363d] border border-[#30363d] text-[#7d8590] hover:text-[#e6edf3] px-5 py-2 rounded-lg transition-all text-sm font-medium">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

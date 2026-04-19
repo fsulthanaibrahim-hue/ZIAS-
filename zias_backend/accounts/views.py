@@ -16,12 +16,12 @@ from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
 
 from .models import (
     User, Student, Mentor, Reviewer, Course, Module, Day, Task, Batch,
-    StudentModule, PasswordResetToken, ContactMessage, StudentWeekReview
+    StudentModule, PasswordResetToken, ContactMessage, StudentWeekReview, WeekUpdate
 )
 from .serializers import (
     StudentSerializer, MentorSerializer, ReviewerSerializer, UserSerializer,
     CourseSerializer, ModuleSerializer, DaySerializer, TaskSerializer, BatchSerializer,
-    ContactMessageSerializer, StudentModuleSerializer, StudentWeekReviewSerializer
+    ContactMessageSerializer, StudentModuleSerializer, StudentWeekReviewSerializer, WeekUpdateSerializer
 )
 from .permissions import IsAdminUser, IsAdminOrReadOnly, IsStudentOwner
 
@@ -43,12 +43,12 @@ class DayFilterBackend(BaseFilterBackend):
         return queryset
 
 # ----------------------------
-# BATCH VIEWSET (FIXED: mentors can now view batches)
+# BATCH VIEWSET
 # ----------------------------
 class BatchViewSet(viewsets.ModelViewSet):
     queryset = Batch.objects.all()
     serializer_class = BatchSerializer
-    permission_classes = [IsAdminOrReadOnly]   # ← changed from [IsAdminUser]
+    permission_classes = [IsAdminOrReadOnly]
 
 # ----------------------------
 # STUDENT VIEWSET
@@ -122,7 +122,7 @@ class CourseViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminOrReadOnly]
 
 # ----------------------------
-# MODULE VIEWSET
+# MODULE VIEWSET (with fixed student_modules – never returns 400)
 # ----------------------------
 class ModuleViewSet(viewsets.ModelViewSet):
     queryset = Module.objects.all()
@@ -147,23 +147,33 @@ class ModuleViewSet(viewsets.ModelViewSet):
         user = request.user
         student_id = request.query_params.get('student_id')
 
+        # Determine which student to use
         if user.is_admin or user.is_mentor:
             if student_id:
                 try:
                     student = Student.objects.get(id=student_id)
                 except Student.DoesNotExist:
-                    return Response({"detail": "Student not found."}, status=404)
+                    return Response([])   # Return empty list, not 404
             else:
                 if user.is_student:
                     student = Student.objects.get(user=user)
                 else:
-                    return Response({"detail": "Provide student_id for reviewer."}, status=400)
+                    # Reviewer without student_id – return empty list
+                    return Response([])
         else:
             if not user.is_student:
-                return Response({"detail": "Access denied."}, status=403)
+                return Response([])   # Not a student
             student = Student.objects.get(user=user)
 
+        # Common modules (always included)
         common_modules = Module.objects.filter(is_common=True)
+
+        # If student has no course, return only common modules (or empty)
+        if not student.course:
+            serializer = self.get_serializer(common_modules, many=True)
+            return Response(serializer.data)
+
+        # Course‑specific modules
         course_modules = Module.objects.filter(course__name=student.course, is_common=False).order_by('order')
 
         accessible_course_modules = []
@@ -487,29 +497,16 @@ class UpdateDashboardAccessView(APIView):
         return Response({"detail": "Dashboard access updated."}, status=status.HTTP_200_OK)
 
 # ----------------------------
-# STUDENT LIST VIEW (for admin/mentor dropdown) – UPDATED with fallback
+# STUDENT LIST VIEW (for admin/mentor/reviewer dropdown)
 # ----------------------------
 class StudentListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         user = request.user
-        if user.is_admin:
+        # Allow admin, mentor, and reviewer
+        if user.is_admin or user.is_mentor or user.is_reviewer:
             students = Student.objects.select_related('user', 'student_batch').all()
-        elif user.is_mentor:
-            try:
-                mentor = Mentor.objects.get(user=user)
-                batch = mentor.batch
-                if batch:
-                    # Students linked via foreign key
-                    fk_students = Student.objects.filter(student_batch=batch).select_related('user', 'student_batch')
-                    # Students whose old `batch` CharField matches the batch name (fallback)
-                    text_students = Student.objects.filter(batch=batch.name).exclude(student_batch=batch).select_related('user', 'student_batch')
-                    students = fk_students | text_students
-                else:
-                    students = Student.objects.none()
-            except Mentor.DoesNotExist:
-                students = Student.objects.none()
         else:
             return Response({"detail": "Not authorized"}, status=403)
 
@@ -536,7 +533,7 @@ class StudentListView(APIView):
         return Response(data)
 
 # ----------------------------
-# WEEKLY TOPPERS VIEW (new)
+# WEEKLY TOPPERS VIEW
 # ----------------------------
 class WeeklyToppersView(APIView):
     permission_classes = [IsAuthenticated]
@@ -572,7 +569,7 @@ class WeeklyToppersView(APIView):
         return Response(toppers_data)
 
 # ----------------------------
-# STUDENT WEEK REVIEW VIEW
+# STUDENT WEEK REVIEW VIEW (with auto‑complete)
 # ----------------------------
 class StudentWeekReviewView(generics.RetrieveUpdateAPIView):
     permission_classes = [IsAuthenticated]
@@ -596,3 +593,25 @@ class StudentWeekReviewView(generics.RetrieveUpdateAPIView):
 
         obj, created = StudentWeekReview.objects.get_or_create(student=student, module_id=module_id)
         return obj
+
+    def perform_update(self, serializer):
+        review = serializer.save()
+        # If total_score is set (non‑null), mark the module as completed for the student
+        if review.total_score is not None:
+            student_module, created = StudentModule.objects.get_or_create(
+                student=review.student,
+                module=review.module
+            )
+            if not student_module.is_completed:
+                student_module.is_completed = True
+                student_module.completed_at = timezone.now()
+                student_module.save()
+
+
+# ----------------------------
+# WEEK UPDATE VIEWSET
+# ----------------------------
+class WeekUpdateViewSet(viewsets.ModelViewSet):
+    queryset = WeekUpdate.objects.all()
+    serializer_class = WeekUpdateSerializer
+    permission_classes = [IsAuthenticated]

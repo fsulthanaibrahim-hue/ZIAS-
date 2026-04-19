@@ -74,6 +74,11 @@ function NavLink({ to, label, active, badge }) {
             <path d="M2 2h12v12H2V2zm1 1v10h10V3H3zm2 2h6v1H5V5zm0 2h6v1H5V7zm0 2h6v1H5V9z" />
           </svg>
         )}
+        {label === "Batches" && (
+          <svg viewBox="0 0 16 16" fill="currentColor" width="16" height="16">
+            <path d="M2 2h12v1H2V2zm0 2h12v1H2V4zm0 2h12v1H2V6zm0 2h12v1H2V8zm0 2h12v1H2v-1zm0 2h12v1H2v-1zM2 0h12v1H2V0z" />
+          </svg>
+        )}
       </span>
 
       {label}
@@ -188,8 +193,9 @@ function Sidebar() {
         <NavLink to="/admin/reviewers" label="Reviewers" active={isActive("/admin/reviewers")} />
         <NavLink to="/admin/courses" label="Courses" active={isActive("/admin/courses")} />
         <NavLink to="/admin/modules" label="Modules" active={isActive("/admin/modules")} />
+        <NavLink to="/admin/batches" label="Batches" active={isActive("/admin/batches")} />    {/* NEW */}
         <NavLink to="/admin/messages" label="Messages" active={isActive("/admin/messages")} />
-        <NavLink to="/admin/review-sheets" label="Review Sheets" active={isActive("/admin/review-sheets")} />   {/* NEW */}
+        <NavLink to="/admin/review-sheets" label="Review Sheets" active={isActive("/admin/review-sheets")} />
       </nav>
 
       <div

@@ -16,10 +16,10 @@ function Toast({ message, type, onClose }) {
   const icon = type === "success" ? "✓" : type === "error" ? "✕" : "ℹ";
 
   return (
-    <div className={`fixed top-5 right-5 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl backdrop-blur-md ${bgColor} text-white text-sm font-medium animate-in slide-in-from-top-2`}>
+    <div className="fixed top-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl backdrop-blur-md text-white text-sm font-medium animate-in slide-in-from-top-2 max-w-[90vw] sm:max-w-md">
       <span className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold">{icon}</span>
-      <span>{message}</span>
-      <button onClick={onClose} className="ml-2 text-white/70 hover:text-white">×</button>
+      <span className="flex-1">{message}</span>
+      <button onClick={onClose} className="ml-2 text-white/70 hover:text-white text-lg leading-none">×</button>
     </div>
   );
 }
@@ -30,14 +30,15 @@ function Reviewers() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [phoneError, setPhoneError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [viewingReviewer, setViewingReviewer] = useState(null);
   const [formData, setFormData] = useState({
     username: "",
     email: "",
-    phone: "",
     department: "",
-    batch: ""
+    qualification: "",
+    experience: "",
+    batch: "",
   });
 
   const [toast, setToast] = useState(null);
@@ -80,21 +81,14 @@ function Reviewers() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // Phone validation (optional, but if provided must be 10 digits)
-    if (formData.phone && !/^\d{10}$/.test(formData.phone)) {
-      showToast("Phone number must be exactly 10 digits", "error");
-      setPhoneError("Phone number must be exactly 10 digits");
-      return;
-    }
-    setPhoneError("");
     setSubmitting(true);
 
     const payload = {
       username: formData.username,
       email: formData.email,
-      phone: formData.phone,
       department: formData.department,
+      qualification: formData.qualification || null,
+      experience: formData.experience || null,
       batch: formData.batch || null,
     };
     try {
@@ -107,7 +101,7 @@ function Reviewers() {
       }
       setShowForm(false);
       setEditingId(null);
-      setFormData({ username: "", email: "", phone: "", department: "", batch: "" });
+      setFormData({ username: "", email: "", department: "", qualification: "", experience: "", batch: "" });
       fetchReviewers();
     } catch (error) {
       if (error.response) {
@@ -129,40 +123,32 @@ function Reviewers() {
     setFormData({
       username: reviewer.username,
       email: reviewer.email,
-      phone: reviewer.phone || "",
       department: reviewer.department,
+      qualification: reviewer.qualification || "",
+      experience: reviewer.experience || "",
       batch: reviewer.batch || "",
     });
-    setPhoneError("");
     setShowForm(true);
   };
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
-    if (name === "phone") {
-      const digits = value.replace(/\D/g, "").slice(0, 10);
-      setFormData(prev => ({ ...prev, phone: digits }));
-      if (digits.length > 0 && digits.length !== 10) {
-        setPhoneError("Phone number must be exactly 10 digits");
-      } else {
-        setPhoneError("");
-      }
-    } else {
-      setFormData(prev => ({ ...prev, [name]: value }));
-    }
+    setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
   const filteredReviewers = reviewers.filter(r =>
     r.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     r.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    r.phone?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     r.department?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const inputClass = `
     w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-4 py-2.5 text-[#e6edf3]
     placeholder-[#484f58] focus:outline-none focus:border-[#388bfd] focus:ring-1 focus:ring-[#388bfd]/30
-    transition-all duration-200 text-sm font-mono
+    transition-all duration-200 text-sm
+  `;
+  const readOnlyClass = `
+    w-full bg-[#0d1117]/50 border border-[#30363d]/50 rounded-lg px-4 py-2.5 text-[#7d8590]
+    cursor-not-allowed text-sm
   `;
 
   const getInitials = (name) => (name || "?")[0].toUpperCase();
@@ -179,8 +165,7 @@ function Reviewers() {
   };
 
   return (
-    <div className="min-h-screen w-screen bg-[#0d1117] text-[#e6edf3]"
-      style={{ fontFamily: "'Geist', 'SF Pro Display', system-ui, sans-serif" }}>
+    <div className="min-h-screen w-full bg-[#0d1117] text-[#e6edf3]">
       <style>{`
         .table-row-hover:hover { background: rgba(56,139,253,0.04); }
         .modal-enter { animation: modalIn 0.2s cubic-bezier(0.16,1,0.3,1); }
@@ -193,16 +178,25 @@ function Reviewers() {
           to { opacity:1; transform:translateY(0); }
         }
         .animate-in { animation: slide-in-from-top-2 0.2s ease-out; }
+        /* Mobile card layout for small screens */
+        @media (max-width: 640px) {
+          .reviewer-table thead { display: none; }
+          .reviewer-table tbody tr { display: block; margin-bottom: 1rem; border: 1px solid #21262d; border-radius: 0.75rem; background: #0d1117; }
+          .reviewer-table tbody td { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; border-bottom: 1px solid #21262d; text-align: right; }
+          .reviewer-table tbody td:last-child { border-bottom: none; }
+          .reviewer-table tbody td::before { content: attr(data-label); font-weight: 600; color: #7d8590; margin-right: 1rem; text-align: left; flex: 1; }
+          .reviewer-table tbody td .action-buttons { margin-left: auto; display: flex; gap: 0.5rem; }
+        }
       `}</style>
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
 
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-6 sm:py-8">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-4 sm:py-8">
 
-        {/* Top Bar */}
+        {/* Top Bar - Responsive stacking */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
           <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center shrink-0">
               <svg className="w-5 h-5 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
@@ -216,8 +210,8 @@ function Reviewers() {
           </div>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            {/* Search */}
-            <div className="relative">
+            {/* Search - full width on mobile */}
+            <div className="relative w-full sm:w-64">
               <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#484f58]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
               </svg>
@@ -226,7 +220,7 @@ function Reviewers() {
                 placeholder="Search reviewers..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="bg-[#161b22] border border-[#30363d] rounded-lg pl-9 pr-4 py-2 text-[#e6edf3] placeholder-[#484f58] focus:outline-none focus:border-[#388bfd] focus:ring-1 focus:ring-[#388bfd]/20 transition-all text-sm w-full sm:w-64"
+                className="w-full bg-[#161b22] border border-[#30363d] rounded-lg pl-9 pr-4 py-2 text-[#e6edf3] placeholder-[#484f58] focus:outline-none focus:border-[#388bfd] focus:ring-1 focus:ring-[#388bfd]/20 transition-all text-sm"
               />
               {searchTerm && (
                 <button onClick={() => setSearchTerm("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#484f58] hover:text-[#7d8590] transition">
@@ -237,15 +231,14 @@ function Reviewers() {
               )}
             </div>
 
-            {/* Add Button */}
+            {/* Add Button - full width on mobile */}
             <button
               onClick={() => {
                 setEditingId(null);
-                setFormData({ username: "", email: "", phone: "", department: "", batch: "" });
-                setPhoneError("");
+                setFormData({ username: "", email: "", department: "", qualification: "", experience: "", batch: "" });
                 setShowForm(true);
               }}
-              className="shine flex items-center justify-center gap-2 bg-[#238636] hover:bg-[#2ea043] border border-[#2ea043]/40 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 shadow-lg shadow-[#238636]/20"
+              className="shine flex items-center justify-center gap-2 bg-[#238636] hover:bg-[#2ea043] border border-[#2ea043]/40 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 shadow-lg shadow-[#238636]/20 w-full sm:w-auto"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -255,7 +248,7 @@ function Reviewers() {
           </div>
         </div>
 
-        {/* Add/Edit Modal */}
+        {/* Add/Edit Modal - fully responsive */}
         {showForm && (
           <div
             className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 backdrop-blur-md p-4"
@@ -263,10 +256,10 @@ function Reviewers() {
           >
             <form
               onSubmit={handleSubmit}
-              className="modal-enter bg-[#161b22] rounded-2xl w-full max-w-md border border-[#30363d] shadow-2xl shadow-black/60"
+              className="modal-enter bg-[#161b22] rounded-2xl w-full max-w-md border border-[#30363d] shadow-2xl shadow-black/60 max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex justify-between items-center px-4 sm:px-6 py-4 border-b border-[#21262d]">
+              <div className="sticky top-0 bg-[#161b22] z-10 flex justify-between items-center px-4 sm:px-6 py-4 border-b border-[#21262d]">
                 <div className="flex items-center gap-3">
                   <div className="w-7 h-7 rounded-lg bg-violet-500/10 border border-violet-500/20 flex items-center justify-center">
                     <svg className="w-3.5 h-3.5 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -288,39 +281,25 @@ function Reviewers() {
               <div className="px-4 sm:px-6 py-5 space-y-4">
                 <div>
                   <label className="block text-[#7d8590] text-xs font-medium mb-1.5 uppercase tracking-wider">Username</label>
-                  <input type="text" name="username" placeholder="johndoe" value={formData.username} onChange={handleChange} required className={inputClass} />
+                  <input type="text" name="username" value={formData.username} onChange={handleChange} required className={inputClass} />
                 </div>
                 <div>
                   <label className="block text-[#7d8590] text-xs font-medium mb-1.5 uppercase tracking-wider">Email</label>
-                  <input type="email" name="email" placeholder="john@example.com" value={formData.email} onChange={handleChange} required className={inputClass} />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[#7d8590] text-xs font-medium mb-1.5 uppercase tracking-wider">Phone</label>
-                    <input
-                      type="tel"
-                      name="phone"
-                      placeholder="10-digit mobile number"
-                      value={formData.phone}
-                      onChange={handleChange}
-                      className={`${inputClass} ${phoneError ? "border-red-500 focus:border-red-500" : ""}`}
-                    />
-                    {phoneError && <p className="text-red-400 text-xs mt-1">{phoneError}</p>}
-                  </div>
-                  <div>
-                    <label className="block text-[#7d8590] text-xs font-medium mb-1.5 uppercase tracking-wider">Department</label>
-                    <input type="text" name="department" placeholder="e.g. Academics, Placement" value={formData.department} onChange={handleChange} required className={inputClass} />
-                  </div>
+                  <input type="email" name="email" value={formData.email} onChange={handleChange} required className={inputClass} />
                 </div>
                 <div>
-                  <label className="block text-[#7d8590] text-xs font-medium mb-1.5 uppercase tracking-wider">Batch</label>
-                  <select name="batch" value={formData.batch} onChange={handleChange} className={inputClass}>
-                    <option value="">Select a batch</option>
-                    {batchesList.map((batch) => (
-                      <option key={batch.id} value={batch.id}>{batch.name}</option>
-                    ))}
-                  </select>
+                  <label className="block text-[#7d8590] text-xs font-medium mb-1.5 uppercase tracking-wider">Department</label>
+                  <input type="text" name="department" value={formData.department} onChange={handleChange} required className={inputClass} />
                 </div>
+                <div>
+                  <label className="block text-[#7d8590] text-xs font-medium mb-1.5 uppercase tracking-wider">Qualification</label>
+                  <input type="text" name="qualification" value={formData.qualification} onChange={handleChange} className={inputClass} placeholder="e.g. B.Tech, MBA" />
+                </div>
+                <div>
+                  <label className="block text-[#7d8590] text-xs font-medium mb-1.5 uppercase tracking-wider">Experience (years)</label>
+                  <input type="text" name="experience" value={formData.experience} onChange={handleChange} className={inputClass} placeholder="e.g. 5 years" />
+                </div>
+                {/* Batch dropdown removed as requested earlier, but kept if needed. Uncomment if you want batch */}
               </div>
 
               <div className="flex gap-2 px-4 sm:px-6 py-4 border-t border-[#21262d]">
@@ -335,54 +314,52 @@ function Reviewers() {
           </div>
         )}
 
-        {/* Reviewers Table */}
-        <div className="overflow-x-auto rounded-xl border border-[#21262d] shadow-xl shadow-black/20">
-          <table className="min-w-full">
-            <thead>
-              <tr className="bg-[#161b22] border-b border-[#21262d]">
-                {["Reviewer", "Email", "Phone", "Department", "Batch", ""].map((h, i) => (
-                  <th key={i} className="text-left px-3 sm:px-4 py-3 text-[#7d8590] text-xs font-semibold uppercase tracking-widest whitespace-nowrap">
-                    {h}
-                  </th>
-                ))}
+        {/* Reviewers Table / Card Layout */}
+        <div className="overflow-hidden rounded-xl border border-[#21262d] shadow-xl shadow-black/20">
+          <table className="reviewer-table min-w-full">
+            <thead className="bg-[#161b22] border-b border-[#21262d]">
+              <tr>
+                <th className="text-left px-4 py-3 text-[#7d8590] text-xs font-semibold uppercase tracking-widest">Reviewer</th>
+                <th className="text-left px-4 py-3 text-[#7d8590] text-xs font-semibold uppercase tracking-widest">Email</th>
+                <th className="text-left px-4 py-3 text-[#7d8590] text-xs font-semibold uppercase tracking-widest">Department</th>
+                <th className="text-left px-4 py-3 text-[#7d8590] text-xs font-semibold uppercase tracking-widest">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-[#0d1117] divide-y divide-[#21262d]">
               {filteredReviewers.length > 0 ? (
                 filteredReviewers.map((r) => (
                   <tr key={r.id} className="table-row-hover transition-colors duration-150 group">
-                    <td className="px-3 sm:px-4 py-2.5 sm:py-3.5">
-                      <div className="flex items-center gap-2 sm:gap-3">
-                        <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br ${getColor(r.username)} flex items-center justify-center text-white text-[10px] sm:text-xs font-bold shrink-0`}>
+                    <td data-label="Reviewer" className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${getColor(r.username)} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
                           {getInitials(r.username)}
                         </div>
-                        <span className="text-[#e6edf3] text-xs sm:text-sm font-medium truncate max-w-[100px] sm:max-w-none">{r.username}</span>
+                        <button
+                          onClick={() => setViewingReviewer(r)}
+                          className="text-[#e6edf3] text-sm font-medium hover:text-blue-400 transition-colors cursor-pointer"
+                        >
+                          {r.username}
+                        </button>
                       </div>
                     </td>
-                    <td className="px-3 sm:px-4 py-2.5 sm:py-3.5 text-[#7d8590] text-xs sm:text-sm font-mono truncate max-w-[120px] sm:max-w-none">{r.email}</td>
-                    <td className="px-3 sm:px-4 py-2.5 sm:py-3.5 text-[#7d8590] text-xs sm:text-sm font-mono">{r.phone || "—"}</td>
-                    <td className="px-3 sm:px-4 py-2.5 sm:py-3.5">
-                      <span className="inline-flex items-center gap-1.5 bg-violet-500/10 text-violet-400 border border-violet-500/20 text-[10px] sm:text-xs font-medium px-2 py-0.5 sm:py-1 rounded-full whitespace-nowrap">
+                    <td data-label="Email" className="px-4 py-3 text-[#7d8590] text-sm font-mono break-all">
+                      {r.email}
+                    </td>
+                    <td data-label="Department" className="px-4 py-3">
+                      <span className="inline-flex items-center gap-1.5 bg-violet-500/10 text-violet-400 border border-violet-500/20 text-xs font-medium px-2 py-1 rounded-full">
                         {r.department}
                       </span>
                     </td>
-                    <td className="px-3 sm:px-4 py-2.5 sm:py-3.5">
-                      {r.batch ? (
-                        <span className="inline-flex items-center gap-1.5 bg-purple-500/10 text-purple-400 border border-purple-500/20 text-[10px] sm:text-xs font-medium px-2 py-0.5 sm:py-1 rounded-full whitespace-nowrap">
-                          {getBatchName(r.batch)}
-                        </span>
-                      ) : <span className="text-[#484f58] text-xs">—</span>}
-                    </td>
-                    <td className="px-3 sm:px-4 py-2.5 sm:py-3.5">
-                      <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-150">
+                    <td data-label="Actions" className="px-4 py-3">
+                      <div className="flex items-center gap-2">
                         <button onClick={() => handleEdit(r)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-[#7d8590] hover:text-[#388bfd] hover:bg-[#388bfd]/10 border border-transparent hover:border-[#388bfd]/20 transition-all text-xs font-medium">
-                          <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                           </svg>
                           <span className="hidden sm:inline">Edit</span>
                         </button>
                         <button onClick={() => handleDelete(r.id)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-[#7d8590] hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all text-xs font-medium">
-                          <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                           </svg>
                           <span className="hidden sm:inline">Delete</span>
@@ -393,10 +370,10 @@ function Reviewers() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan="6" className="text-center py-16 sm:py-20">
+                  <td colSpan="4" className="text-center py-12 sm:py-20">
                     <div className="flex flex-col items-center gap-3">
-                      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-[#161b22] border border-[#30363d] flex items-center justify-center">
-                        <svg className="w-5 h-5 sm:w-6 sm:h-6 text-[#484f58]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <div className="w-12 h-12 rounded-2xl bg-[#161b22] border border-[#30363d] flex items-center justify-center">
+                        <svg className="w-6 h-6 text-[#484f58]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
                       </div>
@@ -415,7 +392,7 @@ function Reviewers() {
 
           {/* Footer */}
           {filteredReviewers.length > 0 && (
-            <div className="bg-[#161b22] border-t border-[#21262d] px-3 sm:px-4 py-2.5 flex flex-col sm:flex-row items-center justify-between gap-2">
+            <div className="bg-[#161b22] border-t border-[#21262d] px-4 py-2.5 flex flex-col sm:flex-row items-center justify-between gap-2">
               <p className="text-[#484f58] text-xs">
                 Showing <span className="text-[#7d8590] font-medium">{filteredReviewers.length}</span> of <span className="text-[#7d8590] font-medium">{reviewers.length}</span> reviewers
               </p>
@@ -428,6 +405,44 @@ function Reviewers() {
           )}
         </div>
       </div>
+
+      {/* View Details Modal - fully responsive */}
+      {viewingReviewer && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 backdrop-blur-md p-4" onClick={() => setViewingReviewer(null)}>
+          <div className="bg-[#161b22] rounded-2xl w-full max-w-2xl border border-[#30363d] shadow-2xl shadow-black/60 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="sticky top-0 bg-[#161b22] z-10 flex justify-between items-center px-4 sm:px-6 py-4 border-b border-[#21262d]">
+              <div className="flex items-center gap-3">
+                <div className="w-7 h-7 rounded-lg bg-violet-500/10 border border-violet-500/20 flex items-center justify-center">
+                  <svg className="w-3.5 h-3.5 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-[#e6edf3]">Reviewer Details</h3>
+                  <p className="text-[#7d8590] text-xs">View all information</p>
+                </div>
+              </div>
+              <button type="button" onClick={() => setViewingReviewer(null)} className="text-[#484f58] hover:text-[#7d8590] transition p-1.5 rounded-lg hover:bg-[#21262d]">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="px-4 sm:px-6 py-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Username</label><input type="text" value={viewingReviewer.username || ""} readOnly className={readOnlyClass} /></div>
+                <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Email</label><input type="text" value={viewingReviewer.email || ""} readOnly className={readOnlyClass} /></div>
+                <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Department</label><input type="text" value={viewingReviewer.department || ""} readOnly className={readOnlyClass} /></div>
+                <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Qualification</label><input type="text" value={viewingReviewer.qualification || "—"} readOnly className={readOnlyClass} /></div>
+                <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Experience</label><input type="text" value={viewingReviewer.experience || "—"} readOnly className={readOnlyClass} /></div>
+              </div>
+            </div>
+            <div className="sticky bottom-0 bg-[#161b22] px-4 sm:px-6 py-4 border-t border-[#21262d] flex justify-end">
+              <button onClick={() => setViewingReviewer(null)} className="bg-[#21262d] hover:bg-[#30363d] border border-[#30363d] text-[#7d8590] hover:text-[#e6edf3] px-5 py-2 rounded-lg transition-all text-sm font-medium">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

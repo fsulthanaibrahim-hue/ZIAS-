@@ -93,6 +93,8 @@ class Reviewer(models.Model):
     )
     department = models.CharField(max_length=100)
     batch = models.ForeignKey(Batch, on_delete=models.SET_NULL, null=True, blank=True, related_name='reviewers')
+    qualification = models.CharField(max_length=200, blank=True)
+    experience = models.CharField(max_length=100, blank=True)
 
     def __str__(self):
         return self.user.username
@@ -213,7 +215,7 @@ class ContactMessage(models.Model):
 class StudentWeekReview(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='week_reviews')
     module = models.ForeignKey(Module, on_delete=models.CASCADE, related_name='student_reviews')
-    
+
     reviewer_name = models.CharField(max_length=100, blank=True)
     advisor_name = models.CharField(max_length=100, blank=True)
     review_date = models.DateField(null=True, blank=True)
@@ -232,7 +234,7 @@ class StudentWeekReview(models.Model):
     star_rating = models.PositiveSmallIntegerField(null=True, blank=True, choices=[(i, i) for i in range(1, 6)])
     total_score = models.PositiveSmallIntegerField(null=True, blank=True)
     
-    # NEW: role‑specific remark fields (each role can add their own notes)
+    # role‑specific remark fields
     admin_remarks = models.TextField(blank=True)
     reviewer_remarks = models.TextField(blank=True)
     mentor_remarks = models.TextField(blank=True)
@@ -247,6 +249,20 @@ class StudentWeekReview(models.Model):
 
 
 # ----------------------------
+# WEEK UPDATE MODEL (for extra updates per week)
+# ----------------------------
+class WeekUpdate(models.Model):
+    week_review = models.ForeignKey(StudentWeekReview, on_delete=models.CASCADE, related_name='updates')
+    update_date = models.DateField(auto_now_add=True)
+    update_text = models.TextField(blank=True)
+    extra_score = models.PositiveSmallIntegerField(null=True, blank=True)
+    created_by = models.CharField(max_length=50, blank=True)  # e.g., "admin", "mentor", "reviewer"
+
+    def __str__(self):
+        return f"Update for {self.week_review}"
+
+
+# ----------------------------
 # SIGNAL: Auto-create StudentWeekReview entries when a Student is created
 # ----------------------------
 @receiver(post_save, sender=Student)
@@ -258,13 +274,10 @@ def create_student_week_reviews(sender, instance, created, **kwargs):
     if created:
         # If student has a course, fetch modules for that course; otherwise all modules.
         if instance.course:
-            # Since Student.course is a CharField, we need to filter Course by name.
-            # We assume the course name exactly matches a Course object's name.
             modules = Module.objects.filter(course__name=instance.course)
         else:
             modules = Module.objects.all()
         
         for module in modules:
             StudentWeekReview.objects.get_or_create(student=instance, module=module)
-
             

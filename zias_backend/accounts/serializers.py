@@ -5,7 +5,7 @@ from django.utils import timezone
 from django.conf import settings
 from django.db import IntegrityError
 from rest_framework import serializers
-from .models import User, Student, Mentor, Reviewer, Course, Module, Day, Task, Batch, StudentModule, ContactMessage, StudentWeekReview
+from .models import User, Student, Mentor, Reviewer, Course, Module, Day, Task, Batch, StudentModule, ContactMessage, StudentWeekReview, WeekUpdate
 
 def generate_random_password(length=10):
     alphabet = string.ascii_letters + string.digits
@@ -69,7 +69,7 @@ class ModuleSerializer(serializers.ModelSerializer):
         fields = ['id', 'course', 'course_name', 'title', 'order', 'content', 'is_common', 'is_locked', 'unlock_date']
 
 # ----------------------------
-# STUDENT SERIALIZER (with batch name fix)
+# STUDENT SERIALIZER
 # ----------------------------
 class StudentSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username')
@@ -129,6 +129,17 @@ class StudentSerializer(serializers.ModelSerializer):
 
         student = Student.objects.create(user=user, **validated_data)
 
+        # If the student has a batch name (CharField) and no student_batch FK,
+        # try to find a Batch object with that name and link it.
+        if student.batch and not student.student_batch:
+            try:
+                batch_obj = Batch.objects.get(name=student.batch)
+                student.student_batch = batch_obj
+                student.save(update_fields=['student_batch'])
+            except Batch.DoesNotExist:
+                pass
+
+        # Send welcome email (unchanged)
         expiry_days = settings.PASSWORD_EXPIRY_DAYS
         subject = '🎓 Welcome to ZIAS – Your Account Credentials'
         html_message = f"""
@@ -230,10 +241,21 @@ ZIAS Team
                         raise serializers.ValidationError({"email": "A user with this email already exists."})
                     else:
                         raise
+        # Also, if batch name (CharField) changed, try to update student_batch FK
+        if 'batch' in validated_data and validated_data['batch'] != instance.batch:
+            new_batch_name = validated_data['batch']
+            if new_batch_name:
+                try:
+                    batch_obj = Batch.objects.get(name=new_batch_name)
+                    instance.student_batch = batch_obj
+                    instance.save(update_fields=['student_batch'])
+                except Batch.DoesNotExist:
+                    instance.student_batch = None
+                    instance.save(update_fields=['student_batch'])
         return super().update(instance, validated_data)
 
 # ----------------------------
-# MENTOR SERIALIZER (fixed concurrency)
+# MENTOR SERIALIZER
 # ----------------------------
 class MentorSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username')
@@ -248,11 +270,9 @@ class MentorSerializer(serializers.ModelSerializer):
         username = user_data['username']
         email = user_data['email']
 
-        # Try to get existing user, else create with conflict handling
         random_password = generate_random_password()
         try:
             user = User.objects.get(username=username)
-            # Update email if needed
             if user.email != email:
                 user.email = email
             if not user.is_mentor:
@@ -270,7 +290,6 @@ class MentorSerializer(serializers.ModelSerializer):
                 user.is_mentor = True
                 user.password_changed_at = timezone.now()
                 user.save()
-                # Send welcome email
                 subject = 'Your ZIAS Account Credentials'
                 message = f"""
 Dear {username},
@@ -288,13 +307,11 @@ ZIAS Team
 """
                 send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [email], fail_silently=False)
             except IntegrityError:
-                # Another request created the user concurrently; retrieve it
                 user = User.objects.get(username=username)
                 if not user.is_mentor:
                     user.is_mentor = True
                     user.save()
 
-        # Prevent duplicate mentor profile
         if Mentor.objects.filter(user=user).exists():
             raise serializers.ValidationError({"username": "This user already has a mentor profile."})
 
@@ -322,7 +339,7 @@ ZIAS Team
         return super().update(instance, validated_data)
 
 # ----------------------------
-# REVIEWER SERIALIZER (fixed concurrency)
+# REVIEWER SERIALIZER (UPDATED to include qualification and experience)
 # ----------------------------
 class ReviewerSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username')
@@ -330,7 +347,7 @@ class ReviewerSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Reviewer
-        fields = ['id', 'username', 'email', 'department', 'batch']
+        fields = ['id', 'username', 'email', 'department', 'batch', 'qualification', 'experience']
 
     def create(self, validated_data):
         user_data = validated_data.pop('user')
@@ -435,3 +452,12 @@ class StudentWeekReviewSerializer(serializers.ModelSerializer):
         model = StudentWeekReview
         fields = '__all__'
         read_only_fields = ['id', 'student', 'module', 'updated_at']
+
+# ----------------------------
+# WEEK UPDATE SERIALIZER
+# ----------------------------
+class WeekUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WeekUpdate
+        fields = '__all__'
+        read_only_fields = ['id', 'update_date']
