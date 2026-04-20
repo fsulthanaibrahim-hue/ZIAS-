@@ -3,7 +3,6 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import API from "../api/api";
 
-// Module-level flag to prevent double fetching in React Strict Mode
 let initialDataFetched = false;
 
 const extractWeekNumber = (title) => {
@@ -12,9 +11,9 @@ const extractWeekNumber = (title) => {
 };
 
 const cleanTitle = (title) => {
-  if (!title) return "";
+  if (!title) return "Week";
   const pattern = /^week\s+\d+\s*[–:\-]\s*/i;
-  return title.replace(pattern, "").trim();
+  return title.replace(pattern, "").trim() || "Week";
 };
 
 function debounce(func, delay) {
@@ -25,18 +24,29 @@ function debounce(func, delay) {
   };
 }
 
+// Fixed ranges up to week 44
+const WEEK_RANGES = [
+  { label: "Week 0 - 12", start: 1, end: 12 },
+  { label: "Week 13 - 16", start: 13, end: 16 },
+  { label: "Week 17 - 24", start: 17, end: 24 },
+  { label: "Week 25 - 32", start: 25, end: 32 },
+  { label: "Week 33 - 40", start: 33, end: 40 },
+  { label: "Week 41 - 44", start: 41, end: 44 },
+];
+
 function StudentReviewEdit() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const studentId = searchParams.get("student_id");
 
   const [student, setStudent] = useState(null);
-  const [weeks, setWeeks] = useState([]);
+  const [allWeeks, setAllWeeks] = useState([]);
+  const [filteredWeeks, setFilteredWeeks] = useState([]);
   const [reviews, setReviews] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [activeRangeIndex, setActiveRangeIndex] = useState(0);
 
-  // Ref to ensure fetchData runs only once per component instance (in case module flag is not enough)
   const dataFetched = useRef(false);
 
   const saveField = useCallback(async (weekId, field, value) => {
@@ -54,7 +64,6 @@ function StudentReviewEdit() {
     debouncedSave(weekId, field, value);
   };
 
-  // Fetch student details – runs only once on mount
   useEffect(() => {
     if (!studentId) {
       navigate("/admin/review-sheets");
@@ -72,7 +81,6 @@ function StudentReviewEdit() {
     fetchStudent();
   }, [studentId, navigate]);
 
-  // Fetch weeks and reviews – runs only once (module-level flag + component ref)
   useEffect(() => {
     if (!studentId) return;
     if (!initialDataFetched && !dataFetched.current) {
@@ -83,12 +91,12 @@ function StudentReviewEdit() {
         setError(null);
         try {
           const modulesRes = await API.get(`modules/student-modules/?student_id=${studentId}`);
-          let allWeeks = modulesRes.data;
-          allWeeks.sort((a, b) => extractWeekNumber(a.title) - extractWeekNumber(b.title));
-          setWeeks(allWeeks);
+          let allWeeksData = modulesRes.data;
+          allWeeksData.sort((a, b) => extractWeekNumber(a.title) - extractWeekNumber(b.title));
+          setAllWeeks(allWeeksData);
 
           const reviewsData = {};
-          for (const week of allWeeks) {
+          for (const week of allWeeksData) {
             try {
               const reviewRes = await API.get(`week-review/${week.id}/?student_id=${studentId}`);
               reviewsData[week.id] = reviewRes.data;
@@ -106,12 +114,21 @@ function StudentReviewEdit() {
       };
       fetchData();
     } else {
-      // If data already fetched, just set loading false if needed
       setLoading(false);
     }
   }, [studentId]);
 
-  // Status options exactly match backend choices
+  useEffect(() => {
+    const range = WEEK_RANGES[activeRangeIndex];
+    if (range && allWeeks.length) {
+      const filtered = allWeeks.filter(week => {
+        const weekNum = extractWeekNumber(week.title);
+        return weekNum >= range.start && weekNum <= range.end;
+      });
+      setFilteredWeeks(filtered);
+    }
+  }, [activeRangeIndex, allWeeks]);
+
   const rows = [
     { label: "Status", field: "task_status", type: "select", options: ["Not Started", "In Progress", "Completed", "Needs Improvement"] },
     { label: "Project Updates", field: "feedback", type: "textarea", rows: 2 },
@@ -204,13 +221,33 @@ function StudentReviewEdit() {
           </button>
         </div>
 
+        {/* Range Tabs */}
+        <div className="mb-6 overflow-x-auto pb-2">
+          <div className="flex gap-2 flex-wrap">
+            {WEEK_RANGES.map((range, idx) => (
+              <button
+                key={idx}
+                onClick={() => setActiveRangeIndex(idx)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap ${
+                  activeRangeIndex === idx
+                    ? "bg-[#388bfd] text-white shadow-md"
+                    : "bg-[#21262d] text-[#7d8590] hover:bg-[#30363d]"
+                }`}
+              >
+                {range.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Table */}
         <div className="overflow-x-auto rounded-xl border border-[#21262d] shadow-xl shadow-black/20">
           <table className="min-w-full border-collapse">
             <thead className="bg-[#161b22] border-b border-[#21262d]">
               <tr>
                 <th className="sticky left-0 bg-[#161b22] z-10 px-4 py-3 text-left text-[#7d8590] text-xs font-semibold uppercase w-48">FIELD / WEEK</th>
-                {weeks.map(week => (
-                  <th key={week.id} className="px-3 py-3 text-left text-[#e6edf3] text-sm font-medium min-w-[200px] border-l border-[#21262d]">
+                {filteredWeeks.map((week, idx) => (
+                  <th key={week.id || idx} className="px-3 py-3 text-left text-[#e6edf3] text-sm font-medium min-w-[200px] border-l border-[#21262d]">
                     {cleanTitle(week.title)}
                   </th>
                 ))}
@@ -220,7 +257,7 @@ function StudentReviewEdit() {
               {rows.map(row => (
                 <tr key={row.field} className="hover:bg-[#161b22]/40">
                   <td className="sticky left-0 bg-[#0d1117] px-4 py-3 text-[#7d8590] text-sm font-medium border-r border-[#21262d]">{row.label}</td>
-                  {weeks.map(week => (
+                  {filteredWeeks.map(week => (
                     <td key={week.id} className="px-3 py-2 border-l border-[#21262d] align-top">{renderCell(week.id, row)}</td>
                   ))}
                 </tr>
@@ -229,11 +266,21 @@ function StudentReviewEdit() {
           </table>
         </div>
 
+        {/* Personal Details */}
         <div className="mt-6 bg-[#161b22] rounded-xl border border-[#21262d] p-4">
           <h3 className="text-sm font-semibold text-[#e6edf3] mb-2">Personal Details</h3>
-          <div className="flex flex-wrap gap-4 text-xs text-[#7d8590]">
-            <span>Week 0 - 12</span><span>Week 13 - 16</span><span>Week 17 - 24</span>
-            <span>Week 25 - 32</span><span>Week 33 - 40</span><span>Week 41 - 44</span>
+          <div className="flex flex-wrap gap-4 text-xs">
+            {WEEK_RANGES.map((range, idx) => (
+              <button
+                key={idx}
+                onClick={() => setActiveRangeIndex(idx)}
+                className={`hover:text-blue-400 transition ${
+                  activeRangeIndex === idx ? "text-blue-400" : "text-[#7d8590]"
+                }`}
+              >
+                {range.label}
+              </button>
+            ))}
           </div>
         </div>
         <div className="mt-4 text-right text-[#484f58] text-xs">💡 Click any cell to edit. Changes auto‑save.</div>

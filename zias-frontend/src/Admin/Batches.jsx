@@ -28,6 +28,26 @@ function Toast({ message, type, onClose }) {
   );
 }
 
+// Custom confirmation modal for delete
+function ConfirmModal({ isOpen, onClose, onConfirm, batchName }) {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 backdrop-blur-md p-4">
+      <div className="bg-[#161b22] rounded-2xl max-w-md w-full border border-[#30363d] shadow-2xl shadow-black/60 p-6 mx-4">
+        <h3 className="text-lg font-semibold text-[#e6edf3] mb-2">Confirm Delete</h3>
+        <p className="text-[#7d8590] mb-6">
+          Are you sure you want to delete <span className="text-white font-medium">{batchName}</span>?<br />
+          Students assigned to it will lose batch association. This action cannot be undone.
+        </p>
+        <div className="flex gap-3 justify-end">
+          <button onClick={onClose} className="px-4 py-2 rounded-lg bg-[#21262d] hover:bg-[#30363d] text-[#7d8590] hover:text-white transition">Cancel</button>
+          <button onClick={onConfirm} className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white transition">Delete</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Batches() {
   const [batches, setBatches] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -41,6 +61,10 @@ function Batches() {
     end_date: "",
     is_active: true,
   });
+
+  // Delete confirmation modal state
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [batchToDelete, setBatchToDelete] = useState(null);
 
   const [toast, setToast] = useState(null);
   const showToast = (msg, type) => setToast({ message: msg, type });
@@ -60,14 +84,23 @@ function Batches() {
     }
   }, []);
 
-  const handleDelete = (id) => {
-    if (window.confirm("Delete this batch? Students assigned to it will lose batch association.")) {
-      API.delete(`batches/${id}/`)
-        .then(() => {
-          fetchBatches();
-          showToast("Batch deleted successfully", "success");
-        })
-        .catch(() => showToast("Failed to delete batch", "error"));
+  const handleDeleteClick = (batchId, batchName) => {
+    setBatchToDelete({ id: batchId, name: batchName });
+    setShowConfirmModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!batchToDelete) return;
+    try {
+      await API.delete(`batches/${batchToDelete.id}/`);
+      fetchBatches();
+      showToast("Batch deleted successfully", "success");
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to delete batch", "error");
+    } finally {
+      setShowConfirmModal(false);
+      setBatchToDelete(null);
     }
   };
 
@@ -172,6 +205,7 @@ function Batches() {
       `}</style>
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
+      <ConfirmModal isOpen={showConfirmModal} onClose={() => setShowConfirmModal(false)} onConfirm={confirmDelete} batchName={batchToDelete?.name} />
 
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-4 sm:py-8">
 
@@ -278,7 +312,7 @@ function Batches() {
           </div>
         )}
 
-        {/* Batches Table with responsive card layout and pagination */}
+        {/* Batches Table with responsive card layout and pagination – "Students" column removed */}
         <div className="overflow-hidden rounded-xl border border-[#21262d] shadow-xl shadow-black/20">
           <table className="batches-table min-w-full">
             <thead className="bg-[#161b22] border-b border-[#21262d]">
@@ -287,7 +321,6 @@ function Batches() {
                 <th className="text-left px-4 py-3 text-[#7d8590] text-xs font-semibold uppercase tracking-widest">Start Date</th>
                 <th className="text-left px-4 py-3 text-[#7d8590] text-xs font-semibold uppercase tracking-widest">End Date</th>
                 <th className="text-left px-4 py-3 text-[#7d8590] text-xs font-semibold uppercase tracking-widest">Status</th>
-                <th className="text-left px-4 py-3 text-[#7d8590] text-xs font-semibold uppercase tracking-widest">Students</th>
                 <th className="text-left px-4 py-3 text-[#7d8590] text-xs font-semibold uppercase tracking-widest">Actions</th>
               </tr>
             </thead>
@@ -303,14 +336,13 @@ function Batches() {
                         {batch.is_active ? "Active" : "Inactive"}
                       </span>
                     </td>
-                    <td data-label="Students" className="px-4 py-3 text-[#7d8590] text-sm">{batch.student_count || 0}</td>
                     <td data-label="Actions" className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <button onClick={() => handleEdit(batch)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-[#7d8590] hover:text-[#388bfd] hover:bg-[#388bfd]/10 border border-transparent hover:border-[#388bfd]/20 transition-all text-xs font-medium" title="Edit">
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                           <span className="hidden sm:inline">Edit</span>
                         </button>
-                        <button onClick={() => handleDelete(batch.id)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-[#7d8590] hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all text-xs font-medium" title="Delete">
+                        <button onClick={() => handleDeleteClick(batch.id, batch.name)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-[#7d8590] hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all text-xs font-medium" title="Delete">
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                           <span className="hidden sm:inline">Delete</span>
                         </button>
@@ -320,7 +352,7 @@ function Batches() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan="6" className="text-center py-12 sm:py-20 text-[#7d8590]">
+                  <td colSpan="5" className="text-center py-12 sm:py-20 text-[#7d8590]">
                     {searchTerm ? "No batches match your search" : "No batches found. Click 'Add Batch' to create one."}
                   </td>
                 </tr>

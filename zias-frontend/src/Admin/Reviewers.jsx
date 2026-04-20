@@ -24,6 +24,26 @@ function Toast({ message, type, onClose }) {
   );
 }
 
+// Custom confirmation modal for delete
+function ConfirmModal({ isOpen, onClose, onConfirm, reviewerName }) {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 backdrop-blur-md p-4">
+      <div className="bg-[#161b22] rounded-2xl max-w-md w-full border border-[#30363d] shadow-2xl shadow-black/60 p-6 mx-4">
+        <h3 className="text-lg font-semibold text-[#e6edf3] mb-2">Confirm Delete</h3>
+        <p className="text-[#7d8590] mb-6">
+          Are you sure you want to delete <span className="text-white font-medium">{reviewerName}</span>?<br />
+          This action cannot be undone.
+        </p>
+        <div className="flex gap-3 justify-end">
+          <button onClick={onClose} className="px-4 py-2 rounded-lg bg-[#21262d] hover:bg-[#30363d] text-[#7d8590] hover:text-white transition">Cancel</button>
+          <button onClick={onConfirm} className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white transition">Delete</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Reviewers() {
   const [reviewers, setReviewers] = useState([]);
   const [batchesList, setBatchesList] = useState([]);
@@ -42,6 +62,10 @@ function Reviewers() {
     experience: "",
     batch: "",
   });
+
+  // Delete confirmation modal state
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [reviewerToDelete, setReviewerToDelete] = useState(null);
 
   const [toast, setToast] = useState(null);
   const showToast = (message, type = "success") => setToast({ message, type });
@@ -73,17 +97,23 @@ function Reviewers() {
     fetchBatches();
   }, []);
 
-  const handleDelete = (id) => {
-    if (window.confirm("Are you sure?")) {
-      API.delete(`reviewers/${id}/`)
-        .then(() => {
-          fetchReviewers();
-          showToast("Reviewer deleted successfully", "success");
-        })
-        .catch(err => {
-          console.error(err);
-          showToast("Failed to delete reviewer", "error");
-        });
+  const handleDeleteClick = (reviewerId, reviewerName) => {
+    setReviewerToDelete({ id: reviewerId, name: reviewerName });
+    setShowConfirmModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!reviewerToDelete) return;
+    try {
+      await API.delete(`reviewers/${reviewerToDelete.id}/`);
+      fetchReviewers();
+      showToast("Reviewer deleted successfully", "success");
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to delete reviewer", "error");
+    } finally {
+      setShowConfirmModal(false);
+      setReviewerToDelete(null);
     }
   };
 
@@ -234,6 +264,7 @@ function Reviewers() {
       `}</style>
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
+      <ConfirmModal isOpen={showConfirmModal} onClose={() => setShowConfirmModal(false)} onConfirm={confirmDelete} reviewerName={reviewerToDelete?.name} />
 
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-4 sm:py-8">
 
@@ -401,7 +432,7 @@ function Reviewers() {
                           </svg>
                           <span className="hidden sm:inline">Edit</span>
                         </button>
-                        <button onClick={() => handleDelete(r.id)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-[#7d8590] hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all text-xs font-medium">
+                        <button onClick={() => handleDeleteClick(r.id, r.username)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-[#7d8590] hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all text-xs font-medium">
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                           </svg>

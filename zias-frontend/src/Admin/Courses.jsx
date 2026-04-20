@@ -28,6 +28,26 @@ function Toast({ message, type, onClose }) {
   );
 }
 
+// Custom confirmation modal for delete
+function ConfirmModal({ isOpen, onClose, onConfirm, courseName }) {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 backdrop-blur-md p-4">
+      <div className="bg-[#161b22] rounded-2xl max-w-md w-full border border-[#30363d] shadow-2xl shadow-black/60 p-6 mx-4">
+        <h3 className="text-lg font-semibold text-[#e6edf3] mb-2">Confirm Delete</h3>
+        <p className="text-[#7d8590] mb-6">
+          Are you sure you want to delete <span className="text-white font-medium">{courseName}</span>?<br />
+          This action cannot be undone.
+        </p>
+        <div className="flex gap-3 justify-end">
+          <button onClick={onClose} className="px-4 py-2 rounded-lg bg-[#21262d] hover:bg-[#30363d] text-[#7d8590] hover:text-white transition">Cancel</button>
+          <button onClick={onConfirm} className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white transition">Delete</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Courses() {
   const [courses, setCourses] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -36,6 +56,10 @@ function Courses() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   const [formData, setFormData] = useState({ name: "", description: "", duration: "" });
+
+  // Delete confirmation modal state
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [courseToDelete, setCourseToDelete] = useState(null);
 
   const [toast, setToast] = useState(null);
   const showToast = (message, type = "success") => setToast({ message, type });
@@ -98,14 +122,23 @@ function Courses() {
     setCurrentPage(1);
   }, [searchTerm]);
 
-  const handleDelete = (id) => {
-    if (window.confirm("Delete this course?")) {
-      API.delete(`courses/${id}/`)
-        .then(() => {
-          fetchCourses();
-          showToast("Course deleted successfully", "success");
-        })
-        .catch(() => showToast("Failed to delete course", "error"));
+  const handleDeleteClick = (courseId, courseName) => {
+    setCourseToDelete({ id: courseId, name: courseName });
+    setShowConfirmModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!courseToDelete) return;
+    try {
+      await API.delete(`courses/${courseToDelete.id}/`);
+      fetchCourses();
+      showToast("Course deleted successfully", "success");
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to delete course", "error");
+    } finally {
+      setShowConfirmModal(false);
+      setCourseToDelete(null);
     }
   };
 
@@ -177,6 +210,7 @@ function Courses() {
       `}</style>
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
+      <ConfirmModal isOpen={showConfirmModal} onClose={() => setShowConfirmModal(false)} onConfirm={confirmDelete} courseName={courseToDelete?.name} />
 
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-4 sm:py-8">
 
@@ -356,7 +390,7 @@ function Courses() {
                           <span className="hidden sm:inline">Edit</span>
                         </button>
                         <button
-                          onClick={() => handleDelete(c.id)}
+                          onClick={() => handleDeleteClick(c.id, c.name)}
                           className="flex items-center gap-1 px-2 py-1 rounded-lg text-[#7d8590] hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all text-xs font-medium"
                           title="Delete"
                         >

@@ -27,6 +27,26 @@ function Toast({ message, type, onClose }) {
   );
 }
 
+// Custom confirmation modal for delete
+function ConfirmModal({ isOpen, onClose, onConfirm, moduleTitle }) {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 backdrop-blur-md p-4">
+      <div className="bg-[#161b22] rounded-2xl max-w-md w-full border border-[#30363d] shadow-2xl shadow-black/60 p-6 mx-4">
+        <h3 className="text-lg font-semibold text-[#e6edf3] mb-2">Confirm Delete</h3>
+        <p className="text-[#7d8590] mb-6">
+          Are you sure you want to delete <span className="text-white font-medium">{moduleTitle}</span>?<br />
+          All its days & tasks will be deleted. This action cannot be undone.
+        </p>
+        <div className="flex gap-3 justify-end">
+          <button onClick={onClose} className="px-4 py-2 rounded-lg bg-[#21262d] hover:bg-[#30363d] text-[#7d8590] hover:text-white transition">Cancel</button>
+          <button onClick={onConfirm} className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white transition">Delete</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Modules() {
   const [modules, setModules] = useState([]);
   const [courses, setCourses] = useState([]);
@@ -52,6 +72,10 @@ function Modules() {
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+
+  // Delete confirmation modal state
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [moduleToDelete, setModuleToDelete] = useState(null);
 
   const [toast, setToast] = useState(null);
   const showToast = (msg, type = "success") => setToast({ message: msg, type });
@@ -134,6 +158,32 @@ function Modules() {
     setShowModuleModal(true);
   };
 
+  const handleDeleteClick = (moduleId, moduleTitle) => {
+    setModuleToDelete({ id: moduleId, title: moduleTitle });
+    setShowConfirmModal(true);
+  };
+
+  const confirmDeleteModule = async () => {
+    if (!moduleToDelete) return;
+    try {
+      await API.delete(`modules/${moduleToDelete.id}/`);
+      showToast("Module deleted successfully", "success");
+      if (expandedModuleId === moduleToDelete.id) setExpandedModuleId(null);
+      setDaysByModule(prev => {
+        const newState = { ...prev };
+        delete newState[moduleToDelete.id];
+        return newState;
+      });
+      fetchModules();
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to delete module", "error");
+    } finally {
+      setShowConfirmModal(false);
+      setModuleToDelete(null);
+    }
+  };
+
   const handleModuleSubmit = async (e) => {
     e.preventDefault();
     const payload = { 
@@ -161,23 +211,6 @@ function Modules() {
       fetchModules();
     } catch (err) {
       showToast("Error saving module", "error");
-    }
-  };
-
-  const handleDeleteModule = async (id) => {
-    if (!window.confirm("Delete this module? All its days & tasks will be deleted.")) return;
-    try {
-      await API.delete(`modules/${id}/`);
-      showToast("Module deleted", "success");
-      if (expandedModuleId === id) setExpandedModuleId(null);
-      setDaysByModule(prev => {
-        const newState = { ...prev };
-        delete newState[id];
-        return newState;
-      });
-      fetchModules();
-    } catch (err) {
-      showToast("Delete failed", "error");
     }
   };
 
@@ -355,6 +388,7 @@ function Modules() {
       `}</style>
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
+      <ConfirmModal isOpen={showConfirmModal} onClose={() => setShowConfirmModal(false)} onConfirm={confirmDeleteModule} moduleTitle={moduleToDelete?.title} />
 
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-4 sm:py-8">
 
@@ -499,7 +533,7 @@ function Modules() {
                         <button onClick={() => setExpandedModuleId(expandedModuleId === mod.id ? null : mod.id)} className="p-1.5 rounded-lg text-[#7d8590] hover:text-emerald-400 hover:bg-emerald-500/10" title="Days">
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                         </button>
-                        <button onClick={() => handleDeleteModule(mod.id)} className="p-1.5 rounded-lg text-[#7d8590] hover:text-red-400 hover:bg-red-500/10" title="Delete">
+                        <button onClick={() => handleDeleteClick(mod.id, mod.title)} className="p-1.5 rounded-lg text-[#7d8590] hover:text-red-400 hover:bg-red-500/10" title="Delete">
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                         </button>
                       </div>
