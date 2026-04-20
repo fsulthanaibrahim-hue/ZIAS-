@@ -1,3 +1,4 @@
+// src/Admin/Dashboard.jsx
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../api/api";
@@ -5,13 +6,14 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell,
 } from "recharts";
 
-// ── Stat Card ───
+// ── Stat Card (now 5 boxes) ──
 const StatCard = ({ label, value, icon, color }) => {
   const colors = {
     blue:   { bg: "bg-blue-500/10",    border: "border-blue-500/20",    text: "text-blue-400",    icon: "bg-blue-500/20"    },
     green:  { bg: "bg-emerald-500/10", border: "border-emerald-500/20", text: "text-emerald-400", icon: "bg-emerald-500/20" },
     yellow: { bg: "bg-amber-500/10",   border: "border-amber-500/20",   text: "text-amber-400",   icon: "bg-amber-500/20"   },
     purple: { bg: "bg-violet-500/10",  border: "border-violet-500/20",  text: "text-violet-400",  icon: "bg-violet-500/20"  },
+    rose:   { bg: "bg-rose-500/10",    border: "border-rose-500/20",    text: "text-rose-400",    icon: "bg-rose-500/20"    },
   };
   const c = colors[color];
   return (
@@ -27,13 +29,14 @@ const StatCard = ({ label, value, icon, color }) => {
   );
 };
 
-// ── Quick Action Button ────
+// ── Quick Action Button ──
 const ActionBtn = ({ label, icon, onClick, color = "blue" }) => {
   const colors = {
     blue:   "bg-blue-600/20 hover:bg-blue-600/40 border-blue-500/30 text-blue-300",
     green:  "bg-emerald-600/20 hover:bg-emerald-600/40 border-emerald-500/30 text-emerald-300",
     yellow: "bg-amber-600/20 hover:bg-amber-600/40 border-amber-500/30 text-amber-300",
     purple: "bg-violet-600/20 hover:bg-violet-600/40 border-violet-500/30 text-violet-300",
+    rose:   "bg-rose-600/20 hover:bg-rose-600/40 border-rose-500/30 text-rose-300",
   };
   return (
     <button
@@ -46,7 +49,7 @@ const ActionBtn = ({ label, icon, onClick, color = "blue" }) => {
   );
 };
 
-// ── Custom Tooltip ───
+// ── Custom Tooltip ──
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
     return (
@@ -59,21 +62,21 @@ const CustomTooltip = ({ active, payload, label }) => {
   return null;
 };
 
-// ── Status Dot ───
+// ── Status Dot ──
 const StatusDot = ({ ok }) => (
   <span className={`inline-block w-2 h-2 rounded-full ${ok ? "bg-emerald-400" : "bg-red-400"}`} />
 );
 
-// ── Main Component ───
+// ── Main Component ──
 function Dashboard() {
-  const [stats, setStats]                   = useState({ students: 0, mentors: 0, reviewers: 0 });
+  const [stats, setStats] = useState({ students: 0, mentors: 0, reviewers: 0, courses: 0, batches: 0 });
   const [unreadMessages, setUnreadMessages] = useState(0);
-  const [prevUnread, setPrevUnread]         = useState(0);
-  const [adminName, setAdminName]           = useState("Admin");
-  const [lastUpdated, setLastUpdated]       = useState(null);
-  const [notification, setNotification]     = useState(null);
-  const [apiOk, setApiOk]                  = useState(true);
-  const [activity, setActivity]             = useState([]);
+  const [prevUnread, setPrevUnread] = useState(0);
+  const [adminName, setAdminName] = useState("Admin");
+  const [lastUpdated, setLastUpdated] = useState(null);
+  const [notification, setNotification] = useState(null);
+  const [apiOk, setApiOk] = useState(true);
+  const [activity, setActivity] = useState([]);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -85,16 +88,21 @@ function Dashboard() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [studentsRes, mentorsRes, reviewersRes, messagesRes] = await Promise.all([
+        const [studentsRes, mentorsRes, reviewersRes, coursesRes, batchesRes, messagesRes] = await Promise.all([
           API.get("students/"),
           API.get("mentors/"),
           API.get("reviewers/"),
+          API.get("courses/"),
+          API.get("batches/"),
           API.get("unread-messages/"),
         ]);
-        const s = studentsRes.data.length;
-        const m = mentorsRes.data.length;
-        const r = reviewersRes.data.length;
-        setStats({ students: s, mentors: m, reviewers: r });
+        setStats({
+          students: studentsRes.data.length,
+          mentors: mentorsRes.data.length,
+          reviewers: reviewersRes.data.length,
+          courses: coursesRes.data.length,
+          batches: batchesRes.data.length,
+        });
 
         const newUnread = messagesRes.data.unread_count;
         setUnreadMessages(newUnread);
@@ -120,11 +128,13 @@ function Dashboard() {
     return () => clearInterval(interval);
   }, [prevUnread]);
 
+  // Chart data uses the 5 stats (only 4 shown? We'll include the top 4 or all 5)
   const chartData = [
     { name: "Students",  value: stats.students,  fill: "#3b82f6" },
     { name: "Mentors",   value: stats.mentors,   fill: "#10b981" },
     { name: "Reviewers", value: stats.reviewers, fill: "#f59e0b" },
-    { name: "Messages",  value: unreadMessages,  fill: "#8b5cf6" },
+    { name: "Courses",   value: stats.courses,   fill: "#8b5cf6" },
+    { name: "Batches",   value: stats.batches,   fill: "#ec4899" },
   ];
 
   const greeting = () => {
@@ -163,12 +173,13 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* ── Stat Cards ── */}
+      {/* ── 5 Stat Cards ── */}
       <div className="flex flex-wrap gap-3 sm:gap-4 mb-6 sm:mb-8">
-        <StatCard label="Students"        value={stats.students}  icon="🎓" color="blue"   />
-        <StatCard label="Mentors"         value={stats.mentors}   icon="👨‍🏫" color="green"  />
-        <StatCard label="Reviewers"       value={stats.reviewers} icon="📋" color="yellow" />
-        <StatCard label="Unread Messages" value={unreadMessages}  icon="💬" color="purple" />
+        <StatCard label="Students"   value={stats.students}  icon="🎓" color="blue"   />
+        <StatCard label="Mentors"    value={stats.mentors}   icon="👨‍🏫" color="green"  />
+        <StatCard label="Reviewers"  value={stats.reviewers} icon="📋" color="yellow" />
+        <StatCard label="Courses"    value={stats.courses}   icon="📚" color="purple" />
+        <StatCard label="Batches"    value={stats.batches}   icon="🎓" color="rose"   />
       </div>
 
       {/* ── Quick Actions ── */}
@@ -178,13 +189,15 @@ function Dashboard() {
           <ActionBtn label="Manage Students"  icon="🎓" color="blue"   onClick={() => navigate("/admin/students")}  />
           <ActionBtn label="Manage Mentors"   icon="👨‍🏫" color="green"  onClick={() => navigate("/admin/mentors")}   />
           <ActionBtn label="Manage Reviewers" icon="📋" color="yellow" onClick={() => navigate("/admin/reviewers")} />
-          <ActionBtn label="View Messages"    icon="💬" color="purple" onClick={() => navigate("/admin/messages")}  />
+          <ActionBtn label="Manage Courses"   icon="📚" color="purple" onClick={() => navigate("/admin/courses")}   />
+          <ActionBtn label="Manage Batches"   icon="🎓" color="rose"   onClick={() => navigate("/admin/batches")}   />
+          <ActionBtn label="View Messages"    icon="💬" color="violet" onClick={() => navigate("/admin/messages")}  />
         </div>
       </div>
 
       {/* ── Chart + Activity ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Bar Chart – fixed: numeric height on ResponsiveContainer */}
+        {/* Bar Chart – shows 5 bars */}
         <div className="bg-[#1a2538] rounded-xl border border-white/10 p-4 sm:p-5">
           <p className="text-white/50 text-xs uppercase tracking-widest mb-4 font-semibold">Overview</p>
           <ResponsiveContainer width="100%" height={220}>
@@ -223,6 +236,7 @@ function Dashboard() {
                 { label: "API Server",      ok: apiOk },
                 { label: "Student Service", ok: stats.students >= 0 },
                 { label: "Mentor Service",  ok: stats.mentors >= 0 },
+                { label: "Reviewer Service",ok: stats.reviewers >= 0 },
                 { label: "Message Service", ok: unreadMessages >= 0 },
               ].map(({ label, ok }) => (
                 <div key={label} className="flex items-center justify-between text-sm">

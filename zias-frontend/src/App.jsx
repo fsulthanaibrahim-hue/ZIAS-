@@ -7,6 +7,7 @@ import UserLogin from "./pages/UserLogin";
 import StudentDashboard from "./pages/student/StudentDashboard";
 import StudentProfile from "./pages/student/StudentProfile";
 import StudentReviewSheet from "./pages/student/StudentReviewSheet";
+import StudentReviewSheetRange from "./pages/student/StudentReviewSheetRange"; // NEW: range view
 import StudentWeekView from "./pages/student/StudentWeekView";
 import CourseDetail from "./pages/student/CourseDetail";
 import ModuleView from "./pages/student/ModuleView";
@@ -29,6 +30,7 @@ import ModulesAdmin from "./Admin/Modules";
 import ContactMessages from "./Admin/ContactMessages";
 import Batches from "./Admin/Batches";
 import ReviewSheets from "./Admin/ReviewSheets";
+import StudentReviewEdit from "./Admin/StudentReviewEdit";
 // Common pages
 import Navbar from "./components/Navbar";
 import Home from "./pages/Home";
@@ -100,6 +102,7 @@ function App() {
       <Route path="/student/dashboard" element={<PrivateRoute><StudentDashboard /></PrivateRoute>} />
       <Route path="/student/profile" element={<PrivateRoute><StudentProfile /></PrivateRoute>} />
       <Route path="/student/review-sheet" element={<PrivateRoute><StudentReviewSheet /></PrivateRoute>} />
+      <Route path="/student/review-sheet/range/:start/:end" element={<PrivateRoute><StudentReviewSheetRange /></PrivateRoute>} />
       <Route path="/student/week/:weekId" element={<PrivateRoute><StudentWeekView /></PrivateRoute>} />
       <Route path="/student/course/:courseId" element={<PrivateRoute><CourseDetail /></PrivateRoute>} />
       <Route path="/student/module/:moduleId" element={<PrivateRoute><ModuleView /></PrivateRoute>} />
@@ -127,6 +130,7 @@ function App() {
       <Route path="/admin/messages" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><ContactMessages /></div></AdminRoute>} />
       <Route path="/admin/batches" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Batches /></div></AdminRoute>} />
       <Route path="/admin/review-sheets" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><ReviewSheets /></div></AdminRoute>} />
+      <Route path="/admin/student-review-edit" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><StudentReviewEdit /></div></AdminRoute>} />
 
       {/* 404 page */}
       <Route path="*" element={
