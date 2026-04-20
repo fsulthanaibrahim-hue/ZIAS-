@@ -1,5 +1,5 @@
 // src/Admin/Mentors.jsx
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import API from "../api/api";
 
 function Toast({ message, type, onClose }) {
@@ -48,6 +48,9 @@ function Mentors() {
   const showToast = (message, type = "success") => setToast({ message, type });
   const hideToast = () => setToast(null);
 
+  // Ref to prevent double fetching in Strict Mode
+  const initialFetchDone = useRef(false);
+
   const fetchMentors = () => {
     API.get("mentors/")
       .then(res => setMentors(res.data))
@@ -63,10 +66,20 @@ function Mentors() {
       .catch(() => showToast("Failed to load batches", "error"));
   };
 
+  // Combined initial fetch – runs only once thanks to the ref
   useEffect(() => {
+    if (initialFetchDone.current) return;
+    initialFetchDone.current = true;
     fetchMentors();
     fetchBatches();
   }, []);
+
+  // Refetch batches when form opens (optional)
+  useEffect(() => {
+    if (showForm) {
+      fetchBatches();
+    }
+  }, [showForm]);
 
   const handleDelete = (id) => {
     if (window.confirm("Are you sure?")) {
@@ -299,7 +312,7 @@ function Mentors() {
           </div>
         </div>
 
-        {/* Add/Edit Modal (without dob, gender, address) */}
+        {/* Add/Edit Modal */}
         {showForm && (
           <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 backdrop-blur-md p-4" onClick={() => setShowForm(false)}>
             <form onSubmit={handleSubmit} className="modal-enter bg-[#161b22] rounded-2xl w-full max-w-2xl border border-[#30363d] shadow-2xl shadow-black/60 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -321,7 +334,6 @@ function Mentors() {
               </div>
 
               <div className="px-4 sm:px-6 py-5 space-y-5">
-                {/* Basic Info */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5 uppercase tracking-wider">Username *</label><input type="text" name="username" value={formData.username} onChange={handleChange} required className={inputClass} /></div>
                   <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5 uppercase tracking-wider">Email *</label><input type="email" name="email" value={formData.email} onChange={handleChange} required className={inputClass} /></div>
@@ -330,7 +342,6 @@ function Mentors() {
                   <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5 uppercase tracking-wider">Batch</label><select name="batch" value={formData.batch} onChange={handleChange} className={inputClass}><option value="">Select a batch</option>{batchesList.map(batch => <option key={batch.id} value={batch.id}>{batch.name}</option>)}</select></div>
                 </div>
 
-                {/* Extra Details (only qualification and experience) */}
                 <div className="border-t border-[#21262d] pt-4">
                   <h4 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-3">Extra Details</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -350,7 +361,7 @@ function Mentors() {
           </div>
         )}
 
-        {/* View Details Modal (without dob, gender, address) */}
+        {/* View Details Modal */}
         {viewingMentor && (
           <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 backdrop-blur-md p-4" onClick={() => setViewingMentor(null)}>
             <div className="bg-[#161b22] rounded-2xl w-full max-w-2xl border border-[#30363d] shadow-2xl shadow-black/60 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -388,7 +399,7 @@ function Mentors() {
           </div>
         )}
 
-        {/* Mentors Table (unchanged) */}
+        {/* Mentors Table */}
         <div className="overflow-hidden rounded-xl border border-[#21262d] shadow-xl shadow-black/20">
           <table className="mentor-table min-w-full">
             <thead className="bg-[#161b22] border-b border-[#21262d]">
@@ -425,7 +436,11 @@ function Mentors() {
                   </tr>
                 ))
               ) : (
-                <tr><td colSpan="6" className="text-center py-12 sm:py-20 text-[#7d8590]">{searchTerm ? "No mentors match your search" : "No mentors yet"}</td></tr>
+                <tr>
+                  <td colSpan="6" className="text-center py-12 sm:py-20 text-[#7d8590]">
+                    {searchTerm ? "No mentors match your search" : "No mentors yet"}
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>

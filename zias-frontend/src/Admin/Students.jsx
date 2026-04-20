@@ -1,5 +1,5 @@
 // src/Admin/Students.jsx
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import API from "../api/api";
 
 function Toast({ message, type, onClose }) {
@@ -84,6 +84,9 @@ function Students() {
   const showToast = (message, type = "success") => setToast({ message, type });
   const hideToast = () => setToast(null);
 
+  // Ref to prevent double fetching in Strict Mode
+  const initialFetchDone = useRef(false);
+
   const fetchStudents = () => {
     API.get("students/")
       .then((res) => setStudents(res.data))
@@ -109,13 +112,17 @@ function Students() {
       .catch(() => showToast("Failed to load mentors", "error"));
   };
 
+  // Combined initial fetch – runs only once thanks to the ref
   useEffect(() => {
+    if (initialFetchDone.current) return;
+    initialFetchDone.current = true;
     fetchStudents();
     fetchCourses();
     fetchBatches();
     fetchMentors();
   }, []);
 
+  // Refetch batches/courses when form opens (this is fine; it only runs when showForm changes)
   useEffect(() => {
     if (showForm) {
       fetchBatches();
@@ -596,7 +603,11 @@ function Students() {
                   </tr>
                 ))
               ) : (
-                <tr><td colSpan="7" className="text-center py-12 sm:py-20 text-[#7d8590]">No students found. Click 'Add Student' to create one.</td></tr>
+                <tr>
+                  <td colSpan="7" className="text-center py-12 sm:py-20 text-[#7d8590]">
+                    {searchTerm ? "No students match your search" : "No students found. Click 'Add Student' to create one."}
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>

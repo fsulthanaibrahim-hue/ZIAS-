@@ -1,12 +1,12 @@
 // src/Admin/Dashboard.jsx
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../api/api";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell,
 } from "recharts";
 
-// ── Stat Card (now 5 boxes) ──
+// ── Stat Card (5 boxes) ──
 const StatCard = ({ label, value, icon, color }) => {
   const colors = {
     blue:   { bg: "bg-blue-500/10",    border: "border-blue-500/20",    text: "text-blue-400",    icon: "bg-blue-500/20"    },
@@ -67,11 +67,9 @@ const StatusDot = ({ ok }) => (
   <span className={`inline-block w-2 h-2 rounded-full ${ok ? "bg-emerald-400" : "bg-red-400"}`} />
 );
 
-// ── Main Component ──
 function Dashboard() {
   const [stats, setStats] = useState({ students: 0, mentors: 0, reviewers: 0, courses: 0, batches: 0 });
   const [unreadMessages, setUnreadMessages] = useState(0);
-  const [prevUnread, setPrevUnread] = useState(0);
   const [adminName, setAdminName] = useState("Admin");
   const [lastUpdated, setLastUpdated] = useState(null);
   const [notification, setNotification] = useState(null);
@@ -79,13 +77,21 @@ function Dashboard() {
   const [activity, setActivity] = useState([]);
   const navigate = useNavigate();
 
+  // Ref to prevent double fetch in Strict Mode
+  const fetched = useRef(false);
+
+  // Fetch user name once
   useEffect(() => {
-    API.get("users/me/").then(r => {
-      setAdminName(r.data.first_name || r.data.username || "Admin");
-    }).catch(() => {});
+    API.get("users/me/")
+      .then(r => setAdminName(r.data.first_name || r.data.username || "Admin"))
+      .catch(() => {});
   }, []);
 
+  // Fetch all dashboard data – runs only once
   useEffect(() => {
+    if (fetched.current) return;
+    fetched.current = true;
+
     const fetchData = async () => {
       try {
         const [studentsRes, mentorsRes, reviewersRes, coursesRes, batchesRes, messagesRes] = await Promise.all([
@@ -103,32 +109,56 @@ function Dashboard() {
           courses: coursesRes.data.length,
           batches: batchesRes.data.length,
         });
-
         const newUnread = messagesRes.data.unread_count;
         setUnreadMessages(newUnread);
         setApiOk(true);
+        setLastUpdated(new Date());
 
-        if (prevUnread !== 0 && newUnread > prevUnread) {
+        // Optional: show notification if unread messages > 0 on first load
+        if (newUnread > 0) {
           setNotification(`📩 ${newUnread} unread message${newUnread > 1 ? "s" : ""}`);
           setTimeout(() => setNotification(null), 5000);
-          setActivity(prev => [
-            { id: Date.now(), text: `${newUnread - prevUnread} new message(s) received`, time: new Date(), type: "message" },
-            ...prev.slice(0, 9),
-          ]);
         }
-        setPrevUnread(newUnread);
-        setLastUpdated(new Date());
       } catch (err) {
         console.error(err);
         setApiOk(false);
       }
     };
     fetchData();
-    const interval = setInterval(fetchData, 10000);
-    return () => clearInterval(interval);
-  }, [prevUnread]);
+  }, []); // No interval, no dependencies
 
-  // Chart data uses the 5 stats (only 4 shown? We'll include the top 4 or all 5)
+  // Manual refresh button handler
+  const handleRefresh = async () => {
+    try {
+      const [studentsRes, mentorsRes, reviewersRes, coursesRes, batchesRes, messagesRes] = await Promise.all([
+        API.get("students/"),
+        API.get("mentors/"),
+        API.get("reviewers/"),
+        API.get("courses/"),
+        API.get("batches/"),
+        API.get("unread-messages/"),
+      ]);
+      setStats({
+        students: studentsRes.data.length,
+        mentors: mentorsRes.data.length,
+        reviewers: reviewersRes.data.length,
+        courses: coursesRes.data.length,
+        batches: batchesRes.data.length,
+      });
+      const newUnread = messagesRes.data.unread_count;
+      setUnreadMessages(newUnread);
+      setApiOk(true);
+      setLastUpdated(new Date());
+      setNotification("Data refreshed");
+      setTimeout(() => setNotification(null), 3000);
+    } catch (err) {
+      console.error(err);
+      setApiOk(false);
+      setNotification("Refresh failed");
+      setTimeout(() => setNotification(null), 3000);
+    }
+  };
+
   const chartData = [
     { name: "Students",  value: stats.students,  fill: "#3b82f6" },
     { name: "Mentors",   value: stats.mentors,   fill: "#10b981" },
@@ -146,14 +176,12 @@ function Dashboard() {
 
   return (
     <div className="min-h-screen w-screen bg-[#0f1623] text-white p-4 sm:p-6 md:p-8 overflow-x-hidden">
-      {/* Toast */}
       {notification && (
         <div className="fixed top-6 right-6 z-50 bg-violet-600/90 text-white px-4 py-2.5 rounded-xl shadow-2xl text-sm font-semibold backdrop-blur">
           {notification}
         </div>
       )}
 
-      {/* ── Header ── */}
       <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <p className="text-white/50 text-xs sm:text-sm font-medium">{greeting()},</p>
@@ -170,10 +198,19 @@ function Dashboard() {
               Updated {lastUpdated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
             </p>
           )}
+          <button
+            onClick={handleRefresh}
+            className="bg-[#238636] hover:bg-[#2ea043] text-white px-3 py-1 rounded-lg text-xs font-medium flex items-center gap-1"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Refresh
+          </button>
         </div>
       </div>
 
-      {/* ── 5 Stat Cards ── */}
+      {/* 5 Stat Cards */}
       <div className="flex flex-wrap gap-3 sm:gap-4 mb-6 sm:mb-8">
         <StatCard label="Students"   value={stats.students}  icon="🎓" color="blue"   />
         <StatCard label="Mentors"    value={stats.mentors}   icon="👨‍🏫" color="green"  />
@@ -182,7 +219,7 @@ function Dashboard() {
         <StatCard label="Batches"    value={stats.batches}   icon="🎓" color="rose"   />
       </div>
 
-      {/* ── Quick Actions ── */}
+      {/* Quick Actions */}
       <div className="mb-6 sm:mb-8">
         <p className="text-white/50 text-xs uppercase tracking-widest mb-3 font-semibold">Quick Actions</p>
         <div className="flex flex-wrap gap-2 sm:gap-3">
@@ -195,64 +232,45 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* ── Chart + Activity ── */}
+      {/* Chart + Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Bar Chart – shows 5 bars */}
         <div className="bg-[#1a2538] rounded-xl border border-white/10 p-4 sm:p-5">
           <p className="text-white/50 text-xs uppercase tracking-widest mb-4 font-semibold">Overview</p>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={chartData} barSize={28} maxBarSize={40}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-              <XAxis
-                dataKey="name"
-                tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 10, fontWeight: 500 }}
-                axisLine={false}
-                tickLine={false}
-                interval={0}
-              />
-              <YAxis
-                tick={{ fill: "rgba(255,255,255,0.40)", fontSize: 10 }}
-                axisLine={false}
-                tickLine={false}
-                allowDecimals={false}
-              />
+              <XAxis dataKey="name" tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 10, fontWeight: 500 }} axisLine={false} tickLine={false} interval={0} />
+              <YAxis tick={{ fill: "rgba(255,255,255,0.40)", fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
               <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(255,255,255,0.04)" }} />
               <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                {chartData.map((entry, i) => (
-                  <Cell key={i} fill={entry.fill} />
-                ))}
+                {chartData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
 
-        {/* System Status + Activity */}
         <div className="flex flex-col gap-4">
-          {/* System Status */}
           <div className="bg-[#1a2538] rounded-xl border border-white/10 p-4 sm:p-5">
             <p className="text-white/50 text-xs uppercase tracking-widest mb-3 font-semibold">System Status</p>
             <div className="space-y-2.5">
               {[
-                { label: "API Server",      ok: apiOk },
+                { label: "API Server", ok: apiOk },
                 { label: "Student Service", ok: stats.students >= 0 },
-                { label: "Mentor Service",  ok: stats.mentors >= 0 },
-                { label: "Reviewer Service",ok: stats.reviewers >= 0 },
+                { label: "Mentor Service", ok: stats.mentors >= 0 },
+                { label: "Reviewer Service", ok: stats.reviewers >= 0 },
                 { label: "Message Service", ok: unreadMessages >= 0 },
               ].map(({ label, ok }) => (
                 <div key={label} className="flex items-center justify-between text-sm">
                   <span className="text-white/65 font-medium">{label}</span>
                   <div className="flex items-center gap-1.5">
                     <StatusDot ok={ok} />
-                    <span className={`text-xs font-semibold ${ok ? "text-emerald-400" : "text-red-400"}`}>
-                      {ok ? "Operational" : "Down"}
-                    </span>
+                    <span className={`text-xs font-semibold ${ok ? "text-emerald-400" : "text-red-400"}`}>{ok ? "Operational" : "Down"}</span>
                   </div>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Recent Activity */}
           <div className="bg-[#1a2538] rounded-xl border border-white/10 p-4 sm:p-5 flex-1">
             <p className="text-white/50 text-xs uppercase tracking-widest mb-3 font-semibold">Recent Activity</p>
             {activity.length === 0 ? (
@@ -264,9 +282,7 @@ function Dashboard() {
                     <span className="text-base mt-0.5">📩</span>
                     <div>
                       <p className="text-white/80 font-medium">{a.text}</p>
-                      <p className="text-white/40 text-xs font-medium">
-                        {a.time.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                      </p>
+                      <p className="text-white/40 text-xs font-medium">{a.time.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
                     </div>
                   </li>
                 ))}
