@@ -37,7 +37,6 @@ function StudentReviewSheet() {
     fetchUser();
   }, []);
 
-  // For reviewers, fetch student list
   useEffect(() => {
     const fetchStudents = async () => {
       const isReviewer = userRole === "admin" || userRole === "mentor" || userRole === "reviewer";
@@ -58,7 +57,6 @@ function StudentReviewSheet() {
     fetchStudents();
   }, [userRole]);
 
-  // Fetch weeks and reviews
   useEffect(() => {
     const fetchData = async () => {
       const isReviewer = userRole === "admin" || userRole === "mentor" || userRole === "reviewer";
@@ -97,29 +95,20 @@ function StudentReviewSheet() {
 
   const isReviewer = userRole === "admin" || userRole === "mentor" || userRole === "reviewer";
 
-  // Same rows as admin edit, but read‑only
+  // Same rows as admin edit (read-only)
   const rows = [
-    { label: "Link to Task Folder", field: "link_to_task_folder" },
     { label: "Status", field: "task_status" },
     { label: "Project Updates", field: "feedback" },
     { label: "Reviewer Name", field: "reviewer_name" },
     { label: "Advisor Name", field: "advisor_name" },
     { label: "Score [20]", field: "total_score" },
     { label: "Extra Workouts Review", field: "extra_workouts" },
-    { label: "Progress Video", field: "progress_video" },
     { label: "Review Date", field: "review_date" },
     { label: "English Review", field: "english_review" },
   ];
 
   const renderCell = (weekId, row) => {
     const value = reviews[weekId]?.[row.field] ?? "";
-    if (row.field === "progress_video" && value) {
-      return (
-        <a href={value} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline break-all">
-          Watch Video
-        </a>
-      );
-    }
     return <div className="whitespace-pre-wrap break-words px-2 py-1">{value || "—"}</div>;
   };
 

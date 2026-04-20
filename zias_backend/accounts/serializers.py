@@ -339,7 +339,7 @@ ZIAS Team
         return super().update(instance, validated_data)
 
 # ----------------------------
-# REVIEWER SERIALIZER (UPDATED to include qualification and experience)
+# REVIEWER SERIALIZER
 # ----------------------------
 class ReviewerSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username')
@@ -347,7 +347,7 @@ class ReviewerSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Reviewer
-        fields = ['id', 'username', 'email', 'department', 'batch', 'qualification', 'experience']
+        fields = ['id', 'username', 'email', 'department', 'batch']
 
     def create(self, validated_data):
         user_data = validated_data.pop('user')

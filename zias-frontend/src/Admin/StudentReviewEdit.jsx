@@ -96,24 +96,21 @@ function StudentReviewEdit() {
     fetchData();
   }, [studentId]);
 
-  // Rows mapped to actual backend fields
+  // Status options exactly match backend choices
   const rows = [
-    { key: "link_to_task_folder", label: "Link to Task Folder", type: "text", placeholder: "Paste folder link here", backend: null },
-    { key: "task_status", label: "Status", type: "select", options: ["Task Completed", "Task Need Improvement", "Task Critical", "Task Not Completed"], backend: "task_status" },
-    { key: "feedback", label: "Project Updates", type: "textarea", rows: 2, backend: "feedback" },
-    { key: "reviewer_name", label: "Reviewer Name", type: "text", placeholder: "reviewer", backend: "reviewer_name" },
-    { key: "advisor_name", label: "Advisor Name", type: "text", placeholder: "mentor", backend: "advisor_name" },
-    { key: "total_score", label: "Score [20]", type: "number", placeholder: "0-20", backend: "total_score" },
-    { key: "extra_workouts", label: "Extra Workouts Review", type: "textarea", rows: 2, backend: "extra_workouts" },
-    { key: "progress_video", label: "Progress Video", type: "text", placeholder: "YouTube link", backend: null },
-    { key: "review_date", label: "Review Date", type: "date", backend: "review_date" },
-    { key: "english_review", label: "English Review", type: "textarea", rows: 2, backend: "english_review" },
+    { label: "Status", field: "task_status", type: "select", options: ["Not Started", "In Progress", "Completed", "Needs Improvement"] },
+    { label: "Project Updates", field: "feedback", type: "textarea", rows: 2 },
+    { label: "Reviewer Name", field: "reviewer_name", type: "text", placeholder: "Reviewer" },
+    { label: "Advisor Name", field: "advisor_name", type: "text", placeholder: "Advisor" },
+    { label: "Score [20]", field: "total_score", type: "number", placeholder: "0-20" },
+    { label: "Extra Workouts Review", field: "extra_workouts", type: "textarea", rows: 2 },
+    { label: "Review Date", field: "review_date", type: "date" },
+    { label: "English Review", field: "english_review", type: "textarea", rows: 2 },
   ];
 
   const renderCell = (weekId, row) => {
-    const value = reviews[weekId]?.[row.key] ?? "";
-    const backendField = row.backend;
-    const onChange = (val) => handleChange(weekId, backendField || row.key, val);
+    const value = reviews[weekId]?.[row.field] ?? "";
+    const onChange = (val) => handleChange(weekId, row.field, val);
 
     if (row.type === "select") {
       return (
@@ -143,7 +140,7 @@ function StudentReviewEdit() {
         <input
           type="number"
           value={value}
-          onChange={(e) => onChange(e.target.value ? parseInt(e.target.value) : null)}
+          onChange={(e) => onChange(e.target.value)}
           className="w-full bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-sm text-[#e6edf3] focus:border-[#388bfd] outline-none"
           placeholder={row.placeholder || ""}
         />
@@ -184,11 +181,12 @@ function StudentReviewEdit() {
               {student?.full_name || student?.username} • {student?.course} • {student?.batch}
             </p>
           </div>
-          <div className="flex gap-3">
-            <button onClick={() => navigate("/admin/review-sheets")} className="bg-[#21262d] hover:bg-[#30363d] text-[#7d8590] hover:text-white px-4 py-2 rounded-lg text-sm font-medium transition">
-              ← Back
-            </button>
-          </div>
+          <button
+            onClick={() => navigate("/admin/review-sheets")}
+            className="bg-[#21262d] hover:bg-[#30363d] text-[#7d8590] hover:text-white px-4 py-2 rounded-lg text-sm font-medium transition"
+          >
+            ← Back
+          </button>
         </div>
 
         <div className="overflow-x-auto rounded-xl border border-[#21262d] shadow-xl shadow-black/20">
@@ -205,7 +203,7 @@ function StudentReviewEdit() {
             </thead>
             <tbody className="bg-[#0d1117] divide-y divide-[#21262d]">
               {rows.map(row => (
-                <tr key={row.key} className="hover:bg-[#161b22]/40">
+                <tr key={row.field} className="hover:bg-[#161b22]/40">
                   <td className="sticky left-0 bg-[#0d1117] px-4 py-3 text-[#7d8590] text-sm font-medium border-r border-[#21262d]">{row.label}</td>
                   {weeks.map(week => (
                     <td key={week.id} className="px-3 py-2 border-l border-[#21262d] align-top">{renderCell(week.id, row)}</td>
