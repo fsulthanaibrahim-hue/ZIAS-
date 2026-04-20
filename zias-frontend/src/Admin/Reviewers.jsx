@@ -1,5 +1,5 @@
 // src/Admin/Reviewers.jsx
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import API from "../api/api";
 
 function Toast({ message, type, onClose }) {
@@ -32,6 +32,8 @@ function Reviewers() {
   const [searchTerm, setSearchTerm] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [viewingReviewer, setViewingReviewer] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
   const [formData, setFormData] = useState({
     username: "",
     email: "",
@@ -44,6 +46,9 @@ function Reviewers() {
   const [toast, setToast] = useState(null);
   const showToast = (message, type = "success") => setToast({ message, type });
   const hideToast = () => setToast(null);
+
+  // Ref to prevent double fetching in Strict Mode
+  const initialFetchDone = useRef(false);
 
   const fetchReviewers = () => {
     API.get("reviewers/")
@@ -60,7 +65,10 @@ function Reviewers() {
       .catch(() => showToast("Failed to load batches", "error"));
   };
 
+  // Combined initial fetch – runs only once thanks to the ref
   useEffect(() => {
+    if (initialFetchDone.current) return;
+    initialFetchDone.current = true;
     fetchReviewers();
     fetchBatches();
   }, []);
@@ -140,6 +148,42 @@ function Reviewers() {
     r.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     r.department?.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // Pagination logic
+  const totalFiltered = filteredReviewers.length;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / itemsPerPage));
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedReviewers = filteredReviewers.slice(startIndex, startIndex + itemsPerPage);
+
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxVisible = 5;
+    if (totalPages <= maxVisible) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      if (currentPage <= 3) {
+        for (let i = 1; i <= 4; i++) pages.push(i);
+        pages.push("...");
+        pages.push(totalPages);
+      } else if (currentPage >= totalPages - 2) {
+        pages.push(1);
+        pages.push("...");
+        for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i);
+      } else {
+        pages.push(1);
+        pages.push("...");
+        for (let i = currentPage - 1; i <= currentPage + 1; i++) pages.push(i);
+        pages.push("...");
+        pages.push(totalPages);
+      }
+    }
+    return pages;
+  };
+
+  // Reset page when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
 
   const inputClass = `
     w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-4 py-2.5 text-[#e6edf3]
@@ -299,7 +343,6 @@ function Reviewers() {
                   <label className="block text-[#7d8590] text-xs font-medium mb-1.5 uppercase tracking-wider">Experience (years)</label>
                   <input type="text" name="experience" value={formData.experience} onChange={handleChange} className={inputClass} placeholder="e.g. 5 years" />
                 </div>
-                {/* Batch dropdown removed as requested earlier, but kept if needed. Uncomment if you want batch */}
               </div>
 
               <div className="flex gap-2 px-4 sm:px-6 py-4 border-t border-[#21262d]">
@@ -314,7 +357,7 @@ function Reviewers() {
           </div>
         )}
 
-        {/* Reviewers Table / Card Layout */}
+        {/* Reviewers Table / Card Layout with Pagination */}
         <div className="overflow-hidden rounded-xl border border-[#21262d] shadow-xl shadow-black/20">
           <table className="reviewer-table min-w-full">
             <thead className="bg-[#161b22] border-b border-[#21262d]">
@@ -326,8 +369,8 @@ function Reviewers() {
               </tr>
             </thead>
             <tbody className="bg-[#0d1117] divide-y divide-[#21262d]">
-              {filteredReviewers.length > 0 ? (
-                filteredReviewers.map((r) => (
+              {paginatedReviewers.length > 0 ? (
+                paginatedReviewers.map((r) => (
                   <tr key={r.id} className="table-row-hover transition-colors duration-150 group">
                     <td data-label="Reviewer" className="px-4 py-3">
                       <div className="flex items-center gap-3">
@@ -390,17 +433,21 @@ function Reviewers() {
             </tbody>
           </table>
 
-          {/* Footer */}
-          {filteredReviewers.length > 0 && (
-            <div className="bg-[#161b22] border-t border-[#21262d] px-4 py-2.5 flex flex-col sm:flex-row items-center justify-between gap-2">
-              <p className="text-[#484f58] text-xs">
-                Showing <span className="text-[#7d8590] font-medium">{filteredReviewers.length}</span> of <span className="text-[#7d8590] font-medium">{reviewers.length}</span> reviewers
-              </p>
-              {searchTerm && (
-                <button onClick={() => setSearchTerm("")} className="text-[#388bfd] hover:text-blue-300 text-xs font-medium transition">
-                  Clear filter
-                </button>
-              )}
+          {/* Pagination Controls */}
+          {totalFiltered > 0 && (
+            <div className="bg-[#161b22] border-t border-[#21262d] px-4 py-3 flex flex-col sm:flex-row justify-between gap-3 items-center">
+              <div className="text-[#484f58] text-xs">
+                Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, totalFiltered)} of {totalFiltered} reviewers
+              </div>
+              <div className="flex gap-1 flex-wrap justify-center">
+                <button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1} className="px-2.5 py-1.5 rounded-lg text-sm disabled:text-[#484f58] text-[#7d8590] hover:bg-[#21262d] disabled:hover:bg-transparent">←</button>
+                {getPageNumbers().map((page, idx) =>
+                  page === "..." ? <span key={idx} className="px-2 py-1.5 text-[#484f58]">...</span> : (
+                    <button key={page} onClick={() => setCurrentPage(page)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${currentPage === page ? "bg-[#388bfd] text-white shadow-md shadow-[#388bfd]/20" : "text-[#7d8590] hover:text-[#e6edf3] hover:bg-[#21262d]"}`}>{page}</button>
+                  )
+                )}
+                <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages} className="px-2.5 py-1.5 rounded-lg text-sm disabled:text-[#484f58] text-[#7d8590] hover:bg-[#21262d] disabled:hover:bg-transparent">→</button>
+              </div>
             </div>
           )}
         </div>

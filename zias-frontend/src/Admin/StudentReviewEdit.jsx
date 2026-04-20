@@ -1,7 +1,10 @@
 // src/Admin/StudentReviewEdit.jsx
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import API from "../api/api";
+
+// Module-level flag to prevent double fetching in React Strict Mode
+let initialDataFetched = false;
 
 const extractWeekNumber = (title) => {
   const match = title?.match(/Week\s*(\d+)/i);
@@ -33,6 +36,9 @@ function StudentReviewEdit() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Ref to ensure fetchData runs only once per component instance (in case module flag is not enough)
+  const dataFetched = useRef(false);
+
   const saveField = useCallback(async (weekId, field, value) => {
     try {
       await API.patch(`week-review/${weekId}/?student_id=${studentId}`, { [field]: value });
@@ -48,6 +54,7 @@ function StudentReviewEdit() {
     debouncedSave(weekId, field, value);
   };
 
+  // Fetch student details – runs only once on mount
   useEffect(() => {
     if (!studentId) {
       navigate("/admin/review-sheets");
@@ -65,35 +72,43 @@ function StudentReviewEdit() {
     fetchStudent();
   }, [studentId, navigate]);
 
+  // Fetch weeks and reviews – runs only once (module-level flag + component ref)
   useEffect(() => {
-    const fetchData = async () => {
-      if (!studentId) return;
-      setLoading(true);
-      setError(null);
-      try {
-        const modulesRes = await API.get(`modules/student-modules/?student_id=${studentId}`);
-        let allWeeks = modulesRes.data;
-        allWeeks.sort((a, b) => extractWeekNumber(a.title) - extractWeekNumber(b.title));
-        setWeeks(allWeeks);
+    if (!studentId) return;
+    if (!initialDataFetched && !dataFetched.current) {
+      initialDataFetched = true;
+      dataFetched.current = true;
+      const fetchData = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+          const modulesRes = await API.get(`modules/student-modules/?student_id=${studentId}`);
+          let allWeeks = modulesRes.data;
+          allWeeks.sort((a, b) => extractWeekNumber(a.title) - extractWeekNumber(b.title));
+          setWeeks(allWeeks);
 
-        const reviewsData = {};
-        for (const week of allWeeks) {
-          try {
-            const reviewRes = await API.get(`week-review/${week.id}/?student_id=${studentId}`);
-            reviewsData[week.id] = reviewRes.data;
-          } catch {
-            reviewsData[week.id] = {};
+          const reviewsData = {};
+          for (const week of allWeeks) {
+            try {
+              const reviewRes = await API.get(`week-review/${week.id}/?student_id=${studentId}`);
+              reviewsData[week.id] = reviewRes.data;
+            } catch {
+              reviewsData[week.id] = {};
+            }
           }
+          setReviews(reviewsData);
+        } catch (err) {
+          console.error(err);
+          setError("Failed to load review data.");
+        } finally {
+          setLoading(false);
         }
-        setReviews(reviewsData);
-      } catch (err) {
-        console.error(err);
-        setError("Failed to load review data.");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
+      };
+      fetchData();
+    } else {
+      // If data already fetched, just set loading false if needed
+      setLoading(false);
+    }
   }, [studentId]);
 
   // Status options exactly match backend choices

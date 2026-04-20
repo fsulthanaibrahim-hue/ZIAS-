@@ -1,5 +1,9 @@
+// src/Admin/ContactMessages.jsx
 import { useEffect, useState } from "react";
 import API from "../api/api";
+
+// Module-level flag to prevent double fetching in React Strict Mode
+let initialDataFetched = false;
 
 function ContactMessages() {
   const [messages, setMessages] = useState([]);
@@ -42,7 +46,13 @@ function ContactMessages() {
     }
   };
 
-  useEffect(() => { fetchMessages(); }, []);
+  // Initial fetch – runs only once (module‑level flag prevents double call in Strict Mode)
+  useEffect(() => {
+    if (!initialDataFetched) {
+      initialDataFetched = true;
+      fetchMessages();
+    }
+  }, []);
 
   // Reset to first page when filter changes
   useEffect(() => {
@@ -226,7 +236,6 @@ function ContactMessages() {
                         >
                           {getInitial(msg.name)}
                         </div>
-                        {/* Status badge moves to top-right on mobile? Actually keep here or move? We'll keep original position but adjust layout */}
                       </div>
 
                       {/* Content area – takes full width on mobile */}

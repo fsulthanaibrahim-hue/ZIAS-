@@ -2,6 +2,9 @@
 import { useEffect, useState } from "react";
 import API from "../api/api";
 
+// Module-level flag to prevent double fetching in React Strict Mode
+let initialDataFetched = false;
+
 // Toast Component
 function Toast({ message, type, onClose }) {
   useEffect(() => {
@@ -49,8 +52,12 @@ function Batches() {
       .catch(() => showToast("Failed to load batches", "error"));
   };
 
+  // Initial fetch – runs only once (module‑level flag prevents double call in Strict Mode)
   useEffect(() => {
-    fetchBatches();
+    if (!initialDataFetched) {
+      initialDataFetched = true;
+      fetchBatches();
+    }
   }, []);
 
   const handleDelete = (id) => {

@@ -3,23 +3,31 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import API from "../api/api";
 
+// Module-level flag to prevent double fetching in React Strict Mode
+let initialDataFetched = false;
+
 function ReviewSheets() {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
 
+  const fetchStudents = async () => {
+    try {
+      const res = await API.get("students/list/");
+      setStudents(res.data);
+    } catch (err) {
+      console.error("Failed to fetch students", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Initial fetch – runs only once (module‑level flag prevents double call in Strict Mode)
   useEffect(() => {
-    const fetchStudents = async () => {
-      try {
-        const res = await API.get("students/list/");
-        setStudents(res.data);
-      } catch (err) {
-        console.error("Failed to fetch students", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchStudents();
+    if (!initialDataFetched) {
+      initialDataFetched = true;
+      fetchStudents();
+    }
   }, []);
 
   const filteredStudents = students.filter(s =>

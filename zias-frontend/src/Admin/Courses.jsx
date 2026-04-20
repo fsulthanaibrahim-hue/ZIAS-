@@ -2,6 +2,9 @@
 import { useEffect, useState } from "react";
 import API from "../api/api";
 
+// Module-level flag to prevent double fetching in React Strict Mode
+let initialDataFetched = false;
+
 // Toast Component
 function Toast({ message, type, onClose }) {
   useEffect(() => {
@@ -44,9 +47,15 @@ function Courses() {
       .catch(() => showToast("Failed to load courses", "error"));
   };
 
+  // Initial fetch – runs only once (module‑level flag prevents double call in Strict Mode)
   useEffect(() => {
-    fetchCourses();
+    if (!initialDataFetched) {
+      initialDataFetched = true;
+      fetchCourses();
+    }
   }, []);
+
+  // No extra fetch when form opens – the list is already loaded
 
   const filteredCourses = courses.filter(c =>
     c.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||

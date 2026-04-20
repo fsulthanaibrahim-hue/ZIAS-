@@ -69,7 +69,6 @@ const StatusDot = ({ ok }) => (
 
 function Dashboard() {
   const [stats, setStats] = useState({ students: 0, mentors: 0, reviewers: 0, courses: 0, batches: 0 });
-  const [unreadMessages, setUnreadMessages] = useState(0);
   const [adminName, setAdminName] = useState("Admin");
   const [lastUpdated, setLastUpdated] = useState(null);
   const [notification, setNotification] = useState(null);
@@ -87,20 +86,19 @@ function Dashboard() {
       .catch(() => {});
   }, []);
 
-  // Fetch all dashboard data – runs only once
+  // Fetch dashboard data – runs only once (no unread-messages call)
   useEffect(() => {
     if (fetched.current) return;
     fetched.current = true;
 
     const fetchData = async () => {
       try {
-        const [studentsRes, mentorsRes, reviewersRes, coursesRes, batchesRes, messagesRes] = await Promise.all([
+        const [studentsRes, mentorsRes, reviewersRes, coursesRes, batchesRes] = await Promise.all([
           API.get("students/"),
           API.get("mentors/"),
           API.get("reviewers/"),
           API.get("courses/"),
           API.get("batches/"),
-          API.get("unread-messages/"),
         ]);
         setStats({
           students: studentsRes.data.length,
@@ -109,34 +107,25 @@ function Dashboard() {
           courses: coursesRes.data.length,
           batches: batchesRes.data.length,
         });
-        const newUnread = messagesRes.data.unread_count;
-        setUnreadMessages(newUnread);
         setApiOk(true);
         setLastUpdated(new Date());
-
-        // Optional: show notification if unread messages > 0 on first load
-        if (newUnread > 0) {
-          setNotification(`📩 ${newUnread} unread message${newUnread > 1 ? "s" : ""}`);
-          setTimeout(() => setNotification(null), 5000);
-        }
       } catch (err) {
         console.error(err);
         setApiOk(false);
       }
     };
     fetchData();
-  }, []); // No interval, no dependencies
+  }, []); // No interval, no unread-messages call
 
   // Manual refresh button handler
   const handleRefresh = async () => {
     try {
-      const [studentsRes, mentorsRes, reviewersRes, coursesRes, batchesRes, messagesRes] = await Promise.all([
+      const [studentsRes, mentorsRes, reviewersRes, coursesRes, batchesRes] = await Promise.all([
         API.get("students/"),
         API.get("mentors/"),
         API.get("reviewers/"),
         API.get("courses/"),
         API.get("batches/"),
-        API.get("unread-messages/"),
       ]);
       setStats({
         students: studentsRes.data.length,
@@ -145,8 +134,6 @@ function Dashboard() {
         courses: coursesRes.data.length,
         batches: batchesRes.data.length,
       });
-      const newUnread = messagesRes.data.unread_count;
-      setUnreadMessages(newUnread);
       setApiOk(true);
       setLastUpdated(new Date());
       setNotification("Data refreshed");
@@ -258,7 +245,6 @@ function Dashboard() {
                 { label: "Student Service", ok: stats.students >= 0 },
                 { label: "Mentor Service", ok: stats.mentors >= 0 },
                 { label: "Reviewer Service", ok: stats.reviewers >= 0 },
-                { label: "Message Service", ok: unreadMessages >= 0 },
               ].map(({ label, ok }) => (
                 <div key={label} className="flex items-center justify-between text-sm">
                   <span className="text-white/65 font-medium">{label}</span>

@@ -2,6 +2,9 @@
 import React, { useEffect, useState } from "react";
 import API from "../api/api";
 
+// Module-level flag to prevent double fetching in React Strict Mode
+let initialDataFetched = false;
+
 function Toast({ message, type, onClose }) {
   useEffect(() => {
     const timer = setTimeout(onClose, 3000);
@@ -86,9 +89,13 @@ function Modules() {
     }
   };
 
+  // Initial data fetch – runs only once (module-level flag prevents double call in Strict Mode)
   useEffect(() => {
-    fetchModules();
-    fetchCourses();
+    if (!initialDataFetched) {
+      initialDataFetched = true;
+      fetchModules();
+      fetchCourses();
+    }
   }, []);
 
   useEffect(() => {

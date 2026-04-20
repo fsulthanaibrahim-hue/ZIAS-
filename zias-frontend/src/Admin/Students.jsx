@@ -1,6 +1,9 @@
 // src/Admin/Students.jsx
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import API from "../api/api";
+
+// Module-level flag to prevent double fetching in React Strict Mode
+let initialDataFetched = false;
 
 function Toast({ message, type, onClose }) {
   useEffect(() => {
@@ -84,9 +87,6 @@ function Students() {
   const showToast = (message, type = "success") => setToast({ message, type });
   const hideToast = () => setToast(null);
 
-  // Ref to prevent double fetching in Strict Mode
-  const initialFetchDone = useRef(false);
-
   const fetchStudents = () => {
     API.get("students/")
       .then((res) => setStudents(res.data))
@@ -112,23 +112,18 @@ function Students() {
       .catch(() => showToast("Failed to load mentors", "error"));
   };
 
-  // Combined initial fetch – runs only once thanks to the ref
+  // Initial data fetch – runs only once (module-level flag prevents double call)
   useEffect(() => {
-    if (initialFetchDone.current) return;
-    initialFetchDone.current = true;
-    fetchStudents();
-    fetchCourses();
-    fetchBatches();
-    fetchMentors();
+    if (!initialDataFetched) {
+      initialDataFetched = true;
+      fetchStudents();
+      fetchCourses();
+      fetchBatches();
+      fetchMentors();
+    }
   }, []);
 
-  // Refetch batches/courses when form opens (this is fine; it only runs when showForm changes)
-  useEffect(() => {
-    if (showForm) {
-      fetchBatches();
-      fetchCourses();
-    }
-  }, [showForm]);
+  // No extra fetch when form opens – the lists are already loaded
 
   const handleDeleteClick = (studentId, studentName) => {
     setStudentToDelete({ id: studentId, name: studentName });
