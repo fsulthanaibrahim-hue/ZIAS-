@@ -1,9 +1,6 @@
 // src/Admin/Batches.jsx
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import API from "../api/api";
-
-// Module-level flag to prevent double fetching in React Strict Mode
-let initialDataFetched = false;
 
 // Toast Component
 function Toast({ message, type, onClose }) {
@@ -50,6 +47,7 @@ function ConfirmModal({ isOpen, onClose, onConfirm, batchName }) {
 
 function Batches() {
   const [batches, setBatches] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -70,18 +68,25 @@ function Batches() {
   const showToast = (msg, type) => setToast({ message: msg, type });
   const hideToast = () => setToast(null);
 
+  const fetched = useRef(false);
+
   const fetchBatches = () => {
     API.get("batches/")
-      .then((res) => setBatches(res.data))
-      .catch(() => showToast("Failed to load batches", "error"));
+      .then((res) => {
+        setBatches(res.data);
+        setLoading(false);
+      })
+      .catch(() => {
+        showToast("Failed to load batches", "error");
+        setLoading(false);
+      });
   };
 
-  // Initial fetch – runs only once (module‑level flag prevents double call in Strict Mode)
+  // Initial fetch – runs only once per component mount (ref resets on refresh)
   useEffect(() => {
-    if (!initialDataFetched) {
-      initialDataFetched = true;
-      fetchBatches();
-    }
+    if (fetched.current) return;
+    fetched.current = true;
+    fetchBatches();
   }, []);
 
   const handleDeleteClick = (batchId, batchName) => {
@@ -138,7 +143,6 @@ function Batches() {
     b.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Pagination logic
   const totalFiltered = filteredBatches.length;
   const totalPages = Math.max(1, Math.ceil(totalFiltered / itemsPerPage));
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -178,6 +182,14 @@ function Batches() {
     placeholder-[#484f58] focus:outline-none focus:border-[#388bfd] focus:ring-1 focus:ring-[#388bfd]/30
     transition-all duration-200 text-sm
   `;
+
+  if (loading) {
+    return (
+      <div className="w-full min-h-[60vh] flex items-center justify-center bg-[#0d1117]">
+        <div className="w-8 h-8 border-2 border-[#388bfd] border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen w-full bg-[#0d1117] text-[#e6edf3]" style={{ fontFamily: "'Geist', 'SF Pro Display', system-ui, sans-serif" }}>
@@ -224,7 +236,6 @@ function Batches() {
           </div>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            {/* Search - full width on mobile */}
             <div className="relative w-full sm:w-64">
               <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#484f58]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
@@ -243,7 +254,6 @@ function Batches() {
               )}
             </div>
 
-            {/* Add Button - full width on mobile */}
             <button
               onClick={() => {
                 setEditingId(null);
@@ -312,7 +322,7 @@ function Batches() {
           </div>
         )}
 
-        {/* Batches Table with responsive card layout and pagination – "Students" column removed */}
+        {/* Batches Table */}
         <div className="overflow-hidden rounded-xl border border-[#21262d] shadow-xl shadow-black/20">
           <table className="batches-table min-w-full">
             <thead className="bg-[#161b22] border-b border-[#21262d]">

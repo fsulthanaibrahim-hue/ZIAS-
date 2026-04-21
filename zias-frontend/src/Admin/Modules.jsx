@@ -1,9 +1,6 @@
 // src/Admin/Modules.jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import API from "../api/api";
-
-// Module-level flag to prevent double fetching in React Strict Mode
-let initialDataFetched = false;
 
 function Toast({ message, type, onClose }) {
   useEffect(() => {
@@ -50,6 +47,7 @@ function ConfirmModal({ isOpen, onClose, onConfirm, moduleTitle }) {
 function Modules() {
   const [modules, setModules] = useState([]);
   const [courses, setCourses] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [showModuleModal, setShowModuleModal] = useState(false);
   const [editingModule, setEditingModule] = useState(null);
   const [moduleForm, setModuleForm] = useState({ course: "", title: "", content: "", is_common: true });
@@ -81,6 +79,8 @@ function Modules() {
   const showToast = (msg, type = "success") => setToast({ message: msg, type });
   const hideToast = () => setToast(null);
 
+  const fetched = useRef(false);
+
   useEffect(() => {
     const userStr = localStorage.getItem("user");
     if (userStr) setUser(JSON.parse(userStr));
@@ -89,7 +89,8 @@ function Modules() {
   const fetchModules = () => {
     API.get("modules/")
       .then(res => setModules(res.data))
-      .catch(() => showToast("Failed to load modules", "error"));
+      .catch(() => showToast("Failed to load modules", "error"))
+      .finally(() => setLoading(false));
   };
   const fetchCourses = () => {
     API.get("courses/")
@@ -113,13 +114,12 @@ function Modules() {
     }
   };
 
-  // Initial data fetch – runs only once (module-level flag prevents double call in Strict Mode)
+  // Initial data fetch – runs only once per component mount (ref resets on refresh)
   useEffect(() => {
-    if (!initialDataFetched) {
-      initialDataFetched = true;
-      fetchModules();
-      fetchCourses();
-    }
+    if (fetched.current) return;
+    fetched.current = true;
+    setLoading(true);
+    Promise.all([fetchModules(), fetchCourses()]).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -353,6 +353,14 @@ function Modules() {
   const smallInputClass = "w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-2 text-[#e6edf3] placeholder-[#484f58] focus:outline-none focus:border-[#388bfd] transition-all text-sm";
 
   const isAdmin = user?.is_admin === true;
+
+  if (loading) {
+    return (
+      <div className="w-full min-h-[60vh] flex items-center justify-center bg-[#0d1117]">
+        <div className="w-8 h-8 border-2 border-[#388bfd] border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen w-full bg-[#0d1117] text-[#e6edf3]" style={{ fontFamily: "'Geist', 'SF Pro Display', system-ui, sans-serif" }}>

@@ -1,9 +1,6 @@
 // src/Admin/Courses.jsx
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import API from "../api/api";
-
-// Module-level flag to prevent double fetching in React Strict Mode
-let initialDataFetched = false;
 
 // Toast Component
 function Toast({ message, type, onClose }) {
@@ -50,6 +47,7 @@ function ConfirmModal({ isOpen, onClose, onConfirm, courseName }) {
 
 function Courses() {
   const [courses, setCourses] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -65,21 +63,20 @@ function Courses() {
   const showToast = (message, type = "success") => setToast({ message, type });
   const hideToast = () => setToast(null);
 
+  const fetched = useRef(false);
+
   const fetchCourses = () => {
     API.get("courses/")
       .then(res => setCourses(res.data))
-      .catch(() => showToast("Failed to load courses", "error"));
+      .catch(() => showToast("Failed to load courses", "error"))
+      .finally(() => setLoading(false));
   };
 
-  // Initial fetch – runs only once (module‑level flag prevents double call in Strict Mode)
   useEffect(() => {
-    if (!initialDataFetched) {
-      initialDataFetched = true;
-      fetchCourses();
-    }
+    if (fetched.current) return;
+    fetched.current = true;
+    fetchCourses();
   }, []);
-
-  // No extra fetch when form opens – the list is already loaded
 
   const filteredCourses = courses.filter(c =>
     c.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -87,7 +84,6 @@ function Courses() {
     c.description?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Pagination logic
   const totalFiltered = filteredCourses.length;
   const totalPages = Math.max(1, Math.ceil(totalFiltered / itemsPerPage));
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -182,6 +178,14 @@ function Courses() {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
     </svg>
   );
+
+  if (loading) {
+    return (
+      <div className="w-full min-h-[60vh] flex items-center justify-center bg-[#0d1117]">
+        <div className="w-8 h-8 border-2 border-[#388bfd] border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen w-full bg-[#0d1117] text-[#e6edf3]" style={{ fontFamily: "'Geist', 'SF Pro Display', system-ui, sans-serif" }}>

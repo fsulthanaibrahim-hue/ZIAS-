@@ -1,9 +1,6 @@
 // src/Admin/Students.jsx
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import API from "../api/api";
-
-// Module-level flag to prevent double fetching in React Strict Mode
-let initialDataFetched = false;
 
 function Toast({ message, type, onClose }) {
   useEffect(() => {
@@ -58,6 +55,7 @@ function Students() {
   const [phoneError, setPhoneError] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+  const [loading, setLoading] = useState(true); // new loading state
 
   // Delete confirmation modal state
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -87,13 +85,16 @@ function Students() {
   const showToast = (message, type = "success") => setToast({ message, type });
   const hideToast = () => setToast(null);
 
+  const fetched = useRef(false);
+
   const fetchStudents = () => {
     API.get("students/")
       .then((res) => setStudents(res.data))
       .catch((err) => {
         console.error(err);
         showToast("Failed to load students", "error");
-      });
+      })
+      .finally(() => setLoading(false));
   };
 
   const fetchCourses = () => {
@@ -112,15 +113,12 @@ function Students() {
       .catch(() => showToast("Failed to load mentors", "error"));
   };
 
-  // Initial data fetch – runs only once (module-level flag prevents double call)
+  // Initial data fetch – runs only once (ref resets on full page refresh)
   useEffect(() => {
-    if (!initialDataFetched) {
-      initialDataFetched = true;
-      fetchStudents();
-      fetchCourses();
-      fetchBatches();
-      fetchMentors();
-    }
+    if (fetched.current) return;
+    fetched.current = true;
+    setLoading(true);
+    Promise.all([fetchStudents(), fetchCourses(), fetchBatches(), fetchMentors()]).catch(() => {});
   }, []);
 
   // No extra fetch when form opens – the lists are already loaded
@@ -323,6 +321,14 @@ function Students() {
   ];
   const getColor = (name) => avatarColors[(name?.charCodeAt(0) || 0) % avatarColors.length];
 
+  if (loading) {
+    return (
+      <div className="w-full min-h-[60vh] flex items-center justify-center bg-[#0d1117]">
+        <div className="w-8 h-8 border-2 border-[#388bfd] border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen w-full bg-[#0d1117] text-[#e6edf3]" style={{ fontFamily: "'Geist', 'SF Pro Display', system-ui, sans-serif" }}>
       <style>{`
@@ -409,7 +415,7 @@ function Students() {
           </div>
         </div>
 
-        {/* Add/Edit Modal (full) */}
+        {/* Add/Edit Modal (full) – unchanged */}
         {showForm && (
           <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 backdrop-blur-md p-4" onClick={() => setShowForm(false)}>
             <form onSubmit={handleSubmit} className="modal-enter bg-[#161b22] rounded-2xl w-full max-w-3xl border border-[#30363d] shadow-2xl shadow-black/60 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>

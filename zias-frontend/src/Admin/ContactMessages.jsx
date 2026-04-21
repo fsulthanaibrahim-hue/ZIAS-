@@ -1,26 +1,23 @@
 // src/Admin/ContactMessages.jsx
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import API from "../api/api";
-
-// Module-level flag to prevent double fetching in React Strict Mode
-let initialDataFetched = false;
 
 function ContactMessages() {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState(null);
-  const [filter, setFilter] = useState("all"); 
-  
-  // Pagination state
+  const [filter, setFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 6; // messages per page
+  const itemsPerPage = 6;
+  const fetched = useRef(false);
 
   const fetchMessages = async () => {
     try {
       const res = await API.get("recent-messages/");
-      setMessages(res.data);
+      setMessages(res.data || []);
     } catch (err) {
       console.error(err);
+      setMessages([]);
     } finally {
       setLoading(false);
     }
@@ -46,41 +43,57 @@ function ContactMessages() {
     }
   };
 
-  // Initial fetch – runs only once (module‑level flag prevents double call in Strict Mode)
   useEffect(() => {
-    if (!initialDataFetched) {
-      initialDataFetched = true;
-      fetchMessages();
-    }
+    if (fetched.current) return;
+    fetched.current = true;
+    fetchMessages();
   }, []);
 
-  // Reset to first page when filter changes
   useEffect(() => {
     setCurrentPage(1);
   }, [filter]);
 
-  if (loading) return (
-    <div className="min-h-screen bg-[#0d1117] flex items-center justify-center">
-      <div className="flex flex-col items-center gap-3">
-        <div className="w-8 h-8 border-2 border-[#388bfd] border-t-transparent rounded-full animate-spin" />
-        <p className="text-[#7d8590] text-sm">Loading messages...</p>
+  const formatDate = (d) => {
+    if (!d) return "Unknown";
+    const date = new Date(d);
+    if (isNaN(date.getTime())) return "Invalid date";
+    const now = new Date();
+    const diff = now - date;
+    const mins = Math.floor(diff / 60000);
+    const hrs = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+    if (mins < 1) return "Just now";
+    if (mins < 60) return `${mins}m ago`;
+    if (hrs < 24) return `${hrs}h ago`;
+    if (days < 7) return `${days}d ago`;
+    return date.toLocaleDateString([], { day: "2-digit", month: "short", year: "numeric" });
+  };
+
+  const getInitial = (name) => (name ? name.charAt(0).toUpperCase() : "?");
+  const avatarPalette = [
+    ["#3b82f6","#1d4ed8"], ["#8b5cf6","#6d28d9"], ["#10b981","#065f46"],
+    ["#f59e0b","#b45309"], ["#ef4444","#b91c1c"], ["#06b6d4","#0e7490"],
+  ];
+  const getAvatar = (name) => avatarPalette[(name?.charCodeAt(0) || 0) % avatarPalette.length];
+
+  if (loading) {
+    return (
+      <div className="w-full min-h-[60vh] flex items-center justify-center bg-[#0d1117]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-[#388bfd] border-t-transparent rounded-full animate-spin" />
+          <p className="text-[#7d8590] text-sm">Loading messages...</p>
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
 
   const unreadCount = messages.filter(m => !m.is_read).length;
-
-  const filtered = messages.filter(m =>
-    filter === "all" ? true : filter === "unread" ? !m.is_read : m.is_read
-  );
-
-  // Pagination calculations
+  const filtered = messages.filter(m => filter === "all" ? true : filter === "unread" ? !m.is_read : m.is_read);
   const totalFiltered = filtered.length;
   const totalPages = Math.max(1, Math.ceil(totalFiltered / itemsPerPage));
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedMessages = filtered.slice(startIndex, startIndex + itemsPerPage);
 
-  // Generate page numbers for pagination controls
   const getPageNumbers = () => {
     const pages = [];
     const maxVisible = 5;
@@ -106,31 +119,8 @@ function ContactMessages() {
     return pages;
   };
 
-  const formatDate = (d) => {
-    const date = new Date(d);
-    const now = new Date();
-    const diff = now - date;
-    const mins = Math.floor(diff / 60000);
-    const hrs = Math.floor(diff / 3600000);
-    const days = Math.floor(diff / 86400000);
-    if (mins < 1) return "Just now";
-    if (mins < 60) return `${mins}m ago`;
-    if (hrs < 24) return `${hrs}h ago`;
-    if (days < 7) return `${days}d ago`;
-    return date.toLocaleDateString([], { day: "2-digit", month: "short", year: "numeric" });
-  };
-
-  const getInitial = (name) => (name ? name.charAt(0).toUpperCase() : "?");
-
-  const avatarPalette = [
-    ["#3b82f6","#1d4ed8"], ["#8b5cf6","#6d28d9"], ["#10b981","#065f46"],
-    ["#f59e0b","#b45309"], ["#ef4444","#b91c1c"], ["#06b6d4","#0e7490"],
-  ];
-  const getAvatar = (name) => avatarPalette[(name?.charCodeAt(0) || 0) % avatarPalette.length];
-
   return (
-    <div className="min-h-screen w-screen bg-[#0d1117] text-[#e6edf3]"
-      style={{ fontFamily: "'SF Pro Display', 'Segoe UI', system-ui, sans-serif" }}>
+    <div className="w-full bg-[#0d1117] text-[#e6edf3]">
       <style>{`
         .card-enter { animation: cardIn 0.25s cubic-bezier(0.16,1,0.3,1) both; }
         @keyframes cardIn { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
@@ -139,23 +129,17 @@ function ContactMessages() {
       `}</style>
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-
-        {/* ── Header ── */}
+        {/* Header */}
         <div className="mb-6 sm:mb-8">
-          {/* Title and action button: stack on mobile, row on larger */}
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-5">
             <div>
               <div className="flex items-center gap-3 mb-1">
                 <h1 className="text-xl sm:text-2xl font-bold text-[#e6edf3] tracking-tight">Inbox</h1>
                 {unreadCount > 0 && (
-                  <span className="bg-[#388bfd] text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                    {unreadCount} new
-                  </span>
+                  <span className="bg-[#388bfd] text-white text-xs font-bold px-2 py-0.5 rounded-full">{unreadCount} new</span>
                 )}
               </div>
-              <p className="text-[#7d8590] text-sm">
-                Contact form submissions from your website
-              </p>
+              <p className="text-[#7d8590] text-sm">Contact form submissions from your website</p>
             </div>
             {unreadCount > 0 && (
               <button
@@ -170,12 +154,11 @@ function ContactMessages() {
             )}
           </div>
 
-          {/* Filter tabs – wrap on mobile */}
           <div className="flex flex-wrap items-center gap-1 p-1 bg-[#161b22] border border-[#21262d] rounded-xl w-fit">
             {[
-              { key: "all",    label: "All",    count: messages.length },
+              { key: "all", label: "All", count: messages.length },
               { key: "unread", label: "Unread", count: unreadCount },
-              { key: "read",   label: "Read",   count: messages.length - unreadCount },
+              { key: "read", label: "Read", count: messages.length - unreadCount },
             ].map(tab => (
               <button
                 key={tab.key}
@@ -189,15 +172,13 @@ function ContactMessages() {
                 {tab.label}
                 <span className={`text-xs px-1.5 py-0.5 rounded-md font-semibold ${
                   filter === tab.key ? "bg-[#21262d] text-[#7d8590]" : "text-[#484f58]"
-                }`}>
-                  {tab.count}
-                </span>
+                }`}>{tab.count}</span>
               </button>
             ))}
           </div>
         </div>
 
-        {/* ── Messages Cards ── */}
+        {/* Messages Cards */}
         {paginatedMessages.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 sm:py-24 gap-4">
             <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-[#161b22] border border-[#21262d] flex items-center justify-center">
@@ -213,11 +194,7 @@ function ContactMessages() {
               const [c1, c2] = getAvatar(msg.name);
               const isExpanded = expandedId === msg.id;
               return (
-                <div
-                  key={msg.id}
-                  className="card-enter"
-                  style={{ animationDelay: `${i * 0.04}s` }}
-                >
+                <div key={msg.id} className="card-enter" style={{ animationDelay: `${i * 0.04}s` }}>
                   <div
                     onClick={() => setExpandedId(isExpanded ? null : msg.id)}
                     className={`rounded-xl border cursor-pointer transition-all duration-200 overflow-hidden ${
@@ -226,9 +203,7 @@ function ContactMessages() {
                         : "bg-[#161b22] border-[#21262d] hover:border-[#30363d]"
                     }`}
                   >
-                    {/* Card Top – responsive layout */}
                     <div className="flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4 p-3 sm:p-4">
-                      {/* Avatar - single letter */}
                       <div className="flex sm:flex-col items-center gap-3 sm:gap-0">
                         <div
                           className="w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-white text-xs sm:text-sm font-bold shrink-0"
@@ -237,35 +212,22 @@ function ContactMessages() {
                           {getInitial(msg.name)}
                         </div>
                       </div>
-
-                      {/* Content area – takes full width on mobile */}
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-start justify-between gap-2 mb-1">
                           <div className="flex items-center gap-2.5 min-w-0">
                             <span className={`text-sm font-semibold truncate ${!msg.is_read ? "text-[#e6edf3]" : "text-[#c9d1d9]"}`}>
                               {msg.name}
                             </span>
-                            {!msg.is_read && (
-                              <span className="w-2 h-2 bg-[#388bfd] rounded-full shrink-0" />
-                            )}
+                            {!msg.is_read && <span className="w-2 h-2 bg-[#388bfd] rounded-full shrink-0" />}
                           </div>
                           <span className="text-[#484f58] text-xs shrink-0 font-mono">{formatDate(msg.created_at)}</span>
                         </div>
-
                         <p className={`text-xs mb-1.5 font-mono truncate ${!msg.is_read ? "text-[#7d8590]" : "text-[#484f58]"}`}>
                           {msg.email}{msg.phone ? ` · ${msg.phone}` : ""}
                         </p>
-
-                        <p className={`text-sm font-medium mb-1 ${!msg.is_read ? "text-[#c9d1d9]" : "text-[#7d8590]"}`}>
-                          {msg.subject}
-                        </p>
-
-                        {!isExpanded && (
-                          <p className="text-[#484f58] text-sm truncate leading-relaxed">{msg.message}</p>
-                        )}
+                        <p className={`text-sm font-medium mb-1 ${!msg.is_read ? "text-[#c9d1d9]" : "text-[#7d8590]"}`}>{msg.subject}</p>
+                        {!isExpanded && <p className="text-[#484f58] text-sm truncate leading-relaxed">{msg.message}</p>}
                       </div>
-
-                      {/* Status and chevron – row on mobile, column on desktop? We'll keep as flex row on small screens */}
                       <div className="flex flex-row sm:flex-col items-center justify-between sm:justify-start gap-2 sm:gap-2 shrink-0">
                         {msg.is_read ? (
                           <span className="inline-flex items-center gap-1 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide">
@@ -284,14 +246,11 @@ function ContactMessages() {
                         </svg>
                       </div>
                     </div>
-
-                    {/* Expanded body – responsive padding */}
                     {isExpanded && (
                       <div className="msg-body px-3 sm:px-4 pb-4 pt-0 sm:ml-14">
                         <div className="bg-[#0d1117] border border-[#21262d] rounded-xl p-3 sm:p-4 mb-3">
                           <p className="text-[#c9d1d9] text-sm leading-relaxed whitespace-pre-wrap">{msg.message}</p>
                         </div>
-                        {/* Action buttons – wrap on mobile */}
                         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                           <a
                             href={`mailto:${msg.email}?subject=Re: ${encodeURIComponent(msg.subject)}`}
@@ -336,65 +295,43 @@ function ContactMessages() {
           </div>
         )}
 
-        {/* ── Pagination Controls (already responsive) ── */}
+        {/* Pagination */}
         {totalPages > 1 && (
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-8 pt-2 border-t border-[#21262d]">
             <div className="text-[#484f58] text-xs text-center sm:text-left">
-              Showing{" "}
-              <span className="text-[#7d8590] font-medium">
-                {totalFiltered === 0 ? 0 : startIndex + 1}
-              </span>{" "}
-              to{" "}
-              <span className="text-[#7d8590] font-medium">
-                {Math.min(startIndex + itemsPerPage, totalFiltered)}
-              </span>{" "}
-              of{" "}
-              <span className="text-[#7d8590] font-medium">{totalFiltered}</span> messages
+              Showing {totalFiltered === 0 ? 0 : startIndex + 1} to {Math.min(startIndex + itemsPerPage, totalFiltered)} of {totalFiltered} messages
             </div>
-
             <div className="flex items-center justify-center gap-1">
               <button
                 onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                 disabled={currentPage === 1}
-                className={`px-2.5 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                  currentPage === 1
-                    ? "text-[#484f58] cursor-not-allowed"
-                    : "text-[#7d8590] hover:text-[#e6edf3] hover:bg-[#21262d]"
-                }`}
+                className="px-2.5 py-1.5 rounded-lg text-sm disabled:text-[#484f58] text-[#7d8590] hover:bg-[#21262d]"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
               </button>
-
               {getPageNumbers().map((page, idx) =>
                 page === "..." ? (
-                  <span key={`ellipsis-${idx}`} className="px-2 py-1.5 text-[#484f58] text-sm">
-                    ...
-                  </span>
+                  <span key={`ellipsis-${idx}`} className="px-2 py-1.5 text-[#484f58] text-sm">...</span>
                 ) : (
                   <button
                     key={page}
                     onClick={() => setCurrentPage(page)}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
                       currentPage === page
                         ? "bg-[#388bfd] text-white shadow-md shadow-[#388bfd]/20"
-                        : "text-[#7d8590] hover:text-[#e6edf3] hover:bg-[#21262d]"
+                        : "text-[#7d8590] hover:bg-[#21262d]"
                     }`}
                   >
                     {page}
                   </button>
                 )
               )}
-
               <button
                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                 disabled={currentPage === totalPages}
-                className={`px-2.5 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                  currentPage === totalPages
-                    ? "text-[#484f58] cursor-not-allowed"
-                    : "text-[#7d8590] hover:text-[#e6edf3] hover:bg-[#21262d]"
-                }`}
+                className="px-2.5 py-1.5 rounded-lg text-sm disabled:text-[#484f58] text-[#7d8590] hover:bg-[#21262d]"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -403,8 +340,6 @@ function ContactMessages() {
             </div>
           </div>
         )}
-
-        {/* Footer */}
         {messages.length > 0 && (
           <p className="text-center text-[#484f58] text-xs mt-6">
             {messages.length} message{messages.length !== 1 ? "s" : ""} total · Click a card to expand
