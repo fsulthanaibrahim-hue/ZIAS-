@@ -1,8 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.utils import timezone
-from django.db.models.signals import post_save
-from django.dispatch import receiver
+# No signal imports here
 
 # Custom User model
 class User(AbstractUser):
@@ -295,17 +294,3 @@ class WeekUpdate(models.Model):
     def __str__(self):
         return f"Update for {self.week_review}"
 
-
-# ----------------------------
-# SIGNAL: Auto-create StudentWeekReview entries when a Student is created
-# ----------------------------
-@receiver(post_save, sender=Student)
-def create_student_week_reviews(sender, instance, created, **kwargs):
-    if created:
-        if instance.course:
-            modules = Module.objects.filter(course__name=instance.course)
-        else:
-            modules = Module.objects.all()
-        
-        for module in modules:
-            StudentWeekReview.objects.get_or_create(student=instance, module=module)
