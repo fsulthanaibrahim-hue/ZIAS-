@@ -222,17 +222,29 @@ class StudentWeekReview(models.Model):
     task_status = models.CharField(
         max_length=50, blank=True,
         choices=[
-            ('Not Started', 'Not Started'),
-            ('In Progress', 'In Progress'),
-            ('Completed', 'Completed'),
-            ('Needs Improvement', 'Needs Improvement'),
+            ('Task Completed', 'Task Completed'),
+            ('Task Need Improvement', 'Task Need Improvement'),
+            ('Task Critical', 'Task Critical'),
+            ('Task Not Completed', 'Task Not Completed'),
         ]
     )
     feedback = models.TextField(blank=True)
-    extra_workouts = models.TextField(blank=True, help_text="YouTube video links or descriptions")
-    english_review = models.TextField(blank=True)
+    
+    extra_workouts = models.CharField(
+        max_length=30, blank=True,
+        choices=[
+            ('Completed', 'Completed'),
+            ('Need Improvement', 'Need Improvement'),
+            ('Not Completed', 'Not Completed'),
+        ],
+        help_text="Status of extra workouts"
+    )
+    
+    english_review = models.TextField(blank=True)   # auto‑generated from english_score
+    english_score = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Score out of 20")
+    
     star_rating = models.PositiveSmallIntegerField(null=True, blank=True, choices=[(i, i) for i in range(1, 6)])
-    total_score = models.PositiveSmallIntegerField(null=True, blank=True)
+    total_score = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Total score out of 20")
     
     # role‑specific remark fields
     admin_remarks = models.TextField(blank=True)
@@ -243,6 +255,28 @@ class StudentWeekReview(models.Model):
     
     class Meta:
         unique_together = ['student', 'module']
+    
+    def generate_english_review(self):
+        """Auto‑generate review text based on english_score."""
+        if self.english_score is None:
+            return ""
+        score = self.english_score
+        if score >= 18:
+            return "Excellent English skills. Very fluent and accurate."
+        elif score >= 15:
+            return "Good English skills. Minor errors, but well communicated."
+        elif score >= 12:
+            return "Average English. Needs improvement in grammar and vocabulary."
+        elif score >= 8:
+            return "Below average English. Significant errors, requires practice."
+        else:
+            return "Poor English. Strongly needs basic English training."
+    
+    def save(self, *args, **kwargs):
+        # Auto‑generate english_review if english_score is provided
+        if self.english_score is not None:
+            self.english_review = self.generate_english_review()
+        super().save(*args, **kwargs)
     
     def __str__(self):
         return f"{self.student.user.username} - {self.module.title}"
@@ -256,7 +290,7 @@ class WeekUpdate(models.Model):
     update_date = models.DateField(auto_now_add=True)
     update_text = models.TextField(blank=True)
     extra_score = models.PositiveSmallIntegerField(null=True, blank=True)
-    created_by = models.CharField(max_length=50, blank=True)  # e.g., "admin", "mentor", "reviewer"
+    created_by = models.CharField(max_length=50, blank=True)
 
     def __str__(self):
         return f"Update for {self.week_review}"
@@ -267,12 +301,7 @@ class WeekUpdate(models.Model):
 # ----------------------------
 @receiver(post_save, sender=Student)
 def create_student_week_reviews(sender, instance, created, **kwargs):
-    """
-    When a new Student is created, automatically create StudentWeekReview
-    entries for all modules (or only those matching the student's course).
-    """
     if created:
-        # If student has a course, fetch modules for that course; otherwise all modules.
         if instance.course:
             modules = Module.objects.filter(course__name=instance.course)
         else:
@@ -280,4 +309,3 @@ def create_student_week_reviews(sender, instance, created, **kwargs):
         
         for module in modules:
             StudentWeekReview.objects.get_or_create(student=instance, module=module)
-            

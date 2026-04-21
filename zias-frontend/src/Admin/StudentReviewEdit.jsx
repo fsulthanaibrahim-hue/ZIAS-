@@ -1,5 +1,5 @@
-// src/Admin/StudentReviewEdit.jsx
-import { useEffect, useState, useCallback, useRef } from "react";
+// src/Admin/StudentReviewEdit.jsx (updated with review text, no "auto" label)
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import API from "../api/api";
 
@@ -11,9 +11,9 @@ const extractWeekNumber = (title) => {
 };
 
 const cleanTitle = (title) => {
-  if (!title) return "Week";
+  if (!title) return "";
   const pattern = /^week\s+\d+\s*[–:\-]\s*/i;
-  return title.replace(pattern, "").trim() || "Week";
+  return title.replace(pattern, "").trim();
 };
 
 function debounce(func, delay) {
@@ -24,30 +24,91 @@ function debounce(func, delay) {
   };
 }
 
-// Fixed ranges up to week 44
-const WEEK_RANGES = [
-  { label: "Week 0 - 12", start: 1, end: 12 },
-  { label: "Week 13 - 16", start: 13, end: 16 },
-  { label: "Week 17 - 24", start: 17, end: 24 },
-  { label: "Week 25 - 32", start: 25, end: 32 },
-  { label: "Week 33 - 40", start: 33, end: 40 },
-  { label: "Week 41 - 44", start: 41, end: 44 },
-];
-
 function StudentReviewEdit() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const studentId = searchParams.get("student_id");
 
   const [student, setStudent] = useState(null);
-  const [allWeeks, setAllWeeks] = useState([]);
-  const [filteredWeeks, setFilteredWeeks] = useState([]);
+  const [weeks, setWeeks] = useState([]);
   const [reviews, setReviews] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [activeRangeIndex, setActiveRangeIndex] = useState(0);
-
   const dataFetched = useRef(false);
+  
+  const [reviewersList, setReviewersList] = useState([]);
+
+  useEffect(() => {
+    const fetchReviewers = async () => {
+      try {
+        let reviewerNames = [];
+        try {
+          const res = await API.get("/reviewers/");
+          reviewerNames = res.data.map(rev => {
+            let name = rev.name || rev.user?.username || rev.username;
+            if (!name) return "";
+            name = name.charAt(0).toUpperCase() + name.slice(1);
+            return `${name} Sir`;
+          });
+        } catch (err) {
+          const usersRes = await API.get("/users/?is_reviewer=true");
+          reviewerNames = usersRes.data.map(user => {
+            let name = user.full_name || user.username;
+            if (!name) return "";
+            name = name.charAt(0).toUpperCase() + name.slice(1);
+            return `${name} Sir`;
+          });
+        }
+        const uniqueNames = [...new Set(reviewerNames.filter(n => n && n !== " Sir"))];
+        setReviewersList(uniqueNames);
+      } catch (err) {
+        setReviewersList([]);
+      }
+    };
+    fetchReviewers();
+  }, []);
+
+  const rows = useMemo(() => [
+    {
+      label: "Status",
+      field: "task_status",
+      type: "select",
+      options: ["Task Completed", "Task Need Improvement", "Task Critical", "Task Not Completed"],
+    },
+    { label: "Project Updates", field: "feedback", type: "textarea", rows: 2 },
+    {
+      label: "Reviewer Name",
+      field: "reviewer_name",
+      type: "select",
+      options: reviewersList.length ? reviewersList : ["No reviewers available"],
+    },
+    { label: "Advisor Name", field: "advisor_name", type: "text", placeholder: "Advisor" },
+    {
+      label: "Score [20]",
+      field: "total_score",
+      type: "number",
+      placeholder: "0-20",
+      min: 0,
+      max: 20,
+      step: 1,
+    },
+    {
+      label: "Extra Workouts Review",
+      field: "extra_workouts",
+      type: "select",
+      options: ["Completed", "Need Improvement", "Not Completed"],
+    },
+    { label: "Review Date", field: "review_date", type: "date" },
+    {
+      label: "English Score [20]",
+      field: "english_score",
+      type: "number",
+      placeholder: "0-20",
+      min: 0,
+      max: 20,
+      step: 1,
+    },
+  ], [reviewersList]);
 
   const saveField = useCallback(async (weekId, field, value) => {
     try {
@@ -60,7 +121,21 @@ function StudentReviewEdit() {
   const debouncedSave = useCallback(debounce(saveField, 800), [saveField]);
 
   const handleChange = (weekId, field, value) => {
-    setReviews(prev => ({ ...prev, [weekId]: { ...prev[weekId], [field]: value } }));
+    const row = rows.find((r) => r.field === field);
+    if (row?.type === "number") {
+      let num = parseFloat(value);
+      if (isNaN(num)) {
+        value = "";
+      } else {
+        if (row.min !== undefined && num < row.min) num = row.min;
+        if (row.max !== undefined && num > row.max) num = row.max;
+        value = num;
+      }
+    }
+    setReviews((prev) => ({
+      ...prev,
+      [weekId]: { ...prev[weekId], [field]: value },
+    }));
     debouncedSave(weekId, field, value);
   };
 
@@ -74,7 +149,6 @@ function StudentReviewEdit() {
         const res = await API.get(`students/${studentId}/`);
         setStudent(res.data);
       } catch (err) {
-        console.error(err);
         setError("Failed to load student");
       }
     };
@@ -91,12 +165,12 @@ function StudentReviewEdit() {
         setError(null);
         try {
           const modulesRes = await API.get(`modules/student-modules/?student_id=${studentId}`);
-          let allWeeksData = modulesRes.data;
-          allWeeksData.sort((a, b) => extractWeekNumber(a.title) - extractWeekNumber(b.title));
-          setAllWeeks(allWeeksData);
+          let allWeeks = modulesRes.data;
+          allWeeks.sort((a, b) => extractWeekNumber(a.title) - extractWeekNumber(b.title));
+          setWeeks(allWeeks);
 
           const reviewsData = {};
-          for (const week of allWeeksData) {
+          for (const week of allWeeks) {
             try {
               const reviewRes = await API.get(`week-review/${week.id}/?student_id=${studentId}`);
               reviewsData[week.id] = reviewRes.data;
@@ -106,7 +180,6 @@ function StudentReviewEdit() {
           }
           setReviews(reviewsData);
         } catch (err) {
-          console.error(err);
           setError("Failed to load review data.");
         } finally {
           setLoading(false);
@@ -118,30 +191,11 @@ function StudentReviewEdit() {
     }
   }, [studentId]);
 
-  useEffect(() => {
-    const range = WEEK_RANGES[activeRangeIndex];
-    if (range && allWeeks.length) {
-      const filtered = allWeeks.filter(week => {
-        const weekNum = extractWeekNumber(week.title);
-        return weekNum >= range.start && weekNum <= range.end;
-      });
-      setFilteredWeeks(filtered);
-    }
-  }, [activeRangeIndex, allWeeks]);
-
-  const rows = [
-    { label: "Status", field: "task_status", type: "select", options: ["Not Started", "In Progress", "Completed", "Needs Improvement"] },
-    { label: "Project Updates", field: "feedback", type: "textarea", rows: 2 },
-    { label: "Reviewer Name", field: "reviewer_name", type: "text", placeholder: "Reviewer" },
-    { label: "Advisor Name", field: "advisor_name", type: "text", placeholder: "Advisor" },
-    { label: "Score [20]", field: "total_score", type: "number", placeholder: "0-20" },
-    { label: "Extra Workouts Review", field: "extra_workouts", type: "textarea", rows: 2 },
-    { label: "Review Date", field: "review_date", type: "date" },
-    { label: "English Review", field: "english_review", type: "textarea", rows: 2 },
-  ];
-
   const renderCell = (weekId, row) => {
-    const value = reviews[weekId]?.[row.field] ?? "";
+    let value = reviews[weekId]?.[row.field] ?? "";
+    if (row.type === "number" && (value === null || value === undefined || value === "")) {
+      value = "";
+    }
     const onChange = (val) => handleChange(weekId, row.field, val);
 
     if (row.type === "select") {
@@ -152,7 +206,9 @@ function StudentReviewEdit() {
           className="w-full bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-sm text-[#e6edf3] focus:border-[#388bfd] outline-none"
         >
           <option value="">—</option>
-          {row.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+          {row.options.map((opt) => (
+            <option key={opt} value={opt}>{opt}</option>
+          ))}
         </select>
       );
     }
@@ -169,13 +225,24 @@ function StudentReviewEdit() {
     }
     if (row.type === "number") {
       return (
-        <input
-          type="number"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-full bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-sm text-[#e6edf3] focus:border-[#388bfd] outline-none"
-          placeholder={row.placeholder || ""}
-        />
+        <div>
+          <input
+            type="number"
+            min={row.min}
+            max={row.max}
+            step={row.step}
+            value={value === "" ? "" : value}
+            onChange={(e) => onChange(e.target.value)}
+            className="w-full bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-sm text-[#e6edf3] focus:border-[#388bfd] outline-none"
+            placeholder={row.placeholder || ""}
+          />
+          {/* Show english review text without "auto" label */}
+          {row.field === "english_score" && reviews[weekId]?.english_review && (
+            <div className="mt-1 text-xs text-[#7d8590]">
+              📝 {reviews[weekId].english_review}
+            </div>
+          )}
+        </div>
       );
     }
     if (row.type === "date") {
@@ -208,79 +275,56 @@ function StudentReviewEdit() {
       <div className="max-w-full mx-auto px-4 sm:px-6 py-4 sm:py-8">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-xl font-semibold text-[#e6edf3] tracking-tight">Edit Review Sheet</h1>
+            <h1 className="text-xl font-semibold">Edit Review Sheet</h1>
             <p className="text-[#7d8590] text-sm mt-1">
               {student?.full_name || student?.username} • {student?.course} • {student?.batch}
             </p>
           </div>
-          <button
-            onClick={() => navigate("/admin/review-sheets")}
-            className="bg-[#21262d] hover:bg-[#30363d] text-[#7d8590] hover:text-white px-4 py-2 rounded-lg text-sm font-medium transition"
-          >
-            ← Back
-          </button>
+          <button onClick={() => navigate("/admin/review-sheets")} className="bg-[#21262d] hover:bg-[#30363d] text-[#7d8590] hover:text-white px-4 py-2 rounded-lg text-sm font-medium transition">← Back</button>
         </div>
 
-        {/* Range Tabs */}
-        <div className="mb-6 overflow-x-auto pb-2">
-          <div className="flex gap-2 flex-wrap">
-            {WEEK_RANGES.map((range, idx) => (
-              <button
-                key={idx}
-                onClick={() => setActiveRangeIndex(idx)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap ${
-                  activeRangeIndex === idx
-                    ? "bg-[#388bfd] text-white shadow-md"
-                    : "bg-[#21262d] text-[#7d8590] hover:bg-[#30363d]"
-                }`}
-              >
-                {range.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Table */}
-        <div className="overflow-x-auto rounded-xl border border-[#21262d] shadow-xl shadow-black/20">
+        {/* Desktop Table */}
+        <div className="hidden md:block overflow-x-auto rounded-xl border border-[#21262d]">
           <table className="min-w-full border-collapse">
             <thead className="bg-[#161b22] border-b border-[#21262d]">
               <tr>
                 <th className="sticky left-0 bg-[#161b22] z-10 px-4 py-3 text-left text-[#7d8590] text-xs font-semibold uppercase w-48">FIELD / WEEK</th>
-                {filteredWeeks.map((week, idx) => (
-                  <th key={week.id || idx} className="px-3 py-3 text-left text-[#e6edf3] text-sm font-medium min-w-[200px] border-l border-[#21262d]">
-                    {cleanTitle(week.title)}
-                  </th>
-                ))}
+                {weeks.map(week => <th key={week.id} className="px-3 py-3 text-left text-[#e6edf3] text-sm font-medium min-w-[200px] border-l border-[#21262d]">{cleanTitle(week.title)}</th>)}
               </tr>
             </thead>
             <tbody className="bg-[#0d1117] divide-y divide-[#21262d]">
               {rows.map(row => (
                 <tr key={row.field} className="hover:bg-[#161b22]/40">
                   <td className="sticky left-0 bg-[#0d1117] px-4 py-3 text-[#7d8590] text-sm font-medium border-r border-[#21262d]">{row.label}</td>
-                  {filteredWeeks.map(week => (
-                    <td key={week.id} className="px-3 py-2 border-l border-[#21262d] align-top">{renderCell(week.id, row)}</td>
-                  ))}
+                  {weeks.map(week => <td key={week.id} className="px-3 py-2 border-l border-[#21262d] align-top">{renderCell(week.id, row)}</td>)}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
 
-        {/* Personal Details */}
+        {/* Mobile Cards */}
+        <div className="md:hidden space-y-6">
+          {weeks.map(week => (
+            <div key={week.id} className="bg-[#161b22] rounded-xl border border-[#21262d] p-4">
+              <h2 className="text-lg font-semibold mb-3 border-b border-[#30363d] pb-2">{cleanTitle(week.title)}</h2>
+              <div className="space-y-3">
+                {rows.map(row => (
+                  <div key={row.field} className="flex flex-col gap-1">
+                    <label className="text-[#7d8590] text-xs font-medium uppercase tracking-wide">{row.label}</label>
+                    <div>{renderCell(week.id, row)}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
         <div className="mt-6 bg-[#161b22] rounded-xl border border-[#21262d] p-4">
-          <h3 className="text-sm font-semibold text-[#e6edf3] mb-2">Personal Details</h3>
-          <div className="flex flex-wrap gap-4 text-xs">
-            {WEEK_RANGES.map((range, idx) => (
-              <button
-                key={idx}
-                onClick={() => setActiveRangeIndex(idx)}
-                className={`hover:text-blue-400 transition ${
-                  activeRangeIndex === idx ? "text-blue-400" : "text-[#7d8590]"
-                }`}
-              >
-                {range.label}
-              </button>
-            ))}
+          <h3 className="text-sm font-semibold mb-2">Personal Details</h3>
+          <div className="flex flex-wrap gap-4 text-xs text-[#7d8590]">
+            <span>Week 0 - 12</span><span>Week 13 - 16</span><span>Week 17 - 24</span>
+            <span>Week 25 - 32</span><span>Week 33 - 40</span><span>Week 41 - 44</span>
           </div>
         </div>
         <div className="mt-4 text-right text-[#484f58] text-xs">💡 Click any cell to edit. Changes auto‑save.</div>
