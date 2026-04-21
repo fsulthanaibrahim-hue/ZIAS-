@@ -1,4 +1,4 @@
-// src/components/Sidebar.jsx
+// src/components/Sidebar.jsx (updated with Chat)
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import NotificationBell from "./NotificationBell";
 
@@ -77,6 +77,12 @@ function NavLink({ to, label, active, badge }) {
         {label === "Batches" && (
           <svg viewBox="0 0 16 16" fill="currentColor" width="16" height="16">
             <path d="M2 2h12v1H2V2zm0 2h12v1H2V4zm0 2h12v1H2V6zm0 2h12v1H2V8zm0 2h12v1H2v-1zm0 2h12v1H2v-1zM2 0h12v1H2V0z" />
+          </svg>
+        )}
+        {/* Chat icon */}
+        {label === "Chat" && (
+          <svg viewBox="0 0 16 16" fill="currentColor" width="16" height="16">
+            <path d="M8 2C4.686 2 2 4.686 2 8c0 1.316.4 2.537 1.087 3.548L2 14l2.452-1.087A5.973 5.973 0 008 14c3.314 0 6-2.686 6-6s-2.686-6-6-6zm0 1c2.761 0 5 2.239 5 5s-2.239 5-5 5a4.96 4.96 0 01-2.5-.693L4 13l.693-1.5A4.96 4.96 0 013 9c0-2.761 2.239-5 5-5zM5 7h1v1H5V7zm2 0h1v1H7V7zm2 0h1v1H9V7z" />
           </svg>
         )}
       </span>
@@ -193,9 +199,11 @@ function Sidebar() {
         <NavLink to="/admin/reviewers" label="Reviewers" active={isActive("/admin/reviewers")} />
         <NavLink to="/admin/courses" label="Courses" active={isActive("/admin/courses")} />
         <NavLink to="/admin/modules" label="Modules" active={isActive("/admin/modules")} />
-        <NavLink to="/admin/batches" label="Batches" active={isActive("/admin/batches")} />    {/* NEW */}
+        <NavLink to="/admin/batches" label="Batches" active={isActive("/admin/batches")} />
         <NavLink to="/admin/messages" label="Messages" active={isActive("/admin/messages")} />
         <NavLink to="/admin/review-sheets" label="Review Sheets" active={isActive("/admin/review-sheets")} />
+        {/* 👇 NEW Chat link */}
+        <NavLink to="/chat" label="Chat" active={pathname === "/chat"} />
       </nav>
 
       <div

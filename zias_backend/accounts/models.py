@@ -17,6 +17,19 @@ class User(AbstractUser):
         self.password_changed_at = timezone.now()
         self.save()
 
+    @property
+    def user_type(self):
+        """Helper property to get user type as a string."""
+        if self.is_admin:
+            return 'admin'
+        if self.is_student:
+            return 'student'
+        if self.is_mentor:
+            return 'mentor'
+        if self.is_reviewer:
+            return 'reviewer'
+        return 'unknown'
+
     def __str__(self):
         return self.username
 
@@ -209,6 +222,41 @@ class ContactMessage(models.Model):
         return f"{self.name} - {self.subject}"
 
 # ----------------------------
+# NOTIFICATION MODEL (for real‑time alerts)
+# ----------------------------
+class Notification(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
+    message = models.CharField(max_length=255)
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.message}"
+
+
+# ----------------------------
+# CHAT MESSAGE MODEL (for storing chat history)
+# ----------------------------
+class ChatMessage(models.Model):
+    ROOM_TYPE_CHOICES = [
+        ('broadcast', 'Broadcast'),
+        ('user_type', 'User Type'),
+        ('private', 'Private'),
+    ]
+    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_chat_messages')
+    room_type = models.CharField(max_length=20, choices=ROOM_TYPE_CHOICES)
+    room_identifier = models.CharField(max_length=100, blank=True, null=True)  # e.g., 'admin' or user_id for private
+    message = models.TextField()
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.sender.username} - {self.room_type}: {self.message[:30]}"
+
+    class Meta:
+        ordering = ['-timestamp']
+
+
+# ----------------------------
 # STUDENT WEEK REVIEW MODEL (for reviewer feedback)
 # ----------------------------
 class StudentWeekReview(models.Model):
@@ -293,4 +341,3 @@ class WeekUpdate(models.Model):
 
     def __str__(self):
         return f"Update for {self.week_review}"
-

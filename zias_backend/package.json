@@ -1,5 +1,6 @@
 {
   "dependencies": {
-    "marked": "^17.0.5"
+    "marked": "^17.0.5",
+    "socket.io-client": "^4.8.3"
   }
 }

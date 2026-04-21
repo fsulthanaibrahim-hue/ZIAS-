@@ -1,4 +1,4 @@
-// src/pages/student/StudentDashboard.jsx
+// src/pages/student/StudentDashboard.jsx (add Chat button)
 import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import API from "../../api/api";
@@ -21,7 +21,6 @@ function StudentDashboard() {
         const modulesData = modulesRes.data;
         setModules(modulesData);
 
-        // Fetch review for each module (to show marks/rating)
         const reviewsData = {};
         for (const mod of modulesData) {
           try {
@@ -64,9 +63,12 @@ function StudentDashboard() {
           <div className="flex gap-3">
             <Link to="/student/review-sheet" className="bg-[#1f3a5c] hover:bg-[#2a4a74] px-4 py-2 rounded-lg text-sm transition">📋 Review Sheet</Link>
             <Link to="/student/profile" className="bg-[#21262d] hover:bg-[#30363d] px-4 py-2 rounded-lg text-sm transition">My Profile</Link>
+            {/* 👇 NEW Chat button */}
+            <Link to="/chat" className="bg-[#238636] hover:bg-[#2ea043] px-4 py-2 rounded-lg text-sm transition">💬 Chat</Link>
           </div>
         </div>
 
+        {/* Modules grid - unchanged */}
         <div className="space-y-4">
           <h2 className="text-xl font-semibold mb-4">Your Learning Modules</h2>
           {modules.length === 0 ? (
@@ -131,4 +133,3 @@ function StudentDashboard() {
 }
 
 export default StudentDashboard;
-

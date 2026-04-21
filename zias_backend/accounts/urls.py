@@ -9,7 +9,7 @@ from .views import (
     ContactMessageView, UnreadMessagesCountView, RecentMessagesView, ContactMessageDetailView,
     CustomLoginView, LogoutView, UpdateDashboardAccessView,
     CompleteModuleView, StudentWeekReviewView, StudentListView, WeeklyToppersView,
-    WeekUpdateViewSet   # add this
+    WeekUpdateViewSet, get_chat_history, get_all_users   # 👈 added get_all_users
 )
 
 router = DefaultRouter()
@@ -22,17 +22,12 @@ router.register('days', DayViewSet, basename='day')
 router.register('tasks', TaskViewSet)
 router.register('batches', BatchViewSet)
 router.register('student-modules', StudentModuleViewSet, basename='student-module')
-router.register('week-updates', WeekUpdateViewSet, basename='week-update')   # NEW
+router.register('week-updates', WeekUpdateViewSet, basename='week-update')
 
 urlpatterns = [
-    # Custom student list endpoint – MUST come BEFORE the router include
     path('api/students/list/', StudentListView.as_view(), name='student-list'),
     path('api/students/me/', StudentViewSet.as_view({'get': 'get_me'}), name='student-me'),
-    
-    # Router (handles /api/students/, /api/mentors/, etc.)
     path('api/', include(router.urls)),
-    
-    # JWT and other custom endpoints
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/users/me/', CurrentUserView.as_view(), name='current_user'),
@@ -50,5 +45,6 @@ urlpatterns = [
     path('api/modules/<int:module_id>/complete/', CompleteModuleView.as_view(), name='complete-module'),
     path('api/week-review/<int:module_id>/', StudentWeekReviewView.as_view(), name='week-review'),
     path('api/weekly-toppers/', WeeklyToppersView.as_view(), name='weekly-toppers'),
+    path('api/chat-history/', get_chat_history, name='chat-history'),
+    path('api/users/', get_all_users, name='all_users'),   
 ]
-

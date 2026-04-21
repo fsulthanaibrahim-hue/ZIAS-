@@ -39,6 +39,8 @@ import About from "./pages/About";
 import Contact from "./pages/Contact";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
+// Chat component
+import ChatComponent from "./components/ChatComponent";  // 👈 new import
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem("access_token");
@@ -119,6 +121,17 @@ function App() {
       {/* Mentor routes */}
       <Route path="/mentor/dashboard" element={<PrivateRoute><MentorDashboard /></PrivateRoute>} />
       <Route path="/mentor/profile" element={<PrivateRoute><MentorProfile /></PrivateRoute>} />
+
+      {/* Chat route – accessible to all authenticated users */}
+      <Route path="/chat" element={
+        <PrivateRoute>
+          <div className="min-h-screen bg-[#0d1117]">
+            <div className="max-w-6xl mx-auto px-4 py-6">
+              <ChatComponent />
+            </div>
+          </div>
+        </PrivateRoute>
+      } />
 
       {/* Admin routes */}
       <Route path="/admin/dashboard" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Dashboard /></div></AdminRoute>} />

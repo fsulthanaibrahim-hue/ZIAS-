@@ -6,8 +6,10 @@ import API from "../api/api";
 function NotificationBell() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
+  const wsRef = useRef(null);
   const fetched = useRef(false);
 
+  // Initial fetch via REST (fallback / first load)
   const fetchUnreadCount = async () => {
     setLoading(true);
     try {
@@ -20,14 +22,59 @@ function NotificationBell() {
     }
   };
 
-  // Fetch only once – the ref prevents the second call in Strict Mode
+  // Set up WebSocket connection
+  const setupWebSocket = () => {
+    const token = localStorage.getItem("access_token");
+    if (!token) return;
+
+    // Use the same WebSocket URL as your Django Channels endpoint
+    const wsUrl = `ws://localhost:8000/ws/notifications/?token=${token}`;
+    const ws = new WebSocket(wsUrl);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      console.log("Notification WebSocket connected");
+    };
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === "unread_count") {
+        setUnreadCount(data.count);
+      } else if (data.type === "new_notification") {
+        // Optional: show a toast or update state
+        setUnreadCount(data.unread_count);
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error("WebSocket error:", error);
+    };
+
+    ws.onclose = () => {
+      console.log("Notification WebSocket disconnected");
+      // Attempt to reconnect after 5 seconds
+      setTimeout(setupWebSocket, 5000);
+    };
+  };
+
+  // Initial data and WebSocket setup
   useEffect(() => {
     if (fetched.current) return;
     fetched.current = true;
-    fetchUnreadCount();
+    fetchUnreadCount();     // initial count
+    setupWebSocket();       // real‑time updates
   }, []);
 
-  // Optional: refresh when the user clicks the bell
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.close();
+      }
+    };
+  }, []);
+
+  // Manual refresh when clicking the bell
   const handleClick = () => {
     fetchUnreadCount();
   };
