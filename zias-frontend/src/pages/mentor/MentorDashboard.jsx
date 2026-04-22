@@ -3,6 +3,10 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../../api/api";
 
+// Module-level flags to prevent duplicate fetches
+let mentorFetched = false;
+let isFetching = false;
+
 function MentorDashboard() {
   const [mentor, setMentor] = useState(null);
   const [studentsCount, setStudentsCount] = useState(0);
@@ -11,6 +15,8 @@ function MentorDashboard() {
 
   useEffect(() => {
     const fetchData = async () => {
+      if (mentorFetched || isFetching) return;
+      isFetching = true;
       try {
         const mentorRes = await API.get("mentors/me/");
         setMentor(mentorRes.data);
@@ -18,11 +24,13 @@ function MentorDashboard() {
           params: { mentor: mentorRes.data.id },
         });
         setStudentsCount(studentsRes.data.length);
+        mentorFetched = true;
       } catch (err) {
         console.error(err);
         if (err.response?.status === 401) navigate("/login");
       } finally {
         setLoading(false);
+        isFetching = false;
       }
     };
     fetchData();

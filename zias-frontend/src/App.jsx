@@ -19,7 +19,8 @@ import ReviewerProfile from "./pages/reviewer/ReviewerProfile";
 // Mentor pages
 import MentorDashboard from "./pages/mentor/MentorDashboard";
 import MentorProfile from "./pages/mentor/MentorProfile";
-import MentorStudents from "./pages/mentor/MentorStudents";   // 👈 new import
+import MentorStudents from "./pages/mentor/MentorStudents";
+import MentorModules from "./pages/mentor/MentorModules";   // 👈 new import
 // Admin pages
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./Admin/Dashboard";
@@ -135,6 +136,14 @@ function App() {
           <div style={{ display: "flex" }}>
             <MentorSidebar />
             <MentorStudents />
+          </div>
+        </PrivateRoute>
+      } />
+      <Route path="/mentor/modules" element={
+        <PrivateRoute>
+          <div style={{ display: "flex" }}>
+            <MentorSidebar />
+            <MentorModules />
           </div>
         </PrivateRoute>
       } />

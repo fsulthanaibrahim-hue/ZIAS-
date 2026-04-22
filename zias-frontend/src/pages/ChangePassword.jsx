@@ -1,7 +1,11 @@
 // src/pages/ChangePassword.jsx
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import API from "../api/api";
+
+// Promise cache for user role fetch
+let userPromise = null;
+let globalUserFetched = false;
 
 function Toast({ message, type, onClose }) {
   useEffect(() => {
@@ -34,23 +38,53 @@ function ChangePassword() {
   const [toast, setToast] = useState(null);
   const [userRole, setUserRole] = useState(null);
   const navigate = useNavigate();
+  const mountedRef = useRef(true);
 
-  // Fetch user role on mount
+  // Fetch user role only once using Promise cache
   useEffect(() => {
+    mountedRef.current = true;
     const fetchUser = async () => {
+      if (globalUserFetched && userPromise) {
+        try {
+          const user = await userPromise;
+          if (mountedRef.current) {
+            if (user.is_admin) setUserRole("admin");
+            else if (user.is_mentor) setUserRole("mentor");
+            else if (user.is_reviewer) setUserRole("reviewer");
+            else setUserRole("student");
+          }
+        } catch (err) {
+          console.error(err);
+          if (mountedRef.current) navigate("/login");
+        }
+        return;
+      }
+      if (!userPromise) {
+        userPromise = API.get("users/me/")
+          .then(res => {
+            globalUserFetched = true;
+            return res.data;
+          })
+          .catch(err => {
+            console.error(err);
+            throw err;
+          })
+          .finally(() => { userPromise = null; });
+      }
       try {
-        const res = await API.get("users/me/");
-        const user = res.data;
-        if (user.is_admin) setUserRole("admin");
-        else if (user.is_mentor) setUserRole("mentor");
-        else if (user.is_reviewer) setUserRole("reviewer");
-        else setUserRole("student");
+        const user = await userPromise;
+        if (mountedRef.current) {
+          if (user.is_admin) setUserRole("admin");
+          else if (user.is_mentor) setUserRole("mentor");
+          else if (user.is_reviewer) setUserRole("reviewer");
+          else setUserRole("student");
+        }
       } catch (err) {
-        console.error(err);
-        navigate("/login");
+        if (mountedRef.current) navigate("/login");
       }
     };
     fetchUser();
+    return () => { mountedRef.current = false; };
   }, [navigate]);
 
   const showToast = (message, type = "success") => setToast({ message, type });
@@ -251,6 +285,7 @@ function ChangePassword() {
                   </>
                 )}
               </button>
+              {/* Fixed: Use <Link> properly closed */}
               <Link
                 to={getProfilePath()}
                 className="flex-1 flex items-center justify-center gap-2 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 hover:text-gray-900 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200"

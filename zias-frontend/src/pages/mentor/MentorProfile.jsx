@@ -1,11 +1,15 @@
 // src/pages/mentor/MentorProfile.jsx
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import API from "../../api/api";
 
+// Promise cache for user profile
+let userProfilePromise = null;
+let globalUserFetched = false;
+
 // Updated avatar colors – light green palette
 const avatarColors = [
-  ["#e6f4ea", "#2e7d32"], // light green background, dark green text
+  ["#e6f4ea", "#2e7d32"],
   ["#e8f5e9", "#388e3c"],
   ["#c8e6c9", "#2e7d32"],
   ["#f1f8e9", "#558b2f"],
@@ -38,25 +42,49 @@ function MentorProfile() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState({ text: "", type: "" });
   const navigate = useNavigate();
+  const mountedRef = useRef(true);
 
   useEffect(() => {
+    mountedRef.current = true;
     const fetchProfile = async () => {
+      // If already fetched and promise exists, reuse it
+      if (globalUserFetched && userProfilePromise) {
+        try {
+          const data = await userProfilePromise;
+          if (mountedRef.current) setUser(data);
+        } catch (err) {
+          if (mountedRef.current) setMessage({ text: err.message, type: "error" });
+        } finally {
+          if (mountedRef.current) setLoading(false);
+        }
+        return;
+      }
+      // Create new promise if not already in flight
+      if (!userProfilePromise) {
+        userProfilePromise = API.get("users/me/")
+          .then(res => {
+            globalUserFetched = true;
+            return res.data;
+          })
+          .catch(err => {
+            console.error(err);
+            throw new Error(err.response?.status === 404
+              ? "User profile not found. Please contact admin."
+              : "Failed to load profile.");
+          })
+          .finally(() => { userProfilePromise = null; });
+      }
       try {
-        const userRes = await API.get("users/me/");
-        setUser(userRes.data);
+        const data = await userProfilePromise;
+        if (mountedRef.current) setUser(data);
       } catch (err) {
-        console.error(err);
-        setMessage({
-          text: err.response?.status === 404
-            ? "User profile not found. Please contact admin."
-            : "Failed to load profile.",
-          type: "error",
-        });
+        if (mountedRef.current) setMessage({ text: err.message, type: "error" });
       } finally {
-        setLoading(false);
+        if (mountedRef.current) setLoading(false);
       }
     };
     fetchProfile();
+    return () => { mountedRef.current = false; };
   }, [navigate]);
 
   const handleLogout = () => {
@@ -163,7 +191,7 @@ function MentorProfile() {
 const s = {
   page: {
     minHeight: "100vh",
-    background: "#f9fafb", // light gray background
+    background: "#f9fafb",
     display: "flex",
     alignItems: "flex-start",
     justifyContent: "center",
@@ -230,7 +258,7 @@ const s = {
     margin: 0,
     fontSize: 22,
     fontWeight: 700,
-    color: "#1f2937", // gray-800
+    color: "#1f2937",
     letterSpacing: "-0.3px",
   },
   badge: {
@@ -254,7 +282,7 @@ const s = {
     marginBottom: 22,
   },
   roField: {
-    background: "#f3f4f6", // gray-50
+    background: "#f3f4f6",
     border: "1px solid #e5e7eb",
     borderRadius: 10,
     padding: "10px 14px",
@@ -263,14 +291,14 @@ const s = {
     display: "block",
     fontSize: 10,
     fontWeight: 700,
-    color: "#6b7280", // gray-500
+    color: "#6b7280",
     letterSpacing: 1,
     textTransform: "uppercase",
     marginBottom: 4,
   },
   roValue: {
     fontSize: 14,
-    color: "#374151", // gray-700
+    color: "#374151",
     wordBreak: "break-all",
   },
   divider: {
@@ -287,8 +315,8 @@ const s = {
     textTransform: "uppercase",
   },
   noteBox: {
-    background: "#f0fdf4", // green-50
-    border: "1px solid #bbf7d0", // green-200
+    background: "#f0fdf4",
+    border: "1px solid #bbf7d0",
     borderRadius: 10,
     padding: "12px 16px",
     marginBottom: 24,
@@ -296,7 +324,7 @@ const s = {
   noteText: {
     margin: 0,
     fontSize: 12,
-    color: "#166534", // green-800
+    color: "#166534",
     textAlign: "center",
   },
   actions: {
@@ -321,7 +349,7 @@ const s = {
   btnDashboard: {
     display: "inline-flex",
     alignItems: "center",
-    background: "#22c55e", // green-500
+    background: "#22c55e",
     color: "#ffffff",
     border: "1px solid #16a34a",
     borderRadius: 10,
@@ -334,9 +362,9 @@ const s = {
   btnLogout: {
     display: "inline-flex",
     alignItems: "center",
-    background: "#fef2f2", // red-50
-    color: "#dc2626", // red-600
-    border: "1px solid #fecaca", // red-200
+    background: "#fef2f2",
+    color: "#dc2626",
+    border: "1px solid #fecaca",
     borderRadius: 10,
     padding: "11px 24px",
     fontSize: 14,

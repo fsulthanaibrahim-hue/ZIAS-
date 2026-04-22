@@ -3,6 +3,11 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import API from "../../api/api";
 
+let mentorPromise = null;
+let studentsPromise = null;
+let globalMentorFetched = false;
+let globalStudentsFetched = false;
+
 function MentorStudents() {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -11,12 +16,41 @@ function MentorStudents() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const mentorRes = await API.get("mentors/me/");
-        setMentor(mentorRes.data);
-        const studentsRes = await API.get("students/", {
-          params: { mentor: mentorRes.data.id },
-        });
-        setStudents(studentsRes.data);
+        // Fetch mentor profile only once
+        if (!globalMentorFetched && !mentorPromise) {
+          mentorPromise = API.get("mentors/me/")
+            .then(res => {
+              setMentor(res.data);
+              globalMentorFetched = true;
+              return res.data;
+            })
+            .catch(err => {
+              console.error("Failed to fetch mentor", err);
+              throw err;
+            })
+            .finally(() => {
+              mentorPromise = null;
+            });
+        }
+        const mentorData = await mentorPromise;
+
+        // Fetch students for this mentor only once
+        if (!globalStudentsFetched && !studentsPromise) {
+          studentsPromise = API.get("students/", { params: { mentor: mentorData.id } })
+            .then(res => {
+              setStudents(res.data);
+              globalStudentsFetched = true;
+              return res.data;
+            })
+            .catch(err => {
+              console.error("Failed to fetch students", err);
+              throw err;
+            })
+            .finally(() => {
+              studentsPromise = null;
+            });
+        }
+        await studentsPromise;
       } catch (err) {
         console.error(err);
       } finally {

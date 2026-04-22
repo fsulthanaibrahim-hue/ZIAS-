@@ -55,18 +55,35 @@ class BatchViewSet(viewsets.ModelViewSet):
 # STUDENT VIEWSET
 # ----------------------------
 class StudentViewSet(viewsets.ModelViewSet):
-    queryset = Student.objects.all()
     serializer_class = StudentSerializer
     permission_classes = [IsStudentOwner]
 
-    # Override destroy – no @action decorator
-    def destroy(self, request, *args, **kwargs):
-        student = self.get_object()
-        user = student.user
-        user.is_active = False   # soft delete – user will not appear in chat
-        user.save()
-        student.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+    def get_queryset(self):
+        user = self.request.user
+        # Base queryset: only active users
+        queryset = Student.objects.filter(user__is_active=True)
+
+        if user.is_admin:
+            # Admin can see all active students, optionally filtered by mentor
+            mentor_id = self.request.query_params.get('mentor')
+            if mentor_id:
+                queryset = queryset.filter(mentor_id=mentor_id)
+        elif user.is_mentor:
+            # Mentor sees only their own active students
+            try:
+                mentor = Mentor.objects.get(user=user)
+                queryset = queryset.filter(mentor=mentor)
+            except Mentor.DoesNotExist:
+                queryset = queryset.none()
+        elif user.is_reviewer:
+            # Reviewer might see all active students (or filter as needed)
+            # Adjust as per your requirement
+            queryset = queryset
+        else:
+            # Student sees only their own profile
+            queryset = queryset.filter(user=user)
+
+        return queryset
 
     @action(detail=False, methods=['get'], url_path='me', permission_classes=[IsAuthenticated])
     def get_me(self, request):
@@ -77,6 +94,15 @@ class StudentViewSet(viewsets.ModelViewSet):
         except Student.DoesNotExist:
             return Response({"detail": "Student profile not found"}, status=status.HTTP_404_NOT_FOUND)
 
+    # Override destroy to soft delete (set user inactive)
+    def destroy(self, request, *args, **kwargs):
+        student = self.get_object()
+        user = student.user
+        user.is_active = False
+        user.save()
+        student.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+    
 # ----------------------------
 # MENTOR VIEWSET
 # ----------------------------
