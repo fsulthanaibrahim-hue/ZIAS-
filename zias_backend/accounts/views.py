@@ -59,6 +59,15 @@ class StudentViewSet(viewsets.ModelViewSet):
     serializer_class = StudentSerializer
     permission_classes = [IsStudentOwner]
 
+    # Override destroy – no @action decorator
+    def destroy(self, request, *args, **kwargs):
+        student = self.get_object()
+        user = student.user
+        user.is_active = False   # soft delete – user will not appear in chat
+        user.save()
+        student.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
     @action(detail=False, methods=['get'], url_path='me', permission_classes=[IsAuthenticated])
     def get_me(self, request):
         try:
@@ -603,7 +612,8 @@ def get_chat_history(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_all_users(request):
-    users = User.objects.exclude(id=request.user.id)
+    # Exclude current user and only include active users
+    users = User.objects.exclude(id=request.user.id).filter(is_active=True)
     data = []
     for user in users:
         if user.is_admin:

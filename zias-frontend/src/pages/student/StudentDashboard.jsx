@@ -1,7 +1,8 @@
-// src/pages/student/StudentDashboard.jsx (add Chat button)
+// src/pages/student/StudentDashboard.jsx
 import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import API from "../../api/api";
+import StudentSidebar from "../../components/StudentSidebar";
 
 function StudentDashboard() {
   const [modules, setModules] = useState([]);
@@ -50,84 +51,83 @@ function StudentDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0d1117] text-[#e6edf3] p-8">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-2xl font-bold">Student Dashboard</h1>
+    <div className="flex min-h-screen bg-[#0d1117] text-[#e6edf3]">
+      {/* Sidebar */}
+      <StudentSidebar />
+
+      {/* Main Content */}
+      <main className="flex-1 p-8 overflow-y-auto">
+        <div className="max-w-6xl mx-auto">
+          {/* Welcome Header */}
+          <div className="mb-8">
+            <h1 className="text-2xl font-bold">Dashboard</h1>
             <p className="text-[#7d8590] mt-1">Welcome back, {student?.username || 'Student'}!</p>
             {student?.course && (
               <p className="text-sm text-[#7d8590] mt-1">Course: <span className="text-[#e6edf3]">{student.course}</span></p>
             )}
           </div>
-          <div className="flex gap-3">
-            <Link to="/student/review-sheet" className="bg-[#1f3a5c] hover:bg-[#2a4a74] px-4 py-2 rounded-lg text-sm transition">📋 Review Sheet</Link>
-            <Link to="/student/profile" className="bg-[#21262d] hover:bg-[#30363d] px-4 py-2 rounded-lg text-sm transition">My Profile</Link>
-            {/* 👇 NEW Chat button */}
-            <Link to="/chat" className="bg-[#238636] hover:bg-[#2ea043] px-4 py-2 rounded-lg text-sm transition">💬 Chat</Link>
+
+          {/* Modules Grid */}
+          <div className="space-y-4">
+            <h2 className="text-xl font-semibold mb-4">Your Learning Modules</h2>
+            {modules.length === 0 ? (
+              <p className="text-[#7d8590]">No modules assigned to you yet.</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {modules.map((mod) => {
+                  const isLocked = mod.is_locked || false;
+                  const review = reviews[mod.id] || {};
+                  const totalScore = review.total_score !== undefined ? review.total_score : null;
+                  const starRating = review.star_rating || null;
+                  return (
+                    <div
+                      key={mod.id}
+                      className={`relative bg-[#161b22] rounded-xl border border-[#21262d] overflow-hidden transition-all duration-200 ${
+                        !isLocked ? 'hover:scale-105 hover:shadow-xl cursor-pointer' : 'opacity-60 cursor-not-allowed'
+                      }`}
+                    >
+                      {isLocked ? (
+                        <div className="p-5">
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <h3 className="text-lg font-semibold text-[#e6edf3]">{mod.title}</h3>
+                              <p className="text-[#7d8590] text-sm mt-1">{mod.content || "No description"}</p>
+                              <span className="inline-block mt-3 text-xs bg-yellow-500/20 text-yellow-400 px-2 py-1 rounded-full">🔒 Locked</span>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <Link to={`/student/module/${mod.id}`} className="block p-5">
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <h3 className="text-lg font-semibold text-[#e6edf3] group-hover:text-[#2ea043] transition">{mod.title}</h3>
+                              <p className="text-[#7d8590] text-sm mt-1">{mod.content || "No description"}</p>
+                              {mod.is_common && (
+                                <span className="inline-block mt-3 text-xs bg-blue-500/10 text-blue-400 px-2 py-1 rounded-full">Foundation Module</span>
+                              )}
+                              {totalScore !== null && (
+                                <div className="mt-2 text-sm">
+                                  <span className="text-emerald-400 font-semibold">Score: {totalScore}</span>
+                                </div>
+                              )}
+                              {starRating && (
+                                <div className="mt-1 text-sm text-yellow-400">{'⭐'.repeat(starRating)}</div>
+                              )}
+                            </div>
+                            <svg className="w-5 h-5 text-[#7d8590] group-hover:text-[#2ea043] transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          </div>
+                        </Link>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
-
-        {/* Modules grid - unchanged */}
-        <div className="space-y-4">
-          <h2 className="text-xl font-semibold mb-4">Your Learning Modules</h2>
-          {modules.length === 0 ? (
-            <p className="text-[#7d8590]">No modules assigned to you yet.</p>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {modules.map((mod) => {
-                const isLocked = mod.is_locked || false;
-                const review = reviews[mod.id] || {};
-                const totalScore = review.total_score !== undefined ? review.total_score : null;
-                const starRating = review.star_rating || null;
-                return (
-                  <div
-                    key={mod.id}
-                    className={`relative bg-[#161b22] rounded-xl border border-[#21262d] overflow-hidden transition-all duration-200 ${
-                      !isLocked ? 'hover:scale-105 hover:shadow-xl cursor-pointer' : 'opacity-60 cursor-not-allowed'
-                    }`}
-                  >
-                    {isLocked ? (
-                      <div className="p-5">
-                        <div className="flex justify-between items-start">
-                          <div className="flex-1">
-                            <h3 className="text-lg font-semibold text-[#e6edf3]">{mod.title}</h3>
-                            <p className="text-[#7d8590] text-sm mt-1">{mod.content || "No description"}</p>
-                            <span className="inline-block mt-3 text-xs bg-yellow-500/20 text-yellow-400 px-2 py-1 rounded-full">🔒 Locked</span>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <Link to={`/student/module/${mod.id}`} className="block p-5">
-                        <div className="flex justify-between items-start">
-                          <div className="flex-1">
-                            <h3 className="text-lg font-semibold text-[#e6edf3] group-hover:text-[#2ea043] transition">{mod.title}</h3>
-                            <p className="text-[#7d8590] text-sm mt-1">{mod.content || "No description"}</p>
-                            {mod.is_common && (
-                              <span className="inline-block mt-3 text-xs bg-blue-500/10 text-blue-400 px-2 py-1 rounded-full">Foundation Module</span>
-                            )}
-                            {totalScore !== null && (
-                              <div className="mt-2 text-sm">
-                                <span className="text-emerald-400 font-semibold">Score: {totalScore}</span>
-                              </div>
-                            )}
-                            {starRating && (
-                              <div className="mt-1 text-sm text-yellow-400">{'⭐'.repeat(starRating)}</div>
-                            )}
-                          </div>
-                          <svg className="w-5 h-5 text-[#7d8590] group-hover:text-[#2ea043] transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        </div>
-                      </Link>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
+      </main>
     </div>
   );
 }

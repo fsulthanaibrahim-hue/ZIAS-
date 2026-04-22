@@ -1,14 +1,15 @@
-// src/pages/reviewer/ReviewerProfile.jsx
+// src/pages/mentor/MentorProfile.jsx
 import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import API from "../../api/api";   // ← fixed path
+import API from "../../api/api";
 
+// Updated avatar colors – light green palette
 const avatarColors = [
-  ["#1a3a5c", "#4a9eff"],
-  ["#1a3830", "#3dd68c"],
-  ["#3a1a2c", "#e879a0"],
-  ["#2a2a1a", "#f5a623"],
-  ["#1a1a3a", "#a78bfa"],
+  ["#e6f4ea", "#2e7d32"], // light green background, dark green text
+  ["#e8f5e9", "#388e3c"],
+  ["#c8e6c9", "#2e7d32"],
+  ["#f1f8e9", "#558b2f"],
+  ["#dcedc8", "#33691e"],
 ];
 
 function getInitials(username = "") {
@@ -96,7 +97,7 @@ function MentorProfile() {
       `}</style>
 
       <div style={{ ...s.card, animation: "fadeIn 0.4s ease both" }}>
-        <div style={{ ...s.banner, background: `linear-gradient(135deg, ${bgColor} 0%, #0e1828 100%)` }}>
+        <div style={{ ...s.banner, background: `linear-gradient(135deg, ${bgColor} 0%, #c8e6c9 100%)` }}>
           <div style={s.dotPattern} />
           <div style={{ ...s.avatar, border: `2.5px solid ${accentColor}`, boxShadow: `0 0 24px ${accentColor}30` }}>
             <span style={{ color: accentColor, fontSize: 26, fontWeight: 700, letterSpacing: 1 }}>
@@ -162,7 +163,7 @@ function MentorProfile() {
 const s = {
   page: {
     minHeight: "100vh",
-    background: "#0b1220",
+    background: "#f9fafb", // light gray background
     display: "flex",
     alignItems: "flex-start",
     justifyContent: "center",
@@ -171,26 +172,26 @@ const s = {
   },
   fullPage: {
     minHeight: "100vh",
-    background: "#0b1220",
+    background: "#f9fafb",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
   },
   spinner: {
     width: 36, height: 36,
-    border: "3px solid #1e2d45",
-    borderTop: "3px solid #4a9eff",
+    border: "3px solid #d1d5db",
+    borderTop: "3px solid #22c55e",
     borderRadius: "50%",
     animation: "spin 0.8s linear infinite",
   },
   card: {
     width: "100%",
     maxWidth: 640,
-    background: "#111a2c",
+    background: "#ffffff",
     borderRadius: 20,
     overflow: "hidden",
-    border: "1px solid rgba(255,255,255,0.06)",
-    boxShadow: "0 24px 72px rgba(0,0,0,0.55)",
+    border: "1px solid #e5e7eb",
+    boxShadow: "0 10px 25px -5px rgba(0,0,0,0.05), 0 8px 10px -6px rgba(0,0,0,0.02)",
   },
   banner: {
     position: "relative",
@@ -204,14 +205,14 @@ const s = {
   dotPattern: {
     position: "absolute",
     inset: 0,
-    backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.06) 1px, transparent 1px)",
+    backgroundImage: "radial-gradient(circle, rgba(0,0,0,0.03) 1px, transparent 1px)",
     backgroundSize: "22px 22px",
     pointerEvents: "none",
   },
   avatar: {
     width: 72, height: 72,
     borderRadius: "50%",
-    background: "#0b1220",
+    background: "#ffffff",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -229,7 +230,7 @@ const s = {
     margin: 0,
     fontSize: 22,
     fontWeight: 700,
-    color: "#f0f6ff",
+    color: "#1f2937", // gray-800
     letterSpacing: "-0.3px",
   },
   badge: {
@@ -253,8 +254,8 @@ const s = {
     marginBottom: 22,
   },
   roField: {
-    background: "#0d1625",
-    border: "1px solid rgba(255,255,255,0.05)",
+    background: "#f3f4f6", // gray-50
+    border: "1px solid #e5e7eb",
     borderRadius: 10,
     padding: "10px 14px",
   },
@@ -262,32 +263,32 @@ const s = {
     display: "block",
     fontSize: 10,
     fontWeight: 700,
-    color: "#3a5a7a",
+    color: "#6b7280", // gray-500
     letterSpacing: 1,
     textTransform: "uppercase",
     marginBottom: 4,
   },
   roValue: {
     fontSize: 14,
-    color: "#7a9cbf",
+    color: "#374151", // gray-700
     wordBreak: "break-all",
   },
   divider: {
     height: 1,
-    background: "rgba(255,255,255,0.05)",
+    background: "#e5e7eb",
     margin: "0 0 18px",
   },
   sectionLabel: {
     margin: "0 0 14px",
     fontSize: 10,
     fontWeight: 700,
-    color: "#3a5a7a",
+    color: "#6b7280",
     letterSpacing: 1.2,
     textTransform: "uppercase",
   },
   noteBox: {
-    background: "rgba(74,158,255,0.05)",
-    border: "1px solid rgba(74,158,255,0.1)",
+    background: "#f0fdf4", // green-50
+    border: "1px solid #bbf7d0", // green-200
     borderRadius: 10,
     padding: "12px 16px",
     marginBottom: 24,
@@ -295,7 +296,7 @@ const s = {
   noteText: {
     margin: 0,
     fontSize: 12,
-    color: "#5a7a9a",
+    color: "#166534", // green-800
     textAlign: "center",
   },
   actions: {
@@ -307,9 +308,9 @@ const s = {
   btnSecondary: {
     display: "inline-flex",
     alignItems: "center",
-    background: "rgba(255,255,255,0.04)",
-    color: "#7a9cbf",
-    border: "1px solid rgba(255,255,255,0.08)",
+    background: "#f9fafb",
+    color: "#374151",
+    border: "1px solid #d1d5db",
     borderRadius: 10,
     padding: "11px 24px",
     fontSize: 14,
@@ -320,9 +321,9 @@ const s = {
   btnDashboard: {
     display: "inline-flex",
     alignItems: "center",
-    background: "#1e2d45",
-    color: "#7a9cbf",
-    border: "1px solid rgba(255,255,255,0.08)",
+    background: "#22c55e", // green-500
+    color: "#ffffff",
+    border: "1px solid #16a34a",
     borderRadius: 10,
     padding: "11px 24px",
     fontSize: 14,
@@ -333,9 +334,9 @@ const s = {
   btnLogout: {
     display: "inline-flex",
     alignItems: "center",
-    background: "rgba(226,75,74,0.15)",
-    color: "#e24b4a",
-    border: "1px solid rgba(226,75,74,0.3)",
+    background: "#fef2f2", // red-50
+    color: "#dc2626", // red-600
+    border: "1px solid #fecaca", // red-200
     borderRadius: 10,
     padding: "11px 24px",
     fontSize: 14,
@@ -355,14 +356,14 @@ const s = {
     gap: 8,
   },
   toastSuccess: {
-    background: "rgba(61,214,140,0.07)",
-    border: "1px solid rgba(61,214,140,0.18)",
-    color: "#3dd68c",
+    background: "#f0fdf4",
+    border: "1px solid #bbf7d0",
+    color: "#166534",
   },
   toastError: {
-    background: "rgba(226,75,74,0.07)",
-    border: "1px solid rgba(226,75,74,0.18)",
-    color: "#e24b4a",
+    background: "#fef2f2",
+    border: "1px solid #fecaca",
+    color: "#dc2626",
   },
 };
 

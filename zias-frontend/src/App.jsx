@@ -7,7 +7,7 @@ import UserLogin from "./pages/UserLogin";
 import StudentDashboard from "./pages/student/StudentDashboard";
 import StudentProfile from "./pages/student/StudentProfile";
 import StudentReviewSheet from "./pages/student/StudentReviewSheet";
-import StudentReviewSheetRange from "./pages/student/StudentReviewSheetRange"; // NEW: range view
+import StudentReviewSheetRange from "./pages/student/StudentReviewSheetRange";
 import StudentWeekView from "./pages/student/StudentWeekView";
 import CourseDetail from "./pages/student/CourseDetail";
 import ModuleView from "./pages/student/ModuleView";
@@ -19,6 +19,7 @@ import ReviewerProfile from "./pages/reviewer/ReviewerProfile";
 // Mentor pages
 import MentorDashboard from "./pages/mentor/MentorDashboard";
 import MentorProfile from "./pages/mentor/MentorProfile";
+import MentorStudents from "./pages/mentor/MentorStudents";   // 👈 new import
 // Admin pages
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./Admin/Dashboard";
@@ -40,7 +41,9 @@ import Contact from "./pages/Contact";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 // Chat component
-import ChatComponent from "./components/ChatComponent";  // 👈 new import
+import ChatComponent from "./components/ChatComponent";
+// Sidebars
+import MentorSidebar from "./components/MentorSidebar";
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem("access_token");
@@ -111,18 +114,40 @@ function App() {
       <Route path="/student/change-password" element={<PrivateRoute><ChangePassword /></PrivateRoute>} />
       <Route path="/student/dashboard-lock" element={<PrivateRoute><DashboardLock /></PrivateRoute>} />
 
-      {/* Generic change password route (for all roles) */}
+      {/* Generic change password route */}
       <Route path="/change-password" element={<PrivateRoute><ChangePassword /></PrivateRoute>} />
 
       {/* Reviewer routes */}
       <Route path="/reviewer/dashboard" element={<PrivateRoute><ReviewerDashboard /></PrivateRoute>} />
       <Route path="/reviewer/profile" element={<PrivateRoute><ReviewerProfile /></PrivateRoute>} />
 
-      {/* Mentor routes */}
-      <Route path="/mentor/dashboard" element={<PrivateRoute><MentorDashboard /></PrivateRoute>} />
-      <Route path="/mentor/profile" element={<PrivateRoute><MentorProfile /></PrivateRoute>} />
+      {/* Mentor routes with sidebar */}
+      <Route path="/mentor/dashboard" element={
+        <PrivateRoute>
+          <div style={{ display: "flex" }}>
+            <MentorSidebar />
+            <MentorDashboard />
+          </div>
+        </PrivateRoute>
+      } />
+      <Route path="/mentor/students" element={
+        <PrivateRoute>
+          <div style={{ display: "flex" }}>
+            <MentorSidebar />
+            <MentorStudents />
+          </div>
+        </PrivateRoute>
+      } />
+      <Route path="/mentor/profile" element={
+        <PrivateRoute>
+          <div style={{ display: "flex" }}>
+            <MentorSidebar />
+            <MentorProfile />
+          </div>
+        </PrivateRoute>
+      } />
 
-      {/* Chat route – accessible to all authenticated users */}
+      {/* Chat route */}
       <Route path="/chat" element={
         <PrivateRoute>
           <div className="min-h-screen bg-[#0d1117]">
