@@ -31,7 +31,6 @@ class UserSerializer(serializers.ModelSerializer):
 # ----------------------------
 class BatchSerializer(serializers.ModelSerializer):
     student_count = serializers.IntegerField(source='students.count', read_only=True)
-
     class Meta:
         model = Batch
         fields = ['id', 'name', 'start_date', 'end_date', 'is_active', 'created_at', 'student_count']
@@ -65,19 +64,17 @@ class TaskSerializer(serializers.ModelSerializer):
 # ----------------------------
 class ModuleSerializer(serializers.ModelSerializer):
     course_name = serializers.CharField(source='course.name', read_only=True)
-
     class Meta:
         model = Module
         fields = ['id', 'course', 'course_name', 'title', 'order', 'content', 'is_common', 'is_locked', 'unlock_date']
 
 # ----------------------------
-# STUDENT SERIALIZER
+# STUDENT SERIALIZER (explicit update for all fields)
 # ----------------------------
 class StudentSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username')
     email = serializers.EmailField(source='user.email')
     mentor_name = serializers.CharField(source='mentor.username', read_only=True)
-
     class Meta:
         model = Student
         fields = [
@@ -87,13 +84,11 @@ class StudentSerializer(serializers.ModelSerializer):
             'address', 'educational_qualification', 'college_school',
             'parent_name', 'parent_phone', 'emergency_contact'
         ]
-
     def to_representation(self, instance):
         ret = super().to_representation(instance)
         if instance.student_batch:
             ret['batch'] = instance.student_batch.name
         return ret
-
     def validate_phone(self, value):
         if value:
             if not value.isdigit():
@@ -101,23 +96,16 @@ class StudentSerializer(serializers.ModelSerializer):
             if len(value) != 10:
                 raise serializers.ValidationError("Phone number must be exactly 10 digits.")
         return value
-
     def create(self, validated_data):
         user_data = validated_data.pop('user')
         random_password = generate_random_password()
         try:
-            user = User.objects.create_user(
-                username=user_data['username'],
-                email=user_data['email'],
-                password=random_password
-            )
+            user = User.objects.create_user(username=user_data['username'], email=user_data['email'], password=random_password)
         except IntegrityError:
             raise serializers.ValidationError({"username": "A user with this username already exists."})
-
         user.is_student = True
         user.password_changed_at = timezone.now()
         user.save()
-
         request = self.context.get('request')
         if request and request.user.is_mentor:
             try:
@@ -126,9 +114,7 @@ class StudentSerializer(serializers.ModelSerializer):
                 validated_data['student_batch'] = mentor.batch
             except Mentor.DoesNotExist:
                 pass
-
         student = Student.objects.create(user=user, **validated_data)
-
         if student.batch and not student.student_batch:
             try:
                 batch_obj = Batch.objects.get(name=student.batch)
@@ -136,71 +122,54 @@ class StudentSerializer(serializers.ModelSerializer):
                 student.save(update_fields=['student_batch'])
             except Batch.DoesNotExist:
                 pass
-
-        # Send email using mail.html template
         expiry_days = settings.PASSWORD_EXPIRY_DAYS
         domain = getattr(settings, 'SITE_DOMAIN', 'YOUR_DOMAIN.com')
-        context = {
-            'username': user_data['username'],
-            'password': random_password,
-            'expiry_days': expiry_days,
-            'domain': domain,
-        }
+        context = {'username': user_data['username'], 'password': random_password, 'expiry_days': expiry_days, 'domain': domain}
         html_message = render_to_string('mail.html', context)
         plain_message = strip_tags(html_message)
         subject = '🎓 Welcome to ZIAS – Your Account Credentials'
-        send_mail(
-            subject=subject,
-            message=plain_message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[user_data['email']],
-            html_message=html_message,
-            fail_silently=False,
-        )
+        send_mail(subject, plain_message, settings.DEFAULT_FROM_EMAIL, [user_data['email']], html_message=html_message, fail_silently=False)
         return student
-
     def update(self, instance, validated_data):
+        # Explicitly update all student fields
+        instance.course = validated_data.get('course', instance.course)
+        instance.batch = validated_data.get('batch', instance.batch)
+        instance.phone = validated_data.get('phone', instance.phone)
+        instance.date_of_birth = validated_data.get('date_of_birth', instance.date_of_birth)
+        instance.full_name = validated_data.get('full_name', instance.full_name)
+        instance.age = validated_data.get('age', instance.age)
+        instance.gender = validated_data.get('gender', instance.gender)
+        instance.fathers_name = validated_data.get('fathers_name', instance.fathers_name)
+        instance.fathers_contact = validated_data.get('fathers_contact', instance.fathers_contact)
+        instance.mothers_name = validated_data.get('mothers_name', instance.mothers_name)
+        instance.mothers_contact = validated_data.get('mothers_contact', instance.mothers_contact)
+        instance.address = validated_data.get('address', instance.address)
+        instance.educational_qualification = validated_data.get('educational_qualification', instance.educational_qualification)
+        instance.college_school = validated_data.get('college_school', instance.college_school)
+        instance.parent_name = validated_data.get('parent_name', instance.parent_name)
+        instance.parent_phone = validated_data.get('parent_phone', instance.parent_phone)
+        instance.emergency_contact = validated_data.get('emergency_contact', instance.emergency_contact)
+        instance.save()
+        # Update user if needed
         user_data = validated_data.pop('user', None)
         if user_data:
             new_username = user_data.get('username', instance.user.username)
             new_email = user_data.get('email', instance.user.email)
-
-            if (new_username.lower() != instance.user.username.lower() or 
-                new_email.lower() != instance.user.email.lower()):
-                try:
-                    instance.user.username = new_username
-                    instance.user.email = new_email
-                    instance.user.save()
-                except IntegrityError as e:
-                    if 'username' in str(e):
-                        raise serializers.ValidationError({"username": "A user with this username already exists."})
-                    elif 'email' in str(e):
-                        raise serializers.ValidationError({"email": "A user with this email already exists."})
-                    else:
-                        raise
-        if 'batch' in validated_data and validated_data['batch'] != instance.batch:
-            new_batch_name = validated_data['batch']
-            if new_batch_name:
-                try:
-                    batch_obj = Batch.objects.get(name=new_batch_name)
-                    instance.student_batch = batch_obj
-                    instance.save(update_fields=['student_batch'])
-                except Batch.DoesNotExist:
-                    instance.student_batch = None
-                    instance.save(update_fields=['student_batch'])
-        return super().update(instance, validated_data)
+            if (new_username.lower() != instance.user.username.lower() or new_email.lower() != instance.user.email.lower()):
+                instance.user.username = new_username
+                instance.user.email = new_email
+                instance.user.save()
+        return instance
 
 # ----------------------------
-# MENTOR SERIALIZER
+# MENTOR SERIALIZER (explicit update)
 # ----------------------------
 class MentorSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username')
     email = serializers.EmailField(source='user.email')
-
     class Meta:
         model = Mentor
         fields = ['id', 'username', 'email', 'phone', 'expertise', 'batch']
-
     def create(self, validated_data):
         user_data = validated_data.pop('user')
         username = user_data['username']
@@ -216,74 +185,38 @@ class MentorSerializer(serializers.ModelSerializer):
                 user.password_changed_at = timezone.now()
             user.save()
         except User.DoesNotExist:
-            try:
-                user = User.objects.create_user(
-                    username=username,
-                    email=email,
-                    password=random_password
-                )
-                user.is_mentor = True
-                user.password_changed_at = timezone.now()
-                user.save()
-                # Send simple email for mentor (no HTML needed)
-                subject = 'Your ZIAS Account Credentials'
-                message = f"""
-Dear {username},
-
-Your account has been created successfully.
-
-Login credentials:
-Username: {username}
-Password: {random_password}
-
-Please change your password after first login.
-
-Best regards,
-ZIAS Team
-"""
-                send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [email], fail_silently=False)
-            except IntegrityError:
-                user = User.objects.get(username=username)
-                if not user.is_mentor:
-                    user.is_mentor = True
-                    user.save()
-
+            user = User.objects.create_user(username=username, email=email, password=random_password)
+            user.is_mentor = True
+            user.password_changed_at = timezone.now()
+            user.save()
         if Mentor.objects.filter(user=user).exists():
             raise serializers.ValidationError({"username": "This user already has a mentor profile."})
-
         return Mentor.objects.create(user=user, **validated_data)
-
     def update(self, instance, validated_data):
+        # Explicitly update all mentor fields
+        instance.phone = validated_data.get('phone', instance.phone)
+        instance.expertise = validated_data.get('expertise', instance.expertise)
+        instance.batch = validated_data.get('batch', instance.batch)
+        instance.save()
         user_data = validated_data.pop('user', None)
         if user_data:
             new_username = user_data.get('username', instance.user.username)
             new_email = user_data.get('email', instance.user.email)
-            if (new_username.lower() != instance.user.username.lower() or 
-                new_email.lower() != instance.user.email.lower()):
-                try:
-                    instance.user.username = new_username
-                    instance.user.email = new_email
-                    instance.user.save()
-                except IntegrityError as e:
-                    if 'username' in str(e):
-                        raise serializers.ValidationError({"username": "A user with this username already exists."})
-                    elif 'email' in str(e):
-                        raise serializers.ValidationError({"email": "A user with this email already exists."})
-                    else:
-                        raise
-        return super().update(instance, validated_data)
+            if (new_username.lower() != instance.user.username.lower() or new_email.lower() != instance.user.email.lower()):
+                instance.user.username = new_username
+                instance.user.email = new_email
+                instance.user.save()
+        return instance
 
 # ----------------------------
-# REVIEWER SERIALIZER
+# REVIEWER SERIALIZER (explicit update)
 # ----------------------------
 class ReviewerSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username')
     email = serializers.EmailField(source='user.email')
-
     class Meta:
         model = Reviewer
-        fields = ['id', 'username', 'email', 'department', 'batch']
-
+        fields = ['id', 'username', 'email', 'department', 'qualification', 'experience', 'batch']
     def create(self, validated_data):
         user_data = validated_data.pop('user')
         username = user_data['username']
@@ -299,61 +232,29 @@ class ReviewerSerializer(serializers.ModelSerializer):
                 user.password_changed_at = timezone.now()
             user.save()
         except User.DoesNotExist:
-            try:
-                user = User.objects.create_user(
-                    username=username,
-                    email=email,
-                    password=random_password
-                )
-                user.is_reviewer = True
-                user.password_changed_at = timezone.now()
-                user.save()
-                subject = 'Your ZIAS Account Credentials'
-                message = f"""
-Dear {username},
-
-Your account has been created successfully.
-
-Login credentials:
-Username: {username}
-Password: {random_password}
-
-Please change your password within {settings.PASSWORD_EXPIRY_DAYS} days.
-
-Best regards,
-ZIAS Team
-"""
-                send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [email], fail_silently=False)
-            except IntegrityError:
-                user = User.objects.get(username=username)
-                if not user.is_reviewer:
-                    user.is_reviewer = True
-                    user.save()
-
+            user = User.objects.create_user(username=username, email=email, password=random_password)
+            user.is_reviewer = True
+            user.password_changed_at = timezone.now()
+            user.save()
         if Reviewer.objects.filter(user=user).exists():
             raise serializers.ValidationError({"username": "This user already has a reviewer profile."})
-
         return Reviewer.objects.create(user=user, **validated_data)
-
     def update(self, instance, validated_data):
+        # Explicitly update all reviewer fields
+        instance.department = validated_data.get('department', instance.department)
+        instance.qualification = validated_data.get('qualification', instance.qualification)
+        instance.experience = validated_data.get('experience', instance.experience)
+        instance.batch = validated_data.get('batch', instance.batch)
+        instance.save()
         user_data = validated_data.pop('user', None)
         if user_data:
             new_username = user_data.get('username', instance.user.username)
             new_email = user_data.get('email', instance.user.email)
-            if (new_username.lower() != instance.user.username.lower() or 
-                new_email.lower() != instance.user.email.lower()):
-                try:
-                    instance.user.username = new_username
-                    instance.user.email = new_email
-                    instance.user.save()
-                except IntegrityError as e:
-                    if 'username' in str(e):
-                        raise serializers.ValidationError({"username": "A user with this username already exists."})
-                    elif 'email' in str(e):
-                        raise serializers.ValidationError({"email": "A user with this email already exists."})
-                    else:
-                        raise
-        return super().update(instance, validated_data)
+            if (new_username.lower() != instance.user.username.lower() or new_email.lower() != instance.user.email.lower()):
+                instance.user.username = new_username
+                instance.user.email = new_email
+                instance.user.save()
+        return instance
 
 # ----------------------------
 # STUDENT MODULE SERIALIZER
@@ -361,7 +262,6 @@ ZIAS Team
 class StudentModuleSerializer(serializers.ModelSerializer):
     module_title = serializers.CharField(source='module.title', read_only=True)
     module_content = serializers.CharField(source='module.content', read_only=True)
-    
     class Meta:
         model = StudentModule
         fields = ['id', 'student', 'module', 'module_title', 'module_content', 'order', 'is_completed', 'completed_at']
@@ -380,7 +280,6 @@ class ContactMessageSerializer(serializers.ModelSerializer):
 class StudentWeekReviewSerializer(serializers.ModelSerializer):
     student_name = serializers.CharField(source='student.user.username', read_only=True)
     module_title = serializers.CharField(source='module.title', read_only=True)
-    
     class Meta:
         model = StudentWeekReview
         fields = '__all__'

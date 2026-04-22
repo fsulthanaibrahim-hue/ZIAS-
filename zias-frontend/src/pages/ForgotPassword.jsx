@@ -1,5 +1,7 @@
+// src/pages/ForgotPassword.jsx
 import { useState } from "react";
 import axios from "axios";
+import { Link } from "react-router-dom";
 
 function ForgotPassword() {
   const [email, setEmail] = useState("");
@@ -19,10 +21,10 @@ function ForgotPassword() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0f1623] flex items-center justify-center p-4">
-      <div className="bg-[#1a2538] rounded-xl p-6 w-full max-w-md border border-white/10">
-        <h2 className="text-2xl font-bold text-white mb-4">Forgot Password?</h2>
-        <p className="text-white/60 mb-4">Enter your email and we'll send you a reset link.</p>
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl p-6 w-full max-w-md border border-gray-200 shadow-sm">
+        <h2 className="text-2xl font-bold text-gray-800 mb-2">Forgot Password?</h2>
+        <p className="text-gray-500 mb-6">Enter your email and we'll send you a reset link.</p>
         <form onSubmit={handleSubmit}>
           <input
             type="email"
@@ -30,12 +32,23 @@ function ForgotPassword() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            className="w-full bg-[#0f1623] border border-white/10 rounded-lg px-4 py-2 text-white mb-4"
+            className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/30 transition-all duration-200 mb-4"
           />
-          <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg">Send Reset Link</button>
+          <button
+            type="submit"
+            className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-2 rounded-lg transition shadow-sm"
+          >
+            Send Reset Link
+          </button>
         </form>
-        {message && <p className="mt-4 text-green-400">{message}</p>}
-        {error && <p className="mt-4 text-red-400">{error}</p>}
+        {message && <p className="mt-4 text-green-600 text-sm">{message}</p>}
+        {error && <p className="mt-4 text-red-600 text-sm">{error}</p>}
+        <p className="mt-4 text-center text-sm text-gray-500">
+          Remember your password?{" "}
+          <Link to="/login" className="text-green-600 hover:underline">
+            Login
+          </Link>
+        </p>
       </div>
     </div>
   );

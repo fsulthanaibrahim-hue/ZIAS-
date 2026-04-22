@@ -60,29 +60,22 @@ class StudentViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        # Base queryset: only active users
         queryset = Student.objects.filter(user__is_active=True)
 
         if user.is_admin:
-            # Admin can see all active students, optionally filtered by mentor
             mentor_id = self.request.query_params.get('mentor')
             if mentor_id:
                 queryset = queryset.filter(mentor_id=mentor_id)
         elif user.is_mentor:
-            # Mentor sees only their own active students
             try:
                 mentor = Mentor.objects.get(user=user)
                 queryset = queryset.filter(mentor=mentor)
             except Mentor.DoesNotExist:
                 queryset = queryset.none()
         elif user.is_reviewer:
-            # Reviewer might see all active students (or filter as needed)
-            # Adjust as per your requirement
             queryset = queryset
         else:
-            # Student sees only their own profile
             queryset = queryset.filter(user=user)
-
         return queryset
 
     @action(detail=False, methods=['get'], url_path='me', permission_classes=[IsAuthenticated])
@@ -94,7 +87,6 @@ class StudentViewSet(viewsets.ModelViewSet):
         except Student.DoesNotExist:
             return Response({"detail": "Student profile not found"}, status=status.HTTP_404_NOT_FOUND)
 
-    # Override destroy to soft delete (set user inactive)
     def destroy(self, request, *args, **kwargs):
         student = self.get_object()
         user = student.user
@@ -102,7 +94,7 @@ class StudentViewSet(viewsets.ModelViewSet):
         user.save()
         student.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
-    
+
 # ----------------------------
 # MENTOR VIEWSET
 # ----------------------------
@@ -127,7 +119,7 @@ class MentorViewSet(viewsets.ModelViewSet):
             return Response({"detail": "Mentor profile not found"}, status=status.HTTP_404_NOT_FOUND)
 
 # ----------------------------
-# REVIEWER VIEWSET
+# REVIEWER VIEWSET (STANDARD – NO CUSTOM UPDATE)
 # ----------------------------
 class ReviewerViewSet(viewsets.ModelViewSet):
     queryset = Reviewer.objects.all()
@@ -182,7 +174,6 @@ class ModuleViewSet(viewsets.ModelViewSet):
     def student_modules(self, request):
         user = request.user
         student_id = request.query_params.get('student_id')
-
         if user.is_admin or user.is_mentor:
             if student_id:
                 try:
@@ -230,7 +221,6 @@ class ModuleViewSet(viewsets.ModelViewSet):
 # ----------------------------
 class CompleteModuleView(APIView):
     permission_classes = [IsAuthenticated]
-
     def post(self, request, module_id):
         user = request.user
         if not user.is_student:
@@ -255,7 +245,6 @@ class CompleteModuleView(APIView):
 class StudentModuleViewSet(viewsets.ModelViewSet):
     serializer_class = ModuleSerializer
     permission_classes = [IsAuthenticated]
-
     def get_queryset(self):
         if self.request.user.is_admin:
             return Module.objects.filter(is_common=False)
@@ -266,7 +255,6 @@ class StudentModuleViewSet(viewsets.ModelViewSet):
             return Module.objects.filter(id__in=module_ids, is_common=False)
         except Student.DoesNotExist:
             return Module.objects.none()
-
     def list(self, request):
         queryset = self.get_queryset()
         serializer = self.get_serializer(queryset, many=True)
@@ -278,7 +266,6 @@ class StudentModuleViewSet(viewsets.ModelViewSet):
 class DayViewSet(viewsets.ModelViewSet):
     serializer_class = DaySerializer
     permission_classes = [IsAuthenticated]
-
     def get_queryset(self):
         queryset = Day.objects.all()
         module_id = self.request.query_params.get('module')
@@ -300,7 +287,6 @@ class TaskViewSet(viewsets.ModelViewSet):
 # ----------------------------
 class CurrentUserView(APIView):
     permission_classes = [IsAuthenticated]
-
     def get(self, request):
         serializer = UserSerializer(request.user)
         return Response(serializer.data)
@@ -310,7 +296,6 @@ class CurrentUserView(APIView):
 # ----------------------------
 class ChangePasswordView(APIView):
     permission_classes = [IsAuthenticated]
-
     def post(self, request):
         user = request.user
         old_password = request.data.get('old_password')
@@ -332,7 +317,6 @@ class ChangePasswordView(APIView):
 # ----------------------------
 class SendBulkEmailView(APIView):
     permission_classes = [IsAuthenticated]
-
     def post(self, request):
         user = request.user
         if not user.is_admin:
@@ -450,7 +434,6 @@ class ContactMessageDetailView(APIView):
 # ----------------------------
 class CustomLoginView(APIView):
     permission_classes = [AllowAny]
-
     def post(self, request):
         username = request.data.get('username')
         password = request.data.get('password')
@@ -471,7 +454,6 @@ class CustomLoginView(APIView):
 # ----------------------------
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
-
     def post(self, request):
         try:
             refresh_token = request.data.get('refresh')
@@ -488,7 +470,6 @@ class LogoutView(APIView):
 # ----------------------------
 class UpdateDashboardAccessView(APIView):
     permission_classes = [IsAuthenticated]
-
     def post(self, request):
         user = request.user
         user.last_dashboard_access = timezone.now()
@@ -496,11 +477,10 @@ class UpdateDashboardAccessView(APIView):
         return Response({"detail": "Dashboard access updated."}, status=status.HTTP_200_OK)
 
 # ----------------------------
-# STUDENT LIST VIEW (for admin/mentor/reviewer dropdown)
+# STUDENT LIST VIEW
 # ----------------------------
 class StudentListView(APIView):
     permission_classes = [IsAuthenticated]
-
     def get(self, request):
         user = request.user
         if user.is_admin or user.is_mentor or user.is_reviewer:
@@ -534,7 +514,6 @@ class StudentListView(APIView):
 # ----------------------------
 class WeeklyToppersView(APIView):
     permission_classes = [IsAuthenticated]
-
     def get(self, request):
         user = request.user
         if not (user.is_admin or user.is_mentor):
@@ -567,7 +546,6 @@ class WeeklyToppersView(APIView):
 class StudentWeekReviewView(generics.RetrieveUpdateAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = StudentWeekReviewSerializer
-
     def get_object(self):
         module_id = self.kwargs.get('module_id')
         user = self.request.user
@@ -583,7 +561,6 @@ class StudentWeekReviewView(generics.RetrieveUpdateAPIView):
             student = Student.objects.get(user=user)
         obj, created = StudentWeekReview.objects.get_or_create(student=student, module_id=module_id)
         return obj
-
     def perform_update(self, serializer):
         review = serializer.save()
         if review.total_score is not None:
@@ -605,7 +582,7 @@ class WeekUpdateViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
 # ----------------------------
-# CHAT HISTORY VIEW (REST fallback)
+# CHAT HISTORY VIEW
 # ----------------------------
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -626,6 +603,8 @@ def get_chat_history(request):
         return Response([])
     data = [{
         "sender": m.sender.username,
+        "sender_id": m.sender.id,
+        "room_identifier": m.room_identifier,
         "message": m.message,
         "room": m.room_type,
         "timestamp": m.timestamp.isoformat()
@@ -633,12 +612,11 @@ def get_chat_history(request):
     return Response(data)
 
 # ----------------------------
-# GET ALL USERS (for private chat dropdown)
+# GET ALL USERS
 # ----------------------------
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_all_users(request):
-    # Exclude current user and only include active users
     users = User.objects.exclude(id=request.user.id).filter(is_active=True)
     data = []
     for user in users:

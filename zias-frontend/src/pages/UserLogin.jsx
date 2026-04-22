@@ -1,3 +1,4 @@
+// src/pages/UserLogin.jsx
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import axios from "axios";
@@ -31,7 +32,7 @@ function UserLogin() {
       if (user.is_admin) {
         navigate("/admin/dashboard");
       } else if (user.is_student) {
-        navigate("/user/dashboard");
+        navigate("/student/dashboard");
       } else if (user.is_mentor) {
         navigate("/mentor/dashboard");
       } else if (user.is_reviewer) {
@@ -61,43 +62,42 @@ function UserLogin() {
   );
 
   return (
-    <div className="min-h-screen bg-[#0f1623] flex items-center justify-center p-4">
-      <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 60% 50% at 50% 40%, rgba(59,130,246,0.07) 0%, transparent 70%)" }} />
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="relative w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-blue-600/20 border border-blue-500/30 mb-4">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="#60a5fa" className="w-6 h-6">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-green-100 border border-green-200 mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="#16a34a" className="w-6 h-6">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
             </svg>
           </div>
-          <h1 className="text-xl font-semibold text-white">Welcome back</h1>
-          <p className="text-white/40 text-sm mt-1">Sign in to your account</p>
+          <h1 className="text-xl font-semibold text-gray-800">Welcome back</h1>
+          <p className="text-gray-500 text-sm mt-1">Sign in to your account</p>
         </div>
-        <div className="bg-[#1a2538] rounded-2xl border border-white/10 p-6 shadow-2xl">
+        <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
           {error && (
-            <div className="mb-4 px-4 py-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+            <div className="mb-4 px-4 py-2.5 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm">
               {error}
             </div>
           )}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-white/60 text-sm mb-1.5">Username</label>
+              <label className="block text-gray-600 text-sm mb-1.5">Username</label>
               <input
                 type="text"
                 placeholder="Enter your username"
-                className="w-full bg-[#0f1623] border border-white/10 hover:border-white/20 focus:border-blue-500/60 focus:outline-none rounded-lg px-4 py-2.5 text-white placeholder-white/20 text-sm transition-colors"
+                className="w-full bg-white border border-gray-300 hover:border-gray-400 focus:border-green-500 focus:ring-1 focus:ring-green-500/30 focus:outline-none rounded-lg px-4 py-2.5 text-gray-800 placeholder-gray-400 text-sm transition-colors"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
               />
             </div>
             <div>
-              <label className="block text-white/60 text-sm mb-1.5">Password</label>
+              <label className="block text-gray-600 text-sm mb-1.5">Password</label>
               <div className="relative">
                 <input
                   type={showPassword ? "text" : "password"}
                   placeholder="Enter your password"
-                  className="w-full bg-[#0f1623] border border-white/10 hover:border-white/20 focus:border-blue-500/60 focus:outline-none rounded-lg px-4 py-2.5 pr-11 text-white placeholder-white/20 text-sm transition-colors"
+                  className="w-full bg-white border border-gray-300 hover:border-gray-400 focus:border-green-500 focus:ring-1 focus:ring-green-500/30 focus:outline-none rounded-lg px-4 py-2.5 pr-11 text-gray-800 placeholder-gray-400 text-sm transition-colors"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
@@ -105,21 +105,21 @@ function UserLogin() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-white/30 hover:text-white/60 transition-colors"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 transition-colors"
                 >
                   {showPassword ? <EyeOpen /> : <EyeClosed />}
                 </button>
               </div>
             </div>
             <div className="flex justify-end">
-              <Link to="/forgot-password" className="text-xs text-blue-400/70 hover:text-blue-400 transition-colors">
+              <Link to="/forgot-password" className="text-xs text-green-600 hover:text-green-700 transition-colors">
                 Forgot password?
               </Link>
             </div>
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium py-2.5 rounded-lg transition-colors text-sm"
+              className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium py-2.5 rounded-lg transition-colors text-sm"
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">

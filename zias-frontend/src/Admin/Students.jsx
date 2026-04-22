@@ -9,14 +9,14 @@ function Toast({ message, type, onClose }) {
   }, [onClose]);
 
   const bgColor = type === "success" 
-    ? "bg-emerald-500/90" 
+    ? "bg-green-600" 
     : type === "error" 
-    ? "bg-red-500/90" 
-    : "bg-blue-500/90";
+    ? "bg-red-600" 
+    : "bg-gray-600";
   const icon = type === "success" ? "✓" : type === "error" ? "✕" : "ℹ";
 
   return (
-    <div className={`fixed top-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl backdrop-blur-md ${bgColor} text-white text-sm font-medium animate-in slide-in-from-top-2 max-w-[90vw] sm:max-w-md`}>
+    <div className={`fixed top-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg ${bgColor} text-white text-sm font-medium animate-in slide-in-from-top-2 max-w-[90vw] sm:max-w-md`}>
       <span className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold">{icon}</span>
       <span className="flex-1">{message}</span>
       <button onClick={onClose} className="ml-2 text-white/70 hover:text-white text-lg leading-none">×</button>
@@ -24,18 +24,17 @@ function Toast({ message, type, onClose }) {
   );
 }
 
-// Custom confirmation modal for delete
 function ConfirmModal({ isOpen, onClose, onConfirm, studentName }) {
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 backdrop-blur-md p-4">
-      <div className="bg-[#161b22] rounded-2xl max-w-md w-full border border-[#30363d] shadow-2xl shadow-black/60 p-6 mx-4">
-        <h3 className="text-lg font-semibold text-[#e6edf3] mb-2">Confirm Delete</h3>
-        <p className="text-[#7d8590] mb-6">
-          Are you sure you want to delete <span className="text-white font-medium">{studentName}</span>? This action cannot be undone.
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl max-w-md w-full border border-gray-200 shadow-xl p-6 mx-4">
+        <h3 className="text-lg font-semibold text-gray-800 mb-2">Confirm Delete</h3>
+        <p className="text-gray-600 mb-6">
+          Are you sure you want to delete <span className="text-gray-900 font-medium">{studentName}</span>? This action cannot be undone.
         </p>
         <div className="flex gap-3 justify-end">
-          <button onClick={onClose} className="px-4 py-2 rounded-lg bg-[#21262d] hover:bg-[#30363d] text-[#7d8590] hover:text-white transition">Cancel</button>
+          <button onClick={onClose} className="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition">Cancel</button>
           <button onClick={onConfirm} className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white transition">Delete</button>
         </div>
       </div>
@@ -53,11 +52,14 @@ function Students() {
   const [searchTerm, setSearchTerm] = useState("");
   const [viewingStudent, setViewingStudent] = useState(null);
   const [phoneError, setPhoneError] = useState("");
+  const [fathersContactError, setFathersContactError] = useState("");
+  const [mothersContactError, setMothersContactError] = useState("");
+  const [parentPhoneError, setParentPhoneError] = useState("");
+  const [emergencyContactError, setEmergencyContactError] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
-  const [loading, setLoading] = useState(true); // new loading state
+  const [loading, setLoading] = useState(true);
 
-  // Delete confirmation modal state
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [studentToDelete, setStudentToDelete] = useState(null);
 
@@ -79,6 +81,9 @@ function Students() {
     address: "",
     educational_qualification: "",
     college_school: "",
+    parent_name: "",
+    parent_phone: "",
+    emergency_contact: "",
   });
 
   const [toast, setToast] = useState(null);
@@ -113,15 +118,12 @@ function Students() {
       .catch(() => showToast("Failed to load mentors", "error"));
   };
 
-  // Initial data fetch – runs only once (ref resets on full page refresh)
   useEffect(() => {
     if (fetched.current) return;
     fetched.current = true;
     setLoading(true);
     Promise.all([fetchStudents(), fetchCourses(), fetchBatches(), fetchMentors()]).catch(() => {});
   }, []);
-
-  // No extra fetch when form opens – the lists are already loaded
 
   const handleDeleteClick = (studentId, studentName) => {
     setStudentToDelete({ id: studentId, name: studentName });
@@ -159,15 +161,56 @@ function Students() {
     }
   }, [formData.date_of_birth]);
 
+  const handlePhoneChange = (field, value) => {
+    const digits = value.replace(/\D/g, '').slice(0, 10);
+    setFormData(prev => ({ ...prev, [field]: digits }));
+    if (digits.length > 0 && digits.length !== 10) {
+      if (field === 'phone') setPhoneError('Phone number must be exactly 10 digits');
+      else if (field === 'fathers_contact') setFathersContactError('Phone number must be exactly 10 digits');
+      else if (field === 'mothers_contact') setMothersContactError('Phone number must be exactly 10 digits');
+      else if (field === 'parent_phone') setParentPhoneError('Phone number must be exactly 10 digits');
+      else if (field === 'emergency_contact') setEmergencyContactError('Phone number must be exactly 10 digits');
+    } else {
+      if (field === 'phone') setPhoneError('');
+      else if (field === 'fathers_contact') setFathersContactError('');
+      else if (field === 'mothers_contact') setMothersContactError('');
+      else if (field === 'parent_phone') setParentPhoneError('');
+      else if (field === 'emergency_contact') setEmergencyContactError('');
+    }
+  };
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    if (['phone', 'fathers_contact', 'mothers_contact', 'parent_phone', 'emergency_contact'].includes(name)) {
+      handlePhoneChange(name, value);
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (formData.phone && !/^\d{10}$/.test(formData.phone)) {
-      showToast("Phone number must be exactly 10 digits", "error");
-      setPhoneError("Phone number must be exactly 10 digits");
-      return;
+    // Validate all phone fields
+    let hasError = false;
+    const phoneFields = [
+      { field: 'phone', errorSetter: setPhoneError, label: 'Student phone' },
+      { field: 'fathers_contact', errorSetter: setFathersContactError, label: "Father's contact" },
+      { field: 'mothers_contact', errorSetter: setMothersContactError, label: "Mother's contact" },
+      { field: 'parent_phone', errorSetter: setParentPhoneError, label: 'Parent phone' },
+      { field: 'emergency_contact', errorSetter: setEmergencyContactError, label: 'Emergency contact' },
+    ];
+    for (const { field, errorSetter, label } of phoneFields) {
+      const val = formData[field];
+      if (val && !/^\d{10}$/.test(val)) {
+        errorSetter(`Phone number must be exactly 10 digits`);
+        showToast(`${label} must be exactly 10 digits`, "error");
+        hasError = true;
+      } else {
+        errorSetter('');
+      }
     }
-    setPhoneError("");
+    if (hasError) return;
     
     const payload = {
       username: formData.username.trim(),
@@ -187,6 +230,9 @@ function Students() {
       address: formData.address || null,
       educational_qualification: formData.educational_qualification || null,
       college_school: formData.college_school || null,
+      parent_name: formData.parent_name || null,
+      parent_phone: formData.parent_phone || null,
+      emergency_contact: formData.emergency_contact || null,
     };
     
     try {
@@ -202,9 +248,13 @@ function Students() {
       setFormData({
         username: "", full_name: "", email: "", course: "", batch: "", mentor: "", phone: "", date_of_birth: "", age: "", gender: "",
         fathers_name: "", fathers_contact: "", mothers_name: "", mothers_contact: "",
-        address: "", educational_qualification: "", college_school: "",
+        address: "", educational_qualification: "", college_school: "", parent_name: "", parent_phone: "", emergency_contact: "",
       });
       setPhoneError("");
+      setFathersContactError("");
+      setMothersContactError("");
+      setParentPhoneError("");
+      setEmergencyContactError("");
       fetchStudents();
       setCurrentPage(1);
     } catch (error) {
@@ -238,24 +288,16 @@ function Students() {
       address: student.address || "",
       educational_qualification: student.educational_qualification || "",
       college_school: student.college_school || "",
+      parent_name: student.parent_name || "",
+      parent_phone: student.parent_phone || "",
+      emergency_contact: student.emergency_contact || "",
     });
     setPhoneError("");
+    setFathersContactError("");
+    setMothersContactError("");
+    setParentPhoneError("");
+    setEmergencyContactError("");
     setShowForm(true);
-  };
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    if (name === 'phone') {
-      const digits = value.replace(/\D/g, '').slice(0, 10);
-      setFormData(prev => ({ ...prev, phone: digits }));
-      if (digits.length > 0 && digits.length !== 10) {
-        setPhoneError('Phone number must be exactly 10 digits');
-      } else {
-        setPhoneError('');
-      }
-    } else {
-      setFormData((prev) => ({ ...prev, [name]: value }));
-    }
   };
 
   const filteredStudents = students.filter((s) =>
@@ -301,12 +343,12 @@ function Students() {
   }, [searchTerm]);
 
   const inputClass = `
-    w-full bg-[#0d1117] border border-[#30363d] rounded-lg px-4 py-2.5 text-[#e6edf3]
-    placeholder-[#484f58] focus:outline-none focus:border-[#388bfd] focus:ring-1 focus:ring-[#388bfd]/30
+    w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-800
+    placeholder-gray-400 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/30
     transition-all duration-200 text-sm
   `;
   const readOnlyClass = `
-    w-full bg-[#0d1117]/50 border border-[#30363d]/50 rounded-lg px-4 py-2.5 text-[#7d8590]
+    w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 text-gray-600
     cursor-not-allowed text-sm
   `;
 
@@ -323,34 +365,33 @@ function Students() {
 
   if (loading) {
     return (
-      <div className="w-full min-h-[60vh] flex items-center justify-center bg-[#0d1117]">
-        <div className="w-8 h-8 border-2 border-[#388bfd] border-t-transparent rounded-full animate-spin" />
+      <div className="w-full min-h-[60vh] flex items-center justify-center bg-gray-50">
+        <div className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen w-full bg-[#0d1117] text-[#e6edf3]" style={{ fontFamily: "'Geist', 'SF Pro Display', system-ui, sans-serif" }}>
+    <div className="min-h-screen w-full bg-gray-50 text-gray-800" style={{ fontFamily: "'Geist', 'SF Pro Display', system-ui, sans-serif" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&display=swap');
-        .table-row-hover:hover { background: rgba(56,139,253,0.04); }
+        .table-row-hover:hover { background: rgba(34,197,94,0.04); }
         .modal-enter { animation: modalIn 0.2s cubic-bezier(0.16,1,0.3,1); }
         @keyframes modalIn { from { opacity:0; transform:scale(0.96) translateY(8px); } to { opacity:1; transform:scale(1) translateY(0); } }
         .shine { position:relative; overflow:hidden; }
-        .shine::after { content:''; position:absolute; top:0; left:-100%; width:60%; height:100%; background:linear-gradient(90deg,transparent,rgba(255,255,255,0.04),transparent); animation: shine 3s infinite; }
+        .shine::after { content:''; position:absolute; top:0; left:-100%; width:60%; height:100%; background:linear-gradient(90deg,transparent,rgba(255,255,255,0.3),transparent); animation: shine 3s infinite; }
         @keyframes shine { to { left:150%; } }
         @keyframes slide-in-from-top-2 {
           from { opacity:0; transform:translateY(-1rem); }
           to { opacity:1; transform:translateY(0); }
         }
         .animate-in { animation: slide-in-from-top-2 0.2s ease-out; }
-        /* Mobile card layout for the student table */
         @media (max-width: 640px) {
           .student-table thead { display: none; }
-          .student-table tbody tr { display: block; margin-bottom: 1rem; border: 1px solid #21262d; border-radius: 0.75rem; background: #0d1117; }
-          .student-table tbody td { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; border-bottom: 1px solid #21262d; text-align: right; gap: 1rem; }
+          .student-table tbody tr { display: block; margin-bottom: 1rem; border: 1px solid #e5e7eb; border-radius: 0.75rem; background: white; }
+          .student-table tbody td { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; border-bottom: 1px solid #e5e7eb; text-align: right; gap: 1rem; }
           .student-table tbody td:last-child { border-bottom: none; }
-          .student-table tbody td::before { content: attr(data-label); font-weight: 600; color: #7d8590; text-align: left; flex: 1; }
+          .student-table tbody td::before { content: attr(data-label); font-weight: 600; color: #6b7280; text-align: left; flex: 1; }
           .student-table tbody td .action-buttons { margin-left: auto; display: flex; gap: 0.5rem; }
         }
       `}</style>
@@ -362,20 +403,20 @@ function Students() {
         {/* Top Bar */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
           <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0">
-              <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="w-10 h-10 rounded-xl bg-green-100 border border-green-200 flex items-center justify-center shrink-0">
+              <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
             </div>
             <div>
-              <h1 className="text-xl font-semibold text-[#e6edf3] tracking-tight">Students</h1>
-              <p className="text-[#7d8590] text-xs mt-0.5">{students.length} total · {filteredStudents.length} shown</p>
+              <h1 className="text-xl font-semibold text-gray-800 tracking-tight">Students</h1>
+              <p className="text-gray-500 text-xs mt-0.5">{students.length} total · {filteredStudents.length} shown</p>
             </div>
           </div>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
             <div className="relative w-full sm:w-64">
-              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#484f58]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
               </svg>
               <input
@@ -383,10 +424,10 @@ function Students() {
                 placeholder="Search students..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-[#161b22] border border-[#30363d] rounded-lg pl-9 pr-4 py-2 text-[#e6edf3] placeholder-[#484f58] focus:outline-none focus:border-[#388bfd] focus:ring-1 focus:ring-[#388bfd]/20 transition-all text-sm"
+                className="w-full bg-white border border-gray-300 rounded-lg pl-9 pr-4 py-2 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/20 transition-all text-sm"
               />
               {searchTerm && (
-                <button onClick={() => setSearchTerm("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#484f58] hover:text-[#7d8590] transition">
+                <button onClick={() => setSearchTerm("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition">
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
@@ -400,12 +441,16 @@ function Students() {
                 setFormData({
                   username: "", full_name: "", email: "", course: "", batch: "", mentor: "", phone: "", date_of_birth: "", age: "", gender: "",
                   fathers_name: "", fathers_contact: "", mothers_name: "", mothers_contact: "",
-                  address: "", educational_qualification: "", college_school: "",
+                  address: "", educational_qualification: "", college_school: "", parent_name: "", parent_phone: "", emergency_contact: "",
                 });
                 setPhoneError("");
+                setFathersContactError("");
+                setMothersContactError("");
+                setParentPhoneError("");
+                setEmergencyContactError("");
                 setShowForm(true);
               }}
-              className="shine flex items-center justify-center gap-2 bg-[#238636] hover:bg-[#2ea043] border border-[#2ea043]/40 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 shadow-lg shadow-[#238636]/20 w-full sm:w-auto"
+              className="shine flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 shadow-md w-full sm:w-auto"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -415,23 +460,23 @@ function Students() {
           </div>
         </div>
 
-        {/* Add/Edit Modal (full) – unchanged */}
+        {/* Add/Edit Modal */}
         {showForm && (
-          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 backdrop-blur-md p-4" onClick={() => setShowForm(false)}>
-            <form onSubmit={handleSubmit} className="modal-enter bg-[#161b22] rounded-2xl w-full max-w-3xl border border-[#30363d] shadow-2xl shadow-black/60 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-              <div className="sticky top-0 bg-[#161b22] z-10 flex justify-between items-center px-4 sm:px-6 py-4 border-b border-[#21262d]">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={() => setShowForm(false)}>
+            <form onSubmit={handleSubmit} className="modal-enter bg-white rounded-2xl w-full max-w-3xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+              <div className="sticky top-0 bg-white z-10 flex justify-between items-center px-4 sm:px-6 py-4 border-b border-gray-200">
                 <div className="flex items-center gap-3">
-                  <div className="w-7 h-7 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
-                    <svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="w-7 h-7 rounded-lg bg-green-100 border border-green-200 flex items-center justify-center">
+                    <svg className="w-3.5 h-3.5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={editingId ? "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" : "M12 4v16m8-8H4"} />
                     </svg>
                   </div>
                   <div>
-                    <h3 className="text-sm font-semibold text-[#e6edf3]">{editingId ? "Edit Student" : "New Student"}</h3>
-                    <p className="text-[#7d8590] text-xs">{editingId ? "Update student information" : "Add a new student to the system"}</p>
+                    <h3 className="text-sm font-semibold text-gray-800">{editingId ? "Edit Student" : "New Student"}</h3>
+                    <p className="text-gray-500 text-xs">{editingId ? "Update student information" : "Add a new student to the system"}</p>
                   </div>
                 </div>
-                <button type="button" onClick={() => setShowForm(false)} className="text-[#484f58] hover:text-[#7d8590] transition p-1.5 rounded-lg hover:bg-[#21262d]">
+                <button type="button" onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600 transition p-1.5 rounded-lg hover:bg-gray-100">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
@@ -440,47 +485,50 @@ function Students() {
 
               <div className="px-4 sm:px-6 py-5 space-y-6">
                 <div>
-                  <h4 className="text-xs font-semibold text-[#388bfd] uppercase tracking-wider mb-3">Basic Information</h4>
+                  <h4 className="text-xs font-semibold text-green-600 uppercase tracking-wider mb-3">Basic Information</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Username *</label><input type="text" name="username" value={formData.username} onChange={handleChange} required className={inputClass} /></div>
-                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Full Name</label><input type="text" name="full_name" value={formData.full_name} onChange={handleChange} className={inputClass} /></div>
-                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Email *</label><input type="email" name="email" value={formData.email} onChange={handleChange} required className={inputClass} /></div>
-                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Course *</label><select name="course" value={formData.course} onChange={handleChange} required className={inputClass}><option value="">Select a course</option>{coursesList.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select></div>
-                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Batch *</label><select name="batch" value={formData.batch} onChange={handleChange} required className={inputClass}><option value="">Select a batch</option>{batchesList.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}</select></div>
-                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Mentor (optional)</label><select name="mentor" value={formData.mentor} onChange={handleChange} className={inputClass}><option value="">Select a mentor</option>{mentorsList.map(mentor => <option key={mentor.id} value={mentor.id}>{mentor.username} ({mentor.expertise || "No expertise"})</option>)}</select></div>
-                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Phone</label><input type="text" name="phone" value={formData.phone} onChange={handleChange} className={inputClass} />{phoneError && <p className="text-red-400 text-xs mt-1">{phoneError}</p>}</div>
-                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Date of Birth</label><input type="date" name="date_of_birth" value={formData.date_of_birth} onChange={handleChange} className={inputClass} style={{ colorScheme: "dark" }} /></div>
-                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Age</label><input type="text" name="age" value={formData.age} readOnly className={`${inputClass} cursor-not-allowed opacity-80`} /></div>
-                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Gender</label><select name="gender" value={formData.gender} onChange={handleChange} className={inputClass}><option value="">Select</option><option>Male</option><option>Female</option><option>Other</option></select></div>
+                    <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Username *</label><input type="text" name="username" value={formData.username} onChange={handleChange} required className={inputClass} /></div>
+                    <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Full Name</label><input type="text" name="full_name" value={formData.full_name} onChange={handleChange} className={inputClass} /></div>
+                    <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Email *</label><input type="email" name="email" value={formData.email} onChange={handleChange} required className={inputClass} /></div>
+                    <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Course *</label><select name="course" value={formData.course} onChange={handleChange} required className={inputClass}><option value="">Select a course</option>{coursesList.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select></div>
+                    <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Batch *</label><select name="batch" value={formData.batch} onChange={handleChange} required className={inputClass}><option value="">Select a batch</option>{batchesList.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}</select></div>
+                    <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Mentor (optional)</label><select name="mentor" value={formData.mentor} onChange={handleChange} className={inputClass}><option value="">Select a mentor</option>{mentorsList.map(mentor => <option key={mentor.id} value={mentor.id}>{mentor.username} ({mentor.expertise || "No expertise"})</option>)}</select></div>
+                    <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Phone</label><input type="text" name="phone" value={formData.phone} onChange={handleChange} className={inputClass} />{phoneError && <p className="text-red-500 text-xs mt-1">{phoneError}</p>}</div>
+                    <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Date of Birth</label><input type="date" name="date_of_birth" value={formData.date_of_birth} onChange={handleChange} className={inputClass} /></div>
+                    <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Age</label><input type="text" name="age" value={formData.age} readOnly className={`${inputClass} cursor-not-allowed opacity-80`} /></div>
+                    <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Gender</label><select name="gender" value={formData.gender} onChange={handleChange} className={inputClass}><option value="">Select</option><option>Male</option><option>Female</option><option>Other</option></select></div>
                   </div>
                 </div>
 
-                <div className="border-t border-[#21262d] pt-4">
-                  <h4 className="text-xs font-semibold text-[#f59e0b] uppercase tracking-wider mb-3">Parents</h4>
+                <div className="border-t border-gray-200 pt-4">
+                  <h4 className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-3">Parents</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Father's Name</label><input type="text" name="fathers_name" value={formData.fathers_name} onChange={handleChange} className={inputClass} /></div>
-                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Father's Contact</label><input type="text" name="fathers_contact" value={formData.fathers_contact} onChange={handleChange} className={inputClass} /></div>
-                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Mother's Name</label><input type="text" name="mothers_name" value={formData.mothers_name} onChange={handleChange} className={inputClass} /></div>
-                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Mother's Contact</label><input type="text" name="mothers_contact" value={formData.mothers_contact} onChange={handleChange} className={inputClass} /></div>
+                    <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Father's Name</label><input type="text" name="fathers_name" value={formData.fathers_name} onChange={handleChange} className={inputClass} /></div>
+                    <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Father's Contact</label><input type="text" name="fathers_contact" value={formData.fathers_contact} onChange={handleChange} className={inputClass} />{fathersContactError && <p className="text-red-500 text-xs mt-1">{fathersContactError}</p>}</div>
+                    <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Mother's Name</label><input type="text" name="mothers_name" value={formData.mothers_name} onChange={handleChange} className={inputClass} /></div>
+                    <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Mother's Contact</label><input type="text" name="mothers_contact" value={formData.mothers_contact} onChange={handleChange} className={inputClass} />{mothersContactError && <p className="text-red-500 text-xs mt-1">{mothersContactError}</p>}</div>
+                    <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Parent Name</label><input type="text" name="parent_name" value={formData.parent_name} onChange={handleChange} className={inputClass} /></div>
+                    <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Parent Phone</label><input type="text" name="parent_phone" value={formData.parent_phone} onChange={handleChange} className={inputClass} />{parentPhoneError && <p className="text-red-500 text-xs mt-1">{parentPhoneError}</p>}</div>
+                    <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Emergency Contact</label><input type="text" name="emergency_contact" value={formData.emergency_contact} onChange={handleChange} className={inputClass} />{emergencyContactError && <p className="text-red-500 text-xs mt-1">{emergencyContactError}</p>}</div>
                   </div>
                 </div>
 
-                <div className="border-t border-[#21262d] pt-4">
-                  <h4 className="text-xs font-semibold text-[#f59e0b] uppercase tracking-wider mb-3">Address</h4>
-                  <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Address</label><textarea name="address" rows="2" value={formData.address} onChange={handleChange} className={`${inputClass} resize-none`} /></div>
+                <div className="border-t border-gray-200 pt-4">
+                  <h4 className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-3">Address</h4>
+                  <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Address</label><textarea name="address" rows="2" value={formData.address} onChange={handleChange} className={`${inputClass} resize-none`} /></div>
                 </div>
 
-                <div className="border-t border-[#21262d] pt-4">
-                  <h4 className="text-xs font-semibold text-[#f59e0b] uppercase tracking-wider mb-3">Education</h4>
+                <div className="border-t border-gray-200 pt-4">
+                  <h4 className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-3">Education</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Educational Qualification</label><input type="text" name="educational_qualification" value={formData.educational_qualification} onChange={handleChange} className={inputClass} /></div>
-                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">College / School Name</label><input type="text" name="college_school" value={formData.college_school} onChange={handleChange} className={inputClass} /></div>
+                    <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Educational Qualification</label><input type="text" name="educational_qualification" value={formData.educational_qualification} onChange={handleChange} className={inputClass} /></div>
+                    <div><label className="block text-gray-600 text-xs font-medium mb-1.5">College / School Name</label><input type="text" name="college_school" value={formData.college_school} onChange={handleChange} className={inputClass} /></div>
                   </div>
                 </div>
               </div>
 
-              <div className="sticky bottom-0 bg-[#161b22] px-4 sm:px-6 py-4 border-t border-[#21262d]">
-                <button type="submit" className="w-full bg-[#238636] hover:bg-[#2ea043] border border-[#2ea043]/40 text-white py-2.5 rounded-lg transition-all text-sm font-medium shadow-md shadow-[#238636]/20">
+              <div className="sticky bottom-0 bg-white px-4 sm:px-6 py-4 border-t border-gray-200">
+                <button type="submit" className="w-full bg-green-600 hover:bg-green-700 text-white py-2.5 rounded-lg transition-all text-sm font-medium shadow-sm">
                   {editingId ? "Save Changes" : "Add Student"}
                 </button>
               </div>
@@ -490,21 +538,21 @@ function Students() {
 
         {/* View Details Modal */}
         {viewingStudent && (
-          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 backdrop-blur-md p-4" onClick={() => setViewingStudent(null)}>
-            <div className="bg-[#161b22] rounded-2xl w-full max-w-3xl border border-[#30363d] shadow-2xl shadow-black/60 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-              <div className="sticky top-0 bg-[#161b22] z-10 flex justify-between items-center px-4 sm:px-6 py-4 border-b border-[#21262d]">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={() => setViewingStudent(null)}>
+            <div className="bg-white rounded-2xl w-full max-w-3xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+              <div className="sticky top-0 bg-white z-10 flex justify-between items-center px-4 sm:px-6 py-4 border-b border-gray-200">
                 <div className="flex items-center gap-3">
-                  <div className="w-7 h-7 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
-                    <svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="w-7 h-7 rounded-lg bg-green-100 border border-green-200 flex items-center justify-center">
+                    <svg className="w-3.5 h-3.5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                     </svg>
                   </div>
                   <div>
-                    <h3 className="text-sm font-semibold text-[#e6edf3]">Student Details</h3>
-                    <p className="text-[#7d8590] text-xs">View all information</p>
+                    <h3 className="text-sm font-semibold text-gray-800">Student Details</h3>
+                    <p className="text-gray-500 text-xs">View all information</p>
                   </div>
                 </div>
-                <button type="button" onClick={() => setViewingStudent(null)} className="text-[#484f58] hover:text-[#7d8590] transition p-1.5 rounded-lg hover:bg-[#21262d]">
+                <button type="button" onClick={() => setViewingStudent(null)} className="text-gray-400 hover:text-gray-600 transition p-1.5 rounded-lg hover:bg-gray-100">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
@@ -512,88 +560,89 @@ function Students() {
               </div>
               <div className="px-4 sm:px-6 py-5 space-y-6">
                 <div>
-                  <h4 className="text-xs font-semibold text-[#388bfd] uppercase tracking-wider mb-3">Basic Information</h4>
+                  <h4 className="text-xs font-semibold text-green-600 uppercase tracking-wider mb-3">Basic Information</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Username</label><input type="text" value={viewingStudent.username} readOnly className={readOnlyClass} /></div>
-                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Full Name</label><input type="text" value={viewingStudent.full_name || "—"} readOnly className={readOnlyClass} /></div>
-                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Email</label><input type="text" value={viewingStudent.email} readOnly className={readOnlyClass} /></div>
-                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Course</label><input type="text" value={viewingStudent.course} readOnly className={readOnlyClass} /></div>
-                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Batch</label><input type="text" value={viewingStudent.batch} readOnly className={readOnlyClass} /></div>
-                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Mentor</label><input type="text" value={viewingStudent.mentor_name || "—"} readOnly className={readOnlyClass} /></div>
-                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Phone</label><input type="text" value={viewingStudent.phone || "—"} readOnly className={readOnlyClass} /></div>
-                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Date of Birth</label><input type="text" value={viewingStudent.date_of_birth || "—"} readOnly className={readOnlyClass} /></div>
-                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Age</label><input type="text" value={viewingStudent.age || "—"} readOnly className={readOnlyClass} /></div>
-                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Gender</label><input type="text" value={viewingStudent.gender || "—"} readOnly className={readOnlyClass} /></div>
+                    <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Username</label><input type="text" value={viewingStudent.username} readOnly className={readOnlyClass} /></div>
+                    <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Full Name</label><input type="text" value={viewingStudent.full_name || "—"} readOnly className={readOnlyClass} /></div>
+                    <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Email</label><input type="text" value={viewingStudent.email} readOnly className={readOnlyClass} /></div>
+                    <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Course</label><input type="text" value={viewingStudent.course} readOnly className={readOnlyClass} /></div>
+                    <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Batch</label><input type="text" value={viewingStudent.batch} readOnly className={readOnlyClass} /></div>
+                    <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Mentor</label><input type="text" value={viewingStudent.mentor_name || "—"} readOnly className={readOnlyClass} /></div>
+                    <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Phone</label><input type="text" value={viewingStudent.phone || "—"} readOnly className={readOnlyClass} /></div>
+                    <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Date of Birth</label><input type="text" value={viewingStudent.date_of_birth || "—"} readOnly className={readOnlyClass} /></div>
+                    <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Age</label><input type="text" value={viewingStudent.age || "—"} readOnly className={readOnlyClass} /></div>
+                    <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Gender</label><input type="text" value={viewingStudent.gender || "—"} readOnly className={readOnlyClass} /></div>
                   </div>
                 </div>
-                <div className="border-t border-[#21262d] pt-4">
-                  <h4 className="text-xs font-semibold text-[#f59e0b] uppercase tracking-wider mb-3">Parents</h4>
+                <div className="border-t border-gray-200 pt-4">
+                  <h4 className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-3">Parents</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Father's Name</label><input type="text" value={viewingStudent.fathers_name || "—"} readOnly className={readOnlyClass} /></div>
-                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Father's Contact</label><input type="text" value={viewingStudent.fathers_contact || "—"} readOnly className={readOnlyClass} /></div>
-                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Mother's Name</label><input type="text" value={viewingStudent.mothers_name || "—"} readOnly className={readOnlyClass} /></div>
-                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Mother's Contact</label><input type="text" value={viewingStudent.mothers_contact || "—"} readOnly className={readOnlyClass} /></div>
+                    <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Father's Name</label><input type="text" value={viewingStudent.fathers_name || "—"} readOnly className={readOnlyClass} /></div>
+                    <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Father's Contact</label><input type="text" value={viewingStudent.fathers_contact || "—"} readOnly className={readOnlyClass} /></div>
+                    <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Mother's Name</label><input type="text" value={viewingStudent.mothers_name || "—"} readOnly className={readOnlyClass} /></div>
+                    <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Mother's Contact</label><input type="text" value={viewingStudent.mothers_contact || "—"} readOnly className={readOnlyClass} /></div>
+                    <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Parent Name</label><input type="text" value={viewingStudent.parent_name || "—"} readOnly className={readOnlyClass} /></div>
+                    <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Parent Phone</label><input type="text" value={viewingStudent.parent_phone || "—"} readOnly className={readOnlyClass} /></div>
+                    <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Emergency Contact</label><input type="text" value={viewingStudent.emergency_contact || "—"} readOnly className={readOnlyClass} /></div>
                   </div>
                 </div>
-                <div className="border-t border-[#21262d] pt-4">
-                  <h4 className="text-xs font-semibold text-[#f59e0b] uppercase tracking-wider mb-3">Address</h4>
-                  <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Address</label><textarea rows="2" value={viewingStudent.address || "—"} readOnly className={`${readOnlyClass} resize-none`} /></div>
+                <div className="border-t border-gray-200 pt-4">
+                  <h4 className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-3">Address</h4>
+                  <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Address</label><textarea rows="2" value={viewingStudent.address || "—"} readOnly className={`${readOnlyClass} resize-none`} /></div>
                 </div>
-                <div className="border-t border-[#21262d] pt-4">
-                  <h4 className="text-xs font-semibold text-[#f59e0b] uppercase tracking-wider mb-3">Education</h4>
+                <div className="border-t border-gray-200 pt-4">
+                  <h4 className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-3">Education</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">Educational Qualification</label><input type="text" value={viewingStudent.educational_qualification || "—"} readOnly className={readOnlyClass} /></div>
-                    <div><label className="block text-[#7d8590] text-xs font-medium mb-1.5">College / School Name</label><input type="text" value={viewingStudent.college_school || "—"} readOnly className={readOnlyClass} /></div>
+                    <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Educational Qualification</label><input type="text" value={viewingStudent.educational_qualification || "—"} readOnly className={readOnlyClass} /></div>
+                    <div><label className="block text-gray-500 text-xs font-medium mb-1.5">College / School Name</label><input type="text" value={viewingStudent.college_school || "—"} readOnly className={readOnlyClass} /></div>
                   </div>
                 </div>
               </div>
-              <div className="sticky bottom-0 bg-[#161b22] px-4 sm:px-6 py-4 border-t border-[#21262d] flex justify-end">
-                <button onClick={() => setViewingStudent(null)} className="bg-[#21262d] hover:bg-[#30363d] border border-[#30363d] text-[#7d8590] hover:text-[#e6edf3] px-5 py-2 rounded-lg transition-all text-sm font-medium">
-                  Close
-                </button>
+              <div className="sticky bottom-0 bg-white px-4 sm:px-6 py-4 border-t border-gray-200 flex justify-end">
+                <button onClick={() => setViewingStudent(null)} className="bg-gray-100 hover:bg-gray-200 border border-gray-200 text-gray-700 hover:text-gray-800 px-5 py-2 rounded-lg transition-all text-sm font-medium">Close</button>
               </div>
             </div>
           </div>
         )}
 
-        {/* Students Table with responsive card layout */}
-        <div className="overflow-hidden rounded-xl border border-[#21262d] shadow-xl shadow-black/20">
+        {/* Students Table */}
+        <div className="overflow-hidden rounded-xl border border-gray-200 shadow-sm bg-white">
           <table className="student-table min-w-full">
-            <thead className="bg-[#161b22] border-b border-[#21262d]">
+            <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="text-left px-4 py-3 text-[#7d8590] text-xs font-semibold uppercase tracking-widest">Student</th>
-                <th className="text-left px-4 py-3 text-[#7d8590] text-xs font-semibold uppercase tracking-widest">Email</th>
-                <th className="text-left px-4 py-3 text-[#7d8590] text-xs font-semibold uppercase tracking-widest">Course</th>
-                <th className="text-left px-4 py-3 text-[#7d8590] text-xs font-semibold uppercase tracking-widest">Batch</th>
-                <th className="text-left px-4 py-3 text-[#7d8590] text-xs font-semibold uppercase tracking-widest">Phone</th>
-                <th className="text-left px-4 py-3 text-[#7d8590] text-xs font-semibold uppercase tracking-widest">DOB</th>
-                <th className="text-left px-4 py-3 text-[#7d8590] text-xs font-semibold uppercase tracking-widest">Actions</th>
+                <th className="text-left px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Student</th>
+                <th className="text-left px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Email</th>
+                <th className="text-left px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Course</th>
+                <th className="text-left px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Batch</th>
+                <th className="text-left px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Phone</th>
+                <th className="text-left px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">DOB</th>
+                <th className="text-left px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Actions</th>
               </tr>
             </thead>
-            <tbody className="bg-[#0d1117] divide-y divide-[#21262d]">
+            <tbody className="bg-white divide-y divide-gray-100">
               {paginatedStudents.length > 0 ? (
                 paginatedStudents.map((s) => (
                   <tr key={s.id} className="table-row-hover group">
                     <td data-label="Student" className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${getColor(s.username)} flex items-center justify-center text-white text-xs font-bold shrink-0`}>{getInitial(s.username)}</div>
-                        <button onClick={() => setViewingStudent(s)} className="text-[#e6edf3] text-sm font-medium hover:text-blue-400 transition-colors cursor-pointer text-left">{s.username}</button>
+                        <button onClick={() => setViewingStudent(s)} className="text-gray-800 text-sm font-medium hover:text-green-600 transition-colors cursor-pointer text-left">{s.username}</button>
                       </div>
                     </td>
-                    <td data-label="Email" className="px-4 py-3 text-[#7d8590] text-sm font-mono break-all">{s.email}</td>
-                    <td data-label="Course" className="px-4 py-3"><span className="inline-flex items-center gap-1.5 bg-blue-500/10 text-blue-400 border border-blue-500/20 text-xs font-medium px-2 py-1 rounded-full">{s.course}</span></td>
-                    <td data-label="Batch" className="px-4 py-3"><span className="inline-flex items-center bg-[#21262d] text-[#7d8590] border border-[#30363d] text-xs font-mono px-2 py-1 rounded-full">{s.batch}</span></td>
-                    <td data-label="Phone" className="px-4 py-3 text-[#7d8590] text-sm font-mono">{s.phone || "—"}</td>
-                    <td data-label="DOB" className="px-4 py-3 text-[#7d8590] text-sm font-mono">{s.date_of_birth || "—"}</td>
+                    <td data-label="Email" className="px-4 py-3 text-gray-500 text-sm break-all">{s.email}</td>
+                    <td data-label="Course" className="px-4 py-3"><span className="inline-flex items-center gap-1.5 bg-blue-100 text-blue-700 border border-blue-200 text-xs font-medium px-2 py-1 rounded-full">{s.course}</span></td>
+                    <td data-label="Batch" className="px-4 py-3"><span className="inline-flex items-center bg-gray-100 text-gray-700 border border-gray-200 text-xs font-mono px-2 py-1 rounded-full">{s.batch}</span></td>
+                    <td data-label="Phone" className="px-4 py-3 text-gray-500 text-sm">{s.phone || "—"}</td>
+                    <td data-label="DOB" className="px-4 py-3 text-gray-500 text-sm">{s.date_of_birth || "—"}</td>
                     <td data-label="Actions" className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <button onClick={() => handleEdit(s)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-[#7d8590] hover:text-[#388bfd] hover:bg-[#388bfd]/10 border border-transparent hover:border-[#388bfd]/20 transition-all text-xs font-medium">
+                        <button onClick={() => handleEdit(s)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-gray-500 hover:text-green-600 hover:bg-green-50 border border-transparent hover:border-green-200 transition-all text-xs font-medium">
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                           </svg>
                           <span className="hidden sm:inline">Edit</span>
                         </button>
-                        <button onClick={() => handleDeleteClick(s.id, s.username)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-[#7d8590] hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all text-xs font-medium">
+                        <button onClick={() => handleDeleteClick(s.id, s.username)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-all text-xs font-medium">
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                           </svg>
@@ -605,7 +654,7 @@ function Students() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan="7" className="text-center py-12 sm:py-20 text-[#7d8590]">
+                  <td colSpan="7" className="text-center py-12 sm:py-20 text-gray-500">
                     {searchTerm ? "No students match your search" : "No students found. Click 'Add Student' to create one."}
                   </td>
                 </tr>
@@ -615,16 +664,16 @@ function Students() {
 
           {/* Pagination */}
           {totalFiltered > 0 && (
-            <div className="bg-[#161b22] border-t border-[#21262d] px-4 py-3 flex flex-col sm:flex-row justify-between gap-3 items-center">
-              <div className="text-[#484f58] text-xs">Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, totalFiltered)} of {totalFiltered} students</div>
+            <div className="bg-gray-50 border-t border-gray-200 px-4 py-3 flex flex-col sm:flex-row justify-between gap-3 items-center">
+              <div className="text-gray-500 text-xs">Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, totalFiltered)} of {totalFiltered} students</div>
               <div className="flex gap-1 flex-wrap justify-center">
-                <button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1} className="px-2.5 py-1.5 rounded-lg text-sm disabled:text-[#484f58] text-[#7d8590] hover:bg-[#21262d] disabled:hover:bg-transparent">←</button>
+                <button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1} className="px-2.5 py-1.5 rounded-lg text-sm disabled:text-gray-300 text-gray-500 hover:bg-gray-100 disabled:hover:bg-transparent">←</button>
                 {getPageNumbers().map((page, idx) =>
-                  page === "..." ? <span key={idx} className="px-2 py-1.5 text-[#484f58]">...</span> : (
-                    <button key={page} onClick={() => setCurrentPage(page)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${currentPage === page ? "bg-[#388bfd] text-white shadow-md shadow-[#388bfd]/20" : "text-[#7d8590] hover:text-[#e6edf3] hover:bg-[#21262d]"}`}>{page}</button>
+                  page === "..." ? <span key={idx} className="px-2 py-1.5 text-gray-400">...</span> : (
+                    <button key={page} onClick={() => setCurrentPage(page)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${currentPage === page ? "bg-green-600 text-white shadow-sm" : "text-gray-600 hover:bg-gray-100"}`}>{page}</button>
                   )
                 )}
-                <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages} className="px-2.5 py-1.5 rounded-lg text-sm disabled:text-[#484f58] text-[#7d8590] hover:bg-[#21262d] disabled:hover:bg-transparent">→</button>
+                <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages} className="px-2.5 py-1.5 rounded-lg text-sm disabled:text-gray-300 text-gray-500 hover:bg-gray-100 disabled:hover:bg-transparent">→</button>
               </div>
             </div>
           )}

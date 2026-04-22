@@ -1,4 +1,4 @@
-// src/Admin/StudentReviewEdit.jsx (updated with review text, no "auto" label)
+// src/Admin/StudentReviewEdit.jsx
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import API from "../api/api";
@@ -203,7 +203,7 @@ function StudentReviewEdit() {
         <select
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="w-full bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-sm text-[#e6edf3] focus:border-[#388bfd] outline-none"
+          className="w-full bg-white border border-gray-300 rounded px-2 py-1 text-sm text-gray-800 focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none"
         >
           <option value="">—</option>
           {row.options.map((opt) => (
@@ -218,7 +218,7 @@ function StudentReviewEdit() {
           rows={row.rows || 2}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="w-full bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-sm text-[#e6edf3] focus:border-[#388bfd] outline-none resize-vertical"
+          className="w-full bg-white border border-gray-300 rounded px-2 py-1 text-sm text-gray-800 focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none resize-vertical"
           placeholder={row.placeholder || ""}
         />
       );
@@ -233,12 +233,11 @@ function StudentReviewEdit() {
             step={row.step}
             value={value === "" ? "" : value}
             onChange={(e) => onChange(e.target.value)}
-            className="w-full bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-sm text-[#e6edf3] focus:border-[#388bfd] outline-none"
+            className="w-full bg-white border border-gray-300 rounded px-2 py-1 text-sm text-gray-800 focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none"
             placeholder={row.placeholder || ""}
           />
-          {/* Show english review text without "auto" label */}
           {row.field === "english_score" && reviews[weekId]?.english_review && (
-            <div className="mt-1 text-xs text-[#7d8590]">
+            <div className="mt-1 text-xs text-gray-500">
               📝 {reviews[weekId].english_review}
             </div>
           )}
@@ -251,8 +250,7 @@ function StudentReviewEdit() {
           type="date"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="w-full bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-sm text-[#e6edf3] focus:border-[#388bfd] outline-none"
-          style={{ colorScheme: "dark" }}
+          className="w-full bg-white border border-gray-300 rounded px-2 py-1 text-sm text-gray-800 focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none"
         />
       );
     }
@@ -261,42 +259,42 @@ function StudentReviewEdit() {
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-sm text-[#e6edf3] focus:border-[#388bfd] outline-none"
+        className="w-full bg-white border border-gray-300 rounded px-2 py-1 text-sm text-gray-800 focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none"
         placeholder={row.placeholder || ""}
       />
     );
   };
 
-  if (loading) return <div className="min-h-screen bg-[#0d1117] flex items-center justify-center"><div className="w-8 h-8 border-2 border-[#388bfd] border-t-transparent rounded-full animate-spin" /></div>;
-  if (error) return <div className="min-h-screen bg-[#0d1117] text-red-400 flex items-center justify-center p-8 text-center">{error}</div>;
+  if (loading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><div className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin" /></div>;
+  if (error) return <div className="min-h-screen bg-gray-50 text-red-600 flex items-center justify-center p-8 text-center">{error}</div>;
 
   return (
-    <div className="min-h-screen w-full bg-[#0d1117] text-[#e6edf3] font-sans">
+    <div className="min-h-screen w-full bg-gray-50 text-gray-800 font-sans">
       <div className="max-w-full mx-auto px-4 sm:px-6 py-4 sm:py-8">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-xl font-semibold">Edit Review Sheet</h1>
-            <p className="text-[#7d8590] text-sm mt-1">
+            <h1 className="text-xl font-semibold text-gray-800">Edit Review Sheet</h1>
+            <p className="text-gray-500 text-sm mt-1">
               {student?.full_name || student?.username} • {student?.course} • {student?.batch}
             </p>
           </div>
-          <button onClick={() => navigate("/admin/review-sheets")} className="bg-[#21262d] hover:bg-[#30363d] text-[#7d8590] hover:text-white px-4 py-2 rounded-lg text-sm font-medium transition">← Back</button>
+          <button onClick={() => navigate("/admin/review-sheets")} className="bg-gray-200 hover:bg-gray-300 text-gray-700 hover:text-gray-900 px-4 py-2 rounded-lg text-sm font-medium transition">← Back</button>
         </div>
 
         {/* Desktop Table */}
-        <div className="hidden md:block overflow-x-auto rounded-xl border border-[#21262d]">
+        <div className="hidden md:block overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
           <table className="min-w-full border-collapse">
-            <thead className="bg-[#161b22] border-b border-[#21262d]">
+            <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="sticky left-0 bg-[#161b22] z-10 px-4 py-3 text-left text-[#7d8590] text-xs font-semibold uppercase w-48">FIELD / WEEK</th>
-                {weeks.map(week => <th key={week.id} className="px-3 py-3 text-left text-[#e6edf3] text-sm font-medium min-w-[200px] border-l border-[#21262d]">{cleanTitle(week.title)}</th>)}
+                <th className="sticky left-0 bg-gray-50 z-10 px-4 py-3 text-left text-gray-500 text-xs font-semibold uppercase w-48">FIELD / WEEK</th>
+                {weeks.map(week => <th key={week.id} className="px-3 py-3 text-left text-gray-800 text-sm font-medium min-w-[200px] border-l border-gray-200">{cleanTitle(week.title)}</th>)}
               </tr>
             </thead>
-            <tbody className="bg-[#0d1117] divide-y divide-[#21262d]">
+            <tbody className="bg-white divide-y divide-gray-100">
               {rows.map(row => (
-                <tr key={row.field} className="hover:bg-[#161b22]/40">
-                  <td className="sticky left-0 bg-[#0d1117] px-4 py-3 text-[#7d8590] text-sm font-medium border-r border-[#21262d]">{row.label}</td>
-                  {weeks.map(week => <td key={week.id} className="px-3 py-2 border-l border-[#21262d] align-top">{renderCell(week.id, row)}</td>)}
+                <tr key={row.field} className="hover:bg-gray-50/40">
+                  <td className="sticky left-0 bg-white px-4 py-3 text-gray-600 text-sm font-medium border-r border-gray-200">{row.label}</td>
+                  {weeks.map(week => <td key={week.id} className="px-3 py-2 border-l border-gray-200 align-top">{renderCell(week.id, row)}</td>)}
                 </tr>
               ))}
             </tbody>
@@ -306,12 +304,12 @@ function StudentReviewEdit() {
         {/* Mobile Cards */}
         <div className="md:hidden space-y-6">
           {weeks.map(week => (
-            <div key={week.id} className="bg-[#161b22] rounded-xl border border-[#21262d] p-4">
-              <h2 className="text-lg font-semibold mb-3 border-b border-[#30363d] pb-2">{cleanTitle(week.title)}</h2>
+            <div key={week.id} className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+              <h2 className="text-lg font-semibold text-gray-800 mb-3 border-b border-gray-200 pb-2">{cleanTitle(week.title)}</h2>
               <div className="space-y-3">
                 {rows.map(row => (
                   <div key={row.field} className="flex flex-col gap-1">
-                    <label className="text-[#7d8590] text-xs font-medium uppercase tracking-wide">{row.label}</label>
+                    <label className="text-gray-500 text-xs font-medium uppercase tracking-wide">{row.label}</label>
                     <div>{renderCell(week.id, row)}</div>
                   </div>
                 ))}
@@ -320,14 +318,14 @@ function StudentReviewEdit() {
           ))}
         </div>
 
-        <div className="mt-6 bg-[#161b22] rounded-xl border border-[#21262d] p-4">
-          <h3 className="text-sm font-semibold mb-2">Personal Details</h3>
-          <div className="flex flex-wrap gap-4 text-xs text-[#7d8590]">
+        <div className="mt-6 bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+          <h3 className="text-sm font-semibold text-gray-800 mb-2">Personal Details</h3>
+          <div className="flex flex-wrap gap-4 text-xs text-gray-500">
             <span>Week 0 - 12</span><span>Week 13 - 16</span><span>Week 17 - 24</span>
             <span>Week 25 - 32</span><span>Week 33 - 40</span><span>Week 41 - 44</span>
           </div>
         </div>
-        <div className="mt-4 text-right text-[#484f58] text-xs">💡 Click any cell to edit. Changes auto‑save.</div>
+        <div className="mt-4 text-right text-gray-400 text-xs">💡 Click any cell to edit. Changes auto‑save.</div>
       </div>
     </div>
   );
