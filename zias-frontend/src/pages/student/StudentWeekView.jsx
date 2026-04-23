@@ -1,22 +1,26 @@
 // src/pages/student/StudentWeekView.jsx
 import { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import API from "../../api/api";
 
 function StudentWeekView() {
   const { weekId } = useParams();
+  const navigate = useNavigate();
   const [week, setWeek] = useState(null);
   const [days, setDays] = useState([]);
   const [review, setReview] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [completing, setCompleting] = useState(false);
   const [isReviewer, setIsReviewer] = useState(false);
+  const [isStudent, setIsStudent] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         const userRes = await API.get("users/me/");
         setIsReviewer(userRes.data.is_admin || userRes.data.is_mentor);
+        setIsStudent(userRes.data.is_student);
 
         const weekRes = await API.get(`modules/${weekId}/`);
         setWeek(weekRes.data);
@@ -68,6 +72,28 @@ function StudentWeekView() {
     }
   };
 
+  const completeWeek = async () => {
+    // Check if all days are completed
+    const allCompleted = days.every(day => day.is_completed === true);
+    if (!allCompleted) {
+      alert("Please complete all days before marking the week as completed.");
+      return;
+    }
+
+    setCompleting(true);
+    try {
+      await API.post(`/api/modules/${weekId}/complete/`);
+      alert("Week completed successfully! Next week will be unlocked.");
+      // Optionally redirect back to modules page
+      navigate("/student/modules");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to complete week. Please try again.");
+    } finally {
+      setCompleting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -75,6 +101,8 @@ function StudentWeekView() {
       </div>
     );
   }
+
+  const allDaysCompleted = days.length > 0 && days.every(day => day.is_completed === true);
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-800 p-6">
@@ -99,7 +127,7 @@ function StudentWeekView() {
           <p className="text-gray-500">{week?.content || "No description."}</p>
         </div>
 
-        {/* Review form */}
+        {/* Review form (only for reviewers) */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 mb-6">
           <h2 className="text-lg font-semibold text-gray-800 mb-4">📋 Weekly Review</h2>
           <div className="space-y-4">
@@ -236,7 +264,7 @@ function StudentWeekView() {
         </div>
 
         {/* Daily tasks */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 mb-6">
           <h2 className="text-lg font-semibold text-gray-800 mb-4">📌 Daily Tasks</h2>
           {days.length === 0 ? (
             <p className="text-gray-500">No tasks for this week.</p>
@@ -263,6 +291,23 @@ function StudentWeekView() {
             </div>
           )}
         </div>
+
+        {/* Complete Week Button - only for students */}
+        {isStudent && days.length > 0 && (
+          <div className="flex justify-end">
+            <button
+              onClick={completeWeek}
+              disabled={completing || !allDaysCompleted}
+              className={`px-6 py-2 rounded-lg text-white font-medium transition ${
+                allDaysCompleted
+                  ? "bg-blue-600 hover:bg-blue-700"
+                  : "bg-gray-400 cursor-not-allowed"
+              }`}
+            >
+              {completing ? "Completing..." : "✅ Complete Week"}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

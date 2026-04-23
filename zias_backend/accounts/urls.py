@@ -10,7 +10,6 @@ from .views import (
     CustomLoginView, LogoutView, UpdateDashboardAccessView,
     CompleteModuleView, StudentWeekReviewView, StudentListView, WeeklyToppersView,
     WeekUpdateViewSet
-    # get_chat_history and get_all_users removed
 )
 
 router = DefaultRouter()

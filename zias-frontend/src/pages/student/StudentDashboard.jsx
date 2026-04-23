@@ -15,8 +15,15 @@ function StudentDashboard() {
     const fetchData = async () => {
       try {
         await API.post("update-dashboard-access/");
-        const studentRes = await API.get("students/me/");
-        setStudent(studentRes.data);
+        
+        // Try to fetch student profile – but don't fail if it's missing
+        try {
+          const studentRes = await API.get("students/me/");
+          setStudent(studentRes.data);
+        } catch (err) {
+          console.warn("Could not fetch student profile:", err);
+          // Continue without student data
+        }
 
         const modulesRes = await API.get("modules/student-modules/");
         const modulesData = modulesRes.data;
@@ -44,14 +51,17 @@ function StudentDashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
+      <div className="flex min-h-screen bg-gray-50">
+        <StudentSidebar />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-50 text-gray-800">
+    <div className="flex min-h-screen bg-gray-50">
       <StudentSidebar />
       <main className="flex-1 p-8 overflow-y-auto">
         <div className="max-w-6xl mx-auto">
@@ -70,7 +80,7 @@ function StudentDashboard() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {modules.map((mod) => {
-                  const isLocked = mod.is_locked || false;
+                  const isLocked = mod.is_locked === true;
                   const review = reviews[mod.id] || {};
                   const totalScore = review.total_score !== undefined ? review.total_score : null;
                   const starRating = review.star_rating || null;
@@ -92,7 +102,7 @@ function StudentDashboard() {
                           </div>
                         </div>
                       ) : (
-                        <Link to={`/student/module/${mod.id}`} className="block p-5">
+                        <Link to={`/student/week/${mod.id}`} className="block p-5">
                           <div className="flex justify-between items-start">
                             <div className="flex-1">
                               <h3 className="text-lg font-semibold text-gray-800 group-hover:text-green-600 transition">{mod.title}</h3>
@@ -127,4 +137,4 @@ function StudentDashboard() {
   );
 }
 
-export default StudentDashboard;
+export default StudentDashboard;  

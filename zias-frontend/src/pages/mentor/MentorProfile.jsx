@@ -3,11 +3,6 @@ import { useEffect, useState, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import API from "../../api/api";
 
-// Promise cache for user profile
-let userProfilePromise = null;
-let globalUserFetched = false;
-
-// Updated avatar colors – light green palette
 const avatarColors = [
   ["#e6f4ea", "#2e7d32"],
   ["#e8f5e9", "#388e3c"],
@@ -47,45 +42,26 @@ function MentorProfile() {
   useEffect(() => {
     mountedRef.current = true;
     const fetchProfile = async () => {
-      // If already fetched and promise exists, reuse it
-      if (globalUserFetched && userProfilePromise) {
-        try {
-          const data = await userProfilePromise;
-          if (mountedRef.current) setUser(data);
-        } catch (err) {
-          if (mountedRef.current) setMessage({ text: err.message, type: "error" });
-        } finally {
-          if (mountedRef.current) setLoading(false);
-        }
-        return;
-      }
-      // Create new promise if not already in flight
-      if (!userProfilePromise) {
-        userProfilePromise = API.get("users/me/")
-          .then(res => {
-            globalUserFetched = true;
-            return res.data;
-          })
-          .catch(err => {
-            console.error(err);
-            throw new Error(err.response?.status === 404
-              ? "User profile not found. Please contact admin."
-              : "Failed to load profile.");
-          })
-          .finally(() => { userProfilePromise = null; });
-      }
       try {
-        const data = await userProfilePromise;
-        if (mountedRef.current) setUser(data);
+        const res = await API.get("users/me/");
+        if (mountedRef.current) setUser(res.data);
       } catch (err) {
-        if (mountedRef.current) setMessage({ text: err.message, type: "error" });
+        console.error(err);
+        if (mountedRef.current) {
+          setMessage({
+            text: err.response?.status === 404
+              ? "User profile not found. Please contact admin."
+              : "Failed to load profile.",
+            type: "error",
+          });
+        }
       } finally {
         if (mountedRef.current) setLoading(false);
       }
     };
     fetchProfile();
     return () => { mountedRef.current = false; };
-  }, [navigate]);
+  }, []);
 
   const handleLogout = () => {
     localStorage.removeItem("access_token");
@@ -190,17 +166,18 @@ function MentorProfile() {
 
 const s = {
   page: {
+    width: "100%",               // Take full width of parent (main)
     minHeight: "100vh",
-    background: "#f9fafb",
     display: "flex",
-    alignItems: "flex-start",
+    alignItems: "center",
     justifyContent: "center",
-    padding: "48px 16px 80px",
+    padding: "48px 16px",
     fontFamily: "'DM Sans', 'Segoe UI', sans-serif",
+    boxSizing: "border-box",
   },
   fullPage: {
+    width: "100%",
     minHeight: "100vh",
-    background: "#f9fafb",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -332,6 +309,7 @@ const s = {
     gap: 12,
     alignItems: "center",
     justifyContent: "center",
+    flexWrap: "wrap",
   },
   btnSecondary: {
     display: "inline-flex",

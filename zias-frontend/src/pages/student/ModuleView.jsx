@@ -1,4 +1,4 @@
-// src/pages/student/ModuleView.jsx (dark theme)
+// src/pages/student/ModuleView.jsx (light theme)
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import API from "../../api/api";
@@ -9,11 +9,11 @@ function Toast({ message, type, onClose }) {
     return () => clearTimeout(timer);
   }, [onClose]);
 
-  const bgColor = type === "success" ? "bg-emerald-500/90" : "bg-red-500/90";
+  const bgColor = type === "success" ? "bg-emerald-600" : "bg-red-600";
   const icon = type === "success" ? "✓" : "✕";
 
   return (
-    <div className={`fixed top-5 right-5 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl backdrop-blur-md ${bgColor} text-white text-sm font-medium animate-in slide-in-from-top-2`}>
+    <div className={`fixed top-5 right-5 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg ${bgColor} text-white text-sm font-medium animate-in slide-in-from-top-2`}>
       <span className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold">{icon}</span>
       <span>{message}</span>
       <button onClick={onClose} className="ml-2 text-white/70 hover:text-white">×</button>
@@ -114,53 +114,53 @@ function ModuleView() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0d1117] flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-[#388bfd] border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   if (!module) {
     return (
-      <div className="min-h-screen bg-[#0d1117] text-white flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 text-gray-800 flex items-center justify-center">
         Module not found.
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#0d1117] text-[#e6edf3] p-8">
+    <div className="min-h-screen bg-gray-50 text-gray-800 p-8">
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
 
       <div className="max-w-4xl mx-auto">
-        <Link to="/student/dashboard" className="inline-flex items-center gap-2 text-[#7d8590] hover:text-[#e6edf3] mb-6 transition">
+        <Link to="/student/dashboard" className="inline-flex items-center gap-2 text-gray-500 hover:text-gray-700 mb-6 transition">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
           </svg>
           Back to Dashboard
         </Link>
 
-        <div className="bg-[#161b22] rounded-xl border border-[#21262d] p-6 mb-8">
-          <h1 className="text-2xl font-bold text-[#e6edf3]">{module.title}</h1>
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 mb-8">
+          <h1 className="text-2xl font-bold text-gray-800">{module.title}</h1>
           {module.content && (
-            <div className="mt-3 text-[#7d8590] whitespace-pre-wrap">{module.content}</div>
+            <div className="mt-3 text-gray-600 whitespace-pre-wrap">{module.content}</div>
           )}
           {module.is_common && (
-            <span className="inline-block mt-3 text-xs bg-blue-500/10 text-blue-400 px-2 py-1 rounded-full">
+            <span className="inline-block mt-3 text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
               Foundation Module
             </span>
           )}
         </div>
 
-        <h2 className="text-xl font-semibold text-[#e6edf3] mb-4">Days</h2>
+        <h2 className="text-xl font-semibold text-gray-800 mb-4">Days</h2>
         {days.length === 0 ? (
-          <p className="text-[#7d8590]">No days available for this module.</p>
+          <p className="text-gray-500">No days available for this module.</p>
         ) : (
           <div className="space-y-4">
             {days.map((day) => (
-              <div key={day.id} className="bg-[#161b22] rounded-xl border border-[#21262d] overflow-hidden">
+              <div key={day.id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                 <div
-                  className="p-4 flex items-center justify-between cursor-pointer hover:bg-[#1a2538] transition"
+                  className="p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition"
                   onClick={() => setExpandedDayId(expandedDayId === day.id ? null : day.id)}
                 >
                   <div className="flex items-center gap-3">
@@ -171,15 +171,15 @@ function ModuleView() {
                         e.stopPropagation();
                         toggleDayCompletion(day.id, e.target.checked);
                       }}
-                      className="w-4 h-4 rounded bg-[#0d1117] border-[#30363d] accent-emerald-500"
+                      className="w-4 h-4 text-green-600 rounded border-gray-300 focus:ring-green-500"
                     />
                     <div>
-                      <h3 className="text-lg font-medium text-[#e6edf3]">{day.title}</h3>
-                      <p className="text-xs text-[#484f58]">Order: {day.order}</p>
+                      <h3 className="text-lg font-medium text-gray-800">{day.title}</h3>
+                      <p className="text-xs text-gray-400">Order: {day.order}</p>
                     </div>
                   </div>
                   <svg
-                    className={`w-5 h-5 text-[#484f58] transition-transform duration-200 ${expandedDayId === day.id ? "rotate-180" : ""}`}
+                    className={`w-5 h-5 text-gray-400 transition-transform duration-200 ${expandedDayId === day.id ? "rotate-180" : ""}`}
                     fill="none" stroke="currentColor" viewBox="0 0 24 24"
                   >
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -187,32 +187,32 @@ function ModuleView() {
                 </div>
 
                 {expandedDayId === day.id && (
-                  <div className="p-4 pt-0 border-t border-[#21262d] bg-[#0d1117]/50">
+                  <div className="p-4 pt-0 border-t border-gray-100 bg-gray-50">
                     {day.content && (
-                      <div className="mb-4 p-3 bg-[#0d1117] rounded-lg border border-[#21262d]">
-                        <div className="text-xs font-semibold text-[#7d8590] uppercase mb-1">Day Content</div>
-                        <div className="text-[#c9d1d9] text-sm whitespace-pre-wrap">{day.content}</div>
+                      <div className="mb-4 p-3 bg-white rounded-lg border border-gray-200">
+                        <div className="text-xs font-semibold text-gray-500 uppercase mb-1">Day Content</div>
+                        <div className="text-gray-700 text-sm whitespace-pre-wrap">{day.content}</div>
                       </div>
                     )}
 
                     <div>
-                      <h4 className="text-sm font-semibold text-[#7d8590] uppercase tracking-wider mb-2">Tasks</h4>
+                      <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">Tasks</h4>
                       {(tasksByDay[day.id] || []).length === 0 ? (
-                        <p className="text-[#484f58] text-sm">No tasks for this day.</p>
+                        <p className="text-gray-400 text-sm">No tasks for this day.</p>
                       ) : (
                         <div className="space-y-2">
                           {tasksByDay[day.id].map((task) => (
-                            <div key={task.id} className="bg-[#161b22] rounded-lg p-3 flex items-start gap-3">
+                            <div key={task.id} className="bg-white rounded-lg border border-gray-200 p-3 flex items-start gap-3">
                               <input
                                 type="checkbox"
                                 checked={task.is_completed || false}
                                 onChange={(e) => toggleTaskCompletion(task.id, e.target.checked)}
-                                className="mt-0.5 w-4 h-4 rounded bg-[#0d1117] border-[#30363d] accent-emerald-500"
+                                className="mt-0.5 w-4 h-4 text-green-600 rounded border-gray-300 focus:ring-green-500"
                               />
                               <div className="flex-1">
-                                <p className="text-[#c9d1d9] text-sm font-medium">{task.title}</p>
+                                <p className="text-gray-800 text-sm font-medium">{task.title}</p>
                                 {task.description && (
-                                  <p className="text-[#484f58] text-xs mt-1">{task.description}</p>
+                                  <p className="text-gray-500 text-xs mt-1">{task.description}</p>
                                 )}
                               </div>
                             </div>
@@ -232,7 +232,7 @@ function ModuleView() {
             <button
               onClick={completeModule}
               disabled={completing}
-              className="bg-[#238636] hover:bg-[#2ea043] disabled:bg-gray-600 text-white font-medium px-6 py-2 rounded-lg transition shadow-md"
+              className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-medium px-6 py-2 rounded-lg transition shadow-sm"
             >
               {completing ? "Completing..." : "Complete Module"}
             </button>
@@ -240,7 +240,7 @@ function ModuleView() {
         )}
 
         {isModuleCompleted && (
-          <div className="mt-8 text-center text-emerald-400 font-medium">
+          <div className="mt-8 text-center text-emerald-600 font-medium">
             ✅ Module completed successfully!
           </div>
         )}

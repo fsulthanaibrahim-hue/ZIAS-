@@ -17,7 +17,6 @@ from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
 from .models import (
     User, Student, Mentor, Reviewer, Course, Module, Day, Task, Batch,
     StudentModule, PasswordResetToken, ContactMessage, StudentWeekReview, WeekUpdate
-    # ChatMessage removed
 )
 from .serializers import (
     StudentSerializer, MentorSerializer, ReviewerSerializer, UserSerializer,
@@ -52,7 +51,7 @@ class BatchViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminOrReadOnly]
 
 # ----------------------------
-# STUDENT VIEWSET
+# STUDENT VIEWSET (optimized for mentor dashboard)
 # ----------------------------
 class StudentViewSet(viewsets.ModelViewSet):
     serializer_class = StudentSerializer
@@ -77,6 +76,24 @@ class StudentViewSet(viewsets.ModelViewSet):
         else:
             queryset = queryset.filter(user=user)
         return queryset
+
+    def list(self, request, *args, **kwargs):
+        """Optimized list for mentor dashboard - returns only lightweight fields"""
+        queryset = self.get_queryset()
+        user = request.user
+        if user.is_mentor:
+            data = []
+            for student in queryset.select_related('user'):
+                data.append({
+                    "id": student.id,
+                    "username": student.user.username,
+                    "full_name": student.full_name,
+                    "course": student.course,
+                    "batch": student.batch,
+                })
+            return Response(data)
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
 
     @action(detail=False, methods=['get'], url_path='me', permission_classes=[IsAuthenticated])
     def get_me(self, request):
@@ -150,7 +167,7 @@ class CourseViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminOrReadOnly]
 
 # ----------------------------
-# MODULE VIEWSET (with corrected unlocking logic)
+# MODULE VIEWSET (with auto-create student profile and unlocking)
 # ----------------------------
 class ModuleViewSet(viewsets.ModelViewSet):
     queryset = Module.objects.all()
@@ -175,7 +192,6 @@ class ModuleViewSet(viewsets.ModelViewSet):
         user = request.user
         student_id = request.query_params.get('student_id')
 
-        # Determine the student
         if user.is_admin or user.is_mentor:
             if student_id:
                 try:
@@ -184,35 +200,41 @@ class ModuleViewSet(viewsets.ModelViewSet):
                     return Response([])
             else:
                 if user.is_student:
-                    student = Student.objects.get(user=user)
+                    student, created = Student.objects.get_or_create(
+                        user=user,
+                        defaults={'course': '', 'batch': ''}
+                    )
+                    if created:
+                        print(f"Created missing student profile for {user.username}")
                 else:
                     return Response([])
         else:
             if not user.is_student:
                 return Response([])
-            student = Student.objects.get(user=user)
+            student, created = Student.objects.get_or_create(
+                user=user,
+                defaults={'course': '', 'batch': ''}
+            )
+            if created:
+                print(f"Created missing student profile for {user.username}")
 
-        # Common modules (always unlocked)
         common_modules = Module.objects.filter(is_common=True).order_by('order')
 
-        # If student has no course, return only common modules
         if not student.course:
             serializer = self.get_serializer(common_modules, many=True)
-            return Response(serializer.data)
+            data = serializer.data
+            for item in data:
+                item['is_locked'] = False
+            return Response(data)
 
-        # Course‑specific modules (ordered by 'order')
         course_modules = Module.objects.filter(course__name=student.course, is_common=False).order_by('order')
 
-        # Determine which course modules are accessible (unlocked)
         accessible_course_modules = []
         for mod in course_modules:
-            # Get all previous modules in this course (with lower order)
             previous_modules = course_modules.filter(order__lt=mod.order)
             if not previous_modules.exists():
-                # First module – always unlocked
                 accessible_course_modules.append(mod)
             else:
-                # Check if all previous modules are completed
                 all_prev_completed = True
                 for prev in previous_modules:
                     try:
@@ -226,16 +248,18 @@ class ModuleViewSet(viewsets.ModelViewSet):
                 if all_prev_completed:
                     accessible_course_modules.append(mod)
                 else:
-                    # Stop at the first locked module (all later ones stay locked)
                     break
 
         all_modules = list(common_modules) + accessible_course_modules
         all_modules.sort(key=lambda x: x.order)
         serializer = self.get_serializer(all_modules, many=True)
-        return Response(serializer.data)
+        data = serializer.data
+        for item in data:
+            item['is_locked'] = False
+        return Response(data)
 
 # ----------------------------
-# COMPLETE MODULE VIEW
+# COMPLETE MODULE VIEW (with auto-create student profile)
 # ----------------------------
 class CompleteModuleView(APIView):
     permission_classes = [IsAuthenticated]
@@ -243,10 +267,12 @@ class CompleteModuleView(APIView):
         user = request.user
         if not user.is_student:
             return Response({"detail": "Only students can complete modules."}, status=403)
-        try:
-            student = Student.objects.get(user=user)
-        except Student.DoesNotExist:
-            return Response({"detail": "Student profile not found."}, status=404)
+        student, created = Student.objects.get_or_create(
+            user=user,
+            defaults={'course': '', 'batch': ''}
+        )
+        if created:
+            print(f"Created missing student profile for {user.username} during module completion")
         try:
             module = Module.objects.get(id=module_id)
         except Module.DoesNotExist:

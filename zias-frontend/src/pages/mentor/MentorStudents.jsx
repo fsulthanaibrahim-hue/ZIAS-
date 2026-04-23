@@ -3,68 +3,86 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import API from "../../api/api";
 
-let mentorPromise = null;
-let studentsPromise = null;
-let globalMentorFetched = false;
-let globalStudentsFetched = false;
-
 function MentorStudents() {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [mentor, setMentor] = useState(null);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        // Fetch mentor profile only once
-        if (!globalMentorFetched && !mentorPromise) {
-          mentorPromise = API.get("mentors/me/")
-            .then(res => {
-              setMentor(res.data);
-              globalMentorFetched = true;
-              return res.data;
-            })
-            .catch(err => {
-              console.error("Failed to fetch mentor", err);
-              throw err;
-            })
-            .finally(() => {
-              mentorPromise = null;
-            });
-        }
-        const mentorData = await mentorPromise;
+    let isMounted = true;
+    const abortController = new AbortController();
 
-        // Fetch students for this mentor only once
-        if (!globalStudentsFetched && !studentsPromise) {
-          studentsPromise = API.get("students/", { params: { mentor: mentorData.id } })
-            .then(res => {
-              setStudents(res.data);
-              globalStudentsFetched = true;
-              return res.data;
-            })
-            .catch(err => {
-              console.error("Failed to fetch students", err);
-              throw err;
-            })
-            .finally(() => {
-              studentsPromise = null;
-            });
-        }
-        await studentsPromise;
+    const fetchStudents = async () => {
+      try {
+        const mentorRes = await API.get("mentors/me/", { signal: abortController.signal });
+        if (!isMounted) return;
+        const mentorId = mentorRes.data.id;
+
+        const studentsRes = await API.get("students/", {
+          params: { mentor: mentorId },
+          signal: abortController.signal,
+        });
+        if (!isMounted) return;
+        setStudents(studentsRes.data);
       } catch (err) {
-        console.error(err);
+        if (err.name === "AbortError" || err.code === "ERR_CANCELED") return;
+        console.error("Failed to fetch students:", err);
+        if (isMounted) setError("Could not load students. Please try again.");
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
-    fetchData();
+
+    fetchStudents();
+
+    return () => {
+      isMounted = false;
+      abortController.abort();
+    };
   }, []);
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full bg-gray-50">
-        <div className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
-      </div>
+      <main className="flex-1 p-8 overflow-y-auto bg-gray-50">
+        <div className="max-w-6xl mx-auto">
+          <div className="mb-6">
+            <div className="h-8 w-40 bg-gray-200 rounded animate-pulse mb-2"></div>
+            <div className="h-4 w-48 bg-gray-200 rounded animate-pulse"></div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-full bg-gray-200 animate-pulse"></div>
+                  <div className="flex-1">
+                    <div className="h-4 w-24 bg-gray-200 rounded animate-pulse mb-1"></div>
+                    <div className="h-3 w-16 bg-gray-200 rounded animate-pulse"></div>
+                  </div>
+                </div>
+                <div className="h-6 w-20 bg-gray-200 rounded-full animate-pulse mt-3"></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (error) {
+    return (
+      <main className="flex-1 p-8 overflow-y-auto bg-gray-50">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center py-12 bg-white rounded-xl border border-gray-200 shadow-sm">
+            <p className="text-red-600 mb-4">{error}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="bg-green-600 text-white px-4 py-2 rounded"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      </main>
     );
   }
 
@@ -79,7 +97,12 @@ function MentorStudents() {
         </div>
 
         {students.length === 0 ? (
-          <p className="text-gray-500">No students assigned to you yet.</p>
+          <div className="text-center py-12 bg-white rounded-xl border border-gray-200 shadow-sm">
+            <p className="text-gray-500">No students assigned to you yet.</p>
+            <p className="text-gray-400 text-sm mt-2">
+              Please contact an administrator to assign students to your mentor profile.
+            </p>
+          </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {students.map((student) => (
@@ -92,22 +115,18 @@ function MentorStudents() {
                     {student.username?.charAt(0) || "?"}
                   </div>
                   <div>
-                    <h3 className="font-semibold text-gray-800">{student.full_name || student.username}</h3>
+                    <h3 className="font-semibold text-gray-800">
+                      {student.full_name || student.username}
+                    </h3>
                     <p className="text-xs text-gray-500">{student.course}</p>
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2 mt-3">
                   <Link
-                    to={`/admin/student-review-edit?student_id=${student.id}`}
+                    to={`/mentor/review-sheet?student_id=${student.id}`}
                     className="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-full transition"
                   >
                     Review Sheet
-                  </Link>
-                  <Link
-                    to={`/chat?user=${student.id}`}
-                    className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded-full transition"
-                  >
-                    Chat
                   </Link>
                 </div>
               </div>
