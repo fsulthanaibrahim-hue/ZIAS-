@@ -198,25 +198,6 @@ class Notification(models.Model):
     def __str__(self):
         return f"{self.user.username} - {self.message}"
 
-# Chat Message Model (with is_read field added)
-class ChatMessage(models.Model):
-    ROOM_TYPE_CHOICES = [
-        ('broadcast', 'Broadcast'),
-        ('user_type', 'User Type'),
-        ('private', 'Private'),
-    ]
-    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_chat_messages')
-    room_type = models.CharField(max_length=20, choices=ROOM_TYPE_CHOICES)
-    room_identifier = models.CharField(max_length=100, blank=True, null=True)
-    message = models.TextField()
-    timestamp = models.DateTimeField(auto_now_add=True)
-    is_read = models.BooleanField(default=False)  # ✅ new field
-
-    def __str__(self):
-        return f"{self.sender.username} - {self.room_type}: {self.message[:30]}"
-
-    class Meta:
-        ordering = ['-timestamp']
 
 # Student Week Review Model
 class StudentWeekReview(models.Model):

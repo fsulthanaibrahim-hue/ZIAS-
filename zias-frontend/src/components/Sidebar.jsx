@@ -44,8 +44,7 @@ function getIcon(label) {
       return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}><path d="M2 2h12v12H2V2zm1 1v10h10V3H3zm2 2h6v1H5V5zm0 2h6v1H5V7zm0 2h6v1H5V9z" /></svg>;
     case "Batches":
       return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}><path d="M2 2h12v1H2V2zm0 2h12v1H2V4zm0 2h12v1H2V6zm0 2h12v1H2V8zm0 2h12v1H2v-1zm0 2h12v1H2v-1zM2 0h12v1H2V0z" /></svg>;
-    case "Chat":
-      return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}><path d="M8 2C4.686 2 2 4.686 2 8c0 1.316.4 2.537 1.087 3.548L2 14l2.452-1.087A5.973 5.973 0 008 14c3.314 0 6-2.686 6-6s-2.686-6-6-6zm0 1c2.761 0 5 2.239 5 5s-2.239 5-5 5a4.96 4.96 0 01-2.5-.693L4 13l.693-1.5A4.96 4.96 0 013 9c0-2.761 2.239-5 5-5zM5 7h1v1H5V7zm2 0h1v1H7V7zm2 0h1v1H9V7z" /></svg>;
+    // Removed "Chat" case
     default:
       return null;
   }
@@ -98,7 +97,7 @@ function Sidebar() {
         <NavLink to="/admin/batches" label="Batches" active={isActive("/admin/batches")} />
         <NavLink to="/admin/messages" label="Messages" active={isActive("/admin/messages")} />
         <NavLink to="/admin/review-sheets" label="Review Sheets" active={isActive("/admin/review-sheets")} />
-        <NavLink to="/chat" label="Chat" active={pathname === "/chat"} />
+        {/* Removed Chat link */}
       </nav>
 
       <div className="p-4 border-t border-gray-200">

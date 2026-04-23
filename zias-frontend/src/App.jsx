@@ -20,7 +20,7 @@ import ReviewerProfile from "./pages/reviewer/ReviewerProfile";
 import MentorDashboard from "./pages/mentor/MentorDashboard";
 import MentorProfile from "./pages/mentor/MentorProfile";
 import MentorStudents from "./pages/mentor/MentorStudents";
-import MentorModules from "./pages/mentor/MentorModules";   // 👈 new import
+import MentorModules from "./pages/mentor/MentorModules";
 // Admin pages
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./Admin/Dashboard";
@@ -41,8 +41,6 @@ import About from "./pages/About";
 import Contact from "./pages/Contact";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
-// Chat component
-import ChatComponent from "./components/ChatComponent";
 // Sidebars
 import MentorSidebar from "./components/MentorSidebar";
 import StudentModules from "./pages/student/StudentModules";
@@ -154,17 +152,6 @@ function App() {
           <div style={{ display: "flex" }}>
             <MentorSidebar />
             <MentorProfile />
-          </div>
-        </PrivateRoute>
-      } />
-
-      {/* Chat route */}
-      <Route path="/chat" element={
-        <PrivateRoute>
-          <div className="min-h-screen bg-[#0d1117]">
-            <div className="max-w-6xl mx-auto px-4 py-6">
-              <ChatComponent />
-            </div>
           </div>
         </PrivateRoute>
       } />

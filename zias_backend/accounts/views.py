@@ -16,8 +16,8 @@ from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
 
 from .models import (
     User, Student, Mentor, Reviewer, Course, Module, Day, Task, Batch,
-    StudentModule, PasswordResetToken, ContactMessage, StudentWeekReview, WeekUpdate,
-    ChatMessage
+    StudentModule, PasswordResetToken, ContactMessage, StudentWeekReview, WeekUpdate
+    # ChatMessage removed
 )
 from .serializers import (
     StudentSerializer, MentorSerializer, ReviewerSerializer, UserSerializer,
@@ -598,55 +598,3 @@ class WeekUpdateViewSet(viewsets.ModelViewSet):
     queryset = WeekUpdate.objects.all()
     serializer_class = WeekUpdateSerializer
     permission_classes = [IsAuthenticated]
-
-# ----------------------------
-# CHAT HISTORY VIEW
-# ----------------------------
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def get_chat_history(request):
-    room_type = request.GET.get('room_type')
-    identifier = request.GET.get('identifier')
-    if room_type == 'broadcast':
-        messages = ChatMessage.objects.filter(room_type='broadcast').order_by('-timestamp')[:50]
-    elif room_type == 'user_type' and identifier:
-        messages = ChatMessage.objects.filter(room_type='user_type', room_identifier=identifier).order_by('-timestamp')[:50]
-    elif room_type == 'private':
-        user_id = str(request.user.id)
-        messages = ChatMessage.objects.filter(
-            room_type='private',
-            room_identifier=user_id
-        ).order_by('-timestamp')[:50]
-    else:
-        return Response([])
-    data = [{
-        "sender": m.sender.username,
-        "sender_id": m.sender.id,
-        "room_identifier": m.room_identifier,
-        "message": m.message,
-        "room": m.room_type,
-        "timestamp": m.timestamp.isoformat()
-    } for m in messages[::-1]]
-    return Response(data)
-
-# ----------------------------
-# GET ALL USERS
-# ----------------------------
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def get_all_users(request):
-    users = User.objects.exclude(id=request.user.id).filter(is_active=True)
-    data = []
-    for user in users:
-        if user.is_admin:
-            utype = 'admin'
-        elif user.is_student:
-            utype = 'student'
-        elif user.is_mentor:
-            utype = 'mentor'
-        elif user.is_reviewer:
-            utype = 'reviewer'
-        else:
-            utype = 'unknown'
-        data.append({'id': user.id, 'username': user.username, 'user_type': utype})
-    return Response(data)

@@ -31,8 +31,6 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
-    'daphne',
-    'channels',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -59,15 +57,6 @@ MIDDLEWARE = [
     'accounts.middleware.PasswordExpiryMiddleware',              # ← Now after AuthenticationMiddleware
 ]
 
-ASGI_APPLICATION = 'zias_backend.asgi.application'
-
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels.layers.InMemoryChannelLayer"
-    }
-}
-
-SOCKETIO_REDIS_URL = 'redis://localhost:6379'
 
 
 ROOT_URLCONF = 'zias_backend.urls'

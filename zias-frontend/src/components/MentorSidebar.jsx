@@ -9,7 +9,6 @@ function MentorSidebar() {
     { path: "/mentor/dashboard", label: "Dashboard", icon: "🏠" },
     { path: "/mentor/students", label: "My Students", icon: "👨‍🎓" },
     { path: "/mentor/modules", label: "Modules", icon: "📦" },
-    { path: "/chat", label: "Chat", icon: "💬" },
     { path: "/mentor/profile", label: "Profile", icon: "👤" },
   ];
 

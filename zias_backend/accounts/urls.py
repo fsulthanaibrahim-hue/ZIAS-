@@ -9,7 +9,8 @@ from .views import (
     ContactMessageView, UnreadMessagesCountView, RecentMessagesView, ContactMessageDetailView,
     CustomLoginView, LogoutView, UpdateDashboardAccessView,
     CompleteModuleView, StudentWeekReviewView, StudentListView, WeeklyToppersView,
-    WeekUpdateViewSet, get_chat_history, get_all_users   # 👈 added get_all_users
+    WeekUpdateViewSet
+    # get_chat_history and get_all_users removed
 )
 
 router = DefaultRouter()
@@ -45,6 +46,4 @@ urlpatterns = [
     path('api/modules/<int:module_id>/complete/', CompleteModuleView.as_view(), name='complete-module'),
     path('api/week-review/<int:module_id>/', StudentWeekReviewView.as_view(), name='week-review'),
     path('api/weekly-toppers/', WeeklyToppersView.as_view(), name='weekly-toppers'),
-    path('api/chat-history/', get_chat_history, name='chat-history'),
-    path('api/users/', get_all_users, name='all_users'),   
 ]

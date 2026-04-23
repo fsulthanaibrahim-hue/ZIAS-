@@ -16,14 +16,14 @@ def reset_password_and_email(modeladmin, request, queryset):
 reset_password_and_email.short_description = "Reset password and email user"
 
 class UserAdmin(admin.ModelAdmin):
-    list_display = ['id', 'username', 'email', 'is_admin', 'is_student', 'is_mentor', 'is_reviewer', 'password_changed_at']
-    list_filter = ['is_admin', 'is_student', 'is_mentor', 'is_reviewer']
+    list_display = ['id', 'username', 'email', 'is_student', 'is_mentor', 'is_reviewer', 'password_changed_at']
+    list_filter = ['is_student', 'is_mentor', 'is_reviewer']
     search_fields = ['username', 'email']
     actions = [reset_password_and_email]
 
 admin.site.register(User, UserAdmin)
 
-# Optional: Register Student, Mentor, Reviewer with simple displays
+# Register Student, Mentor, Reviewer with simple displays
 @admin.register(Student)
 class StudentAdmin(admin.ModelAdmin):
     list_display = ['id', 'user', 'course', 'batch', 'phone']
@@ -48,4 +48,3 @@ class ContactMessageAdmin(admin.ModelAdmin):
     def mark_as_read(self, request, queryset):
         queryset.update(is_read=True)
     mark_as_read.short_description = "Mark selected messages as read"
-
