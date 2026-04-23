@@ -4,11 +4,11 @@ import { useNavigate, Link } from "react-router-dom";
 import API from "../../api/api";
 
 const avatarColors = [
-  ["#1a3a5c", "#4a9eff"],
-  ["#1a3830", "#3dd68c"],
-  ["#3a1a2c", "#e879a0"],
-  ["#2a2a1a", "#f5a623"],
-  ["#1a1a3a", "#a78bfa"],
+  ["#e6f4ea", "#2e7d32"], // light green background, dark green text
+  ["#e8f5e9", "#388e3c"],
+  ["#c8e6c9", "#2e7d32"],
+  ["#f1f8e9", "#558b2f"],
+  ["#dcedc8", "#33691e"],
 ];
 
 function getInitials(username = "") {
@@ -25,20 +25,20 @@ function getAvatarColor(username = "") {
 
 function ReadOnly({ label, value }) {
   return (
-    <div style={s.roField}>
-      <span style={s.roLabel}>{label}</span>
-      <span style={s.roValue}>{value || "—"}</span>
+    <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+      <div className="text-xs font-bold text-gray-500 uppercase tracking-wide">{label}</div>
+      <div className="text-gray-800 break-all font-medium">{value || "—"}</div>
     </div>
   );
 }
 
 function ReadOnlyField({ label, value, icon }) {
   return (
-    <div style={s.fieldWrap}>
-      <label style={s.label}>{label}</label>
-      <div style={s.readOnlyWrap}>
-        <span style={{ fontSize: 14, flexShrink: 0, opacity: 0.65 }}>{icon}</span>
-        <span style={s.readOnlyValue}>{value || "—"}</span>
+    <div className="flex flex-col gap-1.5">
+      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">{label}</label>
+      <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+        <span className="text-base">{icon}</span>
+        <span className="text-gray-800 text-sm flex-1">{value || "—"}</span>
       </div>
     </div>
   );
@@ -60,8 +60,7 @@ function StudentProfile() {
           return;
         }
         const studentRes = await API.get("students/me/");
-        const student = studentRes.data;
-        setProfile(student);
+        setProfile(studentRes.data);
       } catch (err) {
         console.error(err);
         setMessage({
@@ -86,8 +85,8 @@ function StudentProfile() {
 
   if (loading) {
     return (
-      <div style={s.fullPage}>
-        <div style={s.spinner} />
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -97,8 +96,8 @@ function StudentProfile() {
 
   if (!profile) {
     return (
-      <div style={s.fullPage}>
-        <div style={{ ...s.toast, ...s.toastError }}>{message.text}</div>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">{message.text}</div>
       </div>
     );
   }
@@ -113,58 +112,73 @@ function StudentProfile() {
   ];
 
   return (
-    <div style={s.page}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
-        @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-      `}</style>
-
-      <div style={{ ...s.card, animation: "fadeIn 0.4s ease both" }}>
-
-        <div style={{ ...s.banner, background: `linear-gradient(135deg, ${bgColor} 0%, #0e1828 100%)` }}>
-          <div style={s.dotPattern} />
-          <div style={{ ...s.avatar, border: `2.5px solid ${accentColor}`, boxShadow: `0 0 24px ${accentColor}30` }}>
-            <span style={{ color: accentColor, fontSize: 26, fontWeight: 700, letterSpacing: 1 }}>
+    <div className="min-h-screen bg-gray-50 py-12 px-4 font-sans">
+      <div className="max-w-2xl mx-auto bg-white rounded-2xl border border-gray-200 shadow-md overflow-hidden transition-all">
+        {/* Banner */}
+        <div
+          className="relative h-40 flex items-end px-8 pb-5"
+          style={{ background: `linear-gradient(135deg, ${bgColor} 0%, #c8e6c9 100%)` }}
+        >
+          <div className="absolute inset-0 bg-[radial-gradient(circle,rgba(0,0,0,0.02)_1px,transparent_1px)] bg-[length:24px_24px]" />
+          <div
+            className="w-20 h-20 rounded-full bg-white flex items-center justify-center shadow-md z-10 border-2"
+            style={{ borderColor: accentColor }}
+          >
+            <span className="text-3xl font-bold" style={{ color: accentColor }}>
               {getInitials(username)}
             </span>
           </div>
-          <div style={s.bannerMeta}>
-            <h2 style={s.bannerName}>{username}</h2>
-            <span style={{ ...s.badge, borderColor: accentColor, color: accentColor }}>Student</span>
+          <div className="ml-4 z-10 pb-1">
+            <h2 className="text-2xl font-bold text-gray-800">{username}</h2>
+            <span
+              className="inline-block text-xs font-bold uppercase tracking-wide px-2 py-0.5 rounded-full mt-1"
+              style={{ backgroundColor: `${accentColor}15`, color: accentColor, border: `1px solid ${accentColor}30` }}
+            >
+              Student
+            </span>
           </div>
         </div>
 
-        <div style={s.body}>
-          <div style={s.roGrid}>
+        {/* Body */}
+        <div className="p-6 sm:p-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <ReadOnly label="Username" value={username} />
             <ReadOnly label="Email" value={email} />
           </div>
 
-          <div style={s.divider} />
-          <p style={s.sectionLabel}>Personal Details</p>
+          <div className="border-t border-gray-200 my-5" />
 
-          <div style={s.fieldGrid}>
+          <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">Personal Details</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
             {personalFields.map(({ name, label, icon, value }) => (
               <ReadOnlyField key={name} label={label} value={value} icon={icon} />
             ))}
           </div>
 
-          <div style={s.noteBox}>
-            <p style={s.noteText}>
+          <div className="bg-green-50 border border-green-100 rounded-lg p-3 text-center mb-6">
+            <p className="text-sm text-green-800">
               📝 For any changes to your profile information, please contact your administrator.
             </p>
           </div>
 
-          <div style={s.actions}>
-            <Link to="/student/change-password" style={s.btnSecondary}>
+          <div className="flex flex-wrap gap-3 justify-center">
+            <Link
+              to="/change-password"
+              className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 text-sm font-medium hover:bg-gray-50 transition"
+            >
               Change Password
             </Link>
-            <Link to="/student/dashboard" style={s.btnDashboard}>
+            <Link
+              to="/student/dashboard"
+              className="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition shadow-sm"
+            >
               Back to Dashboard
             </Link>
-            <button onClick={handleLogout} style={s.btnLogout}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 8 }}>
+            <button
+              onClick={handleLogout}
+              className="inline-flex items-center px-4 py-2 bg-white border border-red-300 text-red-600 rounded-lg text-sm font-medium hover:bg-red-50 transition"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mr-1">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
                 <polyline points="16 17 21 12 16 7" />
                 <line x1="21" y1="12" x2="9" y2="12" />
@@ -174,11 +188,13 @@ function StudentProfile() {
           </div>
 
           {message.text && (
-            <div style={{
-              ...s.toast,
-              ...(message.type === "success" ? s.toastSuccess : s.toastError),
-              animation: "fadeIn 0.3s ease both",
-            }}>
+            <div
+              className={`mt-4 px-4 py-2 rounded-lg text-sm ${
+                message.type === "success"
+                  ? "bg-green-50 border border-green-200 text-green-700"
+                  : "bg-red-50 border border-red-200 text-red-700"
+              }`}
+            >
               {message.type === "success" ? "✓" : "✕"} {message.text}
             </div>
           )}
@@ -187,242 +203,5 @@ function StudentProfile() {
     </div>
   );
 }
-
-const s = {
-  page: {
-    minHeight: "100vh",
-    background: "#0b1220",
-    display: "flex",
-    alignItems: "flex-start",
-    justifyContent: "center",
-    padding: "48px 16px 80px",
-    fontFamily: "'DM Sans', 'Segoe UI', sans-serif",
-  },
-  fullPage: {
-    minHeight: "100vh",
-    background: "#0b1220",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  spinner: {
-    width: 36, height: 36,
-    border: "3px solid #1e2d45",
-    borderTop: "3px solid #4a9eff",
-    borderRadius: "50%",
-    animation: "spin 0.8s linear infinite",
-  },
-  card: {
-    width: "100%",
-    maxWidth: 640,
-    background: "#111a2c",
-    borderRadius: 20,
-    overflow: "hidden",
-    border: "1px solid rgba(255,255,255,0.06)",
-    boxShadow: "0 24px 72px rgba(0,0,0,0.55)",
-  },
-  banner: {
-    position: "relative",
-    height: 164,
-    display: "flex",
-    alignItems: "flex-end",
-    padding: "0 28px 22px",
-    gap: 16,
-    overflow: "hidden",
-  },
-  dotPattern: {
-    position: "absolute",
-    inset: 0,
-    backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.06) 1px, transparent 1px)",
-    backgroundSize: "22px 22px",
-    pointerEvents: "none",
-  },
-  avatar: {
-    width: 72, height: 72,
-    borderRadius: "50%",
-    background: "#0b1220",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-    zIndex: 1,
-  },
-  bannerMeta: {
-    zIndex: 1,
-    display: "flex",
-    flexDirection: "column",
-    gap: 6,
-    paddingBottom: 4,
-  },
-  bannerName: {
-    margin: 0,
-    fontSize: 22,
-    fontWeight: 700,
-    color: "#f0f6ff",
-    letterSpacing: "-0.3px",
-  },
-  badge: {
-    display: "inline-block",
-    fontSize: 10,
-    fontWeight: 700,
-    letterSpacing: 1.4,
-    textTransform: "uppercase",
-    border: "1px solid",
-    borderRadius: 99,
-    padding: "2px 10px",
-    width: "fit-content",
-  },
-  body: {
-    padding: "26px 28px 32px",
-  },
-  roGrid: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: 10,
-    marginBottom: 22,
-  },
-  roField: {
-    background: "#0d1625",
-    border: "1px solid rgba(255,255,255,0.05)",
-    borderRadius: 10,
-    padding: "10px 14px",
-  },
-  roLabel: {
-    display: "block",
-    fontSize: 10,
-    fontWeight: 700,
-    color: "#3a5a7a",
-    letterSpacing: 1,
-    textTransform: "uppercase",
-    marginBottom: 4,
-  },
-  roValue: {
-    fontSize: 14,
-    color: "#7a9cbf",
-    wordBreak: "break-all",
-  },
-  divider: {
-    height: 1,
-    background: "rgba(255,255,255,0.05)",
-    margin: "0 0 18px",
-  },
-  sectionLabel: {
-    margin: "0 0 14px",
-    fontSize: 10,
-    fontWeight: 700,
-    color: "#3a5a7a",
-    letterSpacing: 1.2,
-    textTransform: "uppercase",
-  },
-  fieldGrid: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: 14,
-    marginBottom: 16,
-  },
-  fieldWrap: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 6,
-  },
-  label: {
-    fontSize: 12,
-    fontWeight: 500,
-    color: "#5a7a9a",
-  },
-  readOnlyWrap: {
-    display: "flex",
-    alignItems: "center",
-    background: "#0d1625",
-    border: "1px solid rgba(255,255,255,0.07)",
-    borderRadius: 10,
-    padding: "11px 12px",
-    gap: 8,
-  },
-  readOnlyValue: {
-    flex: 1,
-    color: "#cce0f5",
-    fontSize: 14,
-  },
-  noteBox: {
-    background: "rgba(74,158,255,0.05)",
-    border: "1px solid rgba(74,158,255,0.1)",
-    borderRadius: 10,
-    padding: "12px 16px",
-    marginBottom: 24,
-  },
-  noteText: {
-    margin: 0,
-    fontSize: 12,
-    color: "#5a7a9a",
-    textAlign: "center",
-  },
-  actions: {
-    display: "flex",
-    gap: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  btnSecondary: {
-    display: "inline-flex",
-    alignItems: "center",
-    background: "rgba(255,255,255,0.04)",
-    color: "#7a9cbf",
-    border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: 10,
-    padding: "11px 24px",
-    fontSize: 14,
-    fontWeight: 500,
-    textDecoration: "none",
-    transition: "background 0.2s, color 0.2s",
-  },
-  btnDashboard: {
-    display: "inline-flex",
-    alignItems: "center",
-    background: "#1e2d45",
-    color: "#7a9cbf",
-    border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: 10,
-    padding: "11px 24px",
-    fontSize: 14,
-    fontWeight: 500,
-    textDecoration: "none",
-    transition: "background 0.2s, color 0.2s",
-  },
-  btnLogout: {
-    display: "inline-flex",
-    alignItems: "center",
-    background: "rgba(226,75,74,0.15)",
-    color: "#e24b4a",
-    border: "1px solid rgba(226,75,74,0.3)",
-    borderRadius: 10,
-    padding: "11px 24px",
-    fontSize: 14,
-    fontWeight: 500,
-    cursor: "pointer",
-    textDecoration: "none",
-    transition: "background 0.2s, color 0.2s",
-  },
-  toast: {
-    marginTop: 18,
-    padding: "11px 16px",
-    borderRadius: 10,
-    fontSize: 14,
-    fontWeight: 500,
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-  },
-  toastSuccess: {
-    background: "rgba(61,214,140,0.07)",
-    border: "1px solid rgba(61,214,140,0.18)",
-    color: "#3dd68c",
-  },
-  toastError: {
-    background: "rgba(226,75,74,0.07)",
-    border: "1px solid rgba(226,75,74,0.18)",
-    color: "#e24b4a",
-  },
-};
 
 export default StudentProfile;

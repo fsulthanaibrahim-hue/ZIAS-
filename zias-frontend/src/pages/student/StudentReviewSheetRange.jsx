@@ -132,7 +132,6 @@ function StudentReviewSheetRange() {
           const num = extractWeekNumber(week.title);
           return num >= startNum && num <= endNum;
         });
-        // Sort by week number
         allWeeks.sort((a, b) => extractWeekNumber(a.title) - extractWeekNumber(b.title));
         setWeeks(allWeeks);
 
@@ -181,10 +180,10 @@ function StudentReviewSheetRange() {
   const renderCell = (weekId, row) => {
     const value = reviews[weekId]?.[row.key] ?? "";
     if (!isEditable) {
-      if (row.type === "select") return <div className="px-2 py-1">{value || "—"}</div>;
-      if (row.type === "textarea") return <div className="whitespace-pre-wrap break-words px-2 py-1">{value || "—"}</div>;
-      if (row.type === "date") return <div className="px-2 py-1">{value || "—"}</div>;
-      return <div className="px-2 py-1">{value || "—"}</div>;
+      if (row.type === "select") return <div className="px-2 py-1 text-gray-700">{value || "—"}</div>;
+      if (row.type === "textarea") return <div className="whitespace-pre-wrap break-words px-2 py-1 text-gray-700">{value || "—"}</div>;
+      if (row.type === "date") return <div className="px-2 py-1 text-gray-700">{value || "—"}</div>;
+      return <div className="px-2 py-1 text-gray-700">{value || "—"}</div>;
     }
 
     if (row.type === "select") {
@@ -192,7 +191,7 @@ function StudentReviewSheetRange() {
         <select
           value={value}
           onChange={(e) => handleChange(weekId, row.key, e.target.value)}
-          className="w-full bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-sm text-[#e6edf3] focus:border-[#388bfd] outline-none"
+          className="w-full bg-white border border-gray-300 rounded px-2 py-1 text-sm text-gray-800 focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none"
         >
           <option value="">—</option>
           {row.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
@@ -205,7 +204,7 @@ function StudentReviewSheetRange() {
           rows={row.rows || 2}
           value={value}
           onChange={(e) => handleChange(weekId, row.key, e.target.value)}
-          className="w-full bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-sm text-[#e6edf3] focus:border-[#388bfd] outline-none resize-vertical"
+          className="w-full bg-white border border-gray-300 rounded px-2 py-1 text-sm text-gray-800 focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none resize-vertical"
           placeholder={row.placeholder || ""}
         />
       );
@@ -216,7 +215,7 @@ function StudentReviewSheetRange() {
           type="number"
           value={value}
           onChange={(e) => handleChange(weekId, row.key, e.target.value ? parseInt(e.target.value) : null)}
-          className="w-full bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-sm text-[#e6edf3] focus:border-[#388bfd] outline-none"
+          className="w-full bg-white border border-gray-300 rounded px-2 py-1 text-sm text-gray-800 focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none"
           placeholder={row.placeholder || ""}
         />
       );
@@ -227,8 +226,7 @@ function StudentReviewSheetRange() {
           type="date"
           value={value}
           onChange={(e) => handleChange(weekId, row.key, e.target.value)}
-          className="w-full bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-sm text-[#e6edf3] focus:border-[#388bfd] outline-none"
-          style={{ colorScheme: "dark" }}
+          className="w-full bg-white border border-gray-300 rounded px-2 py-1 text-sm text-gray-800 focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none"
         />
       );
     }
@@ -237,7 +235,7 @@ function StudentReviewSheetRange() {
         type="text"
         value={value}
         onChange={(e) => handleChange(weekId, row.key, e.target.value)}
-        className="w-full bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-sm text-[#e6edf3] focus:border-[#388bfd] outline-none"
+        className="w-full bg-white border border-gray-300 rounded px-2 py-1 text-sm text-gray-800 focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none"
         placeholder={row.placeholder || ""}
       />
     );
@@ -248,18 +246,18 @@ function StudentReviewSheetRange() {
   else if (userRole === "mentor") dashboardLink = "/mentor/dashboard";
   else if (userRole === "reviewer") dashboardLink = "/reviewer/dashboard";
 
-  if (loading) return <div className="min-h-screen bg-[#0d1117] flex items-center justify-center"><div className="w-8 h-8 border-2 border-[#388bfd] border-t-transparent rounded-full animate-spin" /></div>;
-  if (error) return <div className="min-h-screen bg-[#0d1117] text-red-400 flex items-center justify-center p-8 text-center">{error}</div>;
+  if (loading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><div className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin" /></div>;
+  if (error) return <div className="min-h-screen bg-gray-50 text-red-600 flex items-center justify-center p-8 text-center">{error}</div>;
 
   return (
-    <div className="min-h-screen w-full bg-[#0d1117] text-[#e6edf3] font-sans">
+    <div className="min-h-screen w-full bg-gray-50 text-gray-800 font-sans">
       <div className="max-w-full mx-auto px-4 sm:px-6 py-4 sm:py-8">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-xl font-semibold text-[#e6edf3] tracking-tight">
+            <h1 className="text-xl font-semibold text-gray-800 tracking-tight">
               Weeks {start} – {end}
             </h1>
-            <p className="text-[#7d8590] text-sm mt-1">
+            <p className="text-gray-500 text-sm mt-1">
               {isReviewer && selectedStudentId
                 ? students.find(s => s.id === selectedStudentId)?.name || "Select student"
                 : "Your Weekly Progress"}
@@ -270,28 +268,28 @@ function StudentReviewSheetRange() {
               <select
                 value={selectedStudentId || ""}
                 onChange={(e) => setSelectedStudentId(parseInt(e.target.value))}
-                className="bg-[#161b22] border border-[#21262d] rounded-lg px-3 py-1.5 text-sm"
+                className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-800 focus:outline-none focus:border-green-500"
               >
                 {students.map(s => <option key={s.id} value={s.id}>{s.name} ({s.username})</option>)}
               </select>
             )}
-            <Link to={dashboardLink} className="bg-[#21262d] hover:bg-[#30363d] text-[#7d8590] hover:text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+            <Link to={dashboardLink} className="bg-gray-200 hover:bg-gray-300 text-gray-700 hover:text-gray-900 px-4 py-2 rounded-lg text-sm font-medium transition">
               ← Dashboard
             </Link>
             <Link
               to={isReviewer && selectedStudentId ? `/student/review-sheet?student_id=${selectedStudentId}` : "/student/review-sheet"}
-              className="bg-[#21262d] hover:bg-[#30363d] text-[#7d8590] hover:text-white px-4 py-2 rounded-lg text-sm font-medium transition"
+              className="bg-gray-200 hover:bg-gray-300 text-gray-700 hover:text-gray-900 px-4 py-2 rounded-lg text-sm font-medium transition"
             >
               All Weeks
             </Link>
           </div>
         </div>
 
-        <div className="overflow-x-auto rounded-xl border border-[#21262d] shadow-xl shadow-black/20">
+        <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-sm bg-white">
           <table className="min-w-full border-collapse">
-            <thead className="bg-[#161b22] border-b border-[#21262d]">
+            <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="sticky left-0 bg-[#161b22] z-10 px-4 py-3 text-left text-[#7d8590] text-xs font-semibold uppercase w-48">
+                <th className="sticky left-0 bg-gray-50 z-10 px-4 py-3 text-left text-gray-500 text-xs font-semibold uppercase w-48">
                   FIELD / WEEK
                 </th>
                 {weeks.map(week => {
@@ -299,7 +297,7 @@ function StudentReviewSheetRange() {
                   return (
                     <th
                       key={week.id}
-                      className="px-3 py-3 text-left text-[#e6edf3] text-sm font-medium min-w-[200px] border-l border-[#21262d]"
+                      className="px-3 py-3 text-left text-gray-800 text-sm font-medium min-w-[200px] border-l border-gray-200"
                     >
                       {cleanTitle(week.title)}
                     </th>
@@ -307,22 +305,22 @@ function StudentReviewSheetRange() {
                 })}
               </tr>
             </thead>
-            <tbody className="bg-[#0d1117] divide-y divide-[#21262d]">
+            <tbody className="bg-white divide-y divide-gray-100">
               {rows.map(row => (
-                <tr key={row.key} className="hover:bg-[#161b22]/40">
-                  <td className="sticky left-0 bg-[#0d1117] px-4 py-3 text-[#7d8590] text-sm font-medium border-r border-[#21262d]">
+                <tr key={row.key} className="hover:bg-gray-50/40">
+                  <td className="sticky left-0 bg-white px-4 py-3 text-gray-600 text-sm font-medium border-r border-gray-200">
                     {row.label}
                   </td>
                   {weeks.map(week => (
-                    <td key={week.id} className="px-3 py-2 border-l border-[#21262d] align-top">
+                    <td key={week.id} className="px-3 py-2 border-l border-gray-200 align-top">
                       {renderCell(week.id, row)}
                     </td>
                   ))}
                 </tr>
               ))}
               {/* Updates row */}
-              <tr className="hover:bg-[#161b22]/40">
-                <td className="sticky left-0 bg-[#0d1117] px-4 py-3 text-[#7d8590] text-sm font-medium border-r border-[#21262d]">
+              <tr className="hover:bg-gray-50/40">
+                <td className="sticky left-0 bg-white px-4 py-3 text-gray-600 text-sm font-medium border-r border-gray-200">
                   Updates & Extra Scores
                 </td>
                 {weeks.map(week => {
@@ -331,33 +329,33 @@ function StudentReviewSheetRange() {
                   const weekUpdates = weekReviewId ? (updates[weekReviewId] || []) : [];
                   const isExpanded = expandedWeekId === week.id;
                   return (
-                    <td key={week.id} className="px-3 py-2 border-l border-[#21262d] align-top">
+                    <td key={week.id} className="px-3 py-2 border-l border-gray-200 align-top">
                       {isReviewer && weekReviewId && (
                         <button
                           onClick={() => addUpdate(weekReviewId)}
-                          className="text-xs bg-[#238636] hover:bg-[#2ea043] px-2 py-1 rounded mb-2"
+                          className="text-xs bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded mb-2 shadow-sm"
                         >
                           + Add Update
                         </button>
                       )}
                       <button
                         onClick={() => setExpandedWeekId(isExpanded ? null : week.id)}
-                        className="text-xs text-[#7d8590] hover:text-white mb-2 block"
+                        className="text-xs text-gray-500 hover:text-gray-800 mb-2 block"
                       >
                         {isExpanded ? "▼ Hide Updates" : "▶ Show Updates"}
                       </button>
                       {isExpanded && (
                         <div className="space-y-2">
-                          {weekUpdates.length === 0 && <p className="text-[#7d8590] text-xs">No updates yet.</p>}
+                          {weekUpdates.length === 0 && <p className="text-gray-500 text-xs">No updates yet.</p>}
                           {weekUpdates.map(upd => (
-                            <div key={upd.id} className="border-l-2 border-[#21262d] pl-2 mb-2">
+                            <div key={upd.id} className="border-l-2 border-gray-200 pl-2 mb-2">
                               {isReviewer ? (
                                 <>
                                   <textarea
                                     value={upd.update_text}
                                     onChange={(e) => updateUpdate(upd.id, "update_text", e.target.value)}
                                     rows="2"
-                                    className="w-full bg-[#0d1117] border border-[#21262d] rounded px-2 py-1 text-xs"
+                                    className="w-full bg-white border border-gray-300 rounded px-2 py-1 text-xs text-gray-800"
                                     placeholder="Update notes..."
                                   />
                                   <div className="flex gap-2 mt-1">
@@ -366,17 +364,17 @@ function StudentReviewSheetRange() {
                                       placeholder="Extra score"
                                       value={upd.extra_score ?? ""}
                                       onChange={(e) => updateUpdate(upd.id, "extra_score", e.target.value ? parseInt(e.target.value) : null)}
-                                      className="w-24 bg-[#0d1117] border border-[#21262d] rounded px-2 py-1 text-xs"
+                                      className="w-24 bg-white border border-gray-300 rounded px-2 py-1 text-xs text-gray-800"
                                     />
-                                    <span className="text-[#484f58] text-xs">{new Date(upd.update_date).toLocaleDateString()}</span>
-                                    <button onClick={() => deleteUpdate(upd.id)} className="text-red-400 hover:text-red-300 text-xs">🗑</button>
+                                    <span className="text-gray-400 text-xs">{new Date(upd.update_date).toLocaleDateString()}</span>
+                                    <button onClick={() => deleteUpdate(upd.id)} className="text-red-500 hover:text-red-700 text-xs">🗑</button>
                                   </div>
                                 </>
                               ) : (
                                 <>
-                                  <div className="text-xs whitespace-pre-wrap break-words">{upd.update_text || "—"}</div>
-                                  {upd.extra_score && <div className="text-xs text-emerald-400">+{upd.extra_score} pts</div>}
-                                  <div className="text-[#484f58] text-xs">{new Date(upd.update_date).toLocaleDateString()}</div>
+                                  <div className="text-xs whitespace-pre-wrap break-words text-gray-700">{upd.update_text || "—"}</div>
+                                  {upd.extra_score && <div className="text-xs text-green-600">+{upd.extra_score} pts</div>}
+                                  <div className="text-gray-400 text-xs">{new Date(upd.update_date).toLocaleDateString()}</div>
                                 </>
                               )}
                             </div>
@@ -391,7 +389,7 @@ function StudentReviewSheetRange() {
           </table>
         </div>
 
-        <div className="mt-4 text-right text-[#484f58] text-xs">
+        <div className="mt-4 text-right text-gray-400 text-xs">
           💡 {isReviewer ? "Click any cell to edit. Changes auto‑save." : "View‑only mode."}
         </div>
       </div>

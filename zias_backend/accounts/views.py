@@ -119,7 +119,7 @@ class MentorViewSet(viewsets.ModelViewSet):
             return Response({"detail": "Mentor profile not found"}, status=status.HTTP_404_NOT_FOUND)
 
 # ----------------------------
-# REVIEWER VIEWSET (STANDARD – NO CUSTOM UPDATE)
+# REVIEWER VIEWSET
 # ----------------------------
 class ReviewerViewSet(viewsets.ModelViewSet):
     queryset = Reviewer.objects.all()
@@ -150,7 +150,7 @@ class CourseViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminOrReadOnly]
 
 # ----------------------------
-# MODULE VIEWSET
+# MODULE VIEWSET (with corrected unlocking logic)
 # ----------------------------
 class ModuleViewSet(viewsets.ModelViewSet):
     queryset = Module.objects.all()
@@ -174,6 +174,8 @@ class ModuleViewSet(viewsets.ModelViewSet):
     def student_modules(self, request):
         user = request.user
         student_id = request.query_params.get('student_id')
+
+        # Determine the student
         if user.is_admin or user.is_mentor:
             if student_id:
                 try:
@@ -190,25 +192,41 @@ class ModuleViewSet(viewsets.ModelViewSet):
                 return Response([])
             student = Student.objects.get(user=user)
 
-        common_modules = Module.objects.filter(is_common=True)
+        # Common modules (always unlocked)
+        common_modules = Module.objects.filter(is_common=True).order_by('order')
+
+        # If student has no course, return only common modules
         if not student.course:
             serializer = self.get_serializer(common_modules, many=True)
             return Response(serializer.data)
 
+        # Course‑specific modules (ordered by 'order')
         course_modules = Module.objects.filter(course__name=student.course, is_common=False).order_by('order')
+
+        # Determine which course modules are accessible (unlocked)
         accessible_course_modules = []
         for mod in course_modules:
-            prev_module = course_modules.filter(order__lt=mod.order).last()
-            if prev_module is None:
+            # Get all previous modules in this course (with lower order)
+            previous_modules = course_modules.filter(order__lt=mod.order)
+            if not previous_modules.exists():
+                # First module – always unlocked
                 accessible_course_modules.append(mod)
             else:
-                try:
-                    student_module = StudentModule.objects.get(student=student, module=prev_module)
-                    if student_module.is_completed:
-                        accessible_course_modules.append(mod)
-                    else:
+                # Check if all previous modules are completed
+                all_prev_completed = True
+                for prev in previous_modules:
+                    try:
+                        student_module = StudentModule.objects.get(student=student, module=prev)
+                        if not student_module.is_completed:
+                            all_prev_completed = False
+                            break
+                    except StudentModule.DoesNotExist:
+                        all_prev_completed = False
                         break
-                except StudentModule.DoesNotExist:
+                if all_prev_completed:
+                    accessible_course_modules.append(mod)
+                else:
+                    # Stop at the first locked module (all later ones stay locked)
                     break
 
         all_modules = list(common_modules) + accessible_course_modules

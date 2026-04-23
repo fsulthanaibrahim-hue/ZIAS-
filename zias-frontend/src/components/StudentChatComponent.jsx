@@ -1,8 +1,8 @@
-// src/components/ChatComponent.jsx
+// src/components/StudentChatComponent.jsx
 import { useEffect, useState, useRef, useCallback } from "react";
 import API from "../api/api";
 
-function ChatComponent() {
+function StudentChatComponent() {
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState("");
   const [selectedContact, setSelectedContact] = useState(null);
@@ -10,39 +10,36 @@ function ChatComponent() {
   const [loading, setLoading] = useState(true);
   const [wsStatus, setWsStatus] = useState("Connecting...");
   const wsRef = useRef(null);
+  const reconnectTimeoutRef = useRef(null);
+  
   const token = localStorage.getItem("access_token");
   const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
   const currentUserId = currentUser.id;
   const currentUsername = currentUser.username;
-  const isStudent = currentUser.is_student === true;
 
-  // Fetch all users (contacts)
+  // Fetch only mentors, reviewers, admins (student's contacts)
   useEffect(() => {
-    const fetchUsers = async () => {
+    const fetchContacts = async () => {
       try {
         const res = await API.get("users/");
-        let users = res.data;
-        // Filter out current user
-        users = users.filter(u => u.id !== currentUserId);
-        // Students can only see mentors, reviewers, admins
-        if (isStudent) {
-          users = users.filter(u => ["admin", "mentor", "reviewer"].includes(u.user_type));
-        }
+        // Exclude self, include only allowed roles
+        let users = res.data.filter(u => u.id !== currentUserId);
+        users = users.filter(u => ["admin", "mentor", "reviewer"].includes(u.user_type));
         setContacts(users);
       } catch (err) {
-        console.error("Failed to fetch users", err);
+        console.error("Failed to fetch contacts", err);
       } finally {
         setLoading(false);
       }
     };
-    fetchUsers();
-  }, [currentUserId, isStudent]);
+    fetchContacts();
+  }, [currentUserId]);
 
-  // Fetch chat history
+  // Fetch chat history (broadcast + private)
   const fetchHistory = async () => {
     try {
       const [broadcastRes, privateRes] = await Promise.all([
-        API.get("chat-history/?room_type=broadcast"),
+        API.get("chat-history/?room_type=broadcast").catch(() => ({ data: [] })),
         API.get("chat-history/?room_type=private").catch(() => ({ data: [] })),
       ]);
       const allMessages = [...broadcastRes.data, ...privateRes.data];
@@ -62,7 +59,7 @@ function ChatComponent() {
     wsRef.current = ws;
 
     ws.onopen = () => {
-      console.log("WebSocket connected");
+      console.log("✅ Student chat WebSocket connected");
       setWsStatus("Connected");
       fetchHistory();
     };
@@ -78,21 +75,21 @@ function ChatComponent() {
       }
     };
 
-    ws.onerror = (err) => {
-      console.error("WebSocket error", err);
+    ws.onerror = () => {
       setWsStatus("Error");
     };
 
     ws.onclose = () => {
-      console.log("WebSocket closed, reconnecting...");
       setWsStatus("Disconnected");
-      setTimeout(connect, 3000);
+      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = setTimeout(connect, 3000);
     };
   }, [token]);
 
   useEffect(() => {
     connect();
     return () => {
+      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
       if (wsRef.current) wsRef.current.close();
     };
   }, [connect]);
@@ -110,58 +107,35 @@ function ChatComponent() {
       type: "private",
       message: inputMessage,
       recipient_id: selectedContact.id,
+      target_user_id: selectedContact.id,
       sender_id: currentUserId,
       sender: currentUsername,
     };
     wsRef.current.send(JSON.stringify(payload));
     setInputMessage("");
-  };
-
-  // Send broadcast
-  const sendBroadcast = () => {
-    if (!inputMessage.trim()) return;
-    if (wsRef.current?.readyState !== WebSocket.OPEN) {
-      alert("Chat not connected. Please refresh.");
-      return;
-    }
-
-    const payload = {
-      type: "broadcast",
-      message: inputMessage,
-      sender_id: currentUserId,
-      sender: currentUsername,
-    };
-    wsRef.current.send(JSON.stringify(payload));
-    setInputMessage("");
-  };
-
-  const handleSend = () => {
-    if (selectedContact) sendPrivateMessage();
-    else sendBroadcast();
   };
 
   // Filter messages for display
   const getDisplayMessages = () => {
     if (!selectedContact) {
-      // Show only broadcast messages when no contact selected
+      // Show only broadcast messages
       return messages.filter(m => m.type === "broadcast" || m.room === "Broadcast");
     }
-    // Show broadcast + private messages with selected contact
     return messages.filter(m => {
       if (m.type === "broadcast" || m.room === "Broadcast") return true;
-      // Private message check
-      const isToMe = m.recipient_id === currentUserId && m.sender_id === selectedContact.id;
-      const isFromMe = m.sender_id === currentUserId && m.recipient_id === selectedContact.id;
+      // Private messages with selected contact
+      const isToMe = (m.recipient_id === currentUserId || m.target_user_id === currentUserId) 
+                    && m.sender_id === selectedContact.id;
+      const isFromMe = m.sender_id === currentUserId 
+                    && (m.recipient_id === selectedContact.id || m.target_user_id === selectedContact.id);
       return isToMe || isFromMe;
     });
   };
 
   const displayedMessages = getDisplayMessages();
-
   const formatTime = (timestamp) => {
     if (!timestamp) return "";
-    const date = new Date(timestamp);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
   if (loading) {
@@ -173,13 +147,13 @@ function ChatComponent() {
       {/* Contacts sidebar */}
       <div className="w-72 border-r border-gray-200 flex flex-col bg-gray-50">
         <div className="p-3 border-b border-gray-200 bg-white">
-          <h3 className="font-semibold text-gray-800">Contacts</h3>
+          <h3 className="font-semibold text-gray-800">Mentors & Reviewers</h3>
           <div className="text-xs text-gray-400 mt-1">Status: {wsStatus}</div>
         </div>
         <div className="flex-1 overflow-y-auto">
           {contacts.length === 0 && (
             <div className="p-4 text-center text-gray-400 text-sm">
-              {isStudent ? "No mentors or reviewers available" : "No other users found"}
+              No mentors or reviewers available
             </div>
           )}
           {contacts.map(contact => (
@@ -237,12 +211,12 @@ function ChatComponent() {
                   type="text"
                   value={inputMessage}
                   onChange={(e) => setInputMessage(e.target.value)}
-                  onKeyPress={(e) => e.key === "Enter" && handleSend()}
+                  onKeyPress={(e) => e.key === "Enter" && sendPrivateMessage()}
                   placeholder={`Message ${selectedContact.username}...`}
                   className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-green-500"
                 />
                 <button
-                  onClick={handleSend}
+                  onClick={sendPrivateMessage}
                   className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm transition"
                 >
                   Send
@@ -252,9 +226,7 @@ function ChatComponent() {
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center text-gray-400">
-            {isStudent
-              ? "Select a mentor or reviewer to start chatting"
-              : "Select a contact to start messaging"}
+            Select a mentor or reviewer to start chatting
           </div>
         )}
       </div>
@@ -262,4 +234,4 @@ function ChatComponent() {
   );
 }
 
-export default ChatComponent;
+export default StudentChatComponent;

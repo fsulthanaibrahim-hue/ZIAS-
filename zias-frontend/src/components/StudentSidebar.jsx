@@ -8,6 +8,7 @@ function StudentSidebar() {
   const navItems = [
     { path: "/student/dashboard", label: "Dashboard", icon: "🏠" },
     { path: "/student/review-sheet", label: "Review Sheet", icon: "📋" },
+    { path: "/student/modules", label: "Modules", icon: "📦" }, 
     { path: "/chat", label: "Chat", icon: "💬" },
     { path: "/student/profile", label: "Profile", icon: "👤" },
   ];

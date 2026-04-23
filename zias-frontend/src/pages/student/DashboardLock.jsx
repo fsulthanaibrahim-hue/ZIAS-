@@ -20,17 +20,17 @@ function DashboardLock() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0d1117] flex items-center justify-center">
-      <div className="bg-[#161b22] p-8 rounded-xl text-center max-w-md">
-        <h1 className="text-2xl font-bold text-[#e6edf3] mb-4">Dashboard Locked</h1>
-        <p className="text-[#7d8590] mb-6">
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-8 text-center max-w-md">
+        <h1 className="text-2xl font-bold text-gray-800 mb-4">Dashboard Locked</h1>
+        <p className="text-gray-600 mb-6">
           Your dashboard has been locked because you haven't visited for more than 7 days.
           Click the button below to unlock and continue learning.
         </p>
         <button
           onClick={handleUnlock}
           disabled={loading}
-          className="bg-[#238636] hover:bg-[#2ea043] px-6 py-2 rounded-lg font-medium"
+          className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-6 py-2 rounded-lg font-medium transition shadow-sm"
         >
           {loading ? "Unlocking..." : "Unlock Dashboard"}
         </button>

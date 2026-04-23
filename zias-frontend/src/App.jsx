@@ -45,6 +45,7 @@ import ResetPassword from "./pages/ResetPassword";
 import ChatComponent from "./components/ChatComponent";
 // Sidebars
 import MentorSidebar from "./components/MentorSidebar";
+import StudentModules from "./pages/student/StudentModules";
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem("access_token");
@@ -114,6 +115,7 @@ function App() {
       <Route path="/student/module/:moduleId" element={<PrivateRoute><ModuleView /></PrivateRoute>} />
       <Route path="/student/change-password" element={<PrivateRoute><ChangePassword /></PrivateRoute>} />
       <Route path="/student/dashboard-lock" element={<PrivateRoute><DashboardLock /></PrivateRoute>} />
+      <Route path="/student/modules" element={<PrivateRoute><StudentModules /></PrivateRoute>} />
 
       {/* Generic change password route */}
       <Route path="/change-password" element={<PrivateRoute><ChangePassword /></PrivateRoute>} />

@@ -1,4 +1,4 @@
-// src/pages/student/ModuleView.jsx
+// src/pages/student/ModuleView.jsx (dark theme)
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import API from "../../api/api";
@@ -29,6 +29,7 @@ function ModuleView() {
   const [expandedDayId, setExpandedDayId] = useState(null);
   const [tasksByDay, setTasksByDay] = useState({});
   const [toast, setToast] = useState(null);
+  const [completing, setCompleting] = useState(false);
   const showToast = (msg, type) => setToast({ message: msg, type });
   const hideToast = () => setToast(null);
 
@@ -63,7 +64,7 @@ function ModuleView() {
     try {
       await API.patch(`days/${dayId}/`, { is_completed: completed });
       showToast(completed ? "Day marked as completed" : "Day marked as incomplete", "success");
-      fetchDays();
+      await fetchDays();
     } catch (err) {
       showToast("Failed to update", "error");
     }
@@ -78,6 +79,22 @@ function ModuleView() {
       showToast("Failed to update task", "error");
     }
   };
+
+  const completeModule = async () => {
+    setCompleting(true);
+    try {
+      await API.post(`modules/${moduleId}/complete/`);
+      showToast("Module completed! Next module will unlock.", "success");
+      setTimeout(() => window.location.href = "/student/dashboard", 2000);
+    } catch (err) {
+      showToast("Failed to mark module as completed", "error");
+    } finally {
+      setCompleting(false);
+    }
+  };
+
+  const allDaysCompleted = days.length > 0 && days.every(day => day.is_completed === true);
+  const isModuleCompleted = module?.is_completed || false;
 
   useEffect(() => {
     const loadData = async () => {
@@ -116,7 +133,6 @@ function ModuleView() {
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
 
       <div className="max-w-4xl mx-auto">
-        {/* Back button */}
         <Link to="/student/dashboard" className="inline-flex items-center gap-2 text-[#7d8590] hover:text-[#e6edf3] mb-6 transition">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -124,7 +140,6 @@ function ModuleView() {
           Back to Dashboard
         </Link>
 
-        {/* Module Header */}
         <div className="bg-[#161b22] rounded-xl border border-[#21262d] p-6 mb-8">
           <h1 className="text-2xl font-bold text-[#e6edf3]">{module.title}</h1>
           {module.content && (
@@ -137,15 +152,13 @@ function ModuleView() {
           )}
         </div>
 
-        {/* Days List */}
-        <h2 className="text-xl font-semibold mb-4">Days</h2>
+        <h2 className="text-xl font-semibold text-[#e6edf3] mb-4">Days</h2>
         {days.length === 0 ? (
           <p className="text-[#7d8590]">No days available for this module.</p>
         ) : (
           <div className="space-y-4">
             {days.map((day) => (
               <div key={day.id} className="bg-[#161b22] rounded-xl border border-[#21262d] overflow-hidden">
-                {/* Day Header */}
                 <div
                   className="p-4 flex items-center justify-between cursor-pointer hover:bg-[#1a2538] transition"
                   onClick={() => setExpandedDayId(expandedDayId === day.id ? null : day.id)}
@@ -173,7 +186,6 @@ function ModuleView() {
                   </svg>
                 </div>
 
-                {/* Expanded content */}
                 {expandedDayId === day.id && (
                   <div className="p-4 pt-0 border-t border-[#21262d] bg-[#0d1117]/50">
                     {day.content && (
@@ -212,6 +224,24 @@ function ModuleView() {
                 )}
               </div>
             ))}
+          </div>
+        )}
+
+        {!isModuleCompleted && allDaysCompleted && (
+          <div className="mt-8 flex justify-center">
+            <button
+              onClick={completeModule}
+              disabled={completing}
+              className="bg-[#238636] hover:bg-[#2ea043] disabled:bg-gray-600 text-white font-medium px-6 py-2 rounded-lg transition shadow-md"
+            >
+              {completing ? "Completing..." : "Complete Module"}
+            </button>
+          </div>
+        )}
+
+        {isModuleCompleted && (
+          <div className="mt-8 text-center text-emerald-400 font-medium">
+            ✅ Module completed successfully!
           </div>
         )}
       </div>

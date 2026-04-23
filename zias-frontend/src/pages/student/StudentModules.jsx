@@ -1,39 +1,172 @@
-// src/components/StudentModules.jsx
+// src/pages/student/StudentModules.jsx
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import API from "../../api/api";
+import StudentSidebar from "../../components/StudentSidebar";
 
-function StudentModules({ modules }) {
-  if (modules.length === 0) {
-    return <p className="text-[#7d8590]">No modules assigned to you yet.</p>;
+function StudentModules() {
+  const [modules, setModules] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [student, setStudent] = useState(null);
+
+  useEffect(() => {
+    const fetchModules = async () => {
+      try {
+        const studentRes = await API.get("students/me/");
+        setStudent(studentRes.data);
+
+        const modulesRes = await API.get("modules/student-modules/");
+        const modulesData = modulesRes.data;
+
+        const enrichedModules = await Promise.all(
+          modulesData.map(async (mod) => {
+            try {
+              const daysRes = await API.get(`days/?module=${mod.id}`);
+              const days = daysRes.data;
+              const completedDays = days.filter(day => day.is_completed).length;
+              const progress = days.length > 0 ? (completedDays / days.length) * 100 : 0;
+
+              let review = null;
+              try {
+                const reviewRes = await API.get(`week-review/${mod.id}/`);
+                review = reviewRes.data;
+              } catch {
+                // No review
+              }
+
+              return { ...mod, progress, review, totalDays: days.length };
+            } catch {
+              return { ...mod, progress: 0, review: null, totalDays: 0 };
+            }
+          })
+        );
+
+        const sortedModules = enrichedModules.sort((a, b) => (a.order || a.id) - (b.order || b.id));
+        setModules(sortedModules);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchModules();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen bg-gray-50">
+        <StudentSidebar />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-4">
-      {modules.map((mod) => (
-        <div
-          key={mod.id}
-          className="bg-[#161b22] rounded-xl border border-[#21262d] p-5 hover:bg-[#1a2538] transition"
-        >
-          <div className="flex justify-between items-start">
-            <div className="flex-1">
-              <h3 className="text-lg font-semibold text-[#e6edf3]">{mod.title}</h3>
-              <p className="text-[#7d8590] text-sm mt-1">
-                {mod.content || "No description"}
-              </p>
-              {mod.is_common && (
-                <span className="inline-block mt-2 text-xs bg-blue-500/10 text-blue-400 px-2 py-1 rounded-full">
-                  Foundation Module
-                </span>
-              )}
-            </div>
-            <Link
-              to={`/module/${mod.id}`}
-              className="bg-[#238636] hover:bg-[#2ea043] px-4 py-2 rounded-lg text-sm font-medium transition ml-4"
-            >
-              View Module
-            </Link>
+    <div className="flex min-h-screen bg-gray-50">
+      <StudentSidebar />
+      <main className="flex-1 p-8 overflow-y-auto">
+        <div className="max-w-6xl mx-auto">
+          {/* Header */}
+          <div className="mb-8">
+            <h1 className="text-2xl font-bold text-gray-800">All Modules</h1>
+            <p className="text-gray-500 mt-1">
+              Your learning weeks – track progress and access content
+            </p>
+            {student?.course && (
+              <p className="text-sm text-gray-500 mt-1">Course: <span className="text-gray-700">{student.course}</span></p>
+            )}
           </div>
+
+          {/* Modules grid */}
+          {modules.length === 0 ? (
+            <div className="text-center py-12 bg-white rounded-xl border border-gray-200 shadow-sm">
+              <p className="text-gray-500">No modules assigned to you yet.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {modules.map((mod) => {
+                const isLocked = mod.is_locked === true;
+                const progress = mod.progress || 0;
+                const starRating = mod.review?.star_rating;
+                const totalScore = mod.review?.total_score;
+
+                return (
+                  <div
+                    key={mod.id}
+                    className={`bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden transition-all ${
+                      !isLocked ? "hover:shadow-md hover:-translate-y-1" : "opacity-70"
+                    }`}
+                  >
+                    {isLocked ? (
+                      <div className="p-5">
+                        <div className="flex justify-between items-start mb-2">
+                          <h3 className="text-lg font-semibold text-gray-800">{mod.title}</h3>
+                          <span className="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded-full">
+                            🔒 Locked
+                          </span>
+                        </div>
+                        <p className="text-gray-500 text-sm mb-4 line-clamp-2">
+                          {mod.content || "No description available."}
+                        </p>
+                        <div className="text-gray-400 text-xs">
+                          Complete previous week to unlock
+                        </div>
+                      </div>
+                    ) : (
+                      <Link to={`/student/week/${mod.id}`} className="block p-5">
+                        <div className="flex justify-between items-start mb-2">
+                          <h3 className="text-lg font-semibold text-gray-800 group-hover:text-green-600 transition">
+                            {mod.title}
+                          </h3>
+                          <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
+                            {progress === 100 ? "✅ Completed" : "In Progress"}
+                          </span>
+                        </div>
+                        <p className="text-gray-500 text-sm mb-3 line-clamp-2">
+                          {mod.content || "No description available."}
+                        </p>
+
+                        {/* Progress bar */}
+                        <div className="mb-3">
+                          <div className="flex justify-between text-xs text-gray-500 mb-1">
+                            <span>Progress</span>
+                            <span>{Math.round(progress)}%</span>
+                          </div>
+                          <div className="w-full bg-gray-100 rounded-full h-1.5">
+                            <div
+                              className="bg-green-600 h-1.5 rounded-full transition-all duration-300"
+                              style={{ width: `${progress}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Score & rating */}
+                        {totalScore !== undefined && totalScore !== null && (
+                          <div className="text-sm text-gray-600 mb-2">
+                            Score: <span className="text-emerald-600 font-semibold">{totalScore}</span>
+                          </div>
+                        )}
+                        {starRating && (
+                          <div className="text-sm text-yellow-500 mb-2">
+                            {"⭐".repeat(starRating)}
+                          </div>
+                        )}
+
+                        <div className="text-green-600 text-sm flex items-center gap-1 mt-2">
+                          View Details →
+                        </div>
+                      </Link>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
-      ))}
+      </main>
     </div>
   );
 }

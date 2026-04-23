@@ -3,12 +3,9 @@ import { useEffect, useState, useRef } from "react";
 import { Link } from "react-router-dom";
 import API from "../../api/api";
 
-// Module-level caches
 let mentorPromise = null;
 let studentsPromise = null;
-let modulesPromises = {}; // key: studentId, value: promise
-let globalMentorFetched = false;
-let globalStudentsFetched = false;
+let modulesPromises = {};
 
 function MentorModules() {
   const [modules, setModules] = useState([]);
@@ -18,37 +15,32 @@ function MentorModules() {
   const [mentor, setMentor] = useState(null);
   const mountedRef = useRef(true);
 
-  // Fetch mentor and students only once
   useEffect(() => {
     mountedRef.current = true;
     const fetchInitialData = async () => {
       try {
-        // Mentor profile
-        if (!globalMentorFetched && !mentorPromise) {
+        // Fetch mentor profile (once)
+        if (!mentorPromise) {
           mentorPromise = API.get("mentors/me/")
             .then(res => res.data)
-            .catch(err => { throw err; })
-            .finally(() => { mentorPromise = null; });
+            .catch(err => { throw err; });
         }
         const mentorData = await mentorPromise;
         if (mountedRef.current) setMentor(mentorData);
-        globalMentorFetched = true;
 
-        // Students list
-        if (!globalStudentsFetched && !studentsPromise) {
+        // Fetch students assigned to this mentor (once)
+        if (!studentsPromise) {
           studentsPromise = API.get("students/", { params: { mentor: mentorData.id } })
             .then(res => res.data)
-            .catch(err => { throw err; })
-            .finally(() => { studentsPromise = null; });
+            .catch(err => { throw err; });
         }
         const studentsData = await studentsPromise;
         if (mountedRef.current) {
           setStudents(studentsData);
-          if (studentsData.length > 0 && !selectedStudentId) {
+          if (studentsData.length > 0) {
             setSelectedStudentId(studentsData[0].id);
           }
         }
-        globalStudentsFetched = true;
       } catch (err) {
         console.error(err);
       } finally {
@@ -57,14 +49,14 @@ function MentorModules() {
     };
     fetchInitialData();
     return () => { mountedRef.current = false; };
-  }, []); // empty dependency – runs once
+  }, []);
 
-  // Fetch modules when selected student changes (with deduplication)
+  // Fetch modules when selected student changes
   useEffect(() => {
     if (!selectedStudentId) return;
 
     const fetchModules = async () => {
-      // If already fetching or already fetched for this student, reuse promise
+      // If already fetching or cached, reuse promise
       if (modulesPromises[selectedStudentId]) {
         try {
           const data = await modulesPromises[selectedStudentId];

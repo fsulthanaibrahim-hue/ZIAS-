@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import API from "../../api/api";
+import StudentSidebar from "../../components/StudentSidebar";
 
 const extractWeekNumber = (title) => {
   const match = title?.match(/Week\s*(\d+)/i);
@@ -95,7 +96,6 @@ function StudentReviewSheet() {
 
   const isReviewer = userRole === "admin" || userRole === "mentor" || userRole === "reviewer";
 
-  // Same rows as admin edit (read-only)
   const rows = [
     { label: "Status", field: "task_status" },
     { label: "Project Updates", field: "feedback" },
@@ -117,8 +117,27 @@ function StudentReviewSheet() {
   else if (userRole === "mentor") dashboardLink = "/mentor/dashboard";
   else if (userRole === "reviewer") dashboardLink = "/reviewer/dashboard";
 
-  if (loading) return <div className="min-h-screen bg-[#0d1117] flex items-center justify-center"><div className="w-8 h-8 border-2 border-[#388bfd] border-t-transparent rounded-full animate-spin" /></div>;
-  if (error) return <div className="min-h-screen bg-[#0d1117] text-red-400 flex items-center justify-center p-8 text-center">{error}</div>;
+  if (loading) {
+    return (
+      <div className="flex min-h-screen bg-gray-50">
+        <StudentSidebar />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex min-h-screen bg-gray-50">
+        <StudentSidebar />
+        <div className="flex-1 flex items-center justify-center p-8 text-center">
+          <div className="text-red-600">{error}</div>
+        </div>
+      </div>
+    );
+  }
 
   const weekRanges = [
     { label: "Week 0 - 12", start: 1, end: 12 },
@@ -130,81 +149,84 @@ function StudentReviewSheet() {
   ];
 
   return (
-    <div className="min-h-screen w-full bg-[#0d1117] text-[#e6edf3] font-sans">
-      <div className="max-w-full mx-auto px-4 sm:px-6 py-4 sm:py-8">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-          <div>
-            <h1 className="text-xl font-semibold text-[#e6edf3] tracking-tight">Student Review Sheet</h1>
-            <p className="text-[#7d8590] text-sm mt-1">
-              {isReviewer && selectedStudentId
-                ? students.find(s => s.id === selectedStudentId)?.name || "Select student"
-                : "Your Weekly Progress"}
-            </p>
+    <div className="flex min-h-screen bg-gray-50">
+      <StudentSidebar />
+      <main className="flex-1 p-4 sm:p-6 overflow-x-auto">
+        <div className="max-w-full mx-auto">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+            <div>
+              <h1 className="text-xl font-semibold text-gray-800 tracking-tight">Student Review Sheet</h1>
+              <p className="text-gray-500 text-sm mt-1">
+                {isReviewer && selectedStudentId
+                  ? students.find(s => s.id === selectedStudentId)?.name || "Select student"
+                  : "Your Weekly Progress"}
+              </p>
+            </div>
+            <div className="flex gap-3 items-center flex-wrap">
+              {isReviewer && students.length > 0 && (
+                <select
+                  value={selectedStudentId || ""}
+                  onChange={(e) => setSelectedStudentId(parseInt(e.target.value))}
+                  className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-800 focus:outline-none focus:border-green-500"
+                >
+                  {students.map(s => <option key={s.id} value={s.id}>{s.name} ({s.username})</option>)}
+                </select>
+              )}
+              <Link to={dashboardLink} className="bg-gray-200 hover:bg-gray-300 text-gray-700 hover:text-gray-900 px-4 py-2 rounded-lg text-sm font-medium transition">
+                ← Dashboard
+              </Link>
+            </div>
           </div>
-          <div className="flex gap-3 items-center flex-wrap">
-            {isReviewer && students.length > 0 && (
-              <select
-                value={selectedStudentId || ""}
-                onChange={(e) => setSelectedStudentId(parseInt(e.target.value))}
-                className="bg-[#161b22] border border-[#21262d] rounded-lg px-3 py-1.5 text-sm"
-              >
-                {students.map(s => <option key={s.id} value={s.id}>{s.name} ({s.username})</option>)}
-              </select>
-            )}
-            <Link to={dashboardLink} className="bg-[#21262d] hover:bg-[#30363d] text-[#7d8590] hover:text-white px-4 py-2 rounded-lg text-sm font-medium transition">
-              ← Dashboard
-            </Link>
-          </div>
-        </div>
 
-        <div className="overflow-x-auto rounded-xl border border-[#21262d] shadow-xl shadow-black/20">
-          <table className="min-w-full border-collapse">
-            <thead className="bg-[#161b22] border-b border-[#21262d]">
-              <tr>
-                <th className="sticky left-0 bg-[#161b22] z-10 px-4 py-3 text-left text-[#7d8590] text-xs font-semibold uppercase w-48">FIELD / WEEK</th>
-                {weeks.map(week => (
-                  <th key={week.id} className="px-3 py-3 text-left text-[#e6edf3] text-sm font-medium min-w-[200px] border-l border-[#21262d]">
-                    {cleanTitle(week.title)}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="bg-[#0d1117] divide-y divide-[#21262d]">
-              {rows.map(row => (
-                <tr key={row.field} className="hover:bg-[#161b22]/40">
-                  <td className="sticky left-0 bg-[#0d1117] px-4 py-3 text-[#7d8590] text-sm font-medium border-r border-[#21262d]">{row.label}</td>
+          <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-sm bg-white">
+            <table className="min-w-full border-collapse">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="sticky left-0 bg-gray-50 z-10 px-4 py-3 text-left text-gray-500 text-xs font-semibold uppercase w-48">FIELD / WEEK</th>
                   {weeks.map(week => (
-                    <td key={week.id} className="px-3 py-2 border-l border-[#21262d] align-top">{renderCell(week.id, row)}</td>
+                    <th key={week.id} className="px-3 py-3 text-left text-gray-800 text-sm font-medium min-w-[200px] border-l border-gray-200">
+                      {cleanTitle(week.title)}
+                    </th>
                   ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-100">
+                {rows.map(row => (
+                  <tr key={row.field} className="hover:bg-gray-50/40">
+                    <td className="sticky left-0 bg-white px-4 py-3 text-gray-600 text-sm font-medium border-r border-gray-200">{row.label}</td>
+                    {weeks.map(week => (
+                      <td key={week.id} className="px-3 py-2 border-l border-gray-200 align-top">{renderCell(week.id, row)}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-        <div className="mt-6 bg-[#161b22] rounded-xl border border-[#21262d] p-4">
-          <h3 className="text-sm font-semibold text-[#e6edf3] mb-2">Personal Details</h3>
-          <div className="flex flex-wrap gap-4 text-xs">
-            {weekRanges.map((range) => {
-              const url = isReviewer && selectedStudentId
-                ? `/student/review-sheet/range/${range.start}/${range.end}?student_id=${selectedStudentId}`
-                : `/student/review-sheet/range/${range.start}/${range.end}`;
-              return (
-                <Link key={range.label} to={url} className="text-[#7d8590] hover:text-blue-400 transition">
-                  {range.label}
-                </Link>
-              );
-            })}
+          <div className="mt-6 bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+            <h3 className="text-sm font-semibold text-gray-800 mb-2">Personal Details</h3>
+            <div className="flex flex-wrap gap-4 text-xs">
+              {weekRanges.map((range) => {
+                const url = isReviewer && selectedStudentId
+                  ? `/student/review-sheet/range/${range.start}/${range.end}?student_id=${selectedStudentId}`
+                  : `/student/review-sheet/range/${range.start}/${range.end}`;
+                return (
+                  <Link key={range.label} to={url} className="text-gray-500 hover:text-green-600 transition">
+                    {range.label}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="mt-4 text-right text-gray-400 text-xs">
+            💡 {isReviewer ? "View‑only mode. Use the admin panel to edit." : "Your weekly progress report."}
+            {weeks.length < 44 && (
+              <div className="mt-1 text-amber-600">⚠️ Only {weeks.length} weeks available. Please create weeks 1‑44 in the admin panel.</div>
+            )}
           </div>
         </div>
-
-        <div className="mt-4 text-right text-[#484f58] text-xs">
-          💡 {isReviewer ? "View‑only mode. Use the admin panel to edit." : "Your weekly progress report."}
-          {weeks.length < 44 && (
-            <div className="mt-1 text-amber-400">⚠️ Only {weeks.length} weeks available. Please create weeks 1‑44 in the admin panel.</div>
-          )}
-        </div>
-      </div>
+      </main>
     </div>
   );
 }

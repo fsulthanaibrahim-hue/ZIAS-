@@ -27,34 +27,69 @@ function CourseDetail() {
     fetchData();
   }, [courseId]);
 
-  if (loading) return <div className="min-h-screen bg-[#0f1623] text-white flex items-center justify-center">Loading...</div>;
-  if (error) return <div className="min-h-screen bg-[#0f1623] text-red-400 flex items-center justify-center">{error}</div>;
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 text-red-600 flex items-center justify-center p-4 text-center">
+        {error}
+      </div>
+    );
+  }
   if (!course) return null;
 
   return (
-    <div className="min-h-screen bg-[#0f1623] text-white p-8">
+    <div className="min-h-screen bg-gray-50 text-gray-800 p-8">
       <div className="max-w-4xl mx-auto">
-        <Link to="/student/dashboard" className="text-blue-400 hover:text-blue-300 mb-4 inline-block">
+        <Link
+          to="/student/dashboard"
+          className="text-green-600 hover:text-green-700 mb-4 inline-flex items-center gap-1"
+        >
           ← Back to Dashboard
         </Link>
-        <div className="bg-[#1a2538] rounded-xl p-6 border border-white/10 mb-6">
-          <h1 className="text-3xl font-bold mb-2">{course.name}</h1>
-          <p className="text-white/60 mb-2">Duration: {course.duration || "Not specified"}</p>
-          <p className="text-white/80">{course.description || "No description available."}</p>
+
+        {/* Course Header */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 mb-6">
+          <h1 className="text-3xl font-bold text-gray-800 mb-2">{course.name}</h1>
+          <p className="text-gray-500 mb-2">
+            Duration: {course.duration || "Not specified"}
+          </p>
+          <p className="text-gray-600">
+            {course.description || "No description available."}
+          </p>
         </div>
-        <h2 className="text-2xl font-semibold mb-4">Course Content</h2>
+
+        {/* Modules List */}
+        <h2 className="text-2xl font-semibold text-gray-800 mb-4">Course Content</h2>
         <div className="space-y-3">
           {modules.map((mod) => (
-            <div key={mod.id} className="bg-[#1a2538] rounded-lg p-4 border border-white/10 flex justify-between items-center">
-              <span className="text-white">{mod.title}</span>
+            <div
+              key={mod.id}
+              className="bg-white rounded-lg border border-gray-200 shadow-sm p-4 flex justify-between items-center hover:shadow-md transition"
+            >
+              <span className="text-gray-800 font-medium">{mod.title}</span>
               {mod.is_public ? (
-                <Link to={`/student/module/${mod.id}`} className="text-green-400 hover:text-green-300">View</Link>
+                <Link
+                  to={`/student/module/${mod.id}`}
+                  className="text-green-600 hover:text-green-700 font-medium"
+                >
+                  View
+                </Link>
               ) : (
-                <span className="text-gray-500" title="You need to be enrolled in this course">🔒 Locked</span>
+                <span className="text-gray-400" title="You need to be enrolled in this course">
+                  🔒 Locked
+                </span>
               )}
             </div>
           ))}
-          {modules.length === 0 && <p className="text-white/40">No modules available for this course.</p>}
+          {modules.length === 0 && (
+            <p className="text-gray-500">No modules available for this course.</p>
+          )}
         </div>
       </div>
     </div>

@@ -1,7 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.utils import timezone
-# No signal imports here
 
 # Custom User model
 class User(AbstractUser):
@@ -19,7 +18,6 @@ class User(AbstractUser):
 
     @property
     def user_type(self):
-        """Helper property to get user type as a string."""
         if self.is_admin:
             return 'admin'
         if self.is_student:
@@ -33,9 +31,7 @@ class User(AbstractUser):
     def __str__(self):
         return self.username
 
-# ----------------------------
-# BATCH MODEL
-# ----------------------------
+# Batch Model
 class Batch(models.Model):
     name = models.CharField(max_length=100, unique=True)
     start_date = models.DateField(null=True, blank=True)
@@ -49,13 +45,9 @@ class Batch(models.Model):
     def __str__(self):
         return self.name
 
-# ----------------------------
-# STUDENT PROFILE
-# ----------------------------
+# Student Profile
 class Student(models.Model):
-    user = models.OneToOneField(
-        User, on_delete=models.CASCADE, related_name='student_profile'
-    )
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='student_profile')
     course = models.CharField(max_length=100)
     batch = models.CharField(max_length=50)
     student_batch = models.ForeignKey(Batch, on_delete=models.SET_NULL, null=True, blank=True, related_name='students')
@@ -64,10 +56,7 @@ class Student(models.Model):
     date_of_birth = models.DateField(null=True, blank=True)
     full_name = models.CharField(max_length=150, blank=True, null=True)
     age = models.PositiveIntegerField(blank=True, null=True)
-    gender = models.CharField(
-        max_length=10, blank=True, null=True,
-        choices=[('Male', 'Male'), ('Female', 'Female'), ('Other', 'Other')]
-    )
+    gender = models.CharField(max_length=10, blank=True, null=True, choices=[('Male','Male'),('Female','Female'),('Other','Other')])
     fathers_name = models.CharField(max_length=150, blank=True, null=True)
     fathers_contact = models.CharField(max_length=15, blank=True, null=True)
     mothers_name = models.CharField(max_length=150, blank=True, null=True)
@@ -82,13 +71,9 @@ class Student(models.Model):
     def __str__(self):
         return self.user.username
 
-# ----------------------------
-# MENTOR PROFILE
-# ----------------------------
+# Mentor Profile
 class Mentor(models.Model):
-    user = models.OneToOneField(
-        User, on_delete=models.CASCADE, related_name='mentor_profile'
-    )
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='mentor_profile')
     phone = models.CharField(max_length=20, blank=True, null=True)
     expertise = models.CharField(max_length=100)
     batch = models.ForeignKey(Batch, on_delete=models.SET_NULL, null=True, blank=True, related_name='mentors')
@@ -96,13 +81,9 @@ class Mentor(models.Model):
     def __str__(self):
         return self.user.username
 
-# ----------------------------
-# REVIEWER PROFILE
-# ----------------------------
+# Reviewer Profile
 class Reviewer(models.Model):
-    user = models.OneToOneField(
-        User, on_delete=models.CASCADE, related_name='reviewer_profile'
-    )
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='reviewer_profile')
     department = models.CharField(max_length=100)
     batch = models.ForeignKey(Batch, on_delete=models.SET_NULL, null=True, blank=True, related_name='reviewers')
     qualification = models.CharField(max_length=200, blank=True)
@@ -111,9 +92,7 @@ class Reviewer(models.Model):
     def __str__(self):
         return self.user.username
 
-# ----------------------------
-# COURSE MODEL
-# ----------------------------
+# Course Model
 class Course(models.Model):
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
@@ -123,9 +102,7 @@ class Course(models.Model):
     def __str__(self):
         return self.name
 
-# ----------------------------
-# MODULE MODEL
-# ----------------------------
+# Module Model
 class Module(models.Model):
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='modules')
     title = models.CharField(max_length=200)
@@ -142,9 +119,7 @@ class Module(models.Model):
     def __str__(self):
         return f"{self.course.name} - {self.title}"
 
-# ----------------------------
-# STUDENT MODULE
-# ----------------------------
+# Student Module
 class StudentModule(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='custom_modules')
     module = models.ForeignKey(Module, on_delete=models.CASCADE)
@@ -158,9 +133,7 @@ class StudentModule(models.Model):
     def __str__(self):
         return f"{self.student.user.username} - {self.module.course.name} - {self.module.title}"
 
-# ----------------------------
-# DAY MODEL
-# ----------------------------
+# Day Model
 class Day(models.Model):
     module = models.ForeignKey(Module, on_delete=models.CASCADE, related_name='days')
     title = models.CharField(max_length=100)
@@ -174,9 +147,7 @@ class Day(models.Model):
     def __str__(self):
         return f"{self.module.title} - {self.title}"
 
-# ----------------------------
-# TASK MODEL
-# ----------------------------
+# Task Model
 class Task(models.Model):
     day = models.ForeignKey(Day, on_delete=models.CASCADE, related_name='tasks')
     title = models.CharField(max_length=200)
@@ -191,9 +162,7 @@ class Task(models.Model):
     def __str__(self):
         return self.title
 
-# ----------------------------
-# PASSWORD RESET TOKEN MODEL
-# ----------------------------
+# Password Reset Token
 class PasswordResetToken(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     token = models.CharField(max_length=100, unique=True)
@@ -206,9 +175,7 @@ class PasswordResetToken(models.Model):
     def __str__(self):
         return f"{self.user.username} - {self.token}"
 
-# ----------------------------
-# CONTACT MESSAGE MODEL
-# ----------------------------
+# Contact Message
 class ContactMessage(models.Model):
     name = models.CharField(max_length=100)
     email = models.EmailField()
@@ -221,22 +188,17 @@ class ContactMessage(models.Model):
     def __str__(self):
         return f"{self.name} - {self.subject}"
 
-# ----------------------------
-# NOTIFICATION MODEL (for real‑time alerts)
-# ----------------------------
+# Notification Model
 class Notification(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
     message = models.CharField(max_length=255)
     is_read = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     def __str__(self):
         return f"{self.user.username} - {self.message}"
 
-
-# ----------------------------
-# CHAT MESSAGE MODEL (for storing chat history)
-# ----------------------------
+# Chat Message Model (with is_read field added)
 class ChatMessage(models.Model):
     ROOM_TYPE_CHOICES = [
         ('broadcast', 'Broadcast'),
@@ -245,9 +207,10 @@ class ChatMessage(models.Model):
     ]
     sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_chat_messages')
     room_type = models.CharField(max_length=20, choices=ROOM_TYPE_CHOICES)
-    room_identifier = models.CharField(max_length=100, blank=True, null=True)  # e.g., 'admin' or user_id for private
+    room_identifier = models.CharField(max_length=100, blank=True, null=True)
     message = models.TextField()
     timestamp = models.DateTimeField(auto_now_add=True)
+    is_read = models.BooleanField(default=False)  # ✅ new field
 
     def __str__(self):
         return f"{self.sender.username} - {self.room_type}: {self.message[:30]}"
@@ -255,83 +218,57 @@ class ChatMessage(models.Model):
     class Meta:
         ordering = ['-timestamp']
 
-
-# ----------------------------
-# STUDENT WEEK REVIEW MODEL (for reviewer feedback)
-# ----------------------------
+# Student Week Review Model
 class StudentWeekReview(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='week_reviews')
     module = models.ForeignKey(Module, on_delete=models.CASCADE, related_name='student_reviews')
-
     reviewer_name = models.CharField(max_length=100, blank=True)
     advisor_name = models.CharField(max_length=100, blank=True)
     review_date = models.DateField(null=True, blank=True)
-    task_status = models.CharField(
-        max_length=50, blank=True,
-        choices=[
-            ('Task Completed', 'Task Completed'),
-            ('Task Need Improvement', 'Task Need Improvement'),
-            ('Task Critical', 'Task Critical'),
-            ('Task Not Completed', 'Task Not Completed'),
-        ]
-    )
+    task_status = models.CharField(max_length=50, blank=True, choices=[
+        ('Task Completed', 'Task Completed'),
+        ('Task Need Improvement', 'Task Need Improvement'),
+        ('Task Critical', 'Task Critical'),
+        ('Task Not Completed', 'Task Not Completed'),
+    ])
     feedback = models.TextField(blank=True)
-    
-    extra_workouts = models.CharField(
-        max_length=30, blank=True,
-        choices=[
-            ('Completed', 'Completed'),
-            ('Need Improvement', 'Need Improvement'),
-            ('Not Completed', 'Not Completed'),
-        ],
-        help_text="Status of extra workouts"
-    )
-    
-    english_review = models.TextField(blank=True)   # auto‑generated from english_score
+    extra_workouts = models.CharField(max_length=30, blank=True, choices=[
+        ('Completed', 'Completed'),
+        ('Need Improvement', 'Need Improvement'),
+        ('Not Completed', 'Not Completed'),
+    ])
+    english_review = models.TextField(blank=True)
     english_score = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Score out of 20")
-    
-    star_rating = models.PositiveSmallIntegerField(null=True, blank=True, choices=[(i, i) for i in range(1, 6)])
+    star_rating = models.PositiveSmallIntegerField(null=True, blank=True, choices=[(i,i) for i in range(1,6)])
     total_score = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Total score out of 20")
-    
-    # role‑specific remark fields
-    admin_remarks = models.TextField(blank=True)
-    reviewer_remarks = models.TextField(blank=True)
-    mentor_remarks = models.TextField(blank=True)
-    
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         unique_together = ['student', 'module']
-    
+
     def generate_english_review(self):
-        """Auto‑generate review text based on english_score."""
         if self.english_score is None:
             return ""
-        score = self.english_score
-        if score >= 18:
+        s = self.english_score
+        if s >= 18:
             return "Excellent English skills. Very fluent and accurate."
-        elif score >= 15:
+        if s >= 15:
             return "Good English skills. Minor errors, but well communicated."
-        elif score >= 12:
+        if s >= 12:
             return "Average English. Needs improvement in grammar and vocabulary."
-        elif score >= 8:
+        if s >= 8:
             return "Below average English. Significant errors, requires practice."
-        else:
-            return "Poor English. Strongly needs basic English training."
-    
+        return "Poor English. Strongly needs basic English training."
+
     def save(self, *args, **kwargs):
-        # Auto‑generate english_review if english_score is provided
         if self.english_score is not None:
             self.english_review = self.generate_english_review()
         super().save(*args, **kwargs)
-    
+
     def __str__(self):
         return f"{self.student.user.username} - {self.module.title}"
 
-
-# ----------------------------
-# WEEK UPDATE MODEL (for extra updates per week)
-# ----------------------------
+# Week Update Model
 class WeekUpdate(models.Model):
     week_review = models.ForeignKey(StudentWeekReview, on_delete=models.CASCADE, related_name='updates')
     update_date = models.DateField(auto_now_add=True)
