@@ -9,7 +9,7 @@ from .views import (
     ContactMessageView, UnreadMessagesCountView, RecentMessagesView, ContactMessageDetailView,
     CustomLoginView, LogoutView, UpdateDashboardAccessView,
     CompleteModuleView, StudentWeekReviewView, StudentListView, WeeklyToppersView,
-    WeekUpdateViewSet, ReviewFolderViewSet   # 👈 added ReviewFolderViewSet
+    WeekUpdateViewSet, ReviewFolderViewSet, ChatRoomList, ChatMessageList
 )
 
 router = DefaultRouter()
@@ -23,7 +23,7 @@ router.register('tasks', TaskViewSet)
 router.register('batches', BatchViewSet)
 router.register('student-modules', StudentModuleViewSet, basename='student-module')
 router.register('week-updates', WeekUpdateViewSet, basename='week-update')
-router.register('review-folders', ReviewFolderViewSet, basename='review-folder')   # 👈 new router registration
+router.register('review-folders', ReviewFolderViewSet, basename='review-folder')  
 
 urlpatterns = [
     path('api/students/list/', StudentListView.as_view(), name='student-list'),
@@ -46,4 +46,6 @@ urlpatterns = [
     path('api/modules/<int:module_id>/complete/', CompleteModuleView.as_view(), name='complete-module'),
     path('api/week-review/<int:module_id>/', StudentWeekReviewView.as_view(), name='week-review'),
     path('api/weekly-toppers/', WeeklyToppersView.as_view(), name='weekly-toppers'),
+    path('api/chat-rooms/', ChatRoomList.as_view(), name='chat-rooms'),
+    path('api/chat-rooms/<int:room_id>/messages/', ChatMessageList.as_view(), name='chat-messages'),
 ]

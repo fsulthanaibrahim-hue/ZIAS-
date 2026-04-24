@@ -13,7 +13,8 @@ import CourseDetail from "./pages/student/CourseDetail";
 import ModuleView from "./pages/student/ModuleView";
 import ChangePassword from "./pages/ChangePassword";
 import DashboardLock from "./pages/student/DashboardLock";
-import StudentReviewFolders from "./pages/student/StudentReviewFolders"; // 👈 new import
+import StudentReviewFolders from "./pages/student/StudentReviewFolders";
+import StudentChat from "./pages/student/StudentChat";
 // Reviewer pages
 import ReviewerDashboard from "./pages/reviewer/ReviewerDashboard";
 import ReviewerProfile from "./pages/reviewer/ReviewerProfile";
@@ -24,7 +25,8 @@ import MentorStudents from "./pages/mentor/MentorStudents";
 import MentorModules from "./pages/mentor/MentorModules";
 import MentorReviewEdit from "./pages/mentor/MentorReviewEdit";
 import MentorReviewSheetRange from "./pages/mentor/MentorReviewSheetRange";
-import MentorReviewFolders from "./pages/mentor/MentorReviewFolders"; // 👈 new import
+import MentorReviewFolders from "./pages/mentor/MentorReviewFolders";
+import MentorChat from "./pages/mentor/MentorChat";
 // Admin pages
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./Admin/Dashboard";
@@ -118,8 +120,8 @@ function App() {
       <Route path="/student/change-password" element={<PrivateRoute><ChangePassword /></PrivateRoute>} />
       <Route path="/student/dashboard-lock" element={<PrivateRoute><DashboardLock /></PrivateRoute>} />
       <Route path="/student/modules" element={<PrivateRoute><StudentModules /></PrivateRoute>} />
-      {/* Student review folders */}
       <Route path="/student/review-folders" element={<PrivateRoute><StudentReviewFolders /></PrivateRoute>} />
+      <Route path="/student/chat" element={<PrivateRoute><StudentChat /></PrivateRoute>} />
 
       {/* Generic change password route */}
       <Route path="/change-password" element={<PrivateRoute><ChangePassword /></PrivateRoute>} />
@@ -161,7 +163,6 @@ function App() {
           </div>
         </PrivateRoute>
       } />
-      {/* Mentor review sheet – editable */}
       <Route path="/mentor/review-sheet" element={
         <PrivateRoute>
           <div style={{ display: "flex" }}>
@@ -170,7 +171,6 @@ function App() {
           </div>
         </PrivateRoute>
       } />
-      {/* Mentor review sheet range – dedicated component */}
       <Route path="/mentor/review-sheet/range/:start/:end" element={
         <PrivateRoute>
           <div style={{ display: "flex" }}>
@@ -179,12 +179,19 @@ function App() {
           </div>
         </PrivateRoute>
       } />
-      {/* Mentor review folders – full CRUD */}
       <Route path="/mentor/review-folders" element={
         <PrivateRoute>
           <div style={{ display: "flex" }}>
             <MentorSidebar />
             <MentorReviewFolders />
+          </div>
+        </PrivateRoute>
+      } />
+      <Route path="/mentor/chat" element={
+        <PrivateRoute>
+          <div style={{ display: "flex" }}>
+            <MentorSidebar />
+            <MentorChat />
           </div>
         </PrivateRoute>
       } />

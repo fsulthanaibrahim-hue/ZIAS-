@@ -292,3 +292,24 @@ class ReviewFolder(models.Model):
             return "Pending"
         return "Done"
     
+
+class ChatRoom(models.Model):
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='chat_rooms')
+    mentor = models.ForeignKey(Mentor, on_delete=models.CASCADE, related_name='chat_rooms')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['student', 'mentor']
+
+    def __str__(self):
+        return f"{self.student.user.username} ↔ {self.mentor.user.username}"
+
+class ChatMessage(models.Model):
+    room = models.ForeignKey(ChatRoom, on_delete=models.CASCADE, related_name='messages')
+    sender = models.ForeignKey(User, on_delete=models.CASCADE)
+    content = models.TextField()
+    is_read = models.BooleanField(default=False)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['timestamp']

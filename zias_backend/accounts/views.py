@@ -14,16 +14,26 @@ from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken, TokenError
 from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
 
+# Add ChatRoom and ChatMessage to the model import list
 from .models import (
     User, Student, Mentor, Reviewer, Course, Module, Day, Task, Batch,
-    StudentModule, PasswordResetToken, ContactMessage, StudentWeekReview, WeekUpdate, ReviewFolder
+    StudentModule, PasswordResetToken, ContactMessage, StudentWeekReview, WeekUpdate, ReviewFolder,
+    ChatRoom, ChatMessage  
 )
+
+# Add ChatRoomSerializer to the serializer import list
 from .serializers import (
     StudentSerializer, MentorSerializer, ReviewerSerializer, UserSerializer,
     CourseSerializer, ModuleSerializer, DaySerializer, TaskSerializer, BatchSerializer,
-    ContactMessageSerializer, StudentModuleSerializer, StudentWeekReviewSerializer, WeekUpdateSerializer, ReviewFolderSerializer
+    ContactMessageSerializer, StudentModuleSerializer, StudentWeekReviewSerializer, WeekUpdateSerializer,
+    ReviewFolderSerializer, ChatRoomSerializer, ChatMessageSerializer   
 )
-from .permissions import IsAdminUser, IsAdminOrReadOnly, IsStudentOwner, IsMentorOrReviewerOrAdmin, IsStudentReadOnly
+
+# Import permission classes (assuming they exist in permissions.py)
+from .permissions import (
+    IsAdminUser, IsAdminOrReadOnly, IsStudentOwner, IsMentorOrReviewerOrAdmin, IsStudentReadOnly
+)
+
 
 # ----------------------------
 # Custom Filter Backends
@@ -653,3 +663,34 @@ class ReviewFolderViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         serializer.save(updated_by=self.request.user)    
+
+
+class ChatRoomList(generics.ListAPIView):
+    serializer_class = ChatRoomSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_student:
+            try:
+                student = Student.objects.get(user=user)
+                return ChatRoom.objects.filter(student=student)
+            except Student.DoesNotExist:
+                return ChatRoom.objects.none()
+        elif user.is_mentor:
+            try:
+                mentor = Mentor.objects.get(user=user)
+                return ChatRoom.objects.filter(mentor=mentor)
+            except Mentor.DoesNotExist:
+                return ChatRoom.objects.none()
+        return ChatRoom.objects.none()
+
+
+class ChatMessageList(generics.ListAPIView):
+    serializer_class = ChatMessageSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        room_id = self.kwargs['room_id']
+        return ChatMessage.objects.filter(room_id=room_id).order_by('timestamp')
+    

@@ -7,7 +7,12 @@ from django.db import IntegrityError
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
 from rest_framework import serializers
-from .models import User, Student, Mentor, Reviewer, Course, Module, Day, Task, Batch, StudentModule, ContactMessage, StudentWeekReview, WeekUpdate, ReviewFolder
+from .models import (
+    User, Student, Mentor, Reviewer, Course, Module, Day, Task, Batch,
+    StudentModule, ContactMessage, StudentWeekReview, WeekUpdate, ReviewFolder,
+    ChatRoom, ChatMessage   
+)
+
 
 def generate_random_password(length=10):
     alphabet = string.ascii_letters + string.digits
@@ -306,3 +311,41 @@ class ReviewFolderSerializer(serializers.ModelSerializer):
         model = ReviewFolder
         fields = '__all__'
         read_only_fields = ['id', 'created_at', 'updated_at', 'created_by', 'updated_by', 'student_name']
+
+
+# # ========== CHAT SERIALIZERS ==========
+class ChatMessageSerializer(serializers.ModelSerializer):
+    sender_name = serializers.CharField(source='sender.username', read_only=True)
+
+    class Meta:
+        model = ChatMessage
+        fields = ['id', 'sender', 'sender_name', 'content', 'is_read', 'timestamp']
+
+
+class ChatRoomSerializer(serializers.ModelSerializer):
+    student_name = serializers.CharField(source='student.user.username', read_only=True)
+    mentor_name = serializers.CharField(source='mentor.user.username', read_only=True)
+    last_message = serializers.SerializerMethodField()
+    unread_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ChatRoom
+        fields = ['id', 'student_name', 'mentor_name', 'created_at', 'last_message', 'unread_count']
+
+    def get_last_message(self, obj):
+        msg = obj.messages.last()
+        if msg:
+            return {
+                'content': msg.content,
+                'timestamp': msg.timestamp.isoformat(),
+                'sender_id': msg.sender_id,
+            }
+        return None
+
+    def get_unread_count(self, obj):
+        request = self.context.get('request')
+        if not request:
+            return 0
+        user = request.user
+        return obj.messages.filter(is_read=False).exclude(sender=user).count()
+    

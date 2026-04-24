@@ -31,18 +31,13 @@ class IsAdminOrReadOnly(permissions.BasePermission):
         return request.user and request.user.is_authenticated and request.user.is_admin
 
 class IsMentorOrReviewerOrAdmin(permissions.BasePermission):
-    """Allows full access to mentors, reviewers, and admins."""
     def has_permission(self, request, view):
         return request.user.is_authenticated and (
             request.user.is_mentor or request.user.is_reviewer or request.user.is_admin
         )
 
 class IsStudentReadOnly(permissions.BasePermission):
-    """Students can only view their own folders, no write access."""
-    def has_permission(self, request, view):
-        return request.user.is_authenticated and request.user.is_student
-
     def has_object_permission(self, request, view, obj):
-        # The student can only see their own folder
-        return obj.student.user == request.user    
-
+        if request.method in permissions.SAFE_METHODS:
+            return obj.student.user == request.user
+        return False
