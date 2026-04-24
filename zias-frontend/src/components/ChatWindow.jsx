@@ -13,7 +13,9 @@ const ChatWindow = ({ room }) => {
 
   useEffect(() => {
     if (!room) return;
-    api.get(`/chat-rooms/${room.id}/messages/`).then(res => setMessages(res.data));
+    api.get(`/chat-rooms/${room.id}/messages/`)
+      .then(res => setMessages(res.data))
+      .catch(err => console.error(err));
   }, [room]);
 
   useEffect(() => {
@@ -22,7 +24,6 @@ const ChatWindow = ({ room }) => {
 
     socket.on('receive_message', (msg) => {
       setMessages(prev => [...prev, msg]);
-      // if message is from other, mark as read
       if (msg.sender_id !== user.id) {
         socket.emit('mark_read', { room_id: room.id });
       }
@@ -30,13 +31,9 @@ const ChatWindow = ({ room }) => {
     socket.on('user_typing', ({ user_id, is_typing }) => {
       if (user_id !== user.id) setOtherTyping(is_typing);
     });
-    socket.on('read_receipt', ({ user_id }) => {
-      // optional: update read status in UI
-    });
     return () => {
       socket.off('receive_message');
       socket.off('user_typing');
-      socket.off('read_receipt');
     };
   }, [socket, room, user.id]);
 
@@ -63,18 +60,15 @@ const ChatWindow = ({ room }) => {
 
   return (
     <div className="flex flex-col h-full bg-gray-50">
-      {/* Header */}
       <div className="bg-white border-b px-4 py-3 flex items-center shadow-sm">
-        <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center text-white font-bold">
-          {room.other_user_name?.charAt(0).toUpperCase()}
+        <div className="w-10 h-10 rounded-full bg-green-600 flex items-center justify-center text-white font-bold text-lg">
+          {room.other_user_name?.charAt(0).toUpperCase() || '?'}
         </div>
         <div className="ml-3">
           <div className="font-semibold text-gray-800">{room.other_user_name}</div>
-          <div className="text-xs text-gray-400">Online (placeholder)</div>
         </div>
       </div>
 
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-2">
         {messages.map(msg => {
           const isMine = msg.sender_id === user.id;
@@ -89,13 +83,10 @@ const ChatWindow = ({ room }) => {
             </div>
           );
         })}
-        {otherTyping && (
-          <div className="text-gray-500 text-sm italic ml-2">Typing...</div>
-        )}
+        {otherTyping && <div className="text-gray-500 text-sm italic">Typing...</div>}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
       <div className="bg-white border-t p-3 flex gap-2">
         <input
           className="flex-1 border rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"

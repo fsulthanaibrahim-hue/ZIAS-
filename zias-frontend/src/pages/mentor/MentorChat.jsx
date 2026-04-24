@@ -1,13 +1,13 @@
-import { useState } from 'react';
-import ChatList from '../../components/ChatList';
-import ChatWindow from '../../components/ChatWindow';
+import { useState } from "react";
+import ChatList from "../../components/ChatList";
+import ChatWindow from "../../components/ChatWindow";
 
 const MentorChat = () => {
   const [selectedRoom, setSelectedRoom] = useState(null);
 
   return (
-    <div className="flex h-full w-full">
-      <div className="w-96 border-r border-gray-200 bg-white">
+    <div className="flex h-screen w-full">
+      <div className="w-96 border-r border-gray-200">
         <ChatList onSelectRoom={setSelectedRoom} selectedRoomId={selectedRoom?.id} />
       </div>
       <div className="flex-1">
