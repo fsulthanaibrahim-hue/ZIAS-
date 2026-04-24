@@ -5,6 +5,7 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.filters import BaseFilterBackend
 from rest_framework import generics
+from rest_framework.parsers import JSONParser
 from django.utils import timezone
 from django.utils.crypto import get_random_string
 from datetime import timedelta
@@ -681,19 +682,12 @@ class ChatRoomList(generics.ListAPIView):
     def get_queryset(self):
         user = self.request.user
         if user.is_student:
-            try:
-                student = Student.objects.get(user=user)
-                return ChatRoom.objects.filter(student=student)
-            except Student.DoesNotExist:
-                return ChatRoom.objects.none()
+            student = Student.objects.get(user=user)
+            return ChatRoom.objects.filter(student=student)
         elif user.is_mentor:
-            try:
-                mentor = Mentor.objects.get(user=user)
-                return ChatRoom.objects.filter(mentor=mentor)
-            except Mentor.DoesNotExist:
-                return ChatRoom.objects.none()
+            mentor = Mentor.objects.get(user=user)
+            return ChatRoom.objects.filter(mentor=mentor)
         return ChatRoom.objects.none()
-
 
 class ChatMessageList(generics.ListAPIView):
     serializer_class = ChatMessageSerializer
@@ -702,4 +696,19 @@ class ChatMessageList(generics.ListAPIView):
     def get_queryset(self):
         room_id = self.kwargs['room_id']
         return ChatMessage.objects.filter(room_id=room_id).order_by('timestamp')
+
+class CreateMessageView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        room_id = request.data.get('room_id')
+        content = request.data.get('content')
+        room = ChatRoom.objects.get(id=room_id)
+        message = ChatMessage.objects.create(
+            room=room,
+            sender=request.user,
+            content=content
+        )
+        serializer = ChatMessageSerializer(message)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
     

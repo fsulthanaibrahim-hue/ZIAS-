@@ -1,10 +1,8 @@
-// src/context/SocketContext.jsx
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import io from 'socket.io-client';
 import { useAuth } from './AuthContext';
 
 const SocketContext = createContext();
-
 export const useSocket = () => useContext(SocketContext);
 
 export const SocketProvider = ({ children }) => {
@@ -13,7 +11,7 @@ export const SocketProvider = ({ children }) => {
 
   useEffect(() => {
     if (!user || !token) return;
-    const newSocket = io('ws://localhost:8000/ws/chat/', {
+    const newSocket = io('http://localhost:3001', {
       query: { token },
       transports: ['websocket'],
     });
