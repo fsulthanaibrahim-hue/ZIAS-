@@ -706,12 +706,13 @@ class CreateMessageView(APIView):
     def post(self, request):
         room_id = request.data.get('room_id')
         content = request.data.get('content')
-        room = ChatRoom.objects.get(id=room_id)
-        message = ChatMessage.objects.create(
-            room=room,
-            sender=request.user,
-            content=content
-        )
+        if not room_id or not content:
+            return Response({"error": "room_id and content required"}, status=400)
+        try:
+            room = ChatRoom.objects.get(id=room_id)
+        except ChatRoom.DoesNotExist:
+            return Response({"error": "Room not found"}, status=404)
+        message = ChatMessage.objects.create(room=room, sender=request.user, content=content)
         serializer = ChatMessageSerializer(message)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-    
+        return Response(serializer.data, status=201)
+
