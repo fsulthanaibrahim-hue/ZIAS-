@@ -1,22 +1,20 @@
-// src/components/StudentSidebar.jsx
+// src/components/ReviewerSidebar.jsx
 import { Link, useLocation } from "react-router-dom";
 
-function StudentSidebar() {
+function ReviewerSidebar() {
   const location = useLocation();
   const isActive = (path) => location.pathname === path;
 
   const navItems = [
-    { path: "/student/dashboard", label: "Dashboard", icon: "🏠" },
-    { path: "/student/review-sheet", label: "Review Sheet", icon: "📋" },
-    { path: "/student/modules", label: "Modules", icon: "📦" },
-    { path: "/student/chat", label: "Chat", icon: "💬" },   // 👈 new chat link
-    { path: "/student/profile", label: "Profile", icon: "👤" },
+    { path: "/reviewer/dashboard", label: "Dashboard", icon: "🏠" },
+    { path: "/reviewer/chat", label: "Chat", icon: "💬" },
+    { path: "/reviewer/profile", label: "Profile", icon: "👤" },
   ];
 
   return (
     <aside className="w-64 bg-white border-r border-gray-200 flex-shrink-0 h-screen sticky top-0 overflow-y-auto">
       <div className="p-4 border-b border-gray-200">
-        <h2 className="text-xl font-bold text-gray-800">Student Panel</h2>
+        <h2 className="text-xl font-bold text-gray-800">Reviewer Panel</h2>
       </div>
       <nav className="p-4 space-y-1">
         {navItems.map((item) => (
@@ -38,4 +36,4 @@ function StudentSidebar() {
   );
 }
 
-export default StudentSidebar;
+export default ReviewerSidebar;

@@ -67,6 +67,7 @@ class Student(models.Model):
     parent_name = models.CharField(max_length=100, blank=True, null=True)
     parent_phone = models.CharField(max_length=15, blank=True, null=True)
     emergency_contact = models.CharField(max_length=15, blank=True, null=True)
+    reviewer = models.ForeignKey('Reviewer', on_delete=models.SET_NULL, null=True, blank=True, related_name='students')
 
     def __str__(self):
         return self.user.username

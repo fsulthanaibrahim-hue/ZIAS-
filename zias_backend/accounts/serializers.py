@@ -154,6 +154,7 @@ class StudentSerializer(serializers.ModelSerializer):
         instance.parent_name = validated_data.get('parent_name', instance.parent_name)
         instance.parent_phone = validated_data.get('parent_phone', instance.parent_phone)
         instance.emergency_contact = validated_data.get('emergency_contact', instance.emergency_contact)
+        instance.mentor = validated_data.get('mentor', instance.mentor)
         instance.save()
         # Update user if needed
         user_data = validated_data.pop('user', None)
@@ -194,8 +195,27 @@ class MentorSerializer(serializers.ModelSerializer):
             user.is_mentor = True
             user.password_changed_at = timezone.now()
             user.save()
+
         if Mentor.objects.filter(user=user).exists():
             raise serializers.ValidationError({"username": "This user already has a mentor profile."})
+        
+        # ---------- Send email ----------
+        expiry_days = settings.PASSWORD_EXPIRY_DAYS
+        domain = getattr(settings, 'SITE_DOMAIN', 'localhost:5173')
+        context = {
+            'username': username,
+            'password': random_password,
+            'expiry_days': expiry_days,
+            'domain': domain
+        }
+        try:
+            html_message = render_to_string('mail.html', context)
+            plain_message = strip_tags(html_message)
+            subject = '🎓 Welcome to ZIAS – Your Mentor Account Credentials'
+            send_mail(subject, plain_message, settings.DEFAULT_FROM_EMAIL, [email], html_message=html_message, fail_silently=False)
+        except Exception as e:
+            print(f"Email sending failed: {e}")
+
         return Mentor.objects.create(user=user, **validated_data)
     def update(self, instance, validated_data):
         # Explicitly update all mentor fields
@@ -243,6 +263,49 @@ class ReviewerSerializer(serializers.ModelSerializer):
             user.save()
         if Reviewer.objects.filter(user=user).exists():
             raise serializers.ValidationError({"username": "This user already has a reviewer profile."})
+        
+        # In accounts/serializers.py, inside MentorSerializer
+def create(self, validated_data):
+    user_data = validated_data.pop('user')
+    username = user_data['username']
+    email = user_data['email']
+    random_password = generate_random_password()
+    try:
+        user = User.objects.get(username=username)
+        if user.email != email:
+            user.email = email
+        if not user.is_mentor:
+            user.is_mentor = True
+        if not user.password_changed_at:
+            user.password_changed_at = timezone.now()
+        user.save()
+    except User.DoesNotExist:
+        user = User.objects.create_user(username=username, email=email, password=random_password)
+        user.is_mentor = True
+        user.password_changed_at = timezone.now()
+        user.save()
+
+    if Mentor.objects.filter(user=user).exists():
+        raise serializers.ValidationError({"username": "This user already has a mentor profile."})
+
+    # ---------- Send email ----------
+    expiry_days = settings.PASSWORD_EXPIRY_DAYS
+    domain = getattr(settings, 'SITE_DOMAIN', 'localhost:5173')
+    context = {
+        'username': username,
+        'password': random_password,
+        'expiry_days': expiry_days,
+        'domain': domain
+    }
+    try:
+        html_message = render_to_string('mail.html', context)
+        plain_message = strip_tags(html_message)
+        subject = '🎓 Welcome to ZIAS – Your Mentor Account Credentials'
+        send_mail(subject, plain_message, settings.DEFAULT_FROM_EMAIL, [email], html_message=html_message, fail_silently=False)
+    except Exception as e:
+        print(f"Email sending failed: {e}")
+    # ---------------------------------
+
         return Reviewer.objects.create(user=user, **validated_data)
     def update(self, instance, validated_data):
         # Explicitly update all reviewer fields
@@ -329,11 +392,16 @@ class ChatRoomSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ChatRoom
-        fields = ['id', 'name', 'room_type', 'last_message', 'unread_count', 'other_user_name', 'other_user_id', 'other_user_type', 'created_at']
+        fields = ['id', 'name', 'room_type', 'last_message', 'unread_count', 
+                  'other_user_name', 'other_user_id', 'other_user_type', 'created_at']
 
     def get_last_message(self, obj):
         msg = obj.messages.last()
-        return ChatMessageSerializer(msg).data if msg else None
+        return {
+            'content': msg.content,
+            'timestamp': msg.timestamp.isoformat(),
+            'sender_id': msg.sender_id,
+        } if msg else None
 
     def get_unread_count(self, obj):
         user = self.context['request'].user
@@ -342,30 +410,57 @@ class ChatRoomSerializer(serializers.ModelSerializer):
     def get_other_user_name(self, obj):
         user = self.context['request'].user
         if user.is_student:
-            return obj.mentor.user.username if obj.mentor else obj.reviewer.user.username
+            if obj.mentor:
+                return obj.mentor.user.username
+            if obj.reviewer:
+                return obj.reviewer.user.username
         elif user.is_mentor:
-            return obj.student.user.username if obj.student else obj.reviewer.user.username
+            if obj.student:
+                return obj.student.user.username
+            if obj.reviewer:
+                return obj.reviewer.user.username
         elif user.is_reviewer:
-            return obj.student.user.username if obj.student else obj.mentor.user.username
-        return ""
+            if obj.student:
+                return obj.student.user.username
+            if obj.mentor:
+                return obj.mentor.user.username
+        return "Unknown"
 
     def get_other_user_id(self, obj):
         user = self.context['request'].user
         if user.is_student:
-            return obj.mentor.id if obj.mentor else obj.reviewer.id
+            if obj.mentor:
+                return obj.mentor.id
+            if obj.reviewer:
+                return obj.reviewer.id
         elif user.is_mentor:
-            return obj.student.id if obj.student else obj.reviewer.id
+            if obj.student:
+                return obj.student.id
+            if obj.reviewer:
+                return obj.reviewer.id
         elif user.is_reviewer:
-            return obj.student.id if obj.student else obj.mentor.id
+            if obj.student:
+                return obj.student.id
+            if obj.mentor:
+                return obj.mentor.id
         return None
 
     def get_other_user_type(self, obj):
         user = self.context['request'].user
         if user.is_student:
-            return 'mentor' if obj.mentor else 'reviewer'
+            if obj.mentor:
+                return 'mentor'
+            if obj.reviewer:
+                return 'reviewer'
         elif user.is_mentor:
-            return 'student' if obj.student else 'reviewer'
+            if obj.student:
+                return 'student'
+            if obj.reviewer:
+                return 'reviewer'
         elif user.is_reviewer:
-            return 'student' if obj.student else 'mentor'
+            if obj.student:
+                return 'student'
+            if obj.mentor:
+                return 'mentor'
         return ''
     

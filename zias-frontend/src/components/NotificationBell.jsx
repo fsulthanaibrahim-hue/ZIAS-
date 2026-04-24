@@ -6,7 +6,7 @@ import API from "../api/api";
 function NotificationBell() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
-  const wsRef = useRef(null);
+  const intervalRef = useRef(null);
   const fetched = useRef(false);
 
   const fetchUnreadCount = async () => {
@@ -21,48 +21,16 @@ function NotificationBell() {
     }
   };
 
-  const setupWebSocket = () => {
-    const token = localStorage.getItem("access_token");
-    if (!token) return;
-    const wsUrl = `ws://localhost:8000/ws/notifications/?token=${token}`;
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      console.log("Notification WebSocket connected");
-    };
-
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.type === "unread_count") {
-        setUnreadCount(data.count);
-      } else if (data.type === "new_notification") {
-        setUnreadCount(data.unread_count);
-      }
-    };
-
-    ws.onerror = (error) => {
-      console.error("WebSocket error:", error);
-    };
-
-    ws.onclose = () => {
-      console.log("Notification WebSocket disconnected");
-      setTimeout(setupWebSocket, 5000);
-    };
-  };
-
   useEffect(() => {
     if (fetched.current) return;
     fetched.current = true;
     fetchUnreadCount();
-    setupWebSocket();
-  }, []);
 
-  useEffect(() => {
+    // Poll every 30 seconds to keep count fresh
+    intervalRef.current = setInterval(fetchUnreadCount, 30000);
+
     return () => {
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        wsRef.current.close();
-      }
+      if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, []);
 

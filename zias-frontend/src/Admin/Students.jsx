@@ -8,10 +8,10 @@ function Toast({ message, type, onClose }) {
     return () => clearTimeout(timer);
   }, [onClose]);
 
-  const bgColor = type === "success" 
-    ? "bg-green-600" 
-    : type === "error" 
-    ? "bg-red-600" 
+  const bgColor = type === "success"
+    ? "bg-green-600"
+    : type === "error"
+    ? "bg-red-600"
     : "bg-gray-600";
   const icon = type === "success" ? "✓" : type === "error" ? "✕" : "ℹ";
 
@@ -145,7 +145,6 @@ function Students() {
     }
   };
 
-  // Auto-calculate age from date_of_birth
   useEffect(() => {
     if (formData.date_of_birth) {
       const birthDate = new Date(formData.date_of_birth);
@@ -190,8 +189,8 @@ function Students() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // Validate all phone fields
+
+    // Validate phone fields
     let hasError = false;
     const phoneFields = [
       { field: 'phone', errorSetter: setPhoneError, label: 'Student phone' },
@@ -211,17 +210,18 @@ function Students() {
       }
     }
     if (hasError) return;
-    
+
+    // Build payload – convert mentor to number if present
     const payload = {
       username: formData.username.trim(),
-      full_name: formData.full_name || null,
+      full_name: formData.full_name ? formData.full_name.trim() : null,
       email: formData.email,
       course: formData.course,
       batch: formData.batch,
-      mentor: formData.mentor || null,
-      phone: formData.phone,
+      mentor: formData.mentor ? parseInt(formData.mentor) : null,
+      phone: formData.phone || null,
       date_of_birth: formData.date_of_birth || null,
-      age: formData.age || null,
+      age: formData.age ? parseInt(formData.age) : null,
       gender: formData.gender || null,
       fathers_name: formData.fathers_name || null,
       fathers_contact: formData.fathers_contact || null,
@@ -234,7 +234,7 @@ function Students() {
       parent_phone: formData.parent_phone || null,
       emergency_contact: formData.emergency_contact || null,
     };
-    
+
     try {
       if (editingId) {
         await API.patch(`students/${editingId}/`, payload);
@@ -258,10 +258,13 @@ function Students() {
       fetchStudents();
       setCurrentPage(1);
     } catch (error) {
+      console.error("API error:", error);
       if (error.response) {
+        console.error("Response data:", error.response.data);
         const errorMsg = Object.values(error.response.data).flat().join(", ");
         showToast(`Error: ${errorMsg || error.response.statusText}`, "error");
-        console.error(error.response.data);
+      } else if (error.request) {
+        showToast("No response from server", "error");
       } else {
         showToast(error.message, "error");
       }
@@ -276,7 +279,7 @@ function Students() {
       email: student.email,
       course: student.course,
       batch: student.batch,
-      mentor: student.mentor || "",
+      mentor: student.mentor ? student.mentor.toString() : "",
       phone: student.phone || "",
       date_of_birth: student.date_of_birth || "",
       age: student.age || "",

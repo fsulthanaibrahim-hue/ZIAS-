@@ -49,17 +49,29 @@ def send_notification_via_channels(sender, instance, created, **kwargs):
             }
         )
 
+
+# -------------------------------------------------------------------
+# Signal 3: Auto‑create chat rooms when a Student is saved
+# -------------------------------------------------------------------
 @receiver(post_save, sender=Student)
 def create_chat_rooms(sender, instance, created, **kwargs):
+    """
+    Automatically create a student‑mentor chat room when a student has a mentor,
+    and a student‑reviewer chat room when a student has a reviewer (if the
+    reviewer field exists on the Student model).
+    """
     if instance.mentor:
         ChatRoom.objects.get_or_create(
             student=instance,
             mentor=instance.mentor,
             room_type='student_mentor'
         )
-    if instance.reviewer:
+    
+    # Only create student‑reviewer room if the Student model has a 'reviewer' field
+    if hasattr(instance, 'reviewer') and instance.reviewer:
         ChatRoom.objects.get_or_create(
             student=instance,
             reviewer=instance.reviewer,
             room_type='student_reviewer'
         )
+        

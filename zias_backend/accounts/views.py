@@ -692,6 +692,8 @@ class ChatRoomList(generics.ListAPIView):
             return ChatRoom.objects.filter(reviewer=reviewer)
         return ChatRoom.objects.none()
 
+
+
 class ChatMessageList(generics.ListAPIView):
     serializer_class = ChatMessageSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -699,6 +701,8 @@ class ChatMessageList(generics.ListAPIView):
     def get_queryset(self):
         room_id = self.kwargs['room_id']
         return ChatMessage.objects.filter(room_id=room_id).order_by('timestamp')
+
+
 
 class CreateMessageView(APIView):
     permission_classes = [IsAuthenticated]

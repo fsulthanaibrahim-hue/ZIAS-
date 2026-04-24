@@ -18,6 +18,8 @@ import StudentChat from "./pages/student/StudentChat";
 // Reviewer pages
 import ReviewerDashboard from "./pages/reviewer/ReviewerDashboard";
 import ReviewerProfile from "./pages/reviewer/ReviewerProfile";
+import ReviewerChat from "./pages/reviewer/ReviewerChat";
+import ReviewerSidebar from "./components/ReviewerSidebar";
 // Mentor pages
 import MentorDashboard from "./pages/mentor/MentorDashboard";
 import MentorProfile from "./pages/mentor/MentorProfile";
@@ -39,7 +41,7 @@ import ContactMessages from "./Admin/ContactMessages";
 import Batches from "./Admin/Batches";
 import ReviewSheets from "./Admin/ReviewSheets";
 import StudentReviewEdit from "./Admin/StudentReviewEdit";
-import AdminProfile from "./Admin/AdminProfile";   // 👈 new import
+import AdminProfile from "./Admin/AdminProfile";
 // Common pages
 import Navbar from "./components/Navbar";
 import Home from "./pages/Home";
@@ -127,9 +129,17 @@ function App() {
       {/* Generic change password route */}
       <Route path="/change-password" element={<PrivateRoute><ChangePassword /></PrivateRoute>} />
 
-      {/* Reviewer routes */}
+      {/* Reviewer routes with sidebar */}
       <Route path="/reviewer/dashboard" element={<PrivateRoute><ReviewerDashboard /></PrivateRoute>} />
       <Route path="/reviewer/profile" element={<PrivateRoute><ReviewerProfile /></PrivateRoute>} />
+      <Route path="/reviewer/chat" element={
+        <PrivateRoute>
+          <div style={{ display: "flex" }}>
+            <ReviewerSidebar />
+            <ReviewerChat />
+          </div>
+        </PrivateRoute>
+      } />
 
       {/* Mentor routes with sidebar */}
       <Route path="/mentor/dashboard" element={
@@ -208,7 +218,7 @@ function App() {
       <Route path="/admin/batches" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Batches /></div></AdminRoute>} />
       <Route path="/admin/review-sheets" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><ReviewSheets /></div></AdminRoute>} />
       <Route path="/admin/student-review-edit" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><StudentReviewEdit /></div></AdminRoute>} />
-      <Route path="/admin/profile" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><AdminProfile /></div></AdminRoute>} />   {/* 👈 new route */}
+      <Route path="/admin/profile" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><AdminProfile /></div></AdminRoute>} />
 
       {/* 404 page */}
       <Route path="*" element={
