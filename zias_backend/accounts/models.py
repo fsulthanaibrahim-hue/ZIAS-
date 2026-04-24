@@ -275,6 +275,7 @@ class ReviewFolder(models.Model):
     time_ended = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    is_done = models.BooleanField(default=False)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='created_review_folders')
     updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='updated_review_folders')
 
