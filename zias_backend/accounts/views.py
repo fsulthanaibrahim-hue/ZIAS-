@@ -16,14 +16,14 @@ from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
 
 from .models import (
     User, Student, Mentor, Reviewer, Course, Module, Day, Task, Batch,
-    StudentModule, PasswordResetToken, ContactMessage, StudentWeekReview, WeekUpdate
+    StudentModule, PasswordResetToken, ContactMessage, StudentWeekReview, WeekUpdate, ReviewFolder
 )
 from .serializers import (
     StudentSerializer, MentorSerializer, ReviewerSerializer, UserSerializer,
     CourseSerializer, ModuleSerializer, DaySerializer, TaskSerializer, BatchSerializer,
-    ContactMessageSerializer, StudentModuleSerializer, StudentWeekReviewSerializer, WeekUpdateSerializer
+    ContactMessageSerializer, StudentModuleSerializer, StudentWeekReviewSerializer, WeekUpdateSerializer, ReviewFolderSerializer
 )
-from .permissions import IsAdminUser, IsAdminOrReadOnly, IsStudentOwner
+from .permissions import IsAdminUser, IsAdminOrReadOnly, IsStudentOwner, IsMentorOrReviewerOrAdmin, IsStudentReadOnly
 
 # ----------------------------
 # Custom Filter Backends
@@ -624,3 +624,32 @@ class WeekUpdateViewSet(viewsets.ModelViewSet):
     queryset = WeekUpdate.objects.all()
     serializer_class = WeekUpdateSerializer
     permission_classes = [IsAuthenticated]
+
+class ReviewFolderViewSet(viewsets.ModelViewSet):
+    serializer_class = ReviewFolderSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        # Full access for mentors, reviewers, admins
+        if user.is_mentor or user.is_reviewer or user.is_admin:
+            return ReviewFolder.objects.all()
+        # Students see only their own folders
+        elif user.is_student:
+            return ReviewFolder.objects.filter(student__user=user)
+        return ReviewFolder.objects.none()
+
+    def get_permissions(self):
+        if self.request.method in ['POST', 'PUT', 'PATCH', 'DELETE']:
+            # Write access only for mentors/reviewers/admins
+            self.permission_classes = [IsMentorOrReviewerOrAdmin]
+        else:
+            # Reads: everyone (but students are already filtered by get_queryset)
+            self.permission_classes = [IsAuthenticated]
+        return super().get_permissions()
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user, updated_by=self.request.user)
+
+    def perform_update(self, serializer):
+        serializer.save(updated_by=self.request.user)    

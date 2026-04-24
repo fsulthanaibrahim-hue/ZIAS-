@@ -9,7 +9,7 @@ from .views import (
     ContactMessageView, UnreadMessagesCountView, RecentMessagesView, ContactMessageDetailView,
     CustomLoginView, LogoutView, UpdateDashboardAccessView,
     CompleteModuleView, StudentWeekReviewView, StudentListView, WeeklyToppersView,
-    WeekUpdateViewSet
+    WeekUpdateViewSet, ReviewFolderViewSet   # 👈 added ReviewFolderViewSet
 )
 
 router = DefaultRouter()
@@ -23,6 +23,7 @@ router.register('tasks', TaskViewSet)
 router.register('batches', BatchViewSet)
 router.register('student-modules', StudentModuleViewSet, basename='student-module')
 router.register('week-updates', WeekUpdateViewSet, basename='week-update')
+router.register('review-folders', ReviewFolderViewSet, basename='review-folder')   # 👈 new router registration
 
 urlpatterns = [
     path('api/students/list/', StudentListView.as_view(), name='student-list'),

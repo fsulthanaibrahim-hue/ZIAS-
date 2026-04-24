@@ -7,7 +7,7 @@ from django.db import IntegrityError
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
 from rest_framework import serializers
-from .models import User, Student, Mentor, Reviewer, Course, Module, Day, Task, Batch, StudentModule, ContactMessage, StudentWeekReview, WeekUpdate
+from .models import User, Student, Mentor, Reviewer, Course, Module, Day, Task, Batch, StudentModule, ContactMessage, StudentWeekReview, WeekUpdate, ReviewFolder
 
 def generate_random_password(length=10):
     alphabet = string.ascii_letters + string.digits
@@ -293,3 +293,20 @@ class WeekUpdateSerializer(serializers.ModelSerializer):
         model = WeekUpdate
         fields = '__all__'
         read_only_fields = ['id', 'update_date']
+
+# ----------------------------
+# REVIEW FOLDER SERIALIZER
+# ----------------------------
+
+class ReviewFolderSerializer(serializers.ModelSerializer):
+    student_name = serializers.CharField(source='student.user.username', read_only=True)
+    review_status = serializers.ReadOnlyField()
+
+    class Meta:
+        model = ReviewFolder
+        fields = [
+            'id', 'student', 'student_name', 'week_folder', 'week', 'review_date',
+            'work_documents', 'industry_expert', 'meeting_link', 'review_sheet',
+            'time_started', 'time_ended', 'review_status', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at', 'created_by', 'updated_by']

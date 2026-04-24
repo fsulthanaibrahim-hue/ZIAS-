@@ -259,3 +259,35 @@ class WeekUpdate(models.Model):
 
     def __str__(self):
         return f"Update for {self.week_review}"
+
+
+
+class ReviewFolder(models.Model):
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='review_folders')
+    week_folder = models.CharField(max_length=100, blank=True, null=True)   # 👈 new
+    week = models.CharField(max_length=100, blank=True)                     # 👈 allow blank
+    review_date = models.DateField()
+    work_documents = models.URLField(blank=True, null=True)
+    industry_expert = models.CharField(max_length=200, blank=True, null=True)
+    meeting_link = models.CharField(max_length=500, blank=True, null=True)
+    review_sheet = models.URLField(blank=True, null=True)
+    time_started = models.DateTimeField(blank=True, null=True)
+    time_ended = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='created_review_folders')
+    updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='updated_review_folders')
+
+    class Meta:
+        ordering = ['-review_date', 'week_folder', 'student__user__username']
+
+    def __str__(self):
+        return f"{self.week_folder or 'No folder'} – {self.student.user.username}"
+
+    @property
+    def review_status(self):
+        required = [self.work_documents, self.industry_expert, self.meeting_link, self.review_sheet]
+        if any(not f for f in required):
+            return "Pending"
+        return "Done"
+    
