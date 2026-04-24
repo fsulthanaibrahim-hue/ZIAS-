@@ -37,30 +37,29 @@ function MentorProfile() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState({ text: "", type: "" });
   const navigate = useNavigate();
-  const mountedRef = useRef(true);
+  const hasFetched = useRef(false);   // prevent duplicate fetch
 
   useEffect(() => {
-    mountedRef.current = true;
+    if (hasFetched.current) return;
+    hasFetched.current = true;
+
     const fetchProfile = async () => {
       try {
         const res = await API.get("users/me/");
-        if (mountedRef.current) setUser(res.data);
+        setUser(res.data);
       } catch (err) {
         console.error(err);
-        if (mountedRef.current) {
-          setMessage({
-            text: err.response?.status === 404
-              ? "User profile not found. Please contact admin."
-              : "Failed to load profile.",
-            type: "error",
-          });
-        }
+        setMessage({
+          text: err.response?.status === 404
+            ? "User profile not found. Please contact admin."
+            : "Failed to load profile.",
+          type: "error",
+        });
       } finally {
-        if (mountedRef.current) setLoading(false);
+        setLoading(false);
       }
     };
     fetchProfile();
-    return () => { mountedRef.current = false; };
   }, []);
 
   const handleLogout = () => {
@@ -166,7 +165,7 @@ function MentorProfile() {
 
 const s = {
   page: {
-    width: "100%",               // Take full width of parent (main)
+    width: "100%",
     minHeight: "100vh",
     display: "flex",
     alignItems: "center",

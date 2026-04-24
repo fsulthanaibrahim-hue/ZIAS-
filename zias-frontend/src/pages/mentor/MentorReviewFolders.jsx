@@ -1,5 +1,5 @@
 // src/pages/mentor/MentorReviewFolders.jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import API from "../../api/api";
 
 function Toast({ message, type, onClose }) {
@@ -45,6 +45,7 @@ function MentorReviewFolders() {
 
   const industryExperts = ["Akif Sir", "Rizan Sir", "Prameesh Sir"];
 
+  const hasFetched = useRef(false);   // prevent duplicate initial fetches
 
   const showToast = (message, type = "success") => setToast({ message, type });
   const hideToast = () => setToast(null);
@@ -63,8 +64,11 @@ function MentorReviewFolders() {
   };
 
   useEffect(() => {
-    fetchStudents();
-    fetchAllFolders();
+    if (!hasFetched.current) {
+      hasFetched.current = true;
+      fetchStudents();
+      fetchAllFolders();
+    }
   }, []);
 
   const fetchStudents = async () => {
@@ -114,7 +118,7 @@ function MentorReviewFolders() {
     .sort((a, b) => new Date(b.modified) - new Date(a.modified));
 
   const rawEntries = selectedFolder ? foldersMap[selectedFolder]?.entries || [] : [];
-  const uniqueWeeks = [...new Set(rawEntries.map(e => e.week).filter(w => w))].sort();
+  const uniqueWeeks = [...new Set(rawEntries.map(e => e.week).filter(w => w))].sort().reverse(); // newest first
   const filteredEntries = rawEntries.filter(entry => {
     if (!searchTerm && !selectedWeek) return true;
     const matchesSearch = !searchTerm || 
@@ -273,7 +277,7 @@ function MentorReviewFolders() {
     }
   };
 
-  // SVG icons
+  // SVG icons (unchanged)
   const EditIcon = () => (
     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -350,7 +354,7 @@ function MentorReviewFolders() {
             </div>
           )}
 
-          {/* Folder list view with search and edit/delete actions */}
+          {/* Folder list view */}
           {!selectedFolder && (
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-x-auto">
               <div className="p-3 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
@@ -449,6 +453,16 @@ function MentorReviewFolders() {
                       </button>
                     )}
                   </div>
+                  <select
+                    value={selectedWeek}
+                    onChange={(e) => setSelectedWeek(e.target.value)}
+                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-green-500"
+                  >
+                    <option value="">All Weeks</option>
+                    {uniqueWeeks.map(week => (
+                      <option key={week} value={week}>{week}</option>
+                    ))}
+                  </select>
                   <button onClick={() => setSelectedFolder(null)} className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium">
                     ← Back
                   </button>

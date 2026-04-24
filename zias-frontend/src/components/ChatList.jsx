@@ -1,54 +1,58 @@
+// src/components/ChatList.jsx
 import React, { useEffect, useState } from 'react';
 import api from '../api';
 import { formatDistanceToNow } from 'date-fns';
 
+// Global cache to avoid duplicate fetches during StrictMode
+let cachedRooms = null;
+let isFetching = false;
+
 const ChatList = ({ onSelectRoom, selectedRoomId }) => {
-  const [rooms, setRooms] = useState([]);
-  const [onlineUsers, setOnlineUsers] = useState({});
+  const [rooms, setRooms] = useState(cachedRooms || []);
+  const [loading, setLoading] = useState(!cachedRooms);
 
   useEffect(() => {
+    if (cachedRooms) {
+      setLoading(false);
+      return;
+    }
+    if (isFetching) return;
+    isFetching = true;
     api.get('/chat-rooms/')
-      .then(res => setRooms(res.data))
-      .catch(err => console.error(err));
+      .then(res => {
+        cachedRooms = res.data;
+        setRooms(cachedRooms);
+      })
+      .catch(err => console.error('Failed to fetch rooms', err))
+      .finally(() => {
+        setLoading(false);
+        isFetching = false;
+      });
   }, []);
 
-  // listen for online status updates (via WebSocket, but can also poll)
-  // simplified: you can add a socket listener in a parent component
+  if (loading) return <div className="p-4">Loading chats...</div>;
+  if (rooms.length === 0) return <div className="p-4 text-gray-500">No chat rooms yet.</div>;
 
   return (
-    <div className="h-full overflow-y-auto bg-white border-r">
-      {rooms.length === 0 && (
-        <div className="p-4 text-gray-500 text-center">No chats yet</div>
-      )}
+    <div className="overflow-y-auto h-full">
       {rooms.map(room => (
         <div
           key={room.id}
           onClick={() => onSelectRoom(room)}
-          className={`flex items-center p-3 cursor-pointer hover:bg-gray-100 transition ${
-            selectedRoomId === room.id ? 'bg-gray-100' : ''
-          }`}
+          className={`p-3 border-b cursor-pointer hover:bg-gray-50 ${selectedRoomId === room.id ? 'bg-gray-100' : ''}`}
         >
-          <div className="w-12 h-12 rounded-full bg-green-500 flex items-center justify-center text-white text-lg font-bold">
-            {room.other_user_name?.charAt(0).toUpperCase() || '?'}
+          <div className="font-medium">{room.other_user_name}</div>
+          <div className="text-sm text-gray-500 truncate">
+            {room.last_message?.content || 'No messages yet'}
           </div>
-          <div className="ml-3 flex-1 overflow-hidden">
-            <div className="flex justify-between">
-              <span className="font-medium text-gray-800">{room.other_user_name}</span>
-              <span className="text-xs text-gray-400">
-                {room.last_message?.timestamp ? formatDistanceToNow(new Date(room.last_message.timestamp), { addSuffix: true }) : ''}
-              </span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-500 truncate">
-                {room.last_message?.content || 'No messages yet'}
-              </span>
-              {room.unread_count > 0 && (
-                <span className="bg-green-600 text-white text-xs rounded-full px-2 py-0.5 ml-2">
-                  {room.unread_count}
-                </span>
-              )}
-            </div>
+          <div className="text-xs text-gray-400">
+            {room.last_message?.timestamp && formatDistanceToNow(new Date(room.last_message.timestamp), { addSuffix: true })}
           </div>
+          {room.unread_count > 0 && (
+            <span className="bg-green-600 text-white text-xs rounded-full px-2 py-0.5 ml-2">
+              {room.unread_count}
+            </span>
+          )}
         </div>
       ))}
     </div>
