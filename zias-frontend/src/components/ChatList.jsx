@@ -1,16 +1,22 @@
-// src/components/ChatList.jsx
 import React, { useEffect, useState } from 'react';
-import api from '../api/api';
+import api from '../api';
 
 const ChatList = ({ onSelectRoom }) => {
   const [rooms, setRooms] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get('/chat-rooms/').then(res => setRooms(res.data));
+    api.get('/chat-rooms/')
+      .then(res => setRooms(res.data))
+      .catch(err => console.error('Failed to fetch rooms', err))
+      .finally(() => setLoading(false));
   }, []);
 
+  if (loading) return <div className="p-4">Loading chats...</div>;
+  if (rooms.length === 0) return <div className="p-4 text-gray-500">No chat rooms yet.</div>;
+
   return (
-    <div className="w-80 bg-white border-r overflow-y-auto">
+    <div className="overflow-y-auto h-full">
       {rooms.map(room => (
         <div
           key={room.id}
@@ -19,13 +25,8 @@ const ChatList = ({ onSelectRoom }) => {
         >
           <div className="font-medium">{room.mentor_name || room.student_name}</div>
           <div className="text-sm text-gray-500 truncate">
-            {room.last_message?.content || 'No messages yet'}
+            {room.last_message || 'No messages yet'}
           </div>
-          {room.unread_count > 0 && (
-            <span className="bg-green-600 text-white text-xs rounded-full px-2 py-0.5 ml-2">
-              {room.unread_count}
-            </span>
-          )}
         </div>
       ))}
     </div>

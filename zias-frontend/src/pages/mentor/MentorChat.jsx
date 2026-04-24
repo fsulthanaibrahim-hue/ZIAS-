@@ -4,24 +4,22 @@ import ChatList from "../../components/ChatList";
 import ChatWindow from "../../components/ChatWindow";
 
 function MentorChat() {
-  const [selectedMentor, setSelectedMentor] = useState(null);
-  const [selectedMentorName, setSelectedMentorName] = useState("");
+  const [selectedRoom, setSelectedRoom] = useState(null);
 
   return (
-    <div className="flex h-screen">
-      <ChatList
-        onSelectMentor={(name, id) => {
-          setSelectedMentorName(name);
-          setSelectedMentor(id);
-        }}
-      />
-      {selectedMentor ? (
-        <ChatWindow mentorId={selectedMentor} mentorName={selectedMentorName} />
-      ) : (
-        <div className="flex-1 flex items-center justify-center text-gray-400">
-          Select a chat
-        </div>
-      )}
+    <div className="flex h-full w-full">
+      <div className="w-80 border-r border-gray-200">
+        <ChatList onSelectRoom={setSelectedRoom} />
+      </div>
+      <div className="flex-1">
+        {selectedRoom ? (
+          <ChatWindow room={selectedRoom} />
+        ) : (
+          <div className="flex items-center justify-center h-full text-gray-400">
+            Select a chat
+          </div>
+        )}
+      </div>
     </div>
   );
 }
