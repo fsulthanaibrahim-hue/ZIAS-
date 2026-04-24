@@ -44,7 +44,8 @@ function getIcon(label) {
       return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}><path d="M2 2h12v12H2V2zm1 1v10h10V3H3zm2 2h6v1H5V5zm0 2h6v1H5V7zm0 2h6v1H5V9z" /></svg>;
     case "Batches":
       return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}><path d="M2 2h12v1H2V2zm0 2h12v1H2V4zm0 2h12v1H2V6zm0 2h12v1H2V8zm0 2h12v1H2v-1zm0 2h12v1H2v-1zM2 0h12v1H2V0z" /></svg>;
-    // Removed "Chat" case
+    case "Profile":
+      return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}><path d="M8 8a3 3 0 100-6 3 3 0 000 6zm-2 1a5 5 0 00-5 5h14a5 5 0 00-5-5H6z" /></svg>;
     default:
       return null;
   }
@@ -63,6 +64,19 @@ function Sidebar() {
     if (linkPath === "/admin/dashboard") return pathname === linkPath;
     return pathname.startsWith(linkPath);
   };
+
+  const navItems = [
+    { path: "/admin/dashboard", label: "Dashboard", badge: "Live" },
+    { path: "/admin/students", label: "Students" },
+    { path: "/admin/mentors", label: "Mentors" },
+    { path: "/admin/reviewers", label: "Reviewers" },
+    { path: "/admin/courses", label: "Courses" },
+    { path: "/admin/modules", label: "Modules" },
+    { path: "/admin/batches", label: "Batches" },
+    { path: "/admin/messages", label: "Messages" },
+    { path: "/admin/review-sheets", label: "Review Sheets" },
+    { path: "/admin/profile", label: "Profile" },   // 👈 new profile link
+  ];
 
   return (
     <aside className="w-64 bg-white border-r border-gray-200 flex flex-col h-screen sticky top-0 font-sans">
@@ -85,19 +99,26 @@ function Sidebar() {
         <div className="text-gray-400 text-[10px] font-semibold uppercase tracking-wider px-3 pb-1">
           Overview
         </div>
-        <NavLink to="/admin/dashboard" label="Dashboard" active={isActive("/admin/dashboard")} badge="Live" />
+        {navItems.slice(0, 1).map((item) => (
+          <NavLink 
+            key={item.path} 
+            to={item.path} 
+            label={item.label} 
+            active={isActive(item.path)} 
+            badge={item.badge}
+          />
+        ))}
         <div className="text-gray-400 text-[10px] font-semibold uppercase tracking-wider px-3 pt-3 pb-1">
           Management
         </div>
-        <NavLink to="/admin/students" label="Students" active={isActive("/admin/students")} />
-        <NavLink to="/admin/mentors" label="Mentors" active={isActive("/admin/mentors")} />
-        <NavLink to="/admin/reviewers" label="Reviewers" active={isActive("/admin/reviewers")} />
-        <NavLink to="/admin/courses" label="Courses" active={isActive("/admin/courses")} />
-        <NavLink to="/admin/modules" label="Modules" active={isActive("/admin/modules")} />
-        <NavLink to="/admin/batches" label="Batches" active={isActive("/admin/batches")} />
-        <NavLink to="/admin/messages" label="Messages" active={isActive("/admin/messages")} />
-        <NavLink to="/admin/review-sheets" label="Review Sheets" active={isActive("/admin/review-sheets")} />
-        {/* Removed Chat link */}
+        {navItems.slice(1).map((item) => (
+          <NavLink 
+            key={item.path} 
+            to={item.path} 
+            label={item.label} 
+            active={isActive(item.path)} 
+          />
+        ))}
       </nav>
 
       <div className="p-4 border-t border-gray-200">

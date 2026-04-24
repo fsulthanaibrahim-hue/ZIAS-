@@ -39,6 +39,7 @@ import ContactMessages from "./Admin/ContactMessages";
 import Batches from "./Admin/Batches";
 import ReviewSheets from "./Admin/ReviewSheets";
 import StudentReviewEdit from "./Admin/StudentReviewEdit";
+import AdminProfile from "./Admin/AdminProfile";   // 👈 new import
 // Common pages
 import Navbar from "./components/Navbar";
 import Home from "./pages/Home";
@@ -207,6 +208,7 @@ function App() {
       <Route path="/admin/batches" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Batches /></div></AdminRoute>} />
       <Route path="/admin/review-sheets" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><ReviewSheets /></div></AdminRoute>} />
       <Route path="/admin/student-review-edit" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><StudentReviewEdit /></div></AdminRoute>} />
+      <Route path="/admin/profile" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><AdminProfile /></div></AdminRoute>} />   {/* 👈 new route */}
 
       {/* 404 page */}
       <Route path="*" element={
