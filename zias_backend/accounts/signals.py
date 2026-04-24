@@ -3,7 +3,7 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
-from .models import Student, Module, StudentWeekReview, Notification
+from .models import Student, Module, StudentWeekReview, Notification, ChatRoom
 
 # -------------------------------------------------------------------
 # Signal 1: Auto‑create StudentWeekReview entries when a Student is created
@@ -47,4 +47,19 @@ def send_notification_via_channels(sender, instance, created, **kwargs):
                 'message': instance.message,
                 'unread_count': unread_count
             }
+        )
+
+@receiver(post_save, sender=Student)
+def create_chat_rooms(sender, instance, created, **kwargs):
+    if instance.mentor:
+        ChatRoom.objects.get_or_create(
+            student=instance,
+            mentor=instance.mentor,
+            room_type='student_mentor'
+        )
+    if instance.reviewer:
+        ChatRoom.objects.get_or_create(
+            student=instance,
+            reviewer=instance.reviewer,
+            room_type='student_reviewer'
         )

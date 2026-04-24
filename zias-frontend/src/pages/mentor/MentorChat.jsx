@@ -1,15 +1,14 @@
-// src/pages/mentor/MentorChat.jsx
-import { useState } from "react";
-import ChatList from "../../components/ChatList";
-import ChatWindow from "../../components/ChatWindow";
+import { useState } from 'react';
+import ChatList from '../../components/ChatList';
+import ChatWindow from '../../components/ChatWindow';
 
-function MentorChat() {
+const MentorChat = () => {
   const [selectedRoom, setSelectedRoom] = useState(null);
 
   return (
     <div className="flex h-full w-full">
-      <div className="w-80 border-r border-gray-200">
-        <ChatList onSelectRoom={setSelectedRoom} />
+      <div className="w-96 border-r border-gray-200 bg-white">
+        <ChatList onSelectRoom={setSelectedRoom} selectedRoomId={selectedRoom?.id} />
       </div>
       <div className="flex-1">
         {selectedRoom ? (
@@ -22,6 +21,6 @@ function MentorChat() {
       </div>
     </div>
   );
-}
+};
 
 export default MentorChat;

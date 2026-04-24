@@ -4,7 +4,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.filters import BaseFilterBackend
-from rest_framework import generics
+from rest_framework import generics, permissions
 from rest_framework.parsers import JSONParser
 from django.utils import timezone
 from django.utils.crypto import get_random_string
@@ -677,7 +677,7 @@ class ReviewFolderViewSet(viewsets.ModelViewSet):
 
 class ChatRoomList(generics.ListAPIView):
     serializer_class = ChatRoomSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
         user = self.request.user
@@ -687,11 +687,14 @@ class ChatRoomList(generics.ListAPIView):
         elif user.is_mentor:
             mentor = Mentor.objects.get(user=user)
             return ChatRoom.objects.filter(mentor=mentor)
+        elif user.is_reviewer:
+            reviewer = Reviewer.objects.get(user=user)
+            return ChatRoom.objects.filter(reviewer=reviewer)
         return ChatRoom.objects.none()
 
 class ChatMessageList(generics.ListAPIView):
     serializer_class = ChatMessageSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
         room_id = self.kwargs['room_id']

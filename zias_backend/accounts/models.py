@@ -2,7 +2,7 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.utils import timezone
 
-# Custom User model
+# Custom User model – defined directly
 class User(AbstractUser):
     is_admin = models.BooleanField(default=False)
     is_student = models.BooleanField(default=False)
@@ -198,7 +198,6 @@ class Notification(models.Model):
     def __str__(self):
         return f"{self.user.username} - {self.message}"
 
-
 # Student Week Review Model
 class StudentWeekReview(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='week_reviews')
@@ -260,12 +259,10 @@ class WeekUpdate(models.Model):
     def __str__(self):
         return f"Update for {self.week_review}"
 
-
-
 class ReviewFolder(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='review_folders')
-    week_folder = models.CharField(max_length=100, blank=True, null=True)   # 👈 new
-    week = models.CharField(max_length=100, blank=True)                     # 👈 allow blank
+    week_folder = models.CharField(max_length=100, blank=True, null=True)
+    week = models.CharField(max_length=100, blank=True)
     review_date = models.DateField()
     work_documents = models.URLField(blank=True, null=True)
     industry_expert = models.CharField(max_length=200, blank=True, null=True)
@@ -291,18 +288,41 @@ class ReviewFolder(models.Model):
         if any(not f for f in required):
             return "Pending"
         return "Done"
-    
 
+# ----------------------------
+# CHAT MODELS
+# ----------------------------
 class ChatRoom(models.Model):
-    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='chat_rooms')
-    mentor = models.ForeignKey(Mentor, on_delete=models.CASCADE, related_name='chat_rooms')
+    ROOM_TYPES = (
+        ('student_mentor', 'Student ↔ Mentor'),
+        ('student_reviewer', 'Student ↔ Reviewer'),
+        ('mentor_reviewer', 'Mentor ↔ Reviewer'),
+    )
+    room_type = models.CharField(max_length=20, choices=ROOM_TYPES, default='student_mentor')
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, null=True, blank=True)
+    mentor = models.ForeignKey(Mentor, on_delete=models.CASCADE, null=True, blank=True)
+    reviewer = models.ForeignKey(Reviewer, on_delete=models.CASCADE, null=True, blank=True)
+    name = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ['student', 'mentor']
+        unique_together = [
+            ('student', 'mentor'),
+            ('student', 'reviewer'),
+            ('mentor', 'reviewer'),
+        ]
+
+    def save(self, *args, **kwargs):
+        if self.room_type == 'student_mentor' and self.student and self.mentor:
+            self.name = f"{self.student.user.username} ↔ {self.mentor.user.username}"
+        elif self.room_type == 'student_reviewer' and self.student and self.reviewer:
+            self.name = f"{self.student.user.username} ↔ {self.reviewer.user.username}"
+        elif self.room_type == 'mentor_reviewer' and self.mentor and self.reviewer:
+            self.name = f"{self.mentor.user.username} ↔ {self.reviewer.user.username}"
+        super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.student.user.username} ↔ {self.mentor.user.username}"
+        return self.name
 
 class ChatMessage(models.Model):
     room = models.ForeignKey(ChatRoom, on_delete=models.CASCADE, related_name='messages')
