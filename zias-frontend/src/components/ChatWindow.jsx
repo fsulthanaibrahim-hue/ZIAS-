@@ -1,3 +1,4 @@
+// src/components/ChatWindow.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import api from '../api';
 import { useSocket } from '../context/SocketContext';
@@ -42,10 +43,7 @@ const ChatWindow = ({ room }) => {
   }, [socket, room, user.id]);
 
   const sendMessage = () => {
-    if (!input.trim()) {
-      console.warn("Empty message ignored");
-      return;
-    }
+    if (!input.trim()) return;
     console.log("Sending message:", { room_id: room.id, content: input });
     socket.emit('send_message', { room_id: room.id, content: input });
     setInput('');
