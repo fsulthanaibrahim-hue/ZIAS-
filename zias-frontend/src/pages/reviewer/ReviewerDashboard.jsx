@@ -1,10 +1,11 @@
 // src/pages/reviewer/ReviewerDashboard.jsx
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import API from "../../api/api";
 
 function ReviewerDashboard() {
   const [reviewer, setReviewer] = useState(null);
+  const [recentFolders, setRecentFolders] = useState([]);
   const [stats, setStats] = useState({
     totalReviews: 0,
     pendingReviews: 0,
@@ -23,9 +24,9 @@ function ReviewerDashboard() {
         if (!isMounted) return;
         setReviewer(reviewerRes.data);
 
-        // Example: fetch review folders (adjust to your actual data model)
+        // Fetch review folders (assuming they are assigned to this reviewer)
         const foldersRes = await API.get("/review-folders/", {
-          params: { created_by: reviewerRes.data.id },
+          params: { reviewer: reviewerRes.data.id }, // adjust filter as per your backend
           signal: abortController.signal,
         });
         const folders = foldersRes.data;
@@ -34,6 +35,8 @@ function ReviewerDashboard() {
           pendingReviews: folders.filter(f => !f.is_done).length,
           completedReviews: folders.filter(f => f.is_done).length,
         });
+        // Take recent 5 folders
+        setRecentFolders(folders.slice(0, 5));
       } catch (err) {
         if (err.name === "AbortError" || err.code === "ERR_CANCELED") return;
         console.error(err);
@@ -60,29 +63,157 @@ function ReviewerDashboard() {
 
   return (
     <main className="flex-1 p-8 overflow-y-auto bg-gray-50">
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-gray-800">Reviewer Dashboard</h1>
           <p className="text-gray-600 mt-1">
             Welcome back, {reviewer?.user?.username || "Reviewer"}!
           </p>
-          <p className="text-sm text-gray-500 mt-1">
-            Department: {reviewer?.department || "Not specified"}
-          </p>
+          {reviewer?.department && (
+            <p className="text-sm text-gray-500 mt-1">Department: {reviewer.department}</p>
+          )}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-            <div className="text-3xl font-bold text-gray-800">{stats.totalReviews}</div>
-            <div className="text-gray-500 text-sm">Total Reviews</div>
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-3xl font-bold text-gray-800">{stats.totalReviews}</div>
+                <div className="text-gray-500 text-sm mt-1">Total Reviews</div>
+              </div>
+              <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+            </div>
           </div>
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-            <div className="text-3xl font-bold text-gray-800">{stats.pendingReviews}</div>
-            <div className="text-gray-500 text-sm">Pending Reviews</div>
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-3xl font-bold text-amber-600">{stats.pendingReviews}</div>
+                <div className="text-gray-500 text-sm mt-1">Pending Reviews</div>
+              </div>
+              <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center text-amber-600">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+            </div>
           </div>
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-            <div className="text-3xl font-bold text-gray-800">{stats.completedReviews}</div>
-            <div className="text-gray-500 text-sm">Completed Reviews</div>
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-3xl font-bold text-green-600">{stats.completedReviews}</div>
+                <div className="text-gray-500 text-sm mt-1">Completed Reviews</div>
+              </div>
+              <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center text-green-600">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Recent Review Folders Table */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+            <div className="flex justify-between items-center">
+              <h2 className="text-lg font-semibold text-gray-800">Recent Review Folders</h2>
+              <Link
+                to="/reviewer/review-folders"
+                className="text-sm text-green-600 hover:text-green-700 font-medium"
+              >
+                View all
+              </Link>
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Week</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Submitted</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                 </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {recentFolders.length === 0 ? (
+                  <tr>
+                    <td colSpan="5" className="px-6 py-8 text-center text-gray-400">
+                      No review folders found.
+                    </td>
+                  </tr>
+                ) : (
+                  recentFolders.map((folder) => (
+                    <tr key={folder.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">
+                          {folder.student_name || "Unknown Student"}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-500">{folder.week || "—"}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-500">
+                          {folder.created_at ? new Date(folder.created_at).toLocaleDateString() : "—"}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          folder.is_done ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"
+                        }`}>
+                          {folder.is_done ? "Completed" : "Pending"}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        <Link
+                          to={`/reviewer/review-sheet?folder_id=${folder.id}`}
+                          className="text-green-600 hover:text-green-900"
+                        >
+                          Review
+                        </Link>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Optional: Quick Actions */}
+        <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+            <h3 className="text-md font-semibold text-gray-800 mb-3">Quick Actions</h3>
+            <div className="space-y-2">
+              <Link
+                to="/reviewer/review-folders"
+                className="block w-full text-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+              >
+                Browse All Review Folders
+              </Link>
+              <Link
+                to="/reviewer/students"
+                className="block w-full text-center px-4 py-2 border border-green-600 text-green-600 rounded-lg hover:bg-green-50 transition"
+              >
+                View My Students
+              </Link>
+            </div>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+            <h3 className="text-md font-semibold text-gray-800 mb-3">Account Information</h3>
+            <div className="text-sm text-gray-600 space-y-1">
+              <p><span className="font-medium">Qualification:</span> {reviewer?.qualification || "—"}</p>
+              <p><span className="font-medium">Experience:</span> {reviewer?.experience || "—"} years</p>
+              <p><span className="font-medium">Batch assigned:</span> {reviewer?.batch || "—"}</p>
+            </div>
           </div>
         </div>
       </div>

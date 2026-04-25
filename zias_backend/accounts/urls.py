@@ -9,12 +9,12 @@ from .views import (
     ContactMessageView, UnreadMessagesCountView, RecentMessagesView, ContactMessageDetailView,
     CustomLoginView, LogoutView, UpdateDashboardAccessView,
     CompleteModuleView, StudentWeekReviewView, StudentListView, WeeklyToppersView,
-    WeekUpdateViewSet, ReviewFolderViewSet, ChatRoomList, ChatMessageList, CreateMessageView, 
+    WeekUpdateViewSet, ReviewFolderViewSet, ChatRoomList, ChatMessageList, 
     ChatMessageListCreateView, ClearChatMessagesView, MarkMessagesReadView
 )
 
 router = DefaultRouter()
-router.register('students', StudentViewSet, basename='student')
+router.register('students', StudentViewSet, basename='student')          # ✅ ADDED
 router.register('mentors', MentorViewSet)
 router.register('reviewers', ReviewerViewSet)
 router.register('courses', CourseViewSet)
@@ -24,11 +24,10 @@ router.register('tasks', TaskViewSet)
 router.register('batches', BatchViewSet)
 router.register('student-modules', StudentModuleViewSet, basename='student-module')
 router.register('week-updates', WeekUpdateViewSet, basename='week-update')
-router.register('review-folders', ReviewFolderViewSet, basename='review-folder')  
+router.register('review-folders', ReviewFolderViewSet, basename='review-folder')
 
 urlpatterns = [
     path('api/students/list/', StudentListView.as_view(), name='student-list'),
-    path('api/students/me/', StudentViewSet.as_view({'get': 'get_me'}), name='student-me'),
     path('api/', include(router.urls)),
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
@@ -49,8 +48,8 @@ urlpatterns = [
     path('api/weekly-toppers/', WeeklyToppersView.as_view(), name='weekly-toppers'),
     path('api/chat-rooms/', ChatRoomList.as_view(), name='chat-rooms'),
     path('api/chat-rooms/<int:room_id>/messages/', ChatMessageList.as_view(), name='chat-messages'),
-    path('api/chat-messages/', CreateMessageView.as_view(), name='create-message'),
-    path('chat-messages/', ChatMessageListCreateView.as_view(), name='chat-messages'),
+    # ✅ Unified chat‑messages endpoint (handles both GET and POST)
+    path('api/chat-messages/', ChatMessageListCreateView.as_view(), name='chat-messages'),
     path('api/chat-messages/clear/', ClearChatMessagesView.as_view(), name='clear-chat-messages'),
     path('api/chat-messages/mark-read/<int:room_id>/', MarkMessagesReadView.as_view(), name='mark-read'),
 ]

@@ -592,7 +592,6 @@ class StudentListView(APIView):
         if user.is_reviewer:
             try:
                 reviewer = Reviewer.objects.get(user=user)
-                # ✅ Filter students by reviewer's batch
                 students = Student.objects.filter(course=reviewer.course).select_related('user', 'student_batch')
             except Reviewer.DoesNotExist:
                 students = Student.objects.none()
@@ -809,7 +808,6 @@ class ChatMessageListCreateView(generics.ListCreateAPIView):
         serializer.save(sender=self.request.user)   
 
 
-
 class ClearChatMessagesView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -831,7 +829,6 @@ class ClearChatMessagesView(APIView):
         return Response({"detail": "All messages cleared"})
 
 
-
 class MarkMessagesReadView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -843,10 +840,6 @@ class MarkMessagesReadView(APIView):
                 is_read=True,
                 read_at=timezone.now()
             )
-            # Optional: emit socket event to the other participant(s)
-            # You can implement later, but for now just return success
             return Response({"marked_read": updated}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-        
