@@ -239,14 +239,17 @@ class MentorSerializer(serializers.ModelSerializer):
 class ReviewerSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username')
     email = serializers.EmailField(source='user.email')
+
     class Meta:
         model = Reviewer
         fields = ['id', 'username', 'email', 'department', 'qualification', 'experience', 'batch']
+
     def create(self, validated_data):
         user_data = validated_data.pop('user')
         username = user_data['username']
         email = user_data['email']
         random_password = generate_random_password()
+
         try:
             user = User.objects.get(username=username)
             if user.email != email:
@@ -256,69 +259,51 @@ class ReviewerSerializer(serializers.ModelSerializer):
             if not user.password_changed_at:
                 user.password_changed_at = timezone.now()
             user.save()
+            # No email sent for existing users (they already have a password)
         except User.DoesNotExist:
+            # Create new user with random password
             user = User.objects.create_user(username=username, email=email, password=random_password)
             user.is_reviewer = True
             user.password_changed_at = timezone.now()
             user.save()
+
+            # ✅ Send welcome email with credentials
+            expiry_days = settings.PASSWORD_EXPIRY_DAYS
+            domain = getattr(settings, 'SITE_DOMAIN', 'localhost:5173')
+            context = {
+                'username': username,
+                'password': random_password,
+                'expiry_days': expiry_days,
+                'domain': domain
+            }
+            try:
+                html_message = render_to_string('mail.html', context)
+                plain_message = strip_tags(html_message)
+                subject = '🎓 Welcome to ZIAS – Your Reviewer Account Credentials'
+                send_mail(subject, plain_message, settings.DEFAULT_FROM_EMAIL, [email],
+                          html_message=html_message, fail_silently=False)
+            except Exception as e:
+                print(f"Email sending failed for reviewer: {e}")
+
         if Reviewer.objects.filter(user=user).exists():
             raise serializers.ValidationError({"username": "This user already has a reviewer profile."})
-        
-        # In accounts/serializers.py, inside MentorSerializer
-def create(self, validated_data):
-    user_data = validated_data.pop('user')
-    username = user_data['username']
-    email = user_data['email']
-    random_password = generate_random_password()
-    try:
-        user = User.objects.get(username=username)
-        if user.email != email:
-            user.email = email
-        if not user.is_mentor:
-            user.is_mentor = True
-        if not user.password_changed_at:
-            user.password_changed_at = timezone.now()
-        user.save()
-    except User.DoesNotExist:
-        user = User.objects.create_user(username=username, email=email, password=random_password)
-        user.is_mentor = True
-        user.password_changed_at = timezone.now()
-        user.save()
 
-    if Mentor.objects.filter(user=user).exists():
-        raise serializers.ValidationError({"username": "This user already has a mentor profile."})
+        # Create and return the Reviewer instance
+        reviewer = Reviewer.objects.create(user=user, **validated_data)
+        return reviewer
 
-    # ---------- Send email ----------
-    expiry_days = settings.PASSWORD_EXPIRY_DAYS
-    domain = getattr(settings, 'SITE_DOMAIN', 'localhost:5173')
-    context = {
-        'username': username,
-        'password': random_password,
-        'expiry_days': expiry_days,
-        'domain': domain
-    }
-    try:
-        html_message = render_to_string('mail.html', context)
-        plain_message = strip_tags(html_message)
-        subject = '🎓 Welcome to ZIAS – Your Mentor Account Credentials'
-        send_mail(subject, plain_message, settings.DEFAULT_FROM_EMAIL, [email], html_message=html_message, fail_silently=False)
-    except Exception as e:
-        print(f"Email sending failed: {e}")
-    # ---------------------------------
-
-        return Reviewer.objects.create(user=user, **validated_data)
     def update(self, instance, validated_data):
-        # Explicitly update all reviewer fields
         instance.department = validated_data.get('department', instance.department)
         instance.qualification = validated_data.get('qualification', instance.qualification)
         instance.experience = validated_data.get('experience', instance.experience)
         instance.batch = validated_data.get('batch', instance.batch)
         instance.save()
+
         user_data = validated_data.pop('user', None)
         if user_data:
             new_username = user_data.get('username', instance.user.username)
             new_email = user_data.get('email', instance.user.email)
-            if (new_username.lower() != instance.user.username.lower() or new_email.lower() != instance.user.email.lower()):
+            if new_username.lower() != instance.user.username.lower() or new_email.lower() != instance.user.email.lower():
                 instance.user.username = new_username
                 instance.user.email = new_email
                 instance.user.save()

@@ -84,12 +84,13 @@ class Mentor(models.Model):
 
 # Reviewer Profile
 class Reviewer(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='reviewer_profile')
-    department = models.CharField(max_length=100)
-    batch = models.ForeignKey(Batch, on_delete=models.SET_NULL, null=True, blank=True, related_name='reviewers')
-    qualification = models.CharField(max_length=200, blank=True)
-    experience = models.CharField(max_length=100, blank=True)
-
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    department = models.CharField(max_length=100, blank=True)
+    qualification = models.CharField(max_length=100, blank=True)
+    experience = models.IntegerField(null=True, blank=True)
+    batch = models.ForeignKey(Batch, on_delete=models.SET_NULL, null=True, blank=True)
+    course = models.CharField(max_length=100, blank=True, null=True)   # ← NEW
+    
     def __str__(self):
         return self.user.username
 

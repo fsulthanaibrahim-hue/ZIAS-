@@ -59,7 +59,7 @@ class BatchViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminOrReadOnly]
 
 # ----------------------------
-# STUDENT VIEWSET (optimized for mentor dashboard)
+# STUDENT VIEWSET (fixed for reviewer)
 # ----------------------------
 class StudentViewSet(viewsets.ModelViewSet):
     serializer_class = StudentSerializer
@@ -80,14 +80,10 @@ class StudentViewSet(viewsets.ModelViewSet):
             except Mentor.DoesNotExist:
                 queryset = queryset.none()
         elif user.is_reviewer:
-            # Only filter if the Student model has a 'reviewer' field
-            if hasattr(Student, 'reviewer'):
-                try:
-                    reviewer = Reviewer.objects.get(user=user)
-                    queryset = queryset.filter(reviewer=reviewer)
-                except Reviewer.DoesNotExist:
-                    queryset = queryset.none()
-            else:
+            try:
+                reviewer = Reviewer.objects.get(user=user)
+                queryset = queryset.filter(course=reviewer.course)
+            except Reviewer.DoesNotExist:
                 queryset = queryset.none()
         else:
             queryset = queryset.filter(user=user)
@@ -96,7 +92,7 @@ class StudentViewSet(viewsets.ModelViewSet):
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
         user = request.user
-        if user.is_mentor:
+        if user.is_mentor or user.is_reviewer:
             data = []
             for student in queryset.select_related('user'):
                 data.append({
@@ -115,7 +111,6 @@ class StudentViewSet(viewsets.ModelViewSet):
         user = request.user
         if not user.is_student:
             return Response({"detail": "User is not a student"}, status=403)
-        # Auto-create missing student profile
         student, created = Student.objects.get_or_create(
             user=user,
             defaults={
@@ -136,11 +131,7 @@ class StudentViewSet(viewsets.ModelViewSet):
             return Response({"detail": "Not authorized"}, status=403)
         try:
             reviewer = Reviewer.objects.get(user=user)
-            # Only use reviewer filter if the field exists
-            if hasattr(Student, 'reviewer'):
-                students = Student.objects.filter(reviewer=reviewer)
-            else:
-                students = Student.objects.none()
+            students = Student.objects.filter(course=reviewer.course)
             data = [{
                 "id": s.id,
                 "username": s.user.username,
@@ -216,7 +207,7 @@ class CourseViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminOrReadOnly]
 
 # ----------------------------
-# MODULE VIEWSET (with auto-create student profile and unlocking)
+# MODULE VIEWSET (unchanged)
 # ----------------------------
 class ModuleViewSet(viewsets.ModelViewSet):
     queryset = Module.objects.all()
@@ -308,7 +299,7 @@ class ModuleViewSet(viewsets.ModelViewSet):
         return Response(data)
 
 # ----------------------------
-# COMPLETE MODULE VIEW (with auto-create student profile)
+# COMPLETE MODULE VIEW
 # ----------------------------
 class CompleteModuleView(APIView):
     permission_classes = [IsAuthenticated]
@@ -391,10 +382,6 @@ class CurrentUserView(APIView):
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-# ---------- (All other views remain exactly as in your original file) ----------
-# ... (The rest of the file unchanged: ChangePasswordView, SendBulkEmailView, password reset, contact, login, logout, etc.)
-# ... I'll include them for completeness, but they are identical to what you had.
 
 # ----------------------------
 # CHANGE PASSWORD ENDPOINT
@@ -582,16 +569,29 @@ class UpdateDashboardAccessView(APIView):
         return Response({"detail": "Dashboard access updated."}, status=status.HTTP_200_OK)
 
 # ----------------------------
-# STUDENT LIST VIEW
+# STUDENT LIST VIEW (FIXED FOR REVIEWER)
 # ----------------------------
 class StudentListView(APIView):
     permission_classes = [IsAuthenticated]
+
     def get(self, request):
-        user = request.user
-        if user.is_admin or user.is_mentor or user.is_reviewer:
+        user = self.request.user
+
+        if user.is_reviewer:
+            try:
+                reviewer = Reviewer.objects.get(user=user)
+                # ✅ Filter students by reviewer's batch
+                students = Student.objects.filter(course=reviewer.course).select_related('user', 'student_batch')
+            except Reviewer.DoesNotExist:
+                students = Student.objects.none()
+        elif user.is_mentor:
+            mentor = Mentor.objects.get(user=user)
+            students = Student.objects.filter(mentor=mentor).select_related('user', 'student_batch')
+        elif user.is_admin:
             students = Student.objects.select_related('user', 'student_batch').all()
         else:
             return Response({"detail": "Not authorized"}, status=403)
+
         data = [{
             "id": s.id,
             "name": s.full_name or s.user.username,
@@ -612,6 +612,34 @@ class StudentListView(APIView):
             "educational_qualification": s.educational_qualification,
             "college_school": s.college_school,
         } for s in students]
+
+        return Response(data)
+
+# ----------------------------
+# REVIEWER DASHBOARD VIEW (NEW)
+# ----------------------------
+class ReviewerDashboardView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            reviewer = Reviewer.objects.get(user=request.user)
+        except Reviewer.DoesNotExist:
+            return Response({"error": "You are not a reviewer"}, status=403)
+
+        students = Student.objects.filter(course=reviewer.course)
+        student_serializer = StudentSerializer(students, many=True)
+
+        review_folders = ReviewFolder.objects.filter(student__in=students).order_by('-created_at')[:20]
+        folder_serializer = ReviewFolderSerializer(review_folders, many=True)
+
+        data = {
+            "reviewer_name": reviewer.user.username,
+            "batch_name": reviewer.batch.name if reviewer.batch else None,
+            "total_students": students.count(),
+            "students": student_serializer.data,
+            "recent_review_folders": folder_serializer.data,
+        }
         return Response(data)
 
 # ----------------------------
