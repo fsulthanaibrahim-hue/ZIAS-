@@ -37,7 +37,7 @@ function ReviewerProfile() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState({ text: "", type: "" });
   const navigate = useNavigate();
-  const isFetched = useRef(false);   // ← Prevent duplicate API call
+  const isFetched = useRef(false);
 
   useEffect(() => {
     if (isFetched.current) return;
@@ -98,7 +98,7 @@ function ReviewerProfile() {
         @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
       `}</style>
 
-      <div style={{ ...s.card, animation: "fadeIn 0.4s ease both" }}>
+      <div style={{ ...s.card, margin: "0 auto", animation: "fadeIn 0.4s ease both" }}>
         <div style={{ ...s.banner, background: `linear-gradient(135deg, ${bgColor} 0%, #c8e6c9 100%)` }}>
           <div style={s.dotPattern} />
           <div style={{ ...s.avatar, border: `2.5px solid ${accentColor}`, boxShadow: `0 0 24px ${accentColor}30` }}>
@@ -164,6 +164,7 @@ function ReviewerProfile() {
 
 const s = {
   page: {
+    width: "100%",
     minHeight: "100vh",
     background: "#f9fafb",
     display: "flex",
