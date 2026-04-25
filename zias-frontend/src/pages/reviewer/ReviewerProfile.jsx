@@ -1,5 +1,5 @@
 // src/pages/reviewer/ReviewerProfile.jsx
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import API from "../../api/api";
 
@@ -37,14 +37,17 @@ function ReviewerProfile() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState({ text: "", type: "" });
   const navigate = useNavigate();
+  const isFetched = useRef(false);   // ← Prevent duplicate API call
 
   useEffect(() => {
+    if (isFetched.current) return;
+    isFetched.current = true;
+
     const fetchProfile = async () => {
       try {
         const res = await API.get("users/me/");
         setUser(res.data);
       } catch (err) {
-        console.error(err);
         setMessage({
           text: err.response?.status === 404
             ? "User profile not found. Please contact admin."

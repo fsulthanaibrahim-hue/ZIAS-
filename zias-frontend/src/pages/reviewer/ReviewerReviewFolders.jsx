@@ -1,5 +1,5 @@
 // src/pages/reviewer/ReviewerReviewFolders.jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import API from "../../api/api";
 
 function ReviewerReviewFolders() {
@@ -10,6 +10,7 @@ function ReviewerReviewFolders() {
   const [selectedWeek, setSelectedWeek] = useState("");
   const [folderSearchTerm, setFolderSearchTerm] = useState("");
   const [error, setError] = useState(null);
+  const isFetched = useRef(false);
 
   const renderLink = (url, label = "Link") => {
     if (!url) return "—";
@@ -25,6 +26,8 @@ function ReviewerReviewFolders() {
   };
 
   useEffect(() => {
+    if (isFetched.current) return;
+    isFetched.current = true;
     fetchAllFolders();
   }, []);
 
@@ -35,7 +38,6 @@ function ReviewerReviewFolders() {
       const res = await API.get("/review-folders/");
       setAllFolders(res.data);
     } catch (err) {
-      console.error(err);
       setError("Failed to load review folders.");
     } finally {
       setLoading(false);
@@ -43,7 +45,7 @@ function ReviewerReviewFolders() {
   };
 
   const foldersMap = allFolders
-    .filter(f => f.week_folder)
+    .filter((f) => f.week_folder)
     .reduce((acc, f) => {
       const name = f.week_folder;
       if (!acc[name]) {
@@ -62,14 +64,14 @@ function ReviewerReviewFolders() {
     }, {});
 
   const folderList = Object.values(foldersMap)
-    .filter(folder => folder.name.toLowerCase().includes(folderSearchTerm.toLowerCase()))
+    .filter((folder) => folder.name.toLowerCase().includes(folderSearchTerm.toLowerCase()))
     .sort((a, b) => new Date(b.modified) - new Date(a.modified));
 
   const rawEntries = selectedFolder ? foldersMap[selectedFolder]?.entries || [] : [];
-  const uniqueWeeks = [...new Set(rawEntries.map(e => e.week).filter(w => w))].sort().reverse();
-  const filteredEntries = rawEntries.filter(entry => {
+  const filteredEntries = rawEntries.filter((entry) => {
     if (!searchTerm && !selectedWeek) return true;
-    const matchesSearch = !searchTerm || 
+    const matchesSearch =
+      !searchTerm ||
       entry.student_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       entry.week?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesWeek = !selectedWeek || entry.week === selectedWeek;
@@ -128,7 +130,7 @@ function ReviewerReviewFolders() {
                       </td>
                     </tr>
                   ) : (
-                    folderList.map(folder => (
+                    folderList.map((folder) => (
                       <tr key={folder.name} className="hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedFolder(folder.name)}>
                         <td className="px-4 py-3 text-sm text-blue-600 hover:underline">📁 {folder.name}</td>
                         <td className="px-4 py-3 text-sm text-gray-700">Folder</td>
@@ -201,7 +203,7 @@ function ReviewerReviewFolders() {
                         </td>
                       </tr>
                     ) : (
-                      filteredEntries.map(entry => (
+                      filteredEntries.map((entry) => (
                         <tr key={entry.id} className="hover:bg-gray-50">
                           <td className="px-4 py-3 text-sm text-gray-700">{entry.review_date}</td>
                           <td className="px-4 py-3 text-sm text-gray-700">{entry.student_name}</td>
@@ -211,9 +213,11 @@ function ReviewerReviewFolders() {
                           <td className="px-4 py-3 text-sm">{renderLink(entry.meeting_link, "Meet Link")}</td>
                           <td className="px-4 py-3 text-sm">{renderLink(entry.review_sheet, "Sheet")}</td>
                           <td className="px-4 py-3 text-center">
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              entry.is_done ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"
-                            }`}>
+                            <span
+                              className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                entry.is_done ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"
+                              }`}
+                            >
                               {entry.is_done ? "Done" : "Pending"}
                             </span>
                           </td>

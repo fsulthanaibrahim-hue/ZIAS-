@@ -1,16 +1,22 @@
 // src/components/ChatList.jsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import api from '../api';
 import { formatDistanceToNow } from 'date-fns';
 
 const ChatList = ({ onSelectRoom, selectedRoomId }) => {
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
+  const isFetched = useRef(false);   // ← prevent double call
 
   useEffect(() => {
+    if (isFetched.current) return;
+    isFetched.current = true;
+
     api.get('/chat-rooms/')
       .then(res => setRooms(res.data))
-      .catch(err => console.error(err))
+      .catch(err => {
+        // silent error – you could add a user-friendly message if needed
+      })
       .finally(() => setLoading(false));
   }, []);
 

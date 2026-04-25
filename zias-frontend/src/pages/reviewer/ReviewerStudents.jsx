@@ -1,5 +1,5 @@
 // src/pages/reviewer/ReviewerStudents.jsx
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Link } from "react-router-dom";
 import API from "../../api/api";
 
@@ -7,14 +7,17 @@ function ReviewerStudents() {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const isFetched = useRef(false);   // Prevent double call in StrictMode
 
   useEffect(() => {
+    if (isFetched.current) return;
+    isFetched.current = true;
+
     const fetchStudents = async () => {
       try {
         const res = await API.get("/students/for-reviewer/");
         setStudents(res.data);
       } catch (err) {
-        console.error(err);
         setError("Could not load assigned students.");
       } finally {
         setLoading(false);
