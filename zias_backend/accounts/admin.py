@@ -48,3 +48,4 @@ class ContactMessageAdmin(admin.ModelAdmin):
     def mark_as_read(self, request, queryset):
         queryset.update(is_read=True)
     mark_as_read.short_description = "Mark selected messages as read"
+    

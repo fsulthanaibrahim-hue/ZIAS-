@@ -453,16 +453,6 @@ function MentorReviewFolders() {
                       </button>
                     )}
                   </div>
-                  <select
-                    value={selectedWeek}
-                    onChange={(e) => setSelectedWeek(e.target.value)}
-                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-green-500"
-                  >
-                    <option value="">All Weeks</option>
-                    {uniqueWeeks.map(week => (
-                      <option key={week} value={week}>{week}</option>
-                    ))}
-                  </select>
                   <button onClick={() => setSelectedFolder(null)} className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium">
                     ← Back
                   </button>
