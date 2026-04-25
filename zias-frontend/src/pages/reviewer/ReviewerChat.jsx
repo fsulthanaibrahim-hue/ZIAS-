@@ -88,7 +88,6 @@ function ReviewerChat() {
                 </div>
                 <div>
                   <h3 className="font-semibold text-gray-800">{selectedRoom?.other_user_name || "Unknown"}</h3>
-                  <p className="text-xs text-green-600">Online</p>
                 </div>
               </div>
               <div className="relative">
