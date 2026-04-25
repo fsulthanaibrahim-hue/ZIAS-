@@ -4,13 +4,12 @@ import api from '../api';
 import { useSocket } from '../context/SocketContext';
 import { formatDistanceToNow } from 'date-fns';
 
-const ChatList = ({ onSelectRoom, selectedRoomId }) => {
+const ChatList = ({ onSelectRoom, selectedRoomId, searchTerm = '' }) => {
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const socket = useSocket();
   const isFetched = useRef(false);
 
-  // Helper: sort rooms by last_message timestamp descending (newest first)
   const sortRooms = (roomsArray) => {
     return [...roomsArray].sort((a, b) => {
       const timeA = a.last_message?.timestamp ? new Date(a.last_message.timestamp) : 0;
@@ -19,7 +18,11 @@ const ChatList = ({ onSelectRoom, selectedRoomId }) => {
     });
   };
 
-  // Fetch initial rooms
+  // ✅ Filter rooms by other_user_name (case‑insensitive)
+  const filteredRooms = rooms.filter(room =>
+    room.other_user_name?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   useEffect(() => {
     if (isFetched.current) return;
     isFetched.current = true;
@@ -29,16 +32,13 @@ const ChatList = ({ onSelectRoom, selectedRoomId }) => {
       .finally(() => setLoading(false));
   }, []);
 
-  // Listen for new messages via WebSocket
+  // Real‑time update when new message arrives
   useEffect(() => {
     if (!socket) return;
-
     const handleNewMessage = (msg) => {
-      // Update the room that received the message
       setRooms(prevRooms => {
         const updatedRooms = prevRooms.map(room => {
           if (room.id === msg.room_id) {
-            // Update last_message and unread_count (if message is not from current user)
             const isOwnMessage = msg.sender_id === (JSON.parse(localStorage.getItem('user'))?.id);
             return {
               ...room,
@@ -52,21 +52,23 @@ const ChatList = ({ onSelectRoom, selectedRoomId }) => {
           }
           return room;
         });
-        // Re-sort after update
         return sortRooms(updatedRooms);
       });
     };
-
     socket.on('receive_message', handleNewMessage);
     return () => socket.off('receive_message', handleNewMessage);
   }, [socket]);
 
   if (loading) return <div className="p-4 text-gray-500">Loading chats...</div>;
-  if (rooms.length === 0) return <div className="p-4 text-gray-500">No chat rooms yet.</div>;
+  if (filteredRooms.length === 0) {
+    return searchTerm
+      ? <div className="p-4 text-gray-500">No matching conversations</div>
+      : <div className="p-4 text-gray-500">No chat rooms yet.</div>;
+  }
 
   return (
     <div className="overflow-y-auto h-full">
-      {rooms.map(room => (
+      {filteredRooms.map(room => (
         <div
           key={room.id}
           onClick={() => onSelectRoom(room)}

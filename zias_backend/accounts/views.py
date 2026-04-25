@@ -7,6 +7,7 @@ from rest_framework.filters import BaseFilterBackend
 from rest_framework import generics, permissions
 from rest_framework.parsers import JSONParser
 from django.utils import timezone
+from django.shortcuts import get_object_or_404
 from django.utils.crypto import get_random_string
 from datetime import timedelta
 from django.core.mail import send_mail
@@ -800,7 +801,12 @@ class ChatMessageListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         room_id = self.request.query_params.get('room')
-        return ChatMessage.objects.filter(room_id=room_id).order_by('timestamp') if room_id else ChatMessage.objects.none()
+        if room_id:
+            return ChatMessage.objects.filter(room_id=room_id).order_by('timestamp')
+        return ChatMessage.objects.none()
+
+    def perform_create(self, serializer):
+        serializer.save(sender=self.request.user)   
 
 
 
@@ -825,31 +831,22 @@ class ClearChatMessagesView(APIView):
         return Response({"detail": "All messages cleared"})
 
 
+
 class MarkMessagesReadView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, room_id):
         try:
-            room = ChatRoom.objects.get(id=room_id)
-        except ChatRoom.DoesNotExist:
-            return Response({"error": "Room not found"}, status=404)
-
-        # Mark all messages in this room that are not from the current user
-        updated = ChatMessage.objects.filter(room=room, is_read=False).exclude(sender=request.user).update(
-            is_read=True,
-            read_at=timezone.now()
-        )
-        # Emit socket event to the other participant(s) to update their unread count
-        from channels.layers import get_channel_layer
-        from asgiref.sync import async_to_sync
-        channel_layer = get_channel_layer()
-        group_name = f"chat_{room.id}"
-        async_to_sync(channel_layer.group_send)(
-            group_name,
-            {
-                "type": "messages_marked_read",
-                "room_id": room.id,
-                "read_by": request.user.id
-            }
-        )
-        return Response({"marked_read": updated})
+            room = get_object_or_404(ChatRoom, id=room_id)
+            # Only mark messages that are not from the current user
+            updated = ChatMessage.objects.filter(room=room, is_read=False).exclude(sender=request.user).update(
+                is_read=True,
+                read_at=timezone.now()
+            )
+            # Optional: emit socket event to the other participant(s)
+            # You can implement later, but for now just return success
+            return Response({"marked_read": updated}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        

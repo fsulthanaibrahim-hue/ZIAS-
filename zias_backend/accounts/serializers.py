@@ -369,8 +369,9 @@ class ChatMessageSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ChatMessage
-        fields = ['id', 'room', 'sender', 'sender_name', 'content', 'is_read', 'timestamp']
-
+        fields = ['id', 'room', 'sender', 'sender_name', 'content', 'is_read', 'timestamp', 'read_at']
+        read_only_fields = ['sender', 'sender_name', 'timestamp', 'is_read', 'read_at']
+        
 
 class ChatRoomSerializer(serializers.ModelSerializer):
     last_message = serializers.SerializerMethodField()
