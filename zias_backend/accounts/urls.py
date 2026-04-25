@@ -10,7 +10,7 @@ from .views import (
     CustomLoginView, LogoutView, UpdateDashboardAccessView,
     CompleteModuleView, StudentWeekReviewView, StudentListView, WeeklyToppersView,
     WeekUpdateViewSet, ReviewFolderViewSet, ChatRoomList, ChatMessageList, CreateMessageView, 
-    ChatMessageListCreateView, ClearChatMessagesView
+    ChatMessageListCreateView, ClearChatMessagesView, MarkMessagesReadView
 )
 
 router = DefaultRouter()
@@ -52,4 +52,5 @@ urlpatterns = [
     path('api/chat-messages/', CreateMessageView.as_view(), name='create-message'),
     path('chat-messages/', ChatMessageListCreateView.as_view(), name='chat-messages'),
     path('api/chat-messages/clear/', ClearChatMessagesView.as_view(), name='clear-chat-messages'),
+    path('api/chat-messages/mark-read/<int:room_id>/', MarkMessagesReadView.as_view(), name='mark-read'),
 ]

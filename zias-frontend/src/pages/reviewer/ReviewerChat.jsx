@@ -10,9 +10,16 @@ function ReviewerChat() {
   const [showDropdown, setShowDropdown] = useState(false);
   const chatWindowRef = useRef();
 
-  const handleSelectRoom = (room) => {
+  const handleSelectRoom = async (room) => {
     setSelectedRoom(room);
     setIsMobileListVisible(false);
+
+    // Mark messages as read in this room
+    try {
+      await API.post(`chat-messages/mark-read/${room.id}/`);
+    } catch (err) {
+      console.error("Failed to mark messages as read", err);
+    }
   };
 
   const handleBack = () => {
@@ -26,9 +33,7 @@ function ReviewerChat() {
     if (!confirmClear) return;
 
     try {
-      // Call backend endpoint to delete all messages in this room
       await API.delete(`chat-messages/clear/?room=${selectedRoom.id}`);
-      // Clear messages in ChatWindow component
       if (chatWindowRef.current) {
         chatWindowRef.current.clearMessages();
       }
@@ -252,7 +257,12 @@ function ReviewerChat() {
           z-index: 10;
         }
 
-        .rc-chat-header-info { flex: 1; min-width: 0; }
+        .rc-chat-header-info {
+          flex: 1;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
         .rc-chat-header-name {
           font-size: 15.5px;
           font-weight: 700;
@@ -267,9 +277,8 @@ function ReviewerChat() {
         }
 
         .rc-header-actions {
-          display: flex;
-          gap: 6px;
           position: relative;
+          margin-left: auto;
         }
 
         .rc-icon-btn {
@@ -375,23 +384,8 @@ function ReviewerChat() {
           }
           .rc-sidebar.hidden { transform: translateX(-100%); }
           .rc-main { width: 100%; }
-          .rc-back-btn { display: flex !important; }
         }
 
-        .rc-back-btn {
-          display: none;
-          align-items: center;
-          justify-content: center;
-          width: 34px;
-          height: 34px;
-          border-radius: 50%;
-          background: rgba(0,0,0,0.04);
-          border: none;
-          cursor: pointer;
-          color: var(--text-primary);
-          margin-right: 4px;
-          flex-shrink: 0;
-        }
         .rc-section-label {
           font-size: 11px;
           font-weight: 700;
@@ -429,40 +423,35 @@ function ReviewerChat() {
           {selectedRoom ? (
             <>
               <div className="rc-chat-header">
-                <button className="rc-back-btn" onClick={handleBack} aria-label="Back">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="15 18 9 12 15 6" />
-                  </svg>
-                </button>
-
-                {/* <div className="rc-avatar" style={{ width: 38, height: 38, fontSize: 14 }}>
+                {/* Avatar */}
+                <div className="rc-avatar" style={{ width: 38, height: 38, fontSize: 14 }}>
                   {selectedRoom?.name?.slice(0, 2).toUpperCase() || "CH"}
                   <div className="rc-online-dot" />
-                </div> */}
+                </div>
 
-                {/* <div className="rc-chat-header-info">
-                  <div className="rc-chat-header-name">{selectedRoom?.name || "Chat"}</div>
-                  <div className="rc-chat-header-status">Online</div>
-                </div> */}
-
-                <div className="rc-header-actions">
-                  {/* Three dots button */}
-                  <button className="rc-icon-btn" onClick={() => setShowDropdown(!showDropdown)}>
-                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none"
-                      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="12" cy="5" r="1" />
-                      <circle cx="12" cy="12" r="1" />
-                      <circle cx="12" cy="19" r="1" />
-                    </svg>
-                  </button>
-                  {showDropdown && (
-                    <div className="rc-dropdown">
-                      <div className="rc-dropdown-item danger" onClick={clearChat}>
-                        Clear chat
+                {/* Name and status + three‑dots */}
+                <div className="rc-chat-header-info">
+                  <div>
+                    <div className="rc-chat-header-name">{selectedRoom?.name || "Chat"}</div>
+                    <div className="rc-chat-header-status">Online</div>
+                  </div>
+                  <div className="rc-header-actions">
+                    <button className="rc-icon-btn" onClick={() => setShowDropdown(!showDropdown)}>
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="5" r="1" />
+                        <circle cx="12" cy="12" r="1" />
+                        <circle cx="12" cy="19" r="1" />
+                      </svg>
+                    </button>
+                    {showDropdown && (
+                      <div className="rc-dropdown">
+                        <div className="rc-dropdown-item danger" onClick={clearChat}>
+                          Clear chat
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               </div>
 

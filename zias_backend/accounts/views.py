@@ -824,3 +824,32 @@ class ClearChatMessagesView(APIView):
         room.messages.all().delete()
         return Response({"detail": "All messages cleared"})
 
+
+class MarkMessagesReadView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, room_id):
+        try:
+            room = ChatRoom.objects.get(id=room_id)
+        except ChatRoom.DoesNotExist:
+            return Response({"error": "Room not found"}, status=404)
+
+        # Mark all messages in this room that are not from the current user
+        updated = ChatMessage.objects.filter(room=room, is_read=False).exclude(sender=request.user).update(
+            is_read=True,
+            read_at=timezone.now()
+        )
+        # Emit socket event to the other participant(s) to update their unread count
+        from channels.layers import get_channel_layer
+        from asgiref.sync import async_to_sync
+        channel_layer = get_channel_layer()
+        group_name = f"chat_{room.id}"
+        async_to_sync(channel_layer.group_send)(
+            group_name,
+            {
+                "type": "messages_marked_read",
+                "room_id": room.id,
+                "read_by": request.user.id
+            }
+        )
+        return Response({"marked_read": updated})
