@@ -1,103 +1,92 @@
 // src/pages/reviewer/ReviewerDashboard.jsx
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import API from "../../api/api";
 
 function ReviewerDashboard() {
-  const [students, setStudents] = useState([]);
+  const [reviewer, setReviewer] = useState(null);
+  const [stats, setStats] = useState({
+    totalReviews: 0,
+    pendingReviews: 0,
+    completedReviews: 0,
+  });
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+  const navigate = useNavigate();
 
   useEffect(() => {
-    const fetchStudents = async () => {
+    let isMounted = true;
+    const abortController = new AbortController();
+
+    const fetchData = async () => {
       try {
-        const res = await API.get("students/list/");
-        setStudents(res.data);
+        const reviewerRes = await API.get("reviewers/me/", { signal: abortController.signal });
+        if (!isMounted) return;
+        setReviewer(reviewerRes.data);
+
+        // Example: fetch review folders (adjust to your actual data model)
+        const foldersRes = await API.get("/review-folders/", {
+          params: { created_by: reviewerRes.data.id },
+          signal: abortController.signal,
+        });
+        const folders = foldersRes.data;
+        setStats({
+          totalReviews: folders.length,
+          pendingReviews: folders.filter(f => !f.is_done).length,
+          completedReviews: folders.filter(f => f.is_done).length,
+        });
       } catch (err) {
-        console.error("Failed to fetch students", err);
+        if (err.name === "AbortError" || err.code === "ERR_CANCELED") return;
+        console.error(err);
+        if (err.response?.status === 401) navigate("/login");
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
-    fetchStudents();
-  }, []);
 
-  const filteredStudents = students.filter(s =>
-    s.name.toLowerCase().includes(search.toLowerCase()) ||
-    s.username.toLowerCase().includes(search.toLowerCase())
-  );
+    fetchData();
+    return () => {
+      isMounted = false;
+      abortController.abort();
+    };
+  }, [navigate]);
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0d1117] flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-[#388bfd] border-t-transparent rounded-full animate-spin" />
+      <div className="flex-1 flex items-center justify-center bg-gray-50">
+        <div className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#0d1117] text-[#e6edf3] p-6">
+    <main className="flex-1 p-8 overflow-y-auto bg-gray-50">
       <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold">📋 Reviewer Dashboard</h1>
-          <div className="flex gap-4">
-            <Link
-              to="/reviewer/profile"
-              className="text-[#7d8590] hover:text-white text-sm transition"
-            >
-              👤 My Profile
-            </Link>
-            <Link
-              to="/login"
-              className="text-[#7d8590] hover:text-white text-sm transition"
-              onClick={() => localStorage.clear()}
-            >
-              Logout
-            </Link>
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold text-gray-800">Reviewer Dashboard</h1>
+          <p className="text-gray-600 mt-1">
+            Welcome back, {reviewer?.user?.username || "Reviewer"}!
+          </p>
+          <p className="text-sm text-gray-500 mt-1">
+            Department: {reviewer?.department || "Not specified"}
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+            <div className="text-3xl font-bold text-gray-800">{stats.totalReviews}</div>
+            <div className="text-gray-500 text-sm">Total Reviews</div>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+            <div className="text-3xl font-bold text-gray-800">{stats.pendingReviews}</div>
+            <div className="text-gray-500 text-sm">Pending Reviews</div>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+            <div className="text-3xl font-bold text-gray-800">{stats.completedReviews}</div>
+            <div className="text-gray-500 text-sm">Completed Reviews</div>
           </div>
         </div>
-
-        {/* Search bar */}
-        <div className="mb-6">
-          <input
-            type="text"
-            placeholder="Search by name or username..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full md:w-80 bg-[#161b22] border border-[#21262d] rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-[#388bfd]"
-          />
-        </div>
-
-        {/* Student cards grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredStudents.map((student) => (
-            <div
-              key={student.id}
-              className="bg-[#161b22] rounded-xl border border-[#21262d] p-5 hover:bg-[#1a2538] transition"
-            >
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-full bg-[#238636] flex items-center justify-center text-white font-bold">
-                  {student.name.charAt(0).toUpperCase()}
-                </div>
-                <div>
-                  <h3 className="font-semibold">{student.name}</h3>
-                  <p className="text-[#7d8590] text-xs">@{student.username}</p>
-                </div>
-              </div>
-              <Link
-                to={`/student/review-sheet?student_id=${student.id}`}
-                className="block text-center bg-[#21262d] hover:bg-[#30363d] rounded-lg px-4 py-2 text-sm transition"
-              >
-                📊 View Review Sheet
-              </Link>
-            </div>
-          ))}
-          {filteredStudents.length === 0 && (
-            <p className="text-[#7d8590] col-span-full text-center py-8">No students found.</p>
-          )}
-        </div>
       </div>
-    </div>
+    </main>
   );
 }
 

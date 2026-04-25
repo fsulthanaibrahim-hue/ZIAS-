@@ -20,6 +20,10 @@ import ReviewerDashboard from "./pages/reviewer/ReviewerDashboard";
 import ReviewerProfile from "./pages/reviewer/ReviewerProfile";
 import ReviewerChat from "./pages/reviewer/ReviewerChat";
 import ReviewerSidebar from "./components/ReviewerSidebar";
+import ReviewerStudents from "./pages/reviewer/ReviewerStudents";
+import ReviewerReviewFolders from "./pages/reviewer/ReviewerReviewFolders";
+import ReviewerReviewSheet from "./pages/reviewer/ReviewerReviewSheet";
+
 // Mentor pages
 import MentorDashboard from "./pages/mentor/MentorDashboard";
 import MentorProfile from "./pages/mentor/MentorProfile";
@@ -130,8 +134,30 @@ function App() {
       <Route path="/change-password" element={<PrivateRoute><ChangePassword /></PrivateRoute>} />
 
       {/* Reviewer routes with sidebar */}
-      <Route path="/reviewer/dashboard" element={<PrivateRoute><ReviewerDashboard /></PrivateRoute>} />
-      <Route path="/reviewer/profile" element={<PrivateRoute><ReviewerProfile /></PrivateRoute>} />
+      <Route path="/reviewer/dashboard" element={
+        <PrivateRoute>
+          <div style={{ display: "flex" }}>
+            <ReviewerSidebar />
+            <ReviewerDashboard />
+          </div>
+        </PrivateRoute>
+      } />
+      <Route path="/reviewer/students" element={
+        <PrivateRoute>
+          <div style={{ display: "flex" }}>
+            <ReviewerSidebar />
+            <ReviewerStudents />
+          </div>
+        </PrivateRoute>
+      } />
+      <Route path="/reviewer/review-folders" element={
+        <PrivateRoute>
+          <div style={{ display: "flex" }}>
+            <ReviewerSidebar />
+            <ReviewerReviewFolders />
+          </div>
+        </PrivateRoute>
+      } />
       <Route path="/reviewer/chat" element={
         <PrivateRoute>
           <div style={{ display: "flex" }}>
@@ -140,6 +166,23 @@ function App() {
           </div>
         </PrivateRoute>
       } />
+      <Route path="/reviewer/profile" element={
+        <PrivateRoute>
+          <div style={{ display: "flex" }}>
+            <ReviewerSidebar />
+            <ReviewerProfile />
+          </div>
+        </PrivateRoute>
+      } />
+      <Route path="/reviewer/review-sheet" element={
+        <PrivateRoute>
+          <div style={{ display: "flex" }}>
+            <ReviewerSidebar />
+            <ReviewerReviewSheet />
+          </div>
+        </PrivateRoute>
+      } />
+
 
       {/* Mentor routes with sidebar */}
       <Route path="/mentor/dashboard" element={

@@ -7,6 +7,8 @@ function ReviewerSidebar() {
 
   const navItems = [
     { path: "/reviewer/dashboard", label: "Dashboard", icon: "🏠" },
+    { path: "/reviewer/students", label: "My Students", icon: "👨‍🎓" },
+    { path: "/reviewer/review-folders", label: "Review Folders", icon: "📁" },
     { path: "/reviewer/chat", label: "Chat", icon: "💬" },
     { path: "/reviewer/profile", label: "Profile", icon: "👤" },
   ];

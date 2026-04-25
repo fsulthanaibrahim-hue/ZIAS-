@@ -66,7 +66,7 @@ class BatchViewSet(viewsets.ModelViewSet):
 # ----------------------------
 class StudentViewSet(viewsets.ModelViewSet):
     serializer_class = StudentSerializer
-    permission_classes = [IsStudentOwner]
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         user = self.request.user
@@ -83,7 +83,11 @@ class StudentViewSet(viewsets.ModelViewSet):
             except Mentor.DoesNotExist:
                 queryset = queryset.none()
         elif user.is_reviewer:
-            queryset = queryset
+            try:
+                reviewer = Reviewer.objects.get(user=user)
+                queryset = queryset.filter(reviewer=reviewer)
+            except Reviewer.DoesNotExist:
+                queryset = queryset.none()
         else:
             queryset = queryset.filter(user=user)
         return queryset
@@ -106,8 +110,8 @@ class StudentViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
-    @action(detail=False, methods=['get'], url_path='me', permission_classes=[IsAuthenticated])
-    def get_me(self, request):
+    @action(detail=False, methods=['get'], url_path='for-reviewer', permission_classes=[IsAuthenticated])
+    def for_reviewer(self, request):
         try:
             student = Student.objects.get(user=request.user)
             serializer = self.get_serializer(student)
