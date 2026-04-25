@@ -377,11 +377,14 @@ class ReviewFolderSerializer(serializers.ModelSerializer):
 
 
 # # ========== CHAT SERIALIZERS ==========
+
 class ChatMessageSerializer(serializers.ModelSerializer):
     sender_name = serializers.CharField(source='sender.username', read_only=True)
+
     class Meta:
         model = ChatMessage
-        fields = ['id', 'sender', 'sender_name', 'content', 'is_read', 'timestamp']
+        fields = ['id', 'room', 'sender', 'sender_name', 'content', 'is_read', 'timestamp']
+
 
 class ChatRoomSerializer(serializers.ModelSerializer):
     last_message = serializers.SerializerMethodField()
@@ -397,11 +400,13 @@ class ChatRoomSerializer(serializers.ModelSerializer):
 
     def get_last_message(self, obj):
         msg = obj.messages.last()
-        return {
-            'content': msg.content,
-            'timestamp': msg.timestamp.isoformat(),
-            'sender_id': msg.sender_id,
-        } if msg else None
+        if msg:
+            return {
+                'content': msg.content,
+                'timestamp': msg.timestamp.isoformat(),
+                'sender_id': msg.sender_id,
+            }
+        return None
 
     def get_unread_count(self, obj):
         user = self.context['request'].user

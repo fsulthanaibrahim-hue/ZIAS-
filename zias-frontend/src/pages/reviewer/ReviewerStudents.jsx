@@ -9,19 +9,18 @@ function ReviewerStudents() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchStudents = async () => {
       try {
-        // Fetch all students (reviewer has permission to list all students via StudentViewSet)
-        const studentsRes = await API.get("/students/");
-        setStudents(studentsRes.data);
+        const res = await API.get("/students/for-reviewer/");
+        setStudents(res.data);
       } catch (err) {
         console.error(err);
-        setError("Failed to load students");
+        setError("Could not load assigned students.");
       } finally {
         setLoading(false);
       }
     };
-    fetchData();
+    fetchStudents();
   }, []);
 
   if (loading) {
@@ -34,9 +33,7 @@ function ReviewerStudents() {
 
   if (error) {
     return (
-      <div className="flex-1 p-8 text-center text-red-600">
-        {error}
-      </div>
+      <div className="flex-1 p-8 text-center text-red-600">{error}</div>
     );
   }
 
@@ -44,15 +41,18 @@ function ReviewerStudents() {
     <main className="flex-1 p-8 overflow-y-auto bg-gray-50">
       <div className="max-w-6xl mx-auto">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-800">Students</h1>
+          <h1 className="text-2xl font-bold text-gray-800">My Students</h1>
           <p className="text-gray-500 text-sm mt-1">
-            All students ({students.length})
+            Students assigned to you ({students.length})
           </p>
         </div>
 
         {students.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-xl border border-gray-200 shadow-sm">
-            <p className="text-gray-500">No students found.</p>
+            <p className="text-gray-500">No students assigned for review yet.</p>
+            <p className="text-gray-400 text-sm mt-2">
+              Please contact an administrator to assign students to your reviewer profile.
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

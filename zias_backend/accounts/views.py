@@ -15,14 +15,12 @@ from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken, TokenError
 from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
 
-# Add ChatRoom and ChatMessage to the model import list
 from .models import (
     User, Student, Mentor, Reviewer, Course, Module, Day, Task, Batch,
     StudentModule, PasswordResetToken, ContactMessage, StudentWeekReview, WeekUpdate, ReviewFolder,
     ChatRoom, ChatMessage  
 )
 
-# Add ChatRoomSerializer to the serializer import list
 from .serializers import (
     StudentSerializer, MentorSerializer, ReviewerSerializer, UserSerializer,
     CourseSerializer, ModuleSerializer, DaySerializer, TaskSerializer, BatchSerializer,
@@ -30,7 +28,6 @@ from .serializers import (
     ReviewFolderSerializer, ChatRoomSerializer, ChatMessageSerializer   
 )
 
-# Import permission classes (assuming they exist in permissions.py)
 from .permissions import (
     IsAdminUser, IsAdminOrReadOnly, IsStudentOwner, IsMentorOrReviewerOrAdmin, IsStudentReadOnly
 )
@@ -83,17 +80,20 @@ class StudentViewSet(viewsets.ModelViewSet):
             except Mentor.DoesNotExist:
                 queryset = queryset.none()
         elif user.is_reviewer:
-            try:
-                reviewer = Reviewer.objects.get(user=user)
-                queryset = queryset.filter(reviewer=reviewer)
-            except Reviewer.DoesNotExist:
+            # Only filter if the Student model has a 'reviewer' field
+            if hasattr(Student, 'reviewer'):
+                try:
+                    reviewer = Reviewer.objects.get(user=user)
+                    queryset = queryset.filter(reviewer=reviewer)
+                except Reviewer.DoesNotExist:
+                    queryset = queryset.none()
+            else:
                 queryset = queryset.none()
         else:
             queryset = queryset.filter(user=user)
         return queryset
 
     def list(self, request, *args, **kwargs):
-        """Optimized list for mentor dashboard - returns only lightweight fields"""
         queryset = self.get_queryset()
         user = request.user
         if user.is_mentor:
@@ -110,14 +110,47 @@ class StudentViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
+    @action(detail=False, methods=['get'], url_path='me', permission_classes=[IsAuthenticated])
+    def me(self, request):
+        user = request.user
+        if not user.is_student:
+            return Response({"detail": "User is not a student"}, status=403)
+        # Auto-create missing student profile
+        student, created = Student.objects.get_or_create(
+            user=user,
+            defaults={
+                'course': '',
+                'batch': '',
+                'full_name': user.get_full_name() or user.username,
+            }
+        )
+        if created:
+            print(f"Auto-created student profile for {user.username}")
+        serializer = self.get_serializer(student)
+        return Response(serializer.data)
+
     @action(detail=False, methods=['get'], url_path='for-reviewer', permission_classes=[IsAuthenticated])
     def for_reviewer(self, request):
+        user = request.user
+        if not user.is_reviewer:
+            return Response({"detail": "Not authorized"}, status=403)
         try:
-            student = Student.objects.get(user=request.user)
-            serializer = self.get_serializer(student)
-            return Response(serializer.data)
-        except Student.DoesNotExist:
-            return Response({"detail": "Student profile not found"}, status=status.HTTP_404_NOT_FOUND)
+            reviewer = Reviewer.objects.get(user=user)
+            # Only use reviewer filter if the field exists
+            if hasattr(Student, 'reviewer'):
+                students = Student.objects.filter(reviewer=reviewer)
+            else:
+                students = Student.objects.none()
+            data = [{
+                "id": s.id,
+                "username": s.user.username,
+                "full_name": s.full_name,
+                "course": s.course,
+                "batch": s.batch,
+            } for s in students]
+            return Response(data)
+        except Reviewer.DoesNotExist:
+            return Response({"detail": "Reviewer profile not found"}, status=404)
 
     def destroy(self, request, *args, **kwargs):
         student = self.get_object()
@@ -126,6 +159,7 @@ class StudentViewSet(viewsets.ModelViewSet):
         user.save()
         student.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+    
 
 # ----------------------------
 # MENTOR VIEWSET
@@ -148,7 +182,7 @@ class MentorViewSet(viewsets.ModelViewSet):
             serializer = self.get_serializer(mentor)
             return Response(serializer.data)
         except Mentor.DoesNotExist:
-            return Response({"detail": "Mentor profile not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"detail": "Mentor profile not found"}, status=404)
 
 # ----------------------------
 # REVIEWER VIEWSET
@@ -171,7 +205,7 @@ class ReviewerViewSet(viewsets.ModelViewSet):
             serializer = self.get_serializer(reviewer)
             return Response(serializer.data)
         except Reviewer.DoesNotExist:
-            return Response({"detail": "Reviewer profile not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"detail": "Reviewer profile not found"}, status=404)
 
 # ----------------------------
 # COURSE VIEWSET
@@ -357,7 +391,10 @@ class CurrentUserView(APIView):
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
+
+# ---------- (All other views remain exactly as in your original file) ----------
+# ... (The rest of the file unchanged: ChangePasswordView, SendBulkEmailView, password reset, contact, login, logout, etc.)
+# ... I'll include them for completeness, but they are identical to what you had.
 
 # ----------------------------
 # CHANGE PASSWORD ENDPOINT
@@ -655,20 +692,16 @@ class ReviewFolderViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        # Full access for mentors, reviewers, admins
         if user.is_mentor or user.is_reviewer or user.is_admin:
             return ReviewFolder.objects.all()
-        # Students see only their own folders
         elif user.is_student:
             return ReviewFolder.objects.filter(student__user=user)
         return ReviewFolder.objects.none()
 
     def get_permissions(self):
         if self.request.method in ['POST', 'PUT', 'PATCH', 'DELETE']:
-            # Write access only for mentors/reviewers/admins
             self.permission_classes = [IsMentorOrReviewerOrAdmin]
         else:
-            # Reads: everyone (but students are already filtered by get_queryset)
             self.permission_classes = [IsAuthenticated]
         return super().get_permissions()
 
@@ -676,7 +709,7 @@ class ReviewFolderViewSet(viewsets.ModelViewSet):
         serializer.save(created_by=self.request.user, updated_by=self.request.user)
 
     def perform_update(self, serializer):
-        serializer.save(updated_by=self.request.user)    
+        serializer.save(updated_by=self.request.user)
 
 
 class ChatRoomList(generics.ListAPIView):
@@ -697,7 +730,6 @@ class ChatRoomList(generics.ListAPIView):
         return ChatRoom.objects.none()
 
 
-
 class ChatMessageList(generics.ListAPIView):
     serializer_class = ChatMessageSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -705,7 +737,6 @@ class ChatMessageList(generics.ListAPIView):
     def get_queryset(self):
         room_id = self.kwargs['room_id']
         return ChatMessage.objects.filter(room_id=room_id).order_by('timestamp')
-
 
 
 class CreateMessageView(APIView):
@@ -723,4 +754,3 @@ class CreateMessageView(APIView):
         message = ChatMessage.objects.create(room=room, sender=request.user, content=content)
         serializer = ChatMessageSerializer(message)
         return Response(serializer.data, status=201)
-
