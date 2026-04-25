@@ -89,7 +89,11 @@ class Reviewer(models.Model):
     qualification = models.CharField(max_length=100, blank=True)
     experience = models.IntegerField(null=True, blank=True)
     batch = models.ForeignKey(Batch, on_delete=models.SET_NULL, null=True, blank=True)
-    course = models.CharField(max_length=100, blank=True, null=True)   # ← NEW
+    course = models.CharField(max_length=100, blank=True, null=True)  
+    available_from = models.TimeField(null=True, blank=True, help_text="Start time (e.g. 09:00)")
+    available_to = models.TimeField(null=True, blank=True, help_text="End time (e.g. 17:00)")
+    available_days = models.JSONField(default=list, blank=True, help_text="List of weekdays (0=Monday, 6=Sunday)")
+
     
     def __str__(self):
         return self.user.username

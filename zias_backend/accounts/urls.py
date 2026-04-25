@@ -9,7 +9,8 @@ from .views import (
     ContactMessageView, UnreadMessagesCountView, RecentMessagesView, ContactMessageDetailView,
     CustomLoginView, LogoutView, UpdateDashboardAccessView,
     CompleteModuleView, StudentWeekReviewView, StudentListView, WeeklyToppersView,
-    WeekUpdateViewSet, ReviewFolderViewSet, ChatRoomList, ChatMessageList, CreateMessageView
+    WeekUpdateViewSet, ReviewFolderViewSet, ChatRoomList, ChatMessageList, CreateMessageView, 
+    ChatMessageListCreateView, ClearChatMessagesView
 )
 
 router = DefaultRouter()
@@ -49,4 +50,6 @@ urlpatterns = [
     path('api/chat-rooms/', ChatRoomList.as_view(), name='chat-rooms'),
     path('api/chat-rooms/<int:room_id>/messages/', ChatMessageList.as_view(), name='chat-messages'),
     path('api/chat-messages/', CreateMessageView.as_view(), name='create-message'),
+    path('chat-messages/', ChatMessageListCreateView.as_view(), name='chat-messages'),
+    path('api/chat-messages/clear/', ClearChatMessagesView.as_view(), name='clear-chat-messages'),
 ]

@@ -197,6 +197,17 @@ class ReviewerViewSet(viewsets.ModelViewSet):
             return Response(serializer.data)
         except Reviewer.DoesNotExist:
             return Response({"detail": "Reviewer profile not found"}, status=404)
+        
+    @action(detail=True, methods=['patch'], permission_classes=[IsAuthenticated])
+    def update_availability(self, request, pk=None):
+        reviewer = self.get_object()
+        if request.user != reviewer.user and not request.user.is_admin:
+            return Response({"detail": "Not allowed"}, status=403)
+        
+        serializer = self.get_serializer(reviewer, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
 
 # ----------------------------
 # COURSE VIEWSET
@@ -746,15 +757,15 @@ class ChatRoomList(generics.ListAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_student:
-            student = Student.objects.get(user=user)
-            return ChatRoom.objects.filter(student=student)
+        if user.is_reviewer:
+            reviewer = Reviewer.objects.get(user=user)
+            return ChatRoom.objects.filter(reviewer=reviewer, mentor__isnull=False, student__isnull=True)
         elif user.is_mentor:
             mentor = Mentor.objects.get(user=user)
             return ChatRoom.objects.filter(mentor=mentor)
-        elif user.is_reviewer:
-            reviewer = Reviewer.objects.get(user=user)
-            return ChatRoom.objects.filter(reviewer=reviewer)
+        elif user.is_student:
+            student = Student.objects.get(user=user)
+            return ChatRoom.objects.filter(student=student)
         return ChatRoom.objects.none()
 
 
@@ -782,3 +793,34 @@ class CreateMessageView(APIView):
         message = ChatMessage.objects.create(room=room, sender=request.user, content=content)
         serializer = ChatMessageSerializer(message)
         return Response(serializer.data, status=201)
+
+class ChatMessageListCreateView(generics.ListCreateAPIView):
+    serializer_class = ChatMessageSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        room_id = self.request.query_params.get('room')
+        return ChatMessage.objects.filter(room_id=room_id).order_by('timestamp') if room_id else ChatMessage.objects.none()
+
+
+
+class ClearChatMessagesView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request):
+        room_id = request.query_params.get('room')
+        if not room_id:
+            return Response({"error": "room parameter required"}, status=400)
+        try:
+            room = ChatRoom.objects.get(id=room_id)
+        except ChatRoom.DoesNotExist:
+            return Response({"error": "Room not found"}, status=404)
+
+        # Allow only participants (mentor/reviewer/student) to clear
+        user = request.user
+        if not (room.mentor and room.mentor.user == user) and not (room.reviewer and room.reviewer.user == user) and not (room.student and room.student.user == user):
+            return Response({"error": "Not authorized"}, status=403)
+
+        room.messages.all().delete()
+        return Response({"detail": "All messages cleared"})
+

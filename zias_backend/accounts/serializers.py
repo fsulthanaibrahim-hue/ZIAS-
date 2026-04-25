@@ -242,7 +242,8 @@ class ReviewerSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Reviewer
-        fields = ['id', 'username', 'email', 'department', 'qualification', 'experience', 'batch']
+        fields = ['id', 'username', 'email', 'department', 'qualification', 'experience', 'batch',
+                  'available_from', 'available_to', 'available_days']
 
     def create(self, validated_data):
         user_data = validated_data.pop('user')

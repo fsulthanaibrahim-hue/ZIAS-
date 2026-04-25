@@ -1,10 +1,10 @@
 // src/components/ChatWindow.jsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import api from '../api';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
 
-const ChatWindow = ({ room }) => {
+const ChatWindow = forwardRef(({ room }, ref) => {
   const { user } = useAuth();
   const socket = useSocket();
   const [messages, setMessages] = useState([]);
@@ -13,6 +13,13 @@ const ChatWindow = ({ room }) => {
   const [loading, setLoading] = useState(true);
   const messagesEndRef = useRef(null);
   const initialLoadRef = useRef(true);
+
+  // Expose "clearMessages" to parent component
+  useImperativeHandle(ref, () => ({
+    clearMessages: () => {
+      setMessages([]);
+    }
+  }));
 
   // Fetch previous messages (oldest first)
   useEffect(() => {
@@ -50,9 +57,8 @@ const ChatWindow = ({ room }) => {
       if (user_id !== user.id) setOtherTyping(is_typing);
     };
 
-    socket.on('receive_message', (msg) => {
-      console.log('Received message:', msg);
-    });
+    // Attach correct listeners
+    socket.on('receive_message', handleReceiveMessage);
     socket.on('user_typing', handleUserTyping);
 
     return () => {
@@ -131,6 +137,6 @@ const ChatWindow = ({ room }) => {
       </div>
     </div>
   );
-};
+});
 
 export default ChatWindow;
