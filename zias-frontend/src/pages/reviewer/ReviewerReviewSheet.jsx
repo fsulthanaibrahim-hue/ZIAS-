@@ -32,56 +32,52 @@ function ReviewerReviewSheet() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [savingStatus, setSavingStatus] = useState({});
-  const [reviewersList, setReviewersList] = useState([]);
-  const [reviewersLoading, setReviewersLoading] = useState(true);
+  const [reviewerNames, setReviewerNames] = useState([]);
+  const [fetchingReviewers, setFetchingReviewers] = useState(true);
 
   const statusOptions = ["Task Completed", "Task Need Improvement", "Task Critical", "Task Not Completed"];
 
-  // Try to fetch all reviewers (for dropdown)
+  // Fetch reviewer names for dropdown (attempt multiple endpoints)
   useEffect(() => {
-    const fetchReviewers = async () => {
+    const fetchNames = async () => {
       try {
-        // Try endpoint that might be accessible to reviewers
-        // Option 1: /api/users/?is_reviewer=true (if available)
-        // Option 2: /api/reviewers/ (but may be forbidden)
-        let response;
+        let names = [];
         try {
-          response = await API.get("/users/?is_reviewer=true");
+          // Try normal reviewers endpoint
+          const res = await API.get("/reviewers/");
+          names = res.data.map(r => r.user?.username || r.username).filter(Boolean);
         } catch {
-          response = await API.get("/reviewers/");
+          // Fallback: try users with is_reviewer=true
+          const res = await API.get("/users/?is_reviewer=true");
+          names = res.data.map(u => u.username).filter(Boolean);
         }
-        const names = response.data.map(rev => {
-          // Extract name from different possible structures
-          const name = rev.user?.username || rev.username || rev.name || "Unknown";
-          return name.charAt(0).toUpperCase() + name.slice(1);
-        });
-        setReviewersList([...new Set(names)]); // unique names
+        setReviewerNames([...new Set(names)]);
       } catch (err) {
-        console.warn("Could not fetch reviewers list, falling back to text input", err);
-        setReviewersList([]); // empty list -> fallback to text input
+        console.warn("Could not fetch reviewers, using text input fallback", err);
+        setReviewerNames([]);
       } finally {
-        setReviewersLoading(false);
+        setFetchingReviewers(false);
       }
     };
-    fetchReviewers();
+    fetchNames();
   }, []);
 
   const rows = useMemo(() => [
     { label: "Status", field: "task_status", editable: true, type: "select", options: statusOptions },
     { label: "Project Updates", field: "feedback", editable: true, type: "text" },
-    { 
-      label: "Reviewer Name", 
-      field: "reviewer_name", 
-      editable: true, 
-      type: reviewersList.length ? "select" : "text", 
-      options: reviewersList 
+    {
+      label: "Reviewer Name",
+      field: "reviewer_name",
+      editable: true,
+      type: reviewerNames.length ? "select" : "text",
+      options: reviewerNames,
     },
     { label: "Advisor Name", field: "advisor_name", editable: false },
     { label: "Score [20]", field: "total_score", editable: true, type: "number", min: 0, max: 20, step: 1 },
     { label: "Extra Workouts Review", field: "extra_workouts", editable: false },
     { label: "Review Date", field: "review_date", editable: false },
     { label: "English Review", field: "english_review", editable: false },
-  ], [reviewersList]);
+  ], [reviewerNames]);
 
   const weekRanges = [
     { label: "Week 0 - 12", start: 1, end: 12 },
@@ -209,7 +205,7 @@ function ReviewerReviewSheet() {
         </div>
       );
     }
-    // text input fallback
+    // text input fallback (if dropdown fails)
     return (
       <div className="flex items-center gap-1">
         <input
@@ -232,14 +228,13 @@ function ReviewerReviewSheet() {
     );
   };
 
-  if (loading || reviewersLoading) {
+  if (loading || fetchingReviewers) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
         <div className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
-
   if (error) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50 p-8 text-center">
@@ -273,6 +268,7 @@ function ReviewerReviewSheet() {
           </div>
         ) : (
           <>
+            {/* Desktop table */}
             <div className="hidden md:block overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
               <table className="min-w-full border-collapse">
                 <thead className="bg-gray-50 border-b border-gray-200">
@@ -306,6 +302,7 @@ function ReviewerReviewSheet() {
               </table>
             </div>
 
+            {/* Mobile cards */}
             <div className="md:hidden space-y-6">
               {weeks.map(week => (
                 <div key={week.id} className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
@@ -330,13 +327,18 @@ function ReviewerReviewSheet() {
           </>
         )}
 
+        {/* Personal Details – clickable week ranges */}
         <div className="mt-6 bg-white rounded-xl border border-gray-200 shadow-sm p-4">
           <h3 className="text-sm font-semibold text-gray-800 mb-2">Personal Details</h3>
           <div className="flex flex-wrap gap-4 text-xs">
             {weekRanges.map((range) => (
-              <span key={range.label} className="text-gray-500">
+              <Link
+                key={range.label}
+                to={`/reviewer/review-sheet/range/${range.start}/${range.end}?student_id=${studentId}`}
+                className="text-green-600 hover:text-green-800 hover:underline"
+              >
                 {range.label}
-              </span>
+              </Link>
             ))}
           </div>
         </div>
