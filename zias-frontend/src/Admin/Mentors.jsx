@@ -1,4 +1,4 @@
-// src/Admin/Mentors.jsx (corrected – removed qualification & experience)
+// src/Admin/Mentors.jsx (username removed – uses Full Name & email)
 import { useEffect, useState, useRef } from "react";
 import API from "../api/api";
 
@@ -54,7 +54,7 @@ function Mentors() {
   const itemsPerPage = 10;
   const [viewingMentor, setViewingMentor] = useState(null);
   const [formData, setFormData] = useState({
-    username: "",
+    name: "",        // Full name (UI only)
     email: "",
     phone: "",
     expertise: "",
@@ -117,6 +117,18 @@ function Mentors() {
     }
   };
 
+  // Generate a username from full name (lowercase, spaces -> underscores)
+  const generateUsername = (name, email) => {
+    let base = name ? name.toLowerCase().trim().replace(/\s+/g, '_') : '';
+    if (!base) base = email ? email.split('@')[0] : 'mentor';
+    // Remove any characters that are not alphanumeric or underscore
+    base = base.replace(/[^a-z0-9_]/g, '');
+    if (!base) base = 'mentor';
+    // Add random suffix to reduce collisions (backend will still enforce uniqueness)
+    const suffix = Math.floor(Math.random() * 10000);
+    return `${base}${suffix}`;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -127,8 +139,9 @@ function Mentors() {
     }
     setPhoneError("");
 
+    const generatedUsername = generateUsername(formData.name, formData.email);
     const payload = {
-      username: formData.username,
+      username: generatedUsername,
       email: formData.email,
       phone: formData.phone,
       expertise: formData.expertise,
@@ -145,7 +158,7 @@ function Mentors() {
       setShowForm(false);
       setEditingId(null);
       setFormData({
-        username: "", email: "", phone: "", expertise: "", batch: "",
+        name: "", email: "", phone: "", expertise: "", batch: "",
       });
       setPhoneError("");
       fetchMentors();
@@ -163,7 +176,7 @@ function Mentors() {
   const handleEdit = (mentor) => {
     setEditingId(mentor.id);
     setFormData({
-      username: mentor.username,
+      name: mentor.username,   // Show the existing username as name
       email: mentor.email,
       phone: mentor.phone || "",
       expertise: mentor.expertise,
@@ -261,10 +274,7 @@ function Mentors() {
         .shine { position:relative; overflow:hidden; }
         .shine::after { content:''; position:absolute; top:0; left:-100%; width:60%; height:100%; background:linear-gradient(90deg,transparent,rgba(255,255,255,0.3),transparent); animation: shine 3s infinite; }
         @keyframes shine { to { left:150%; } }
-        @keyframes slide-in-from-top-2 {
-          from { opacity:0; transform:translateY(-1rem); }
-          to { opacity:1; transform:translateY(0); }
-        }
+        @keyframes slide-in-from-top-2 { from { opacity:0; transform:translateY(-1rem); } to { opacity:1; transform:translateY(0); } }
         .animate-in { animation: slide-in-from-top-2 0.2s ease-out; }
         @media (max-width: 640px) {
           .mentor-table thead { display: none; }
@@ -316,7 +326,7 @@ function Mentors() {
               onClick={() => {
                 setEditingId(null);
                 setFormData({
-                  username: "", email: "", phone: "", expertise: "", batch: "",
+                  name: "", email: "", phone: "", expertise: "", batch: "",
                 });
                 setPhoneError("");
                 setShowForm(true);
@@ -352,7 +362,7 @@ function Mentors() {
 
               <div className="px-4 sm:px-6 py-5 space-y-5">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div><label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Username *</label><input type="text" name="username" value={formData.username} onChange={handleChange} required className={inputClass} /></div>
+                  <div><label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Full Name *</label><input type="text" name="name" value={formData.name} onChange={handleChange} required className={inputClass} /></div>
                   <div><label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Email *</label><input type="email" name="email" value={formData.email} onChange={handleChange} required className={inputClass} /></div>
                   <div><label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Phone</label><input type="tel" name="phone" value={formData.phone} onChange={handleChange} className={`${inputClass} ${phoneError ? "border-red-500" : ""}`} placeholder="10-digit mobile" />{phoneError && <p className="text-red-500 text-xs mt-1">{phoneError}</p>}</div>
                   <div><label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Expertise *</label><input type="text" name="expertise" value={formData.expertise} onChange={handleChange} required className={inputClass} /></div>

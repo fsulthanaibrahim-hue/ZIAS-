@@ -106,8 +106,22 @@ function Batches() {
     }
   };
 
+  // Validate dates before submission
+  const validateDates = () => {
+    if (formData.start_date && formData.end_date) {
+      const start = new Date(formData.start_date);
+      const end = new Date(formData.end_date);
+      if (end < start) {
+        showToast("End date cannot be earlier than start date", "error");
+        return false;
+      }
+    }
+    return true;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!validateDates()) return;
     try {
       if (editingId) {
         await API.patch(`batches/${editingId}/`, formData);

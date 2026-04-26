@@ -45,7 +45,7 @@ function ConfirmModal({ isOpen, onClose, onConfirm, reviewerName }) {
 
 function Reviewers() {
   const [reviewers, setReviewers] = useState([]);
-  const [batchesList, setBatchesList] = useState([]);
+  const [coursesList, setCoursesList] = useState([]);     // for department dropdown
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -54,12 +54,11 @@ function Reviewers() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   const [formData, setFormData] = useState({
-    username: "",
+    name: "",           // Full name (UI only)
     email: "",
     department: "",
     qualification: "",
     experience: "",
-    batch: "",
   });
 
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -79,17 +78,17 @@ function Reviewers() {
       });
   };
 
-  const fetchBatches = () => {
-    API.get("batches/")
-      .then(res => setBatchesList(res.data))
-      .catch(() => showToast("Failed to load batches", "error"));
+  const fetchCourses = () => {
+    API.get("courses/")
+      .then(res => setCoursesList(res.data))
+      .catch(() => showToast("Failed to load courses", "error"));
   };
 
   useEffect(() => {
     if (initialFetchDone.current) return;
     initialFetchDone.current = true;
     fetchReviewers();
-    fetchBatches();
+    fetchCourses();
   }, []);
 
   const handleDeleteClick = (reviewerId, reviewerName) => {
@@ -112,16 +111,28 @@ function Reviewers() {
     }
   };
 
+  // Generate a username from full name (lowercase, spaces -> underscores)
+  const generateUsername = (name, email) => {
+    let base = name ? name.toLowerCase().trim().replace(/\s+/g, '_') : '';
+    if (!base) base = email ? email.split('@')[0] : 'reviewer';
+    base = base.replace(/[^a-z0-9_]/g, '');
+    if (!base) base = 'reviewer';
+    const suffix = Math.floor(Math.random() * 10000);
+    return `${base}${suffix}`;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
+    const generatedUsername = generateUsername(formData.name, formData.email);
+    // Department is stored as the course name (string)
     const payload = {
-      username: formData.username,
+      username: generatedUsername,
       email: formData.email,
-      department: formData.department,
+      department: formData.department,   // already the course name from dropdown
       qualification: formData.qualification || null,
-      experience: formData.experience || null,
-      batch: formData.batch || null,
+      experience: formData.experience ? parseInt(formData.experience) : null,
+      batch: null,
     };
     try {
       if (editingId) {
@@ -133,8 +144,9 @@ function Reviewers() {
       }
       setShowForm(false);
       setEditingId(null);
-      setFormData({ username: "", email: "", department: "", qualification: "", experience: "", batch: "" });
+      setFormData({ name: "", email: "", department: "", qualification: "", experience: "" });
       fetchReviewers();
+      setCurrentPage(1);
     } catch (error) {
       if (error.response) {
         const errorMsg = error.response.data?.username 
@@ -153,12 +165,11 @@ function Reviewers() {
   const handleEdit = (reviewer) => {
     setEditingId(reviewer.id);
     setFormData({
-      username: reviewer.username,
+      name: reviewer.username,   // Show the existing username as name
       email: reviewer.email,
-      department: reviewer.department,
+      department: reviewer.department || "",
       qualification: reviewer.qualification || "",
-      experience: reviewer.experience || "",
-      batch: reviewer.batch || "",
+      experience: reviewer.experience ? reviewer.experience.toString() : "",
     });
     setShowForm(true);
   };
@@ -224,11 +235,6 @@ function Reviewers() {
     "from-rose-500 to-rose-700", "from-cyan-500 to-cyan-700",
   ];
   const getColor = (name) => avatarColors[(name?.charCodeAt(0) || 0) % avatarColors.length];
-
-  const getBatchName = (batchId) => {
-    const batch = batchesList.find(b => b.id === batchId);
-    return batch ? batch.name : "—";
-  };
 
   return (
     <div className="min-h-screen w-full bg-gray-50 text-gray-800">
@@ -299,7 +305,7 @@ function Reviewers() {
             <button
               onClick={() => {
                 setEditingId(null);
-                setFormData({ username: "", email: "", department: "", qualification: "", experience: "", batch: "" });
+                setFormData({ name: "", email: "", department: "", qualification: "", experience: "" });
                 setShowForm(true);
               }}
               className="shine flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 shadow-md w-full sm:w-auto"
@@ -312,7 +318,7 @@ function Reviewers() {
           </div>
         </div>
 
-        {/* Add/Edit Modal */}
+        {/* Add/Edit Modal – Department is a dropdown from courses */}
         {showForm && (
           <div
             className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4"
@@ -344,16 +350,27 @@ function Reviewers() {
 
               <div className="px-4 sm:px-6 py-5 space-y-4">
                 <div>
-                  <label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Username</label>
-                  <input type="text" name="username" value={formData.username} onChange={handleChange} required className={inputClass} />
+                  <label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Full Name *</label>
+                  <input type="text" name="name" value={formData.name} onChange={handleChange} required className={inputClass} />
                 </div>
                 <div>
-                  <label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Email</label>
+                  <label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Email *</label>
                   <input type="email" name="email" value={formData.email} onChange={handleChange} required className={inputClass} />
                 </div>
                 <div>
-                  <label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Department</label>
-                  <input type="text" name="department" value={formData.department} onChange={handleChange} required className={inputClass} />
+                  <label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Department (Course) *</label>
+                  <select
+                    name="department"
+                    value={formData.department}
+                    onChange={handleChange}
+                    required
+                    className={inputClass}
+                  >
+                    <option value="">Select a course</option>
+                    {coursesList.map(course => (
+                      <option key={course.id} value={course.name}>{course.name}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Qualification</label>
@@ -361,7 +378,7 @@ function Reviewers() {
                 </div>
                 <div>
                   <label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Experience (years)</label>
-                  <input type="text" name="experience" value={formData.experience} onChange={handleChange} className={inputClass} placeholder="e.g. 5 years" />
+                  <input type="text" name="experience" value={formData.experience} onChange={handleChange} className={inputClass} placeholder="e.g. 5" />
                 </div>
               </div>
 
@@ -384,7 +401,7 @@ function Reviewers() {
               <tr>
                 <th className="text-left px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Reviewer</th>
                 <th className="text-left px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Email</th>
-                <th className="text-left px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Department</th>
+                <th className="text-left px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Department (Course)</th>
                 <th className="text-left px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Actions</th>
               </tr>
             </thead>
@@ -481,7 +498,7 @@ function Reviewers() {
               <div className="flex items-center gap-3">
                 <div className="w-7 h-7 rounded-lg bg-green-100 border border-green-200 flex items-center justify-center">
                   <svg className="w-3.5 h-3.5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                   </svg>
                 </div>
                 <div>
@@ -499,9 +516,9 @@ function Reviewers() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Username</label><input type="text" value={viewingReviewer.username || ""} readOnly className={readOnlyClass} /></div>
                 <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Email</label><input type="text" value={viewingReviewer.email || ""} readOnly className={readOnlyClass} /></div>
-                <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Department</label><input type="text" value={viewingReviewer.department || ""} readOnly className={readOnlyClass} /></div>
+                <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Department (Course)</label><input type="text" value={viewingReviewer.department || "—"} readOnly className={readOnlyClass} /></div>
                 <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Qualification</label><input type="text" value={viewingReviewer.qualification || "—"} readOnly className={readOnlyClass} /></div>
-                <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Experience</label><input type="text" value={viewingReviewer.experience || "—"} readOnly className={readOnlyClass} /></div>
+                <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Experience</label><input type="text" value={viewingReviewer.experience ? `${viewingReviewer.experience} years` : "—"} readOnly className={readOnlyClass} /></div>
               </div>
             </div>
             <div className="sticky bottom-0 bg-white px-4 sm:px-6 py-4 border-t border-gray-200 flex justify-end">
