@@ -1,6 +1,6 @@
 import { 
   FaEnvelope, FaPhone, FaMapMarkerAlt, 
-  FaFacebook, FaTwitter, FaLinkedin 
+  FaInstagram, FaWhatsapp, FaLinkedin 
 } from 'react-icons/fa';
 import { Link } from 'react-router-dom';
 
@@ -40,7 +40,7 @@ const Footer = () => {
               </li>
               <li className="flex items-center gap-2">
                 <FaPhone className="text-green-500 rotate-90" />
-                <a href="tel:+919876543210" className="hover:text-green-500">+91 98765 43210</a>
+                <a href="tel:+919876543210" className="hover:text-green-500">+91 7034466440</a>
               </li>
               <li className="flex items-center gap-2">
                 <FaMapMarkerAlt className="text-green-500" />
@@ -53,11 +53,11 @@ const Footer = () => {
           <div>
             <h4 className="text-lg font-semibold mb-4">Follow Us</h4>
             <div className="flex gap-4">
-              <a href="https://www.facebook.com/yourpage" target="_blank" rel="noopener noreferrer" className="cursor-pointer hover:text-green-500">
-                <FaFacebook />
+              <a href="https://www.instagram.com/yourpage" target="_blank" rel="noopener noreferrer" className="cursor-pointer hover:text-green-500">
+                <FaInstagram />
               </a>
-              <a href="https://twitter.com/yourhandle" target="_blank" rel="noopener noreferrer" className="cursor-pointer hover:text-green-500">
-                <FaTwitter />
+              <a href="https://whatsapp.com/yourhandle" target="_blank" rel="noopener noreferrer" className="cursor-pointer hover:text-green-500">
+                <FaWhatsapp />
               </a>
               <a href="https://www.linkedin.com/company/zaitooncampus/" target="_blank" rel="noopener noreferrer" className="cursor-pointer hover:text-green-500">
                 <FaLinkedin />

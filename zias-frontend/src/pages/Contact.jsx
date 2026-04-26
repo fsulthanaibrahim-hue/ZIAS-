@@ -164,8 +164,8 @@ const Contact = () => {
               <FaPhoneAlt className="text-green-600 text-4xl mb-4 mx-auto" />
               <h3 className="text-xl font-semibold text-gray-900 mb-2">Phone</h3>
               <p className="text-gray-600 leading-relaxed">
-                +91 98765 43210<br />
-                +91 98764 54410
+                +91 7034466440<br />
+                +91 7034466440
               </p>
             </div>
 
