@@ -219,7 +219,7 @@ class CourseViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminOrReadOnly]
 
 # ----------------------------
-# MODULE VIEWSET (unchanged)
+# MODULE VIEWSET (fixed for reviewer)
 # ----------------------------
 class ModuleViewSet(viewsets.ModelViewSet):
     queryset = Module.objects.all()
@@ -244,7 +244,7 @@ class ModuleViewSet(viewsets.ModelViewSet):
         user = request.user
         student_id = request.query_params.get('student_id')
 
-        if user.is_admin or user.is_mentor:
+        if user.is_admin or user.is_mentor or user.is_reviewer:
             if student_id:
                 try:
                     student = Student.objects.get(id=student_id)
@@ -694,10 +694,11 @@ class StudentWeekReviewView(generics.RetrieveUpdateAPIView):
         module_id = self.kwargs.get('module_id')
         user = self.request.user
         student_id = self.request.query_params.get('student_id')
-        if user.is_admin or user.is_mentor:
+        # ✅ Allow admin, mentor, and reviewer to access week reviews
+        if user.is_admin or user.is_mentor or user.is_reviewer:
             if not student_id:
                 from rest_framework.exceptions import ValidationError
-                raise ValidationError({"detail": "student_id required for reviewer"})
+                raise ValidationError({"detail": "student_id required"})
             student = Student.objects.get(id=student_id)
         else:
             if not user.is_student:

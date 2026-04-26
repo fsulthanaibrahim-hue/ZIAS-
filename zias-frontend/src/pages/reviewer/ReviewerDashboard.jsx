@@ -5,9 +5,10 @@ import API from "../../api/api";
 
 function ReviewerDashboard() {
   const [reviewer, setReviewer] = useState(null);
+  const [students, setStudents] = useState([]);
   const [recentFolders, setRecentFolders] = useState([]);
   const [stats, setStats] = useState({
-    totalReviews: 0,
+    totalStudents: 0,
     pendingReviews: 0,
     completedReviews: 0,
   });
@@ -20,23 +21,39 @@ function ReviewerDashboard() {
 
     const fetchData = async () => {
       try {
+        // Get reviewer profile
         const reviewerRes = await API.get("reviewers/me/", { signal: abortController.signal });
         if (!isMounted) return;
-        setReviewer(reviewerRes.data);
+        const reviewerData = reviewerRes.data;
+        setReviewer(reviewerData);
 
-        // Fetch review folders (assuming they are assigned to this reviewer)
-        const foldersRes = await API.get("/review-folders/", {
-          params: { reviewer: reviewerRes.data.id }, // adjust filter as per your backend
+        // Fetch students assigned to this reviewer (via batch/course)
+        const studentsRes = await API.get("students/", {
+          params: { course: reviewerData.course }, // adjust based on your filter
           signal: abortController.signal,
         });
-        const folders = foldersRes.data;
+        if (!isMounted) return;
+        const studentsList = studentsRes.data;
+        setStudents(studentsList);
+        setStats((prev) => ({ ...prev, totalStudents: studentsList.length }));
+
+        // Fetch review folders (for these students)
+        let allFolders = [];
+        for (const student of studentsList) {
+          const foldersRes = await API.get("/review-folders/", {
+            params: { student: student.id },
+            signal: abortController.signal,
+          });
+          allFolders = [...allFolders, ...foldersRes.data];
+        }
         setStats({
-          totalReviews: folders.length,
-          pendingReviews: folders.filter(f => !f.is_done).length,
-          completedReviews: folders.filter(f => f.is_done).length,
+          totalStudents: studentsList.length,
+          pendingReviews: allFolders.filter(f => !f.is_done).length,
+          completedReviews: allFolders.filter(f => f.is_done).length,
         });
         // Take recent 5 folders
-        setRecentFolders(folders.slice(0, 5));
+        const sorted = allFolders.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        setRecentFolders(sorted.slice(0, 5));
       } catch (err) {
         if (err.name === "AbortError" || err.code === "ERR_CANCELED") return;
         console.error(err);
@@ -80,12 +97,12 @@ function ReviewerDashboard() {
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-3xl font-bold text-gray-800">{stats.totalReviews}</div>
-                <div className="text-gray-500 text-sm mt-1">Total Reviews</div>
+                <div className="text-3xl font-bold text-gray-800">{stats.totalStudents}</div>
+                <div className="text-gray-500 text-sm mt-1">Total Students</div>
               </div>
               <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20v-5a2 2 0 0 0-2-2H9a2 2 0 0 0-2 2v5m4-14a3 3 0 1 1 0 6 3 3 0 0 1 0-6z" />
                 </svg>
               </div>
             </div>
@@ -118,15 +135,12 @@ function ReviewerDashboard() {
           </div>
         </div>
 
-        {/* Recent Review Folders Table */}
+        {/* Recent Students Table (like mentor dashboard) */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
             <div className="flex justify-between items-center">
-              <h2 className="text-lg font-semibold text-gray-800">Recent Review Folders</h2>
-              <Link
-                to="/reviewer/review-folders"
-                className="text-sm text-green-600 hover:text-green-700 font-medium"
-              >
+              <h2 className="text-lg font-semibold text-gray-800">Recent Students</h2>
+              <Link to="/reviewer/students" className="text-sm text-green-600 hover:text-green-700 font-medium">
                 View all
               </Link>
             </div>
@@ -136,59 +150,35 @@ function ReviewerDashboard() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Week</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Submitted</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
-                 </tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Course</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Batch</th>
+                </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {recentFolders.length === 0 ? (
+                {students.slice(0, 5).map((student) => (
+                  <tr key={student.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900">
+                        {student.full_name || student.username}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{student.course || "—"}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{student.batch || "—"}</td>
+                  </tr>
+                ))}
+                {students.length === 0 && (
                   <tr>
-                    <td colSpan="5" className="px-6 py-8 text-center text-gray-400">
-                      No review folders found.
+                    <td colSpan="3" className="px-6 py-8 text-center text-gray-400">
+                      No students assigned to you yet.
                     </td>
                   </tr>
-                ) : (
-                  recentFolders.map((folder) => (
-                    <tr key={folder.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">
-                          {folder.student_name || "Unknown Student"}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-500">{folder.week || "—"}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-500">
-                          {folder.created_at ? new Date(folder.created_at).toLocaleDateString() : "—"}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          folder.is_done ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"
-                        }`}>
-                          {folder.is_done ? "Completed" : "Pending"}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <Link
-                          to={`/reviewer/review-sheet?folder_id=${folder.id}`}
-                          className="text-green-600 hover:text-green-900"
-                        >
-                          Review
-                        </Link>
-                      </td>
-                    </tr>
-                  ))
                 )}
               </tbody>
             </table>
           </div>
         </div>
 
-        {/* Optional: Quick Actions */}
+        {/* Quick Actions & Account Information */}
         <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
             <h3 className="text-md font-semibold text-gray-800 mb-3">Quick Actions</h3>

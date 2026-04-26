@@ -15,14 +15,17 @@ import ChangePassword from "./pages/ChangePassword";
 import DashboardLock from "./pages/student/DashboardLock";
 import StudentReviewFolders from "./pages/student/StudentReviewFolders";
 import StudentChat from "./pages/student/StudentChat";
+import StudentModules from "./pages/student/StudentModules";
+
 // Reviewer pages
 import ReviewerDashboard from "./pages/reviewer/ReviewerDashboard";
 import ReviewerProfile from "./pages/reviewer/ReviewerProfile";
 import ReviewerChat from "./pages/reviewer/ReviewerChat";
-import ReviewerSidebar from "./components/ReviewerSidebar";
 import ReviewerStudents from "./pages/reviewer/ReviewerStudents";
 import ReviewerReviewFolders from "./pages/reviewer/ReviewerReviewFolders";
 import ReviewerReviewSheet from "./pages/reviewer/ReviewerReviewSheet";
+import ReviewerReviewSheetRange from "./pages/reviewer/ReviewerReviewSheetRange";
+
 
 // Mentor pages
 import MentorDashboard from "./pages/mentor/MentorDashboard";
@@ -56,7 +59,9 @@ import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 // Sidebars
 import MentorSidebar from "./components/MentorSidebar";
-import StudentModules from "./pages/student/StudentModules";
+import ReviewerSidebar from "./components/ReviewerSidebar";
+
+
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem("access_token");
@@ -182,6 +187,15 @@ function App() {
           </div>
         </PrivateRoute>
       } />
+      <Route path="/reviewer/review-sheet" element={
+        <PrivateRoute>
+          <div style={{ display: "flex" }}>
+            <ReviewerSidebar />
+            <ReviewerReviewSheetRange />
+          </div>
+        </PrivateRoute>
+      } />
+
 
 
       {/* Mentor routes with sidebar */}

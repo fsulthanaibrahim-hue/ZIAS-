@@ -334,6 +334,8 @@ class ContactMessageSerializer(serializers.ModelSerializer):
 class StudentWeekReviewSerializer(serializers.ModelSerializer):
     student_name = serializers.CharField(source='student.user.username', read_only=True)
     module_title = serializers.CharField(source='module.title', read_only=True)
+    total_score = serializers.IntegerField(min_value=0, max_value=20, required=False, allow_null=True)
+
     class Meta:
         model = StudentWeekReview
         fields = '__all__'
