@@ -34,8 +34,8 @@ function ReviewerReviewSheet() {
   const [savingStatus, setSavingStatus] = useState({});
 
   const statusOptions = ["Task Completed", "Task Need Improvement", "Task Critical", "Task Not Completed"];
-  // Static list of possible reviewer names (no API call)
-  const reviewerOptions = ["Akif Sir", "Rizwan Sir", "Jassir Sir", "Nihas Sir"];
+  // Static list of possible reviewer names (no API call to avoid 403)
+  const reviewerOptions = ["Akif Sir", "Rizwan Sir", "Jassir Sir", "Prameesh Sir", "Nihas Sir"];
 
   const rows = useMemo(() => [
     { label: "Status", field: "task_status", editable: true, type: "select", options: statusOptions },
@@ -80,6 +80,17 @@ function ReviewerReviewSheet() {
   const debouncedSave = useCallback(debounce(saveField, 1000), [saveField]);
 
   const handleChange = (weekId, field, value) => {
+    // For number fields, clamp the value to min/max immediately
+    const row = rows.find(r => r.field === field);
+    if (row?.type === "number") {
+      let num = parseFloat(value);
+      if (isNaN(num)) num = "";
+      if (num !== "") {
+        if (num < row.min) num = row.min;
+        if (num > row.max) num = row.max;
+        value = num;
+      }
+    }
     setReviews(prev => ({
       ...prev,
       [weekId]: { ...prev[weekId], [field]: value }
@@ -301,7 +312,6 @@ function ReviewerReviewSheet() {
           </>
         )}
 
-        {/* Personal Details with clickable week ranges */}
         <div className="mt-6 bg-white rounded-xl border border-gray-200 shadow-sm p-4">
           <h3 className="text-sm font-semibold text-gray-800 mb-2">Personal Details</h3>
           <div className="flex flex-wrap gap-4 text-xs">
