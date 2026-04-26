@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework.filters import BaseFilterBackend
 from rest_framework import generics, permissions
 from rest_framework.parsers import JSONParser
+from rest_framework.exceptions import ValidationError   # ✅ added
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from django.utils.crypto import get_random_string
@@ -19,14 +20,14 @@ from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
 from .models import (
     User, Student, Mentor, Reviewer, Course, Module, Day, Task, Batch,
     StudentModule, PasswordResetToken, ContactMessage, StudentWeekReview, WeekUpdate, ReviewFolder,
-    ChatRoom, ChatMessage  
+    ChatRoom, ChatMessage, CourseStatus
 )
 
 from .serializers import (
     StudentSerializer, MentorSerializer, ReviewerSerializer, UserSerializer,
     CourseSerializer, ModuleSerializer, DaySerializer, TaskSerializer, BatchSerializer,
     ContactMessageSerializer, StudentModuleSerializer, StudentWeekReviewSerializer, WeekUpdateSerializer,
-    ReviewFolderSerializer, ChatRoomSerializer, ChatMessageSerializer   
+    ReviewFolderSerializer, ChatRoomSerializer, ChatMessageSerializer, CourseStatusSerializer
 )
 
 from .permissions import (
@@ -151,7 +152,7 @@ class StudentViewSet(viewsets.ModelViewSet):
         user.save()
         student.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
-    
+
 
 # ----------------------------
 # MENTOR VIEWSET
@@ -198,13 +199,13 @@ class ReviewerViewSet(viewsets.ModelViewSet):
             return Response(serializer.data)
         except Reviewer.DoesNotExist:
             return Response({"detail": "Reviewer profile not found"}, status=404)
-        
+
     @action(detail=True, methods=['patch'], permission_classes=[IsAuthenticated])
     def update_availability(self, request, pk=None):
         reviewer = self.get_object()
         if request.user != reviewer.user and not request.user.is_admin:
             return Response({"detail": "Not allowed"}, status=403)
-        
+
         serializer = self.get_serializer(reviewer, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
@@ -311,10 +312,11 @@ class ModuleViewSet(viewsets.ModelViewSet):
         return Response(data)
 
 # ----------------------------
-# COMPLETE MODULE VIEW
+# COMPLETE MODULE VIEW (with CourseStatus update)
 # ----------------------------
 class CompleteModuleView(APIView):
     permission_classes = [IsAuthenticated]
+
     def post(self, request, module_id):
         user = request.user
         if not user.is_student:
@@ -325,14 +327,39 @@ class CompleteModuleView(APIView):
         )
         if created:
             print(f"Created missing student profile for {user.username} during module completion")
+
         try:
             module = Module.objects.get(id=module_id)
         except Module.DoesNotExist:
             return Response({"detail": "Module not found."}, status=404)
+
         student_module, created = StudentModule.objects.get_or_create(student=student, module=module)
         student_module.is_completed = True
         student_module.completed_at = timezone.now()
         student_module.save()
+
+        # ----- Update CourseStatus (track week progress) -----
+        # Ensure Module has a ForeignKey to Course (named 'course')
+        # and an 'order' field (week number).
+        if module.course and hasattr(module, 'order'):
+            # Get or create CourseStatus for this student and course
+            course_status, _ = CourseStatus.objects.get_or_create(
+                student=student,
+                course=module.course,
+                defaults={'current_week': 1}
+            )
+            # Total weeks in this course = number of modules in that course
+            total_weeks = Module.objects.filter(course=module.course).count()
+            # If the completed module's order equals the current week, advance the week
+            if module.order == course_status.current_week:
+                if course_status.current_week < total_weeks:
+                    course_status.current_week += 1
+                    course_status.save(update_fields=['current_week'])
+                else:
+                    course_status.ended_at = timezone.now()
+                    course_status.save(update_fields=['ended_at'])
+        # -------------------------------------------------------
+
         return Response({"detail": f"Module '{module.title}' marked as completed."}, status=200)
 
 # ----------------------------
@@ -534,16 +561,30 @@ class ContactMessageDetailView(APIView):
             return Response({"detail": "Not found"}, status=status.HTTP_404_NOT_FOUND)
 
 # ----------------------------
-# CUSTOM LOGIN VIEW
+# CUSTOM LOGIN VIEW (supports email or username)
 # ----------------------------
 class CustomLoginView(APIView):
     permission_classes = [AllowAny]
+
     def post(self, request):
-        username = request.data.get('username')
+        email = request.data.get('email')
         password = request.data.get('password')
+        username = request.data.get('username')  # optional, for backward compatibility
+
+        if email:
+            try:
+                user_obj = User.objects.get(email=email)
+                username = user_obj.username
+            except User.DoesNotExist:
+                return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        if not username:
+            return Response({'error': 'Email or username required'}, status=status.HTTP_400_BAD_REQUEST)
+
         user = authenticate(username=username, password=password)
         if not user:
             return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+
         refresh = RefreshToken.for_user(user)
         access = refresh.access_token
         user_serializer = UserSerializer(user)
@@ -627,7 +668,7 @@ class StudentListView(APIView):
         return Response(data)
 
 # ----------------------------
-# REVIEWER DASHBOARD VIEW (NEW)
+# REVIEWER DASHBOARD VIEW
 # ----------------------------
 class ReviewerDashboardView(APIView):
     permission_classes = [IsAuthenticated]
@@ -694,10 +735,8 @@ class StudentWeekReviewView(generics.RetrieveUpdateAPIView):
         module_id = self.kwargs.get('module_id')
         user = self.request.user
         student_id = self.request.query_params.get('student_id')
-        # ✅ Allow admin, mentor, and reviewer to access week reviews
         if user.is_admin or user.is_mentor or user.is_reviewer:
             if not student_id:
-                from rest_framework.exceptions import ValidationError
                 raise ValidationError({"detail": "student_id required"})
             student = Student.objects.get(id=student_id)
         else:
@@ -806,7 +845,7 @@ class ChatMessageListCreateView(generics.ListCreateAPIView):
         return ChatMessage.objects.none()
 
     def perform_create(self, serializer):
-        serializer.save(sender=self.request.user)   
+        serializer.save(sender=self.request.user)
 
 
 class ClearChatMessagesView(APIView):
@@ -821,7 +860,6 @@ class ClearChatMessagesView(APIView):
         except ChatRoom.DoesNotExist:
             return Response({"error": "Room not found"}, status=404)
 
-        # Allow only participants (mentor/reviewer/student) to clear
         user = request.user
         if not (room.mentor and room.mentor.user == user) and not (room.reviewer and room.reviewer.user == user) and not (room.student and room.student.user == user):
             return Response({"error": "Not authorized"}, status=403)
@@ -836,7 +874,6 @@ class MarkMessagesReadView(APIView):
     def post(self, request, room_id):
         try:
             room = get_object_or_404(ChatRoom, id=room_id)
-            # Only mark messages that are not from the current user
             updated = ChatMessage.objects.filter(room=room, is_read=False).exclude(sender=request.user).update(
                 is_read=True,
                 read_at=timezone.now()
@@ -844,3 +881,22 @@ class MarkMessagesReadView(APIView):
             return Response({"marked_read": updated}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class StudentCourseStatusView(generics.RetrieveUpdateAPIView):
+    serializer_class = CourseStatusSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        student_id = self.request.query_params.get('student_id')
+        if not student_id:
+            raise ValidationError({"detail": "student_id required"})
+        student = get_object_or_404(Student, id=student_id)
+        if not student.course:
+            raise ValidationError({"detail": "Student has no course assigned"})
+        course_obj = get_object_or_404(Course, name=student.course)
+        status_obj, created = CourseStatus.objects.get_or_create(
+            student=student,
+            course=course_obj
+        )
+        return status_obj

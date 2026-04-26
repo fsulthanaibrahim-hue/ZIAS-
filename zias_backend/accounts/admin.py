@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib import messages
 from django.utils import timezone
-from .models import User, Student, Mentor, Reviewer, ContactMessage
+from .models import User, Student, Mentor, Reviewer, ContactMessage, CourseStatus
 from .utils import generate_random_password, send_password_email  
 
 # Admin action to reset password and email the user
@@ -49,3 +49,9 @@ class ContactMessageAdmin(admin.ModelAdmin):
         queryset.update(is_read=True)
     mark_as_read.short_description = "Mark selected messages as read"
     
+
+@admin.register(CourseStatus)
+class CourseStatusAdmin(admin.ModelAdmin):
+    list_display = ['student', 'course', 'current_week', 'started_at', 'ended_at']
+    list_filter = ['course', 'ended_at']
+    search_fields = ['student__user__username', 'course__name']    

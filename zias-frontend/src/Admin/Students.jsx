@@ -1,5 +1,5 @@
 // src/Admin/Students.jsx
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import API from "../api/api";
 
 function Toast({ message, type, onClose }) {
@@ -47,6 +47,7 @@ function Students() {
   const [coursesList, setCoursesList] = useState([]);
   const [batchesList, setBatchesList] = useState([]);
   const [mentorsList, setMentorsList] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -58,72 +59,57 @@ function Students() {
   const [emergencyContactError, setEmergencyContactError] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
-  const [loading, setLoading] = useState(true);
-
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [studentToDelete, setStudentToDelete] = useState(null);
-
+  const [toast, setToast] = useState(null);
+  const [submitting, setSubmitting] = useState(false);   // ✅ added for submission locking
   const [formData, setFormData] = useState({
-    username: "",
-    full_name: "",
-    email: "",
-    course: "",
-    batch: "",
-    mentor: "",
-    phone: "",
-    date_of_birth: "",
-    age: "",
-    gender: "",
-    fathers_name: "",
-    fathers_contact: "",
-    mothers_name: "",
-    mothers_contact: "",
-    address: "",
-    educational_qualification: "",
-    college_school: "",
-    parent_name: "",
-    parent_phone: "",
-    emergency_contact: "",
+    full_name: "", email: "", course: "", batch: "", mentor: "", phone: "", date_of_birth: "", age: "", gender: "",
+    fathers_name: "", fathers_contact: "", mothers_name: "", mothers_contact: "",
+    address: "", educational_qualification: "", college_school: "", parent_name: "", parent_phone: "", emergency_contact: "",
   });
 
-  const [toast, setToast] = useState(null);
-  const showToast = (message, type = "success") => setToast({ message, type });
-  const hideToast = () => setToast(null);
+  const showToast = useCallback((message, type = "success") => setToast({ message, type }), []);
+  const hideToast = useCallback(() => setToast(null), []);
 
-  const fetched = useRef(false);
+  const hasLoaded = useRef(false);
 
-  const fetchStudents = () => {
-    API.get("students/")
-      .then((res) => setStudents(res.data))
-      .catch((err) => {
-        console.error(err);
-        showToast("Failed to load students", "error");
-      })
-      .finally(() => setLoading(false));
-  };
-
-  const fetchCourses = () => {
-    API.get("courses/")
-      .then((res) => setCoursesList(res.data))
-      .catch(() => showToast("Failed to load courses", "error"));
-  };
-  const fetchBatches = () => {
-    API.get("batches/")
-      .then((res) => setBatchesList(res.data))
-      .catch(() => showToast("Failed to load batches", "error"));
-  };
-  const fetchMentors = () => {
-    API.get("mentors/")
-      .then((res) => setMentorsList(res.data))
-      .catch(() => showToast("Failed to load mentors", "error"));
-  };
+  const fetchAllData = useCallback(async () => {
+    if (hasLoaded.current) return;
+    hasLoaded.current = true;
+    setLoading(true);
+    try {
+      const [studentsRes, coursesRes, batchesRes, mentorsRes] = await Promise.all([
+        API.get("students/"),
+        API.get("courses/"),
+        API.get("batches/"),
+        API.get("mentors/")
+      ]);
+      setStudents(studentsRes.data);
+      setCoursesList(coursesRes.data);
+      setBatchesList(batchesRes.data);
+      setMentorsList(mentorsRes.data);
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to load data", "error");
+    } finally {
+      setLoading(false);
+    }
+  }, [showToast]);
 
   useEffect(() => {
-    if (fetched.current) return;
-    fetched.current = true;
-    setLoading(true);
-    Promise.all([fetchStudents(), fetchCourses(), fetchBatches(), fetchMentors()]).catch(() => {});
-  }, []);
+    fetchAllData();
+  }, [fetchAllData]);
+
+  const refreshStudents = useCallback(async () => {
+    try {
+      const res = await API.get("students/");
+      setStudents(res.data);
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to refresh student list", "error");
+    }
+  }, [showToast]);
 
   const handleDeleteClick = (studentId, studentName) => {
     setStudentToDelete({ id: studentId, name: studentName });
@@ -134,7 +120,7 @@ function Students() {
     if (!studentToDelete) return;
     try {
       await API.delete(`students/${studentToDelete.id}/`);
-      fetchStudents();
+      await refreshStudents();
       showToast("Student deleted successfully", "success");
     } catch (err) {
       console.error(err);
@@ -151,9 +137,7 @@ function Students() {
       const today = new Date();
       let age = today.getFullYear() - birthDate.getFullYear();
       const m = today.getMonth() - birthDate.getMonth();
-      if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-        age--;
-      }
+      if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
       setFormData(prev => ({ ...prev, age: age.toString() }));
     } else {
       setFormData(prev => ({ ...prev, age: "" }));
@@ -163,19 +147,12 @@ function Students() {
   const handlePhoneChange = (field, value) => {
     const digits = value.replace(/\D/g, '').slice(0, 10);
     setFormData(prev => ({ ...prev, [field]: digits }));
-    if (digits.length > 0 && digits.length !== 10) {
-      if (field === 'phone') setPhoneError('Phone number must be exactly 10 digits');
-      else if (field === 'fathers_contact') setFathersContactError('Phone number must be exactly 10 digits');
-      else if (field === 'mothers_contact') setMothersContactError('Phone number must be exactly 10 digits');
-      else if (field === 'parent_phone') setParentPhoneError('Phone number must be exactly 10 digits');
-      else if (field === 'emergency_contact') setEmergencyContactError('Phone number must be exactly 10 digits');
-    } else {
-      if (field === 'phone') setPhoneError('');
-      else if (field === 'fathers_contact') setFathersContactError('');
-      else if (field === 'mothers_contact') setMothersContactError('');
-      else if (field === 'parent_phone') setParentPhoneError('');
-      else if (field === 'emergency_contact') setEmergencyContactError('');
-    }
+    const errorMsg = digits.length > 0 && digits.length !== 10 ? 'Phone number must be exactly 10 digits' : '';
+    if (field === 'phone') setPhoneError(errorMsg);
+    else if (field === 'fathers_contact') setFathersContactError(errorMsg);
+    else if (field === 'mothers_contact') setMothersContactError(errorMsg);
+    else if (field === 'parent_phone') setParentPhoneError(errorMsg);
+    else if (field === 'emergency_contact') setEmergencyContactError(errorMsg);
   };
 
   const handleChange = (e) => {
@@ -187,33 +164,40 @@ function Students() {
     }
   };
 
+  // Generate a username from email or full name, with a random suffix to reduce collisions
+  const generateUsername = (email, fullName) => {
+    let base = email ? email.split('@')[0] : (fullName || 'student');
+    base = base.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!base) base = 'student';
+    const suffix = Math.floor(Math.random() * 10000);
+    return `${base}${suffix}`;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     // Validate phone fields
-    let hasError = false;
     const phoneFields = [
-      { field: 'phone', errorSetter: setPhoneError, label: 'Student phone' },
-      { field: 'fathers_contact', errorSetter: setFathersContactError, label: "Father's contact" },
-      { field: 'mothers_contact', errorSetter: setMothersContactError, label: "Mother's contact" },
-      { field: 'parent_phone', errorSetter: setParentPhoneError, label: 'Parent phone' },
-      { field: 'emergency_contact', errorSetter: setEmergencyContactError, label: 'Emergency contact' },
+      { field: 'phone', setError: setPhoneError, label: 'Student phone' },
+      { field: 'fathers_contact', setError: setFathersContactError, label: "Father's contact" },
+      { field: 'mothers_contact', setError: setMothersContactError, label: "Mother's contact" },
+      { field: 'parent_phone', setError: setParentPhoneError, label: 'Parent phone' },
+      { field: 'emergency_contact', setError: setEmergencyContactError, label: 'Emergency contact' },
     ];
-    for (const { field, errorSetter, label } of phoneFields) {
+    let hasError = false;
+    for (const { field, setError, label } of phoneFields) {
       const val = formData[field];
       if (val && !/^\d{10}$/.test(val)) {
-        errorSetter(`Phone number must be exactly 10 digits`);
+        setError('Phone number must be exactly 10 digits');
         showToast(`${label} must be exactly 10 digits`, "error");
         hasError = true;
       } else {
-        errorSetter('');
+        setError('');
       }
     }
     if (hasError) return;
 
-    // Build payload – convert mentor to number if present
+    // Build payload – without username for new students (we'll add generated one)
     const payload = {
-      username: formData.username.trim(),
       full_name: formData.full_name ? formData.full_name.trim() : null,
       email: formData.email,
       course: formData.course,
@@ -235,46 +219,69 @@ function Students() {
       emergency_contact: formData.emergency_contact || null,
     };
 
+    setSubmitting(true);
     try {
       if (editingId) {
         await API.patch(`students/${editingId}/`, payload);
         showToast("Student updated successfully", "success");
+        setShowForm(false);
+        setEditingId(null);
+        resetForm();
+        await refreshStudents();
       } else {
+        const generatedUsername = generateUsername(formData.email, formData.full_name);
+        payload.username = generatedUsername;
         await API.post("students/", payload);
-        showToast(`Student added successfully! Username: ${payload.username}`, "success");
+        showToast(`Student added successfully! Username: ${generatedUsername}`, "success");
+        setShowForm(false);
+        resetForm();
+        await refreshStudents();
+        setCurrentPage(1);
       }
-      setShowForm(false);
-      setEditingId(null);
-      setFormData({
-        username: "", full_name: "", email: "", course: "", batch: "", mentor: "", phone: "", date_of_birth: "", age: "", gender: "",
-        fathers_name: "", fathers_contact: "", mothers_name: "", mothers_contact: "",
-        address: "", educational_qualification: "", college_school: "", parent_name: "", parent_phone: "", emergency_contact: "",
-      });
-      setPhoneError("");
-      setFathersContactError("");
-      setMothersContactError("");
-      setParentPhoneError("");
-      setEmergencyContactError("");
-      fetchStudents();
-      setCurrentPage(1);
     } catch (error) {
       console.error("API error:", error);
+      // Extract meaningful error message from backend response
+      let errorMsg = "An unexpected error occurred.";
       if (error.response) {
-        console.error("Response data:", error.response.data);
-        const errorMsg = Object.values(error.response.data).flat().join(", ");
-        showToast(`Error: ${errorMsg || error.response.statusText}`, "error");
+        const data = error.response.data;
+        if (typeof data === 'object') {
+          const messages = [];
+          if (data.username) messages.push(`Username: ${data.username.join(', ')}`);
+          if (data.email) messages.push(`Email: ${data.email.join(', ')}`);
+          if (data.non_field_errors) messages.push(data.non_field_errors.join(', '));
+          if (data.detail) messages.push(data.detail);
+          if (messages.length) errorMsg = messages.join('; ');
+          else errorMsg = "Validation error. Please check the data.";
+        } else if (typeof data === 'string') {
+          errorMsg = data;
+        }
       } else if (error.request) {
-        showToast("No response from server", "error");
+        errorMsg = "No response from server. Please check your connection.";
       } else {
-        showToast(error.message, "error");
+        errorMsg = error.message;
       }
+      showToast(errorMsg, "error");
+    } finally {
+      setSubmitting(false);
     }
+  };
+
+  const resetForm = () => {
+    setFormData({
+      full_name: "", email: "", course: "", batch: "", mentor: "", phone: "", date_of_birth: "", age: "", gender: "",
+      fathers_name: "", fathers_contact: "", mothers_name: "", mothers_contact: "",
+      address: "", educational_qualification: "", college_school: "", parent_name: "", parent_phone: "", emergency_contact: "",
+    });
+    setPhoneError("");
+    setFathersContactError("");
+    setMothersContactError("");
+    setParentPhoneError("");
+    setEmergencyContactError("");
   };
 
   const handleEdit = (student) => {
     setEditingId(student.id);
     setFormData({
-      username: student.username,
       full_name: student.full_name || "",
       email: student.email,
       course: student.course,
@@ -303,8 +310,8 @@ function Students() {
     setShowForm(true);
   };
 
-  const filteredStudents = students.filter((s) =>
-    s.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+  const filteredStudents = students.filter(s =>
+    (s.full_name || s.username)?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     s.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     s.course?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     s.batch?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -345,16 +352,8 @@ function Students() {
     setCurrentPage(1);
   }, [searchTerm]);
 
-  const inputClass = `
-    w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-800
-    placeholder-gray-400 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/30
-    transition-all duration-200 text-sm
-  `;
-  const readOnlyClass = `
-    w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 text-gray-600
-    cursor-not-allowed text-sm
-  `;
-
+  const inputClass = `w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/30 transition-all duration-200 text-sm`;
+  const readOnlyClass = `w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 text-gray-600 cursor-not-allowed text-sm`;
   const getInitial = (name) => name ? name.charAt(0).toUpperCase() : "?";
   const avatarColors = [
     "from-blue-500 to-blue-700",
@@ -384,10 +383,7 @@ function Students() {
         .shine { position:relative; overflow:hidden; }
         .shine::after { content:''; position:absolute; top:0; left:-100%; width:60%; height:100%; background:linear-gradient(90deg,transparent,rgba(255,255,255,0.3),transparent); animation: shine 3s infinite; }
         @keyframes shine { to { left:150%; } }
-        @keyframes slide-in-from-top-2 {
-          from { opacity:0; transform:translateY(-1rem); }
-          to { opacity:1; transform:translateY(0); }
-        }
+        @keyframes slide-in-from-top-2 { from { opacity:0; transform:translateY(-1rem); } to { opacity:1; transform:translateY(0); } }
         .animate-in { animation: slide-in-from-top-2 0.2s ease-out; }
         @media (max-width: 640px) {
           .student-table thead { display: none; }
@@ -441,16 +437,7 @@ function Students() {
             <button
               onClick={() => {
                 setEditingId(null);
-                setFormData({
-                  username: "", full_name: "", email: "", course: "", batch: "", mentor: "", phone: "", date_of_birth: "", age: "", gender: "",
-                  fathers_name: "", fathers_contact: "", mothers_name: "", mothers_contact: "",
-                  address: "", educational_qualification: "", college_school: "", parent_name: "", parent_phone: "", emergency_contact: "",
-                });
-                setPhoneError("");
-                setFathersContactError("");
-                setMothersContactError("");
-                setParentPhoneError("");
-                setEmergencyContactError("");
+                resetForm();
                 setShowForm(true);
               }}
               className="shine flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 shadow-md w-full sm:w-auto"
@@ -463,7 +450,7 @@ function Students() {
           </div>
         </div>
 
-        {/* Add/Edit Modal */}
+        {/* Add/Edit Modal (without username field) */}
         {showForm && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={() => setShowForm(false)}>
             <form onSubmit={handleSubmit} className="modal-enter bg-white rounded-2xl w-full max-w-3xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -490,7 +477,6 @@ function Students() {
                 <div>
                   <h4 className="text-xs font-semibold text-green-600 uppercase tracking-wider mb-3">Basic Information</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Username *</label><input type="text" name="username" value={formData.username} onChange={handleChange} required className={inputClass} /></div>
                     <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Full Name</label><input type="text" name="full_name" value={formData.full_name} onChange={handleChange} className={inputClass} /></div>
                     <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Email *</label><input type="email" name="email" value={formData.email} onChange={handleChange} required className={inputClass} /></div>
                     <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Course *</label><select name="course" value={formData.course} onChange={handleChange} required className={inputClass}><option value="">Select a course</option>{coursesList.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select></div>
@@ -498,7 +484,7 @@ function Students() {
                     <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Mentor (optional)</label><select name="mentor" value={formData.mentor} onChange={handleChange} className={inputClass}><option value="">Select a mentor</option>{mentorsList.map(mentor => <option key={mentor.id} value={mentor.id}>{mentor.username} ({mentor.expertise || "No expertise"})</option>)}</select></div>
                     <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Phone</label><input type="text" name="phone" value={formData.phone} onChange={handleChange} className={inputClass} />{phoneError && <p className="text-red-500 text-xs mt-1">{phoneError}</p>}</div>
                     <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Date of Birth</label><input type="date" name="date_of_birth" value={formData.date_of_birth} onChange={handleChange} className={inputClass} /></div>
-                    <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Age</label><input type="text" name="age" value={formData.age} readOnly className={`${inputClass} cursor-not-allowed opacity-80`} /></div>
+                    <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Age</label><input type="text" name="age" value={formData.age} readOnly className={inputClass + " cursor-not-allowed opacity-80"} /></div>
                     <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Gender</label><select name="gender" value={formData.gender} onChange={handleChange} className={inputClass}><option value="">Select</option><option>Male</option><option>Female</option><option>Other</option></select></div>
                   </div>
                 </div>
@@ -518,7 +504,7 @@ function Students() {
 
                 <div className="border-t border-gray-200 pt-4">
                   <h4 className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-3">Address</h4>
-                  <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Address</label><textarea name="address" rows="2" value={formData.address} onChange={handleChange} className={`${inputClass} resize-none`} /></div>
+                  <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Address</label><textarea name="address" rows="2" value={formData.address} onChange={handleChange} className={inputClass + " resize-none"} /></div>
                 </div>
 
                 <div className="border-t border-gray-200 pt-4">
@@ -531,15 +517,19 @@ function Students() {
               </div>
 
               <div className="sticky bottom-0 bg-white px-4 sm:px-6 py-4 border-t border-gray-200">
-                <button type="submit" className="w-full bg-green-600 hover:bg-green-700 text-white py-2.5 rounded-lg transition-all text-sm font-medium shadow-sm">
-                  {editingId ? "Save Changes" : "Add Student"}
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white py-2.5 rounded-lg transition-all text-sm font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {submitting ? (editingId ? "Saving..." : "Adding...") : (editingId ? "Save Changes" : "Add Student")}
                 </button>
               </div>
             </form>
           </div>
         )}
 
-        {/* View Details Modal */}
+        {/* View Details Modal (username removed) */}
         {viewingStudent && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={() => setViewingStudent(null)}>
             <div className="bg-white rounded-2xl w-full max-w-3xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -565,7 +555,6 @@ function Students() {
                 <div>
                   <h4 className="text-xs font-semibold text-green-600 uppercase tracking-wider mb-3">Basic Information</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Username</label><input type="text" value={viewingStudent.username} readOnly className={readOnlyClass} /></div>
                     <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Full Name</label><input type="text" value={viewingStudent.full_name || "—"} readOnly className={readOnlyClass} /></div>
                     <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Email</label><input type="text" value={viewingStudent.email} readOnly className={readOnlyClass} /></div>
                     <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Course</label><input type="text" value={viewingStudent.course} readOnly className={readOnlyClass} /></div>
@@ -591,7 +580,7 @@ function Students() {
                 </div>
                 <div className="border-t border-gray-200 pt-4">
                   <h4 className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-3">Address</h4>
-                  <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Address</label><textarea rows="2" value={viewingStudent.address || "—"} readOnly className={`${readOnlyClass} resize-none`} /></div>
+                  <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Address</label><textarea rows="2" value={viewingStudent.address || "—"} readOnly className={readOnlyClass + " resize-none"} /></div>
                 </div>
                 <div className="border-t border-gray-200 pt-4">
                   <h4 className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-3">Education</h4>
@@ -628,8 +617,12 @@ function Students() {
                   <tr key={s.id} className="table-row-hover group">
                     <td data-label="Student" className="px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${getColor(s.username)} flex items-center justify-center text-white text-xs font-bold shrink-0`}>{getInitial(s.username)}</div>
-                        <button onClick={() => setViewingStudent(s)} className="text-gray-800 text-sm font-medium hover:text-green-600 transition-colors cursor-pointer text-left">{s.username}</button>
+                        <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${getColor(s.full_name || s.username)} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
+                          {getInitial(s.full_name || s.username)}
+                        </div>
+                        <button onClick={() => setViewingStudent(s)} className="text-gray-800 text-sm font-medium hover:text-green-600 transition-colors cursor-pointer text-left">
+                          {s.full_name || s.username}
+                        </button>
                       </div>
                     </td>
                     <td data-label="Email" className="px-4 py-3 text-gray-500 text-sm break-all">{s.email}</td>
@@ -645,7 +638,7 @@ function Students() {
                           </svg>
                           <span className="hidden sm:inline">Edit</span>
                         </button>
-                        <button onClick={() => handleDeleteClick(s.id, s.username)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-all text-xs font-medium">
+                        <button onClick={() => handleDeleteClick(s.id, s.full_name || s.username)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-all text-xs font-medium">
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                           </svg>

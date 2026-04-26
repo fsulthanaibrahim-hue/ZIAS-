@@ -340,3 +340,28 @@ class ChatMessage(models.Model):
 
     class Meta:
         ordering = ['timestamp']
+
+
+class CourseStatus(models.Model):
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='course_statuses')
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='student_statuses')
+    started_at = models.DateTimeField(auto_now_add=True)
+    ended_at = models.DateTimeField(null=True, blank=True)
+    current_week = models.PositiveIntegerField(default=1)
+
+    class Meta:
+        unique_together = ('student', 'course')  # one status per student per course
+        ordering = ['-started_at']
+
+    def __str__(self):
+        return f"{self.student.user.username} - {self.course.name} (Week {self.current_week})"
+
+    def advance_week(self, total_weeks):
+        """Increment current_week, and mark as ended if complete."""
+        if self.current_week < total_weeks:
+            self.current_week += 1
+            self.save(update_fields=['current_week'])
+        else:
+            self.ended_at = timezone.now()
+            self.save(update_fields=['ended_at'])
+
