@@ -32,35 +32,10 @@ function ReviewerReviewSheet() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [savingStatus, setSavingStatus] = useState({});
-  const [reviewerNames, setReviewerNames] = useState([]);
-  const [fetchingReviewers, setFetchingReviewers] = useState(true);
 
   const statusOptions = ["Task Completed", "Task Need Improvement", "Task Critical", "Task Not Completed"];
-
-  // Fetch reviewer names for dropdown (attempt multiple endpoints)
-  useEffect(() => {
-    const fetchNames = async () => {
-      try {
-        let names = [];
-        try {
-          // Try normal reviewers endpoint
-          const res = await API.get("/reviewers/");
-          names = res.data.map(r => r.user?.username || r.username).filter(Boolean);
-        } catch {
-          // Fallback: try users with is_reviewer=true
-          const res = await API.get("/users/?is_reviewer=true");
-          names = res.data.map(u => u.username).filter(Boolean);
-        }
-        setReviewerNames([...new Set(names)]);
-      } catch (err) {
-        console.warn("Could not fetch reviewers, using text input fallback", err);
-        setReviewerNames([]);
-      } finally {
-        setFetchingReviewers(false);
-      }
-    };
-    fetchNames();
-  }, []);
+  // Static list of possible reviewer names (no API call)
+  const reviewerOptions = ["Akif Sir", "Rizwan Sir", "Jassir Sir", "Nihas Sir"];
 
   const rows = useMemo(() => [
     { label: "Status", field: "task_status", editable: true, type: "select", options: statusOptions },
@@ -69,15 +44,15 @@ function ReviewerReviewSheet() {
       label: "Reviewer Name",
       field: "reviewer_name",
       editable: true,
-      type: reviewerNames.length ? "select" : "text",
-      options: reviewerNames,
+      type: "select",
+      options: reviewerOptions,
     },
     { label: "Advisor Name", field: "advisor_name", editable: false },
     { label: "Score [20]", field: "total_score", editable: true, type: "number", min: 0, max: 20, step: 1 },
     { label: "Extra Workouts Review", field: "extra_workouts", editable: false },
     { label: "Review Date", field: "review_date", editable: false },
     { label: "English Review", field: "english_review", editable: false },
-  ], [reviewerNames]);
+  ], []);
 
   const weekRanges = [
     { label: "Week 0 - 12", start: 1, end: 12 },
@@ -205,7 +180,7 @@ function ReviewerReviewSheet() {
         </div>
       );
     }
-    // text input fallback (if dropdown fails)
+    // text input fallback
     return (
       <div className="flex items-center gap-1">
         <input
@@ -228,13 +203,14 @@ function ReviewerReviewSheet() {
     );
   };
 
-  if (loading || fetchingReviewers) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
         <div className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
+
   if (error) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50 p-8 text-center">
@@ -268,7 +244,6 @@ function ReviewerReviewSheet() {
           </div>
         ) : (
           <>
-            {/* Desktop table */}
             <div className="hidden md:block overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
               <table className="min-w-full border-collapse">
                 <thead className="bg-gray-50 border-b border-gray-200">
@@ -302,7 +277,6 @@ function ReviewerReviewSheet() {
               </table>
             </div>
 
-            {/* Mobile cards */}
             <div className="md:hidden space-y-6">
               {weeks.map(week => (
                 <div key={week.id} className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
@@ -327,7 +301,7 @@ function ReviewerReviewSheet() {
           </>
         )}
 
-        {/* Personal Details – clickable week ranges */}
+        {/* Personal Details with clickable week ranges */}
         <div className="mt-6 bg-white rounded-xl border border-gray-200 shadow-sm p-4">
           <h3 className="text-sm font-semibold text-gray-800 mb-2">Personal Details</h3>
           <div className="flex flex-wrap gap-4 text-xs">
