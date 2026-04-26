@@ -5,7 +5,7 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.filters import BaseFilterBackend
 from rest_framework import generics, permissions
-from rest_framework.parsers import JSONParser
+from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
 from rest_framework.exceptions import ValidationError   # ✅ added
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
@@ -20,7 +20,7 @@ from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
 from .models import (
     User, Student, Mentor, Reviewer, Course, Module, Day, Task, Batch,
     StudentModule, PasswordResetToken, ContactMessage, StudentWeekReview, WeekUpdate, ReviewFolder,
-    ChatRoom, ChatMessage, CourseStatus
+    ChatRoom, ChatMessage, CourseStatus, Document
 )
 
 from .serializers import (
@@ -900,3 +900,24 @@ class StudentCourseStatusView(generics.RetrieveUpdateAPIView):
             course=course_obj
         )
         return status_obj
+
+
+class UploadStudentDocumentView(APIView):
+    parser_classes = (MultiPartParser, FormParser)
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        file_obj = request.data.get('file')
+        student_id = request.data.get('student')
+        description = request.data.get('description', '')
+        if not file_obj or not student_id:
+            return Response({"error": "file and student are required"}, status=400)
+        try:
+            student = Student.objects.get(id=student_id)
+        except Student.DoesNotExist:
+            return Response({"error": "Student not found"}, status=404)
+        doc = Document.objects.create(file=file_obj, description=description)
+        student.documents.add(doc)
+        return Response({"id": doc.id, "url": doc.file.url}, status=201)
+
+

@@ -80,6 +80,7 @@ class StudentSerializer(serializers.ModelSerializer):
     username = serializers.CharField(write_only=True, required=False)   # flat, used for CREATE
     email = serializers.EmailField(write_only=True, required=False)     # flat
     mentor_name = serializers.CharField(source='mentor.username', read_only=True)
+    documents = serializers.SerializerMethodField()
 
     class Meta:
         model = Student
@@ -88,7 +89,7 @@ class StudentSerializer(serializers.ModelSerializer):
             'phone', 'date_of_birth', 'full_name', 'age', 'gender',
             'fathers_name', 'fathers_contact', 'mothers_name', 'mothers_contact',
             'address', 'educational_qualification', 'college_school',
-            'parent_name', 'parent_phone', 'emergency_contact'
+            'parent_name', 'parent_phone', 'emergency_contact', 'documents'
         ]
 
     def to_representation(self, instance):
@@ -189,6 +190,10 @@ class StudentSerializer(serializers.ModelSerializer):
                 instance.user.email = email
             instance.user.save()
         return instance
+    
+    def get_documents(self, obj):
+        return [{'id': doc.id, 'url': doc.file.url, 'description': doc.description} for doc in obj.documents.all()]
+
 
 # ----------------------------
 # MENTOR SERIALIZER (explicit update)

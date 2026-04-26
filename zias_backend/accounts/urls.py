@@ -10,7 +10,7 @@ from .views import (
     CustomLoginView, LogoutView, UpdateDashboardAccessView,
     CompleteModuleView, StudentWeekReviewView, StudentListView, WeeklyToppersView,
     WeekUpdateViewSet, ReviewFolderViewSet, ChatRoomList, ChatMessageList, 
-    ChatMessageListCreateView, ClearChatMessagesView, MarkMessagesReadView
+    ChatMessageListCreateView, ClearChatMessagesView, MarkMessagesReadView, UploadStudentDocumentView
 )
 
 router = DefaultRouter()
@@ -48,8 +48,8 @@ urlpatterns = [
     path('api/weekly-toppers/', WeeklyToppersView.as_view(), name='weekly-toppers'),
     path('api/chat-rooms/', ChatRoomList.as_view(), name='chat-rooms'),
     path('api/chat-rooms/<int:room_id>/messages/', ChatMessageList.as_view(), name='chat-messages'),
-    # ✅ Unified chat‑messages endpoint (handles both GET and POST)
     path('api/chat-messages/', ChatMessageListCreateView.as_view(), name='chat-messages'),
     path('api/chat-messages/clear/', ClearChatMessagesView.as_view(), name='clear-chat-messages'),
     path('api/chat-messages/mark-read/<int:room_id>/', MarkMessagesReadView.as_view(), name='mark-read'),
+    path('api/upload-student-document/', UploadStudentDocumentView.as_view(), name='upload-student-doc'),
 ]

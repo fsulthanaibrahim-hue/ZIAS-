@@ -45,6 +45,15 @@ class Batch(models.Model):
     def __str__(self):
         return self.name
 
+# Document Model – moved BEFORE Student (so Student can reference it)
+class Document(models.Model):
+    file = models.FileField(upload_to='student_documents/')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    description = models.CharField(max_length=255, blank=True)
+
+    def __str__(self):
+        return self.file.name
+
 # Student Profile
 class Student(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='student_profile')
@@ -68,6 +77,7 @@ class Student(models.Model):
     parent_phone = models.CharField(max_length=15, blank=True, null=True)
     emergency_contact = models.CharField(max_length=15, blank=True, null=True)
     reviewer = models.ForeignKey('Reviewer', on_delete=models.SET_NULL, null=True, blank=True, related_name='students')
+    documents = models.ManyToManyField(Document, blank=True, related_name='students')
 
     def __str__(self):
         return self.user.username
@@ -94,7 +104,6 @@ class Reviewer(models.Model):
     available_to = models.TimeField(null=True, blank=True, help_text="End time (e.g. 17:00)")
     available_days = models.JSONField(default=list, blank=True, help_text="List of weekdays (0=Monday, 6=Sunday)")
 
-    
     def __str__(self):
         return self.user.username
 
@@ -341,7 +350,6 @@ class ChatMessage(models.Model):
     class Meta:
         ordering = ['timestamp']
 
-
 class CourseStatus(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='course_statuses')
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='student_statuses')
@@ -350,14 +358,13 @@ class CourseStatus(models.Model):
     current_week = models.PositiveIntegerField(default=1)
 
     class Meta:
-        unique_together = ('student', 'course')  # one status per student per course
+        unique_together = ('student', 'course')
         ordering = ['-started_at']
 
     def __str__(self):
         return f"{self.student.user.username} - {self.course.name} (Week {self.current_week})"
 
     def advance_week(self, total_weeks):
-        """Increment current_week, and mark as ended if complete."""
         if self.current_week < total_weeks:
             self.current_week += 1
             self.save(update_fields=['current_week'])
@@ -365,3 +372,4 @@ class CourseStatus(models.Model):
             self.ended_at = timezone.now()
             self.save(update_fields=['ended_at'])
 
+            
