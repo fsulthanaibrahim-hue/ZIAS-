@@ -37,10 +37,45 @@ function ReviewerReviewSheet() {
 
   const statusOptions = ["Task Completed", "Task Need Improvement", "Task Critical", "Task Not Completed"];
 
+  // Try to fetch all reviewers (for dropdown)
+  useEffect(() => {
+    const fetchReviewers = async () => {
+      try {
+        // Try endpoint that might be accessible to reviewers
+        // Option 1: /api/users/?is_reviewer=true (if available)
+        // Option 2: /api/reviewers/ (but may be forbidden)
+        let response;
+        try {
+          response = await API.get("/users/?is_reviewer=true");
+        } catch {
+          response = await API.get("/reviewers/");
+        }
+        const names = response.data.map(rev => {
+          // Extract name from different possible structures
+          const name = rev.user?.username || rev.username || rev.name || "Unknown";
+          return name.charAt(0).toUpperCase() + name.slice(1);
+        });
+        setReviewersList([...new Set(names)]); // unique names
+      } catch (err) {
+        console.warn("Could not fetch reviewers list, falling back to text input", err);
+        setReviewersList([]); // empty list -> fallback to text input
+      } finally {
+        setReviewersLoading(false);
+      }
+    };
+    fetchReviewers();
+  }, []);
+
   const rows = useMemo(() => [
     { label: "Status", field: "task_status", editable: true, type: "select", options: statusOptions },
     { label: "Project Updates", field: "feedback", editable: true, type: "text" },
-    { label: "Reviewer Name", field: "reviewer_name", editable: true, type: "select", options: reviewersList.map(r => r.user?.username || r.username || "Unknown") },
+    { 
+      label: "Reviewer Name", 
+      field: "reviewer_name", 
+      editable: true, 
+      type: reviewersList.length ? "select" : "text", 
+      options: reviewersList 
+    },
     { label: "Advisor Name", field: "advisor_name", editable: false },
     { label: "Score [20]", field: "total_score", editable: true, type: "number", min: 0, max: 20, step: 1 },
     { label: "Extra Workouts Review", field: "extra_workouts", editable: false },
@@ -56,20 +91,6 @@ function ReviewerReviewSheet() {
     { label: "Week 33 - 40", start: 33, end: 40 },
     { label: "Week 41 - 44", start: 41, end: 44 },
   ];
-
-  useEffect(() => {
-    const fetchReviewers = async () => {
-      try {
-        const res = await API.get("reviewers/");
-        setReviewersList(res.data);
-      } catch (err) {
-        console.error("Failed to fetch reviewers", err);
-      } finally {
-        setReviewersLoading(false);
-      }
-    };
-    fetchReviewers();
-  }, []);
 
   const saveField = useCallback(async (weekId, field, value) => {
     if (!["task_status", "feedback", "reviewer_name", "total_score"].includes(field)) return;
@@ -188,6 +209,7 @@ function ReviewerReviewSheet() {
         </div>
       );
     }
+    // text input fallback
     return (
       <div className="flex items-center gap-1">
         <input
@@ -229,7 +251,6 @@ function ReviewerReviewSheet() {
   return (
     <div className="min-h-screen w-full bg-gray-50 text-gray-800 font-sans">
       <div className="max-w-full mx-auto px-4 sm:px-6 py-4 sm:py-8">
-        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
             <h1 className="text-xl sm:text-2xl font-semibold text-gray-800">Review Sheet (Editable)</h1>
@@ -252,7 +273,6 @@ function ReviewerReviewSheet() {
           </div>
         ) : (
           <>
-            {/* Desktop Table */}
             <div className="hidden md:block overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
               <table className="min-w-full border-collapse">
                 <thead className="bg-gray-50 border-b border-gray-200">
@@ -286,7 +306,6 @@ function ReviewerReviewSheet() {
               </table>
             </div>
 
-            {/* Mobile Cards */}
             <div className="md:hidden space-y-6">
               {weeks.map(week => (
                 <div key={week.id} className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
@@ -311,7 +330,6 @@ function ReviewerReviewSheet() {
           </>
         )}
 
-        {/* Personal Details Section */}
         <div className="mt-6 bg-white rounded-xl border border-gray-200 shadow-sm p-4">
           <h3 className="text-sm font-semibold text-gray-800 mb-2">Personal Details</h3>
           <div className="flex flex-wrap gap-4 text-xs">

@@ -12,7 +12,7 @@ export const SocketProvider = ({ children }) => {
 
   useEffect(() => {
     if (!user || !token) return;
-    const newSocket = io('http://localhost:3001', {
+    const newSocket = io('http://localhost:4000', {   // ✅ changed to 4000
       query: { token },
       transports: ['websocket'],
     });

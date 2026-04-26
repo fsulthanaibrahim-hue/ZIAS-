@@ -22,7 +22,6 @@ const ChatWindow = forwardRef(({ room }, ref) => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // Fetch messages when room changes
   useEffect(() => {
     if (!room) return;
     setLoading(true);
@@ -34,7 +33,6 @@ const ChatWindow = forwardRef(({ room }, ref) => {
       .catch(err => console.error('Failed to fetch messages:', err))
       .finally(() => setLoading(false));
 
-    // Mark messages as read
     const markRead = async () => {
       try {
         await api.post(`chat-messages/mark-read/${room.id}/`);
@@ -44,12 +42,10 @@ const ChatWindow = forwardRef(({ room }, ref) => {
     markRead();
   }, [room, socket]);
 
-  // Scroll on new messages
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
-  // WebSocket events
   useEffect(() => {
     if (!socket || !room) return;
     socket.emit('join_room', { room_id: room.id });
@@ -59,9 +55,7 @@ const ChatWindow = forwardRef(({ room }, ref) => {
       if (msgRoomId !== room.id) return;
       if (processedIds.current.has(msg.id)) return;
       processedIds.current.add(msg.id);
-      
       setMessages(prev => [...prev, msg]);
-      
       if (msg.sender_id !== user.id) {
         api.post(`chat-messages/mark-read/${room.id}/`).catch(() => {});
         socket.emit('mark_read', { room_id: room.id });
@@ -124,11 +118,27 @@ const ChatWindow = forwardRef(({ room }, ref) => {
     return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
+  const isCurrentUserMessage = (msg) => {
+    // Compare as strings to avoid type mismatch
+    if (msg.sender_id !== undefined && user.id !== undefined) {
+      if (String(msg.sender_id) === String(user.id)) return true;
+    }
+    // Fallback: compare by username
+    if (msg.sender_name && user.username) {
+      if (msg.sender_name === user.username) return true;
+    }
+    return false;
+  };
+
+  const renderSenderName = (msg, isMine) => {
+    if (isMine) return "You";
+    return msg.sender_name || "Unknown";
+  };
+
   if (!room) return null;
 
   return (
     <div className="flex flex-col h-full bg-gray-50">
-      {/* Messages List */}
       <div className="flex-1 overflow-y-auto p-4 space-y-2">
         {loading ? (
           <div className="text-center text-gray-400 mt-8">Loading messages...</div>
@@ -136,14 +146,13 @@ const ChatWindow = forwardRef(({ room }, ref) => {
           <div className="text-center text-gray-400 mt-8">No messages yet. Say hello!</div>
         ) : (
           messages.map((msg) => {
-            // ✅ CRITICAL: Check if the message sender is the current logged-in user
-            const isMine = msg.sender_id === user.id;
+            const isMine = isCurrentUserMessage(msg);
             return (
               <div key={msg.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-[70%] rounded-lg px-3 py-2 ${isMine ? 'bg-green-600 text-white' : 'bg-white text-gray-800 shadow-sm'}`}>
-                  {!isMine && (
-                    <div className="text-xs font-semibold text-green-600 mb-1">{msg.sender_name}</div>
-                  )}
+                  <div className="text-xs font-semibold mb-1">
+                    {renderSenderName(msg, isMine)}
+                  </div>
                   <div className="text-sm break-words">{msg.content}</div>
                   <div className={`text-xs text-right mt-1 flex items-center justify-end gap-1 ${isMine ? 'text-green-100' : 'text-gray-400'}`}>
                     {formatTime(msg.timestamp)}
@@ -158,7 +167,6 @@ const ChatWindow = forwardRef(({ room }, ref) => {
         <div ref={bottomRef} />
       </div>
 
-      {/* Input Box */}
       <div className="bg-white border-t p-3 flex gap-2 flex-shrink-0">
         <input
           className="flex-1 border rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
