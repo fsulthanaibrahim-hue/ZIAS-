@@ -1,3 +1,4 @@
+// src/Admin/Mentors.jsx
 import { useEffect, useState, useRef, useCallback } from "react";
 import API from "../api/api";
 
@@ -57,7 +58,6 @@ function Mentors() {
     batch: "",
   });
 
-  // Document states
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [viewerDocuments, setViewerDocuments] = useState([]);
   const [uploadingDocs, setUploadingDocs] = useState(false);
@@ -74,6 +74,18 @@ function Mentors() {
 
   const initialFetchDone = useRef(false);
   const batchesFetched = useRef(false);
+
+  // Safe document URL helper – returns absolute URL or '#'
+const getDocumentUrl = (url) => {
+  if (!url || typeof url !== 'string') {
+    console.error('Invalid document URL:', url);
+    return '#';
+  }
+  // If it's already an absolute URL, return it
+  if (url.startsWith('http')) return url;
+  // Otherwise prepend the backend base URL
+  return `http://127.0.0.1:8000${url}`;
+};
 
   const fetchMentors = useCallback(async () => {
     try {
@@ -353,8 +365,6 @@ function Mentors() {
     return batch ? batch.name : "—";
   };
 
-  if (false) return null; // placeholder
-
   return (
     <div className="min-h-screen w-full bg-gray-50 text-gray-800" style={{ fontFamily: "'Geist', 'SF Pro Display', system-ui, sans-serif" }}>
       <style>{`
@@ -380,7 +390,7 @@ function Mentors() {
       <ConfirmModal isOpen={showConfirmModal} onClose={() => setShowConfirmModal(false)} onConfirm={confirmDelete} mentorName={mentorToDelete?.name} />
 
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-4 sm:py-8">
-        {/* Top Bar */}
+        {/* Top Bar (unchanged) */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 rounded-xl bg-green-100 border border-green-200 flex items-center justify-center shrink-0">
@@ -425,7 +435,7 @@ function Mentors() {
           </div>
         </div>
 
-        {/* Add/Edit Modal */}
+        {/* Add/Edit Modal (unchanged except using getDocumentUrl) */}
         {showForm && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={() => setShowForm(false)}>
             <form
@@ -433,6 +443,7 @@ function Mentors() {
               className="modal-enter bg-white rounded-2xl w-full max-w-3xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
+              {/* Header, Basic Information, etc. */}
               <div className="sticky top-0 bg-white z-10 flex justify-between items-center px-4 sm:px-6 py-4 border-b border-gray-200">
                 <div className="flex items-center gap-3">
                   <div className="w-7 h-7 rounded-lg bg-green-100 border border-green-200 flex items-center justify-center">
@@ -451,7 +462,7 @@ function Mentors() {
               </div>
 
               <div className="px-4 sm:px-6 py-5 space-y-6">
-                {/* Basic Information */}
+                {/* Basic Information (same as before) */}
                 <div>
                   <h4 className="text-xs font-semibold text-green-600 uppercase tracking-wider mb-3">Basic Information</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -463,7 +474,7 @@ function Mentors() {
                   </div>
                 </div>
 
-                {/* Document Section */}
+                {/* Document Section for edit mode */}
                 {editingId && (
                   <div className="border-t border-gray-200 pt-4">
                     <h4 className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-3">Documents</h4>
@@ -477,7 +488,7 @@ function Mentors() {
                         <ul className="space-y-2">
                           {editDocuments.map(doc => (
                             <li key={doc.id} className="flex items-center justify-between gap-2 text-sm bg-gray-50 p-2 rounded-lg">
-                              <a href={doc.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-blue-600 hover:underline truncate cursor-pointer">
+                              <a href={getDocumentUrl(doc.url)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-blue-600 hover:underline truncate cursor-pointer">
                                 <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
                                 <span className="truncate">{doc.file_name || "Document"}</span>
                               </a>
@@ -539,7 +550,7 @@ function Mentors() {
           </div>
         )}
 
-        {/* View Details Modal – no upload, only documents list */}
+        {/* View Details Modal – only list, uses safe getDocumentUrl */}
         {viewingMentor && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={() => setViewingMentor(null)}>
             <div className="bg-white rounded-2xl w-full max-w-3xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -561,7 +572,7 @@ function Mentors() {
               </div>
 
               <div className="px-4 sm:px-6 py-5 space-y-6">
-                {/* Basic Information */}
+                {/* Basic Information fields */}
                 <div>
                   <h4 className="text-xs font-semibold text-green-600 uppercase tracking-wider mb-3">Basic Information</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -573,7 +584,7 @@ function Mentors() {
                   </div>
                 </div>
 
-                {/* Documents section – only list, no upload */}
+                {/* Documents section – clickable links */}
                 <div className="border-t border-gray-200 pt-4">
                   <h4 className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-3">Documents</h4>
                   {viewerDocuments.length === 0 ? (
@@ -583,7 +594,7 @@ function Mentors() {
                       {viewerDocuments.map(doc => (
                         <li key={doc.id} className="flex items-center gap-2 text-sm bg-gray-50 p-2 rounded-lg">
                           <a
-                            href={doc.url}
+                            href={getDocumentUrl(doc.url)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="flex items-center gap-2 text-blue-600 hover:underline truncate cursor-pointer"
@@ -607,7 +618,7 @@ function Mentors() {
           </div>
         )}
 
-        {/* Mentors Table */}
+        {/* Mentors Table (unchanged) */}
         <div className="overflow-hidden rounded-xl border border-gray-200 shadow-sm bg-white">
           <table className="mentor-table min-w-full">
             <thead className="bg-gray-50 border-b border-gray-200">

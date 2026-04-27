@@ -527,6 +527,14 @@ class StudentDocumentSerializer(serializers.ModelSerializer):
     
 
 class MentorDocumentSerializer(serializers.ModelSerializer):
+    url = serializers.SerializerMethodField()
+
     class Meta:
         model = MentorDocument
-        fields = ['id', 'file', 'file_name', 'uploaded_at']
+        fields = ['id', 'file', 'file_name', 'uploaded_at', 'url']
+
+    def get_url(self, obj):
+        request = self.context.get('request')
+        if request:
+            return request.build_absolute_uri(obj.file.url)
+        return obj.file.url
