@@ -211,7 +211,7 @@ class Notification(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     is_read = models.BooleanField(default=False)
     link = models.CharField(max_length=500, blank=True, null=True)   # 👈 add this
-    
+
 
     def __str__(self):
         return f"{self.user.username} - {self.message}"
@@ -375,3 +375,33 @@ class CourseStatus(models.Model):
             self.ended_at = timezone.now()
             self.save(update_fields=['ended_at'])
 
+class StudentDocument(models.Model):
+    student = models.ForeignKey(
+        'Student', 
+        on_delete=models.CASCADE, 
+        related_name='student_documents'   # ✅ change from 'documents'
+    )
+    file = models.FileField(upload_to='student_documents/')
+    file_name = models.CharField(max_length=255, blank=True)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        if not self.file_name:
+            self.file_name = self.file.name
+        super().save(*args, **kwargs)
+
+class MentorDocument(models.Model):
+    mentor = models.ForeignKey(
+        'Mentor', 
+        on_delete=models.CASCADE, 
+        related_name='mentor_documents'    # ✅ change from 'documents'
+    )
+    file = models.FileField(upload_to='mentor_documents/')
+    file_name = models.CharField(max_length=255, blank=True)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        if not self.file_name:
+            self.file_name = self.file.name
+        super().save(*args, **kwargs)
+        

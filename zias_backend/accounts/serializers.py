@@ -10,7 +10,7 @@ from rest_framework import serializers
 from .models import (
     User, Student, Mentor, Reviewer, Course, Module, Day, Task, Batch,
     StudentModule, ContactMessage, StudentWeekReview, WeekUpdate, ReviewFolder,
-    ChatRoom, ChatMessage, CourseStatus, Notification
+    ChatRoom, ChatMessage, CourseStatus, Notification, StudentDocument, MentorDocument
 )
 
 
@@ -494,3 +494,22 @@ class NotificationSerializer(serializers.ModelSerializer):
         model = Notification
         fields = ['id', 'message', 'created_at', 'is_read', 'link']
 
+
+class StudentDocumentSerializer(serializers.ModelSerializer):
+    url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StudentDocument
+        fields = ['id', 'file', 'file_name', 'uploaded_at', 'url']
+
+    def get_url(self, obj):
+        request = self.context.get('request')
+        if request:
+            return request.build_absolute_uri(obj.file.url)
+        return obj.file.url
+    
+
+class MentorDocumentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MentorDocument
+        fields = ['id', 'file', 'file_name', 'uploaded_at']

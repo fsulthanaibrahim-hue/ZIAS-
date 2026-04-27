@@ -1,7 +1,6 @@
-# accounts/urls.py
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView  # ✅ ADD THIS LINE
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .views import (
     StudentViewSet, MentorViewSet, ReviewerViewSet, CurrentUserView,
     ChangePasswordView, SendBulkEmailView, CourseViewSet,
@@ -10,9 +9,11 @@ from .views import (
     ContactMessageView, UnreadMessagesCountView, RecentMessagesView, ContactMessageDetailView,
     CustomLoginView, LogoutView, UpdateDashboardAccessView,
     CompleteModuleView, StudentWeekReviewView, StudentListView, WeeklyToppersView,
-    WeekUpdateViewSet, ReviewFolderViewSet, ChatRoomList, ChatMessageList, 
-    ChatMessageListCreateView, ClearChatMessagesView, MarkMessagesReadView, 
-    UploadStudentDocumentView, NotificationViewSet
+    WeekUpdateViewSet, ReviewFolderViewSet, ChatRoomList, ChatMessageList,
+    ChatMessageListCreateView, ClearChatMessagesView, MarkMessagesReadView,
+    UploadStudentDocumentView, NotificationViewSet, StudentDocumentListView,
+    StudentDocumentDeleteView, MentorDocumentListView, UploadMentorDocumentView,
+    MentorDocumentDeleteView
 )
 
 router = DefaultRouter()
@@ -54,5 +55,12 @@ urlpatterns = [
     path('api/chat-messages/', ChatMessageListCreateView.as_view(), name='chat-messages'),
     path('api/chat-messages/clear/', ClearChatMessagesView.as_view(), name='clear-chat-messages'),
     path('api/chat-messages/mark-read/<int:room_id>/', MarkMessagesReadView.as_view(), name='mark-read'),
+    # Student document endpoints
     path('api/upload-student-document/', UploadStudentDocumentView.as_view(), name='upload-student-doc'),
+    path('api/students/<int:student_id>/documents/', StudentDocumentListView.as_view(), name='student-documents'),
+    path('api/student-documents/<int:doc_id>/', StudentDocumentDeleteView.as_view(), name='delete-student-doc'),
+    # Mentor document endpoints
+    path('api/upload-mentor-document/', UploadMentorDocumentView.as_view(), name='upload-mentor-doc'),
+    path('api/mentors/<int:mentor_id>/documents/', MentorDocumentListView.as_view(), name='mentor-documents'),
+    path('api/mentor-documents/<int:doc_id>/', MentorDocumentDeleteView.as_view(), name='delete-mentor-doc'),
 ]

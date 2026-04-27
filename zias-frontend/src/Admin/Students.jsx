@@ -1,4 +1,3 @@
-// src/Admin/Students.jsx
 import { useEffect, useState, useRef, useCallback } from "react";
 import API from "../api/api";
 
@@ -61,9 +60,8 @@ function Students() {
   const [submitting, setSubmitting] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [viewerDocuments, setViewerDocuments] = useState([]);
-  // For uploading documents inside view modal
-  const [uploadingDocs, setUploadingDocs] = useState(false);
-  const [newDocs, setNewDocs] = useState([]);
+  const [editDocuments, setEditDocuments] = useState([]);
+  const [loadingEditDocs, setLoadingEditDocs] = useState(false);
 
   const [formData, setFormData] = useState({
     full_name: "", email: "", course: "", batch: "", mentor: "", phone: "", date_of_birth: "", age: "", gender: "",
@@ -300,9 +298,20 @@ function Students() {
     setParentPhoneError("");
     setEmergencyContactError("");
     setSelectedFiles([]);
+    setEditDocuments([]);
   };
 
-  const handleEdit = (student) => {
+  const fetchStudentDocuments = async (studentId) => {
+    try {
+      const res = await API.get(`students/${studentId}/documents/`);
+      return res.data;
+    } catch (err) {
+      console.error(err);
+      return [];
+    }
+  };
+
+  const handleEdit = async (student) => {
     setEditingId(student.id);
     setFormData({
       full_name: student.full_name || "",
@@ -325,61 +334,135 @@ function Students() {
       parent_phone: student.parent_phone || "",
       emergency_contact: student.emergency_contact || "",
     });
-    setPhoneError("");
-    setFathersContactError("");
-    setMothersContactError("");
-    setParentPhoneError("");
-    setEmergencyContactError("");
+    setLoadingEditDocs(true);
+    const docs = await fetchStudentDocuments(student.id);
+    setEditDocuments(docs);
+    setLoadingEditDocs(false);
     setSelectedFiles([]);
     setShowForm(true);
   };
 
-  const fetchStudentDocuments = async (studentId) => {
-    try {
-      const res = await API.get(`students/${studentId}/documents/`);
-      setViewerDocuments(res.data);
-    } catch (err) {
-      console.error(err);
-      setViewerDocuments([]);
-    }
-  };
-
-  const deleteDocument = async (docId) => {
+  const deleteEditDocument = async (docId) => {
     try {
       await API.delete(`student-documents/${docId}/`);
-      showToast("Document deleted", "success");
-      // Refresh documents list
-      if (viewingStudent) await fetchStudentDocuments(viewingStudent.id);
+      setEditDocuments(prev => prev.filter(d => d.id !== docId));
+      showToast("Document removed", "success");
     } catch (err) {
       console.error(err);
       showToast("Failed to delete document", "error");
     }
   };
 
-  const uploadDocsToCurrentStudent = async () => {
-    if (!viewingStudent || newDocs.length === 0) return;
-    setUploadingDocs(true);
-    for (const file of newDocs) {
+  const getDocumentUrl = (url) => {
+  if (url.startsWith('http')) return url;
+  return `http://127.0.0.1:8000${url}`;
+};
+
+  const uploadDocumentsForEdit = async (studentId, files) => {
+    if (!files.length) return;
+    for (const file of files) {
       const fd = new FormData();
       fd.append('file', file);
-      fd.append('student', viewingStudent.id);
+      fd.append('student', studentId);
       try {
         await API.post('upload-student-document/', fd);
         showToast(`Uploaded ${file.name}`, "success");
+        const updatedDocs = await fetchStudentDocuments(studentId);
+        setEditDocuments(updatedDocs);
       } catch (err) {
         console.error(err);
         showToast(`Failed to upload ${file.name}`, "error");
       }
     }
-    await fetchStudentDocuments(viewingStudent.id);
-    setNewDocs([]);
-    setUploadingDocs(false);
+    setSelectedFiles([]);
   };
 
-  const openViewModal = (student) => {
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    const phoneFields = [
+      { field: 'phone', setError: setPhoneError, label: 'Student phone' },
+      { field: 'fathers_contact', setError: setFathersContactError, label: "Father's contact" },
+      { field: 'mothers_contact', setError: setMothersContactError, label: "Mother's contact" },
+      { field: 'parent_phone', setError: setParentPhoneError, label: 'Parent phone' },
+      { field: 'emergency_contact', setError: setEmergencyContactError, label: 'Emergency contact' },
+    ];
+    let hasError = false;
+    for (const { field, setError, label } of phoneFields) {
+      const val = formData[field];
+      if (val && !/^\d{10}$/.test(val)) {
+        setError('Phone number must be exactly 10 digits');
+        showToast(`${label} must be exactly 10 digits`, "error");
+        hasError = true;
+      } else {
+        setError('');
+      }
+    }
+    if (hasError) return;
+
+    const payload = {
+      full_name: formData.full_name ? formData.full_name.trim() : null,
+      email: formData.email,
+      course: formData.course,
+      batch: formData.batch,
+      mentor: formData.mentor ? parseInt(formData.mentor) : null,
+      phone: formData.phone || null,
+      date_of_birth: formData.date_of_birth || null,
+      age: formData.age ? parseInt(formData.age) : null,
+      gender: formData.gender || null,
+      fathers_name: formData.fathers_name || null,
+      fathers_contact: formData.fathers_contact || null,
+      mothers_name: formData.mothers_name || null,
+      mothers_contact: formData.mothers_contact || null,
+      address: formData.address || null,
+      educational_qualification: formData.educational_qualification || null,
+      college_school: formData.college_school || null,
+      parent_name: formData.parent_name || null,
+      parent_phone: formData.parent_phone || null,
+      emergency_contact: formData.emergency_contact || null,
+    };
+
+    setSubmitting(true);
+    try {
+      await API.patch(`students/${editingId}/`, payload);
+      showToast("Student updated successfully", "success");
+      if (selectedFiles.length) {
+        await uploadDocumentsForEdit(editingId, selectedFiles);
+      }
+      setShowForm(false);
+      setEditingId(null);
+      resetForm();
+      await refreshStudents();
+    } catch (error) {
+      console.error("API error:", error);
+      let errorMsg = "An unexpected error occurred.";
+      if (error.response) {
+        const data = error.response.data;
+        if (typeof data === 'object') {
+          const messages = [];
+          if (data.username) messages.push(`Username: ${data.username.join(', ')}`);
+          if (data.email) messages.push(`Email: ${data.email.join(', ')}`);
+          if (data.non_field_errors) messages.push(data.non_field_errors.join(', '));
+          if (data.detail) messages.push(data.detail);
+          if (messages.length) errorMsg = messages.join('; ');
+          else errorMsg = "Validation error. Please check the data.";
+        } else if (typeof data === 'string') {
+          errorMsg = data;
+        }
+      } else if (error.request) {
+        errorMsg = "No response from server. Please check your connection.";
+      } else {
+        errorMsg = error.message;
+      }
+      showToast(errorMsg, "error");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const openViewModal = async (student) => {
     setViewingStudent(student);
-    fetchStudentDocuments(student.id);
-    setNewDocs([]);
+    const docs = await fetchStudentDocuments(student.id);
+    setViewerDocuments(docs);
   };
 
   const filteredStudents = students.filter(s =>
@@ -457,6 +540,7 @@ function Students() {
         @keyframes shine { to { left:150%; } }
         @keyframes slide-in-from-top-2 { from { opacity:0; transform:translateY(-1rem); } to { opacity:1; transform:translateY(0); } }
         .animate-in { animation: slide-in-from-top-2 0.2s ease-out; }
+        .cursor-pointer { cursor: pointer; }
         @media (max-width: 640px) {
           .student-table thead { display: none; }
           .student-table tbody tr { display: block; margin-bottom: 1rem; border: 1px solid #e5e7eb; border-radius: 0.75rem; background: white; }
@@ -518,11 +602,14 @@ function Students() {
           </div>
         </div>
 
-        {/* Add/Edit Modal with document upload */}
+        {/* Add/Edit Modal */}
         {showForm && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={() => setShowForm(false)}>
-            <form onSubmit={handleSubmit} className="modal-enter bg-white rounded-2xl w-full max-w-3xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-              {/* Header */}
+            <form
+              onSubmit={editingId ? handleEditSubmit : handleSubmit}
+              className="modal-enter bg-white rounded-2xl w-full max-w-3xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="sticky top-0 bg-white z-10 flex justify-between items-center px-4 sm:px-6 py-4 border-b border-gray-200">
                 <div className="flex items-center gap-3">
                   <div className="w-7 h-7 rounded-lg bg-green-100 border border-green-200 flex items-center justify-center">
@@ -540,7 +627,6 @@ function Students() {
                 </button>
               </div>
 
-              {/* Form fields */}
               <div className="px-4 sm:px-6 py-5 space-y-6">
                 {/* Basic Information */}
                 <div>
@@ -587,22 +673,54 @@ function Students() {
                   </div>
                 </div>
 
-                {/* Document upload section */}
-                <div className="border-t border-gray-200 pt-4">
-                  <h4 className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-3">Documents (PDF, images)</h4>
-                  <input
-                    type="file"
-                    multiple
-                    accept=".pdf,.jpg,.jpeg,.png"
-                    onChange={(e) => setSelectedFiles(Array.from(e.target.files))}
-                    className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
-                  />
-                  {selectedFiles.length > 0 && (
-                    <ul className="mt-2 text-xs text-gray-500 list-disc pl-5">
-                      {selectedFiles.map((f, idx) => <li key={idx}>📎 {f.name}</li>)}
-                    </ul>
-                  )}
-                </div>
+                {/* Document Section – only in edit mode */}
+                {editingId && (
+                  <div className="border-t border-gray-200 pt-4">
+                    <h4 className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-3">Documents</h4>
+                    <div className="mb-4">
+                      <label className="block text-gray-600 text-xs font-medium mb-1.5">Existing Documents</label>
+                      {loadingEditDocs ? (
+                        <p className="text-gray-400 text-sm">Loading documents...</p>
+                      ) : editDocuments.length === 0 ? (
+                        <p className="text-gray-400 text-sm">No documents uploaded yet.</p>
+                      ) : (
+                        <ul className="space-y-2">
+                          {editDocuments.map(doc => (
+                            <li key={doc.id} className="flex items-center justify-between gap-2 text-sm bg-gray-50 p-2 rounded-lg">
+                              <a href={doc.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-blue-600 hover:underline truncate cursor-pointer">
+                                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                                <span className="truncate">{doc.file_name || "Document"}</span>
+                              </a>
+                              <button
+                                type="button"
+                                onClick={() => deleteEditDocument(doc.id)}
+                                className="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-50 transition"
+                                title="Delete document"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-gray-600 text-xs font-medium mb-1.5">Upload Additional Documents</label>
+                      <input
+                        type="file"
+                        multiple
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        onChange={(e) => setSelectedFiles(Array.from(e.target.files))}
+                        className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                      />
+                      {selectedFiles.length > 0 && (
+                        <ul className="mt-2 text-xs text-gray-500 list-disc pl-5">
+                          {selectedFiles.map((f, idx) => <li key={idx}>📎 {f.name}</li>)}
+                        </ul>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="sticky bottom-0 bg-white px-4 sm:px-6 py-4 border-t border-gray-200">
@@ -614,7 +732,7 @@ function Students() {
           </div>
         )}
 
-        {/* View Details Modal – with full document manager */}
+        {/* View Details Modal – no upload, only documents list */}
         {viewingStudent && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={() => setViewingStudent(null)}>
             <div className="bg-white rounded-2xl w-full max-w-3xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -627,7 +745,7 @@ function Students() {
                   </div>
                   <div>
                     <h3 className="text-sm font-semibold text-gray-800">Student Details</h3>
-                    <p className="text-gray-500 text-xs">View all information & manage documents</p>
+                    <p className="text-gray-500 text-xs">View all information & documents</p>
                   </div>
                 </div>
                 <button type="button" onClick={() => setViewingStudent(null)} className="text-gray-400 hover:text-gray-600 transition p-1.5 rounded-lg hover:bg-gray-100">
@@ -644,7 +762,11 @@ function Students() {
                     <div><label className="block text-gray-500 text-xs">Email</label><p className="text-gray-800 text-sm mt-1">{viewingStudent.email}</p></div>
                     <div><label className="block text-gray-500 text-xs">Course</label><p className="text-gray-800 text-sm mt-1">{viewingStudent.course}</p></div>
                     <div><label className="block text-gray-500 text-xs">Batch</label><p className="text-gray-800 text-sm mt-1">{viewingStudent.batch}</p></div>
-                    <div><label className="block text-gray-500 text-xs">Mentor</label><p className="text-gray-800 text-sm mt-1">{viewingStudent.mentor_name || "—"}</p></div>
+                    <div><label className="block text-gray-500 text-xs">Mentor</label>
+                      <p className="text-gray-800 text-sm mt-1">
+                        {viewingStudent.mentor ? (mentorsList.find(m => m.id === viewingStudent.mentor)?.username || "—") : "—"}
+                      </p>
+                    </div>
                     <div><label className="block text-gray-500 text-xs">Phone</label><p className="text-gray-800 text-sm mt-1">{viewingStudent.phone || "—"}</p></div>
                     <div><label className="block text-gray-500 text-xs">Date of Birth</label><p className="text-gray-800 text-sm mt-1">{viewingStudent.date_of_birth || "—"}</p></div>
                     <div><label className="block text-gray-500 text-xs">Age</label><p className="text-gray-800 text-sm mt-1">{viewingStudent.age || "—"}</p></div>
@@ -681,53 +803,26 @@ function Students() {
                   </div>
                 </div>
 
-                {/* Documents section with upload & delete */}
+                {/* Documents section – only list, no upload */}
                 <div className="border-t border-gray-200 pt-4">
                   <h4 className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-3">Documents</h4>
-                  
-                  {/* Upload new documents for this student */}
-                  <div className="mb-4">
-                    <input
-                      type="file"
-                      multiple
-                      accept=".pdf,.jpg,.jpeg,.png"
-                      onChange={(e) => setNewDocs(Array.from(e.target.files))}
-                      className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
-                    />
-                    {newDocs.length > 0 && (
-                      <div className="mt-2 flex justify-between items-center">
-                        <ul className="text-xs text-gray-500 list-disc pl-5">
-                          {newDocs.map((f, idx) => <li key={idx}>📎 {f.name}</li>)}
-                        </ul>
-                        <button
-                          onClick={uploadDocsToCurrentStudent}
-                          disabled={uploadingDocs}
-                          className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-lg text-xs font-medium disabled:opacity-50"
-                        >
-                          {uploadingDocs ? "Uploading..." : "Upload"}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* List existing documents */}
                   {viewerDocuments.length === 0 ? (
-                    <p className="text-gray-400 text-sm">No documents uploaded yet.</p>
+                    <p className="text-gray-400 text-sm">No documents uploaded.</p>
                   ) : (
                     <ul className="space-y-2">
                       {viewerDocuments.map(doc => (
-                        <li key={doc.id} className="flex items-center justify-between gap-2 text-sm bg-gray-50 p-2 rounded-lg">
-                          <a href={doc.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-blue-600 hover:underline truncate">
-                            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                        <li key={doc.id} className="flex items-center gap-2 text-sm bg-gray-50 p-2 rounded-lg">
+                          <a
+                            href={doc.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 text-blue-600 hover:underline truncate cursor-pointer"
+                          >
+                            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                            </svg>
                             <span className="truncate">{doc.file_name || "Document"}</span>
                           </a>
-                          <button
-                            onClick={() => deleteDocument(doc.id)}
-                            className="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-50 transition"
-                            title="Delete document"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                          </button>
                         </li>
                       ))}
                     </ul>

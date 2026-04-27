@@ -54,6 +54,7 @@ function Courses() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   const [formData, setFormData] = useState({ name: "", description: "", duration: "" });
+  const [durationError, setDurationError] = useState("");
 
   // Delete confirmation modal state
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -80,7 +81,7 @@ function Courses() {
 
   const filteredCourses = courses.filter(c =>
     c.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.duration?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (c.duration?.toString().toLowerCase().includes(searchTerm.toLowerCase())) ||
     c.description?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -138,19 +139,55 @@ function Courses() {
     }
   };
 
+  const handleDurationChange = (e) => {
+    const value = e.target.value;
+    // Allow empty or positive integers
+    if (value === "") {
+      setFormData({ ...formData, duration: "" });
+      setDurationError("");
+      return;
+    }
+    const num = parseInt(value, 10);
+    if (isNaN(num) || num < 0) {
+      setDurationError("Duration must be a positive number");
+      setFormData({ ...formData, duration: value });
+    } else {
+      setDurationError("");
+      setFormData({ ...formData, duration: num.toString() });
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    // Validate duration is a number > 0 if provided
+    let durationValue = null;
+    if (formData.duration && formData.duration !== "") {
+      const num = parseInt(formData.duration, 10);
+      if (isNaN(num) || num <= 0) {
+        setDurationError("Duration must be a positive number");
+        return;
+      }
+      durationValue = num;
+    }
+    
+    const payload = {
+      name: formData.name,
+      description: formData.description,
+      duration: durationValue
+    };
+
     try {
       if (editingId) {
-        await API.patch(`courses/${editingId}/`, formData);
+        await API.patch(`courses/${editingId}/`, payload);
         showToast("Course updated successfully", "success");
       } else {
-        await API.post("courses/", formData);
+        await API.post("courses/", payload);
         showToast("Course added successfully", "success");
       }
       setShowForm(false);
       setEditingId(null);
       setFormData({ name: "", description: "", duration: "" });
+      setDurationError("");
       fetchCourses();
     } catch (err) {
       let errorMsg = "Error saving course";
@@ -163,7 +200,12 @@ function Courses() {
 
   const handleEdit = (course) => {
     setEditingId(course.id);
-    setFormData({ name: course.name, description: course.description || "", duration: course.duration || "" });
+    setFormData({
+      name: course.name,
+      description: course.description || "",
+      duration: course.duration ? course.duration.toString() : ""
+    });
+    setDurationError("");
     setShowForm(true);
   };
 
@@ -233,7 +275,6 @@ function Courses() {
           </div>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            {/* Search - full width on mobile */}
             <div className="relative w-full sm:w-64">
               <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
@@ -254,11 +295,11 @@ function Courses() {
               )}
             </div>
 
-            {/* Add Button - full width on mobile */}
             <button
               onClick={() => {
                 setEditingId(null);
                 setFormData({ name: "", description: "", duration: "" });
+                setDurationError("");
                 setShowForm(true);
               }}
               className="shine flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 shadow-md w-full sm:w-auto"
@@ -271,7 +312,7 @@ function Courses() {
           </div>
         </div>
 
-        {/* Modal - Responsive */}
+        {/* Modal - Responsive with number input for duration */}
         {showForm && (
           <div
             className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4"
@@ -313,15 +354,19 @@ function Courses() {
                   />
                 </div>
                 <div>
-                  <label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Duration</label>
+                  <label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Duration (in weeks)</label>
                   <input
-                    type="text"
+                    type="number"
                     name="duration"
-                    placeholder="e.g. 6 months"
+                    placeholder="e.g. 44"
                     value={formData.duration}
-                    onChange={e => setFormData({ ...formData, duration: e.target.value })}
-                    className={inputClass}
+                    onChange={handleDurationChange}
+                    min="1"
+                    step="1"
+                    className={`${inputClass} [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none`}
                   />
+                  {durationError && <p className="text-red-500 text-xs mt-1">{durationError}</p>}
+                  <p className="text-gray-400 text-xs mt-1">Enter number of weeks (positive integer)</p>
                 </div>
                 <div>
                   <label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Description</label>
@@ -348,7 +393,7 @@ function Courses() {
           </div>
         )}
 
-        {/* Courses Table with responsive card layout and pagination */}
+        {/* Courses Table with responsive card layout */}
         <div className="overflow-hidden rounded-xl border border-gray-200 shadow-sm bg-white">
           <table className="courses-table min-w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
@@ -374,7 +419,7 @@ function Courses() {
                     <td data-label="Duration" className="px-4 py-3">
                       {c.duration ? (
                         <span className="inline-flex items-center gap-1.5 bg-green-100 text-green-700 border border-green-200 text-xs font-medium px-2 py-1 rounded-full">
-                          {c.duration}
+                          {c.duration} week{c.duration !== 1 ? 's' : ''}
                         </span>
                       ) : <span className="text-gray-400 text-xs">—</span>}
                     </td>

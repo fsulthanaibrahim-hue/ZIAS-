@@ -1,26 +1,4 @@
-# accounts/middleware.py (add print statements)
-from urllib.parse import parse_qs
-from channels.db import database_sync_to_async
-from django.contrib.auth.models import AnonymousUser
-from rest_framework_simplejwt.tokens import AccessToken
-
-@database_sync_to_async
-def get_user_from_token(token):
-    try:
-        print(f"[DEBUG] Validating token: {token[:50]}...")
-        access_token = AccessToken(token)
-        from django.contrib.auth import get_user_model
-        User = get_user_model()
-        user = User.objects.get(id=access_token['user_id'])
-        print(f"[DEBUG] Found user: {user.username} (id={user.id})")
-        return user
-    except Exception as e:
-        print(f"[DEBUG] Token error: {type(e).__name__}: {e}")
-        return AnonymousUser()
-
-class JwtAuthMiddleware:
-    def __init__(self, app):
-        self.app = app# accounts/middleware.py
+# accounts/middleware.py
 from urllib.parse import parse_qs
 from channels.db import database_sync_to_async
 from django.contrib.auth.models import AnonymousUser
@@ -40,14 +18,22 @@ class PasswordExpiryMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
+        # Skip media and static files
+        if request.path.startswith('/media/') or request.path.startswith('/static/'):
+            return self.get_response(request)
+
         if request.user.is_authenticated:
             expiry_days = settings.PASSWORD_EXPIRY_DAYS
             if request.user.password_changed_at:
                 if timezone.now() - request.user.password_changed_at > timedelta(days=expiry_days):
-                    return Response(
-                        {"detail": "Your password has expired. Please change it.", "code": "password_expired"},
-                        status=status.HTTP_401_UNAUTHORIZED
-                    )
+                    # Return a JSON response for API calls, or redirect for HTML
+                    if request.path.startswith('/api/'):
+                        return Response(
+                            {"detail": "Your password has expired. Please change it.", "code": "password_expired"},
+                            status=status.HTTP_401_UNAUTHORIZED
+                        )
+                    else:
+                        return redirect('/change-password/')
         return self.get_response(request)
 
 
@@ -59,8 +45,12 @@ class WeeklyDashboardLockMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
+        # Skip media and static files
+        if request.path.startswith('/media/') or request.path.startswith('/static/'):
+            return self.get_response(request)
+
         if request.user.is_authenticated and request.user.is_student:
-            if request.path.startswith('/user/dashboard') or request.path == '/user/dashboard/':
+            if request.path.startswith('/user/dashboard'):
                 last_access = request.user.last_dashboard_access
                 if last_access:
                     if timezone.now() - last_access > timedelta(days=7):
@@ -76,11 +66,15 @@ class WeeklyDashboardLockMiddleware:
 @database_sync_to_async
 def get_user_from_token(token):
     try:
+        print(f"[DEBUG] Validating token: {token[:50]}...")
         access_token = AccessToken(token)
         from django.contrib.auth import get_user_model
         User = get_user_model()
-        return User.objects.get(id=access_token['user_id'])
-    except Exception:
+        user = User.objects.get(id=access_token['user_id'])
+        print(f"[DEBUG] Found user: {user.username} (id={user.id})")
+        return user
+    except Exception as e:
+        print(f"[DEBUG] Token error: {type(e).__name__}: {e}")
         return AnonymousUser()
 
 class JwtAuthMiddleware:
@@ -89,15 +83,14 @@ class JwtAuthMiddleware:
 
     async def __call__(self, scope, receive, send):
         query_string = scope.get('query_string', b'').decode()
-        print(f"[AUTH] Query string: {query_string}")  # ← debug
-        from urllib.parse import parse_qs
+        print(f"[AUTH] Query string: {query_string}")
         params = parse_qs(query_string)
         token = params.get('token', [None])[0]
         if token:
-            print(f"[AUTH] Token received: {token[:30]}...")  # ← debug
+            print(f"[AUTH] Token received: {token[:30]}...")
             user = await get_user_from_token(token)
             scope['user'] = user
-            print(f"[AUTH] User: {user}, authenticated: {user.is_authenticated}")  # ← debug
+            print(f"[AUTH] User: {user}, authenticated: {user.is_authenticated}")
         else:
             scope['user'] = AnonymousUser()
             print("[AUTH] No token, anonymous")

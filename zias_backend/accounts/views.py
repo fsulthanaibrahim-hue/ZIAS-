@@ -1,13 +1,12 @@
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, generics, permissions
 from rest_framework.generics import RetrieveAPIView
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.filters import BaseFilterBackend
-from rest_framework import generics, permissions
 from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
-from rest_framework.exceptions import ValidationError   # ✅ added
+from rest_framework.exceptions import ValidationError   
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from django.utils.crypto import get_random_string
@@ -21,14 +20,15 @@ from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
 from .models import (
     User, Student, Mentor, Reviewer, Course, Module, Day, Task, Batch,
     StudentModule, PasswordResetToken, ContactMessage, StudentWeekReview, WeekUpdate, ReviewFolder,
-    ChatRoom, ChatMessage, CourseStatus, Document, Notification
+    ChatRoom, ChatMessage, CourseStatus, Notification, StudentDocument, MentorDocument
 )
 
 from .serializers import (
     StudentSerializer, MentorSerializer, ReviewerSerializer, UserSerializer,
     CourseSerializer, ModuleSerializer, DaySerializer, TaskSerializer, BatchSerializer,
     ContactMessageSerializer, StudentModuleSerializer, StudentWeekReviewSerializer, WeekUpdateSerializer,
-    ReviewFolderSerializer, ChatRoomSerializer, ChatMessageSerializer, CourseStatusSerializer, NotificationSerializer
+    ReviewFolderSerializer, ChatRoomSerializer, ChatMessageSerializer, CourseStatusSerializer, 
+    NotificationSerializer, StudentDocumentSerializer, MentorDocumentSerializer
 )
 
 from .permissions import (
@@ -53,6 +53,7 @@ class DayFilterBackend(BaseFilterBackend):
             return queryset.filter(day_id=day_id)
         return queryset
 
+
 # ----------------------------
 # BATCH VIEWSET
 # ----------------------------
@@ -61,8 +62,9 @@ class BatchViewSet(viewsets.ModelViewSet):
     serializer_class = BatchSerializer
     permission_classes = [IsAdminOrReadOnly]
 
+
 # ----------------------------
-# STUDENT VIEWSET (fixed for reviewer)
+# STUDENT VIEWSET
 # ----------------------------
 class StudentViewSet(viewsets.ModelViewSet):
     serializer_class = StudentSerializer
@@ -178,6 +180,7 @@ class MentorViewSet(viewsets.ModelViewSet):
         except Mentor.DoesNotExist:
             return Response({"detail": "Mentor profile not found"}, status=404)
 
+
 # ----------------------------
 # REVIEWER VIEWSET
 # ----------------------------
@@ -212,6 +215,7 @@ class ReviewerViewSet(viewsets.ModelViewSet):
         serializer.save()
         return Response(serializer.data)
 
+
 # ----------------------------
 # COURSE VIEWSET
 # ----------------------------
@@ -220,8 +224,9 @@ class CourseViewSet(viewsets.ModelViewSet):
     serializer_class = CourseSerializer
     permission_classes = [IsAdminOrReadOnly]
 
+
 # ----------------------------
-# MODULE VIEWSET (fixed for reviewer)
+# MODULE VIEWSET
 # ----------------------------
 class ModuleViewSet(viewsets.ModelViewSet):
     queryset = Module.objects.all()
@@ -312,6 +317,7 @@ class ModuleViewSet(viewsets.ModelViewSet):
             item['is_locked'] = False
         return Response(data)
 
+
 # ----------------------------
 # COMPLETE MODULE VIEW (with CourseStatus update)
 # ----------------------------
@@ -339,19 +345,13 @@ class CompleteModuleView(APIView):
         student_module.completed_at = timezone.now()
         student_module.save()
 
-        # ----- Update CourseStatus (track week progress) -----
-        # Ensure Module has a ForeignKey to Course (named 'course')
-        # and an 'order' field (week number).
         if module.course and hasattr(module, 'order'):
-            # Get or create CourseStatus for this student and course
             course_status, _ = CourseStatus.objects.get_or_create(
                 student=student,
                 course=module.course,
                 defaults={'current_week': 1}
             )
-            # Total weeks in this course = number of modules in that course
             total_weeks = Module.objects.filter(course=module.course).count()
-            # If the completed module's order equals the current week, advance the week
             if module.order == course_status.current_week:
                 if course_status.current_week < total_weeks:
                     course_status.current_week += 1
@@ -359,9 +359,9 @@ class CompleteModuleView(APIView):
                 else:
                     course_status.ended_at = timezone.now()
                     course_status.save(update_fields=['ended_at'])
-        # -------------------------------------------------------
 
         return Response({"detail": f"Module '{module.title}' marked as completed."}, status=200)
+
 
 # ----------------------------
 # STUDENT MODULE VIEWSET
@@ -384,6 +384,7 @@ class StudentModuleViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
+
 # ----------------------------
 # DAY VIEWSET
 # ----------------------------
@@ -397,6 +398,7 @@ class DayViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(module_id=module_id)
         return queryset
 
+
 # ----------------------------
 # TASK VIEWSET
 # ----------------------------
@@ -405,6 +407,7 @@ class TaskViewSet(viewsets.ModelViewSet):
     serializer_class = TaskSerializer
     filter_backends = [DayFilterBackend]
     permission_classes = [IsAdminOrReadOnly]
+
 
 # ----------------------------
 # GET CURRENT USER INFO
@@ -422,6 +425,7 @@ class CurrentUserView(APIView):
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 # ----------------------------
 # CHANGE PASSWORD ENDPOINT
@@ -443,6 +447,7 @@ class ChangePasswordView(APIView):
         user.save()
         OutstandingToken.objects.filter(user=user).delete()
         return Response({"detail": "Password changed successfully."}, status=status.HTTP_200_OK)
+
 
 # ----------------------------
 # SEND BULK EMAIL
@@ -466,6 +471,7 @@ class SendBulkEmailView(APIView):
             return Response({"detail": f"Email sent to {len(recipient_list)} users."}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 # ----------------------------
 # PASSWORD RESET VIEWS
@@ -505,6 +511,7 @@ class ConfirmPasswordResetView(APIView):
         user.save()
         reset.delete()
         return Response({"detail": "Password reset successful."}, status=status.HTTP_200_OK)
+
 
 # ----------------------------
 # CONTACT MESSAGE VIEWS
@@ -563,8 +570,9 @@ class ContactMessageDetailView(RetrieveAPIView):
         except ContactMessage.DoesNotExist:
             return Response({"detail": "Not found"}, status=status.HTTP_404_NOT_FOUND)
 
+
 # ----------------------------
-# CUSTOM LOGIN VIEW (supports email or username)
+# CUSTOM LOGIN VIEW
 # ----------------------------
 class CustomLoginView(APIView):
     permission_classes = [AllowAny]
@@ -572,7 +580,7 @@ class CustomLoginView(APIView):
     def post(self, request):
         email = request.data.get('email')
         password = request.data.get('password')
-        username = request.data.get('username')  # optional, for backward compatibility
+        username = request.data.get('username')
 
         if email:
             try:
@@ -597,6 +605,7 @@ class CustomLoginView(APIView):
             'user': user_serializer.data,
         })
 
+
 # ----------------------------
 # LOGOUT VIEW
 # ----------------------------
@@ -613,6 +622,7 @@ class LogoutView(APIView):
         except TokenError:
             return Response({'error': 'Invalid token'}, status=status.HTTP_400_BAD_REQUEST)
 
+
 # ----------------------------
 # UPDATE DASHBOARD ACCESS VIEW
 # ----------------------------
@@ -624,8 +634,9 @@ class UpdateDashboardAccessView(APIView):
         user.save(update_fields=['last_dashboard_access'])
         return Response({"detail": "Dashboard access updated."}, status=status.HTTP_200_OK)
 
+
 # ----------------------------
-# STUDENT LIST VIEW (FIXED FOR REVIEWER)
+# STUDENT LIST VIEW
 # ----------------------------
 class StudentListView(APIView):
     permission_classes = [IsAuthenticated]
@@ -670,6 +681,7 @@ class StudentListView(APIView):
 
         return Response(data)
 
+
 # ----------------------------
 # REVIEWER DASHBOARD VIEW
 # ----------------------------
@@ -696,6 +708,7 @@ class ReviewerDashboardView(APIView):
             "recent_review_folders": folder_serializer.data,
         }
         return Response(data)
+
 
 # ----------------------------
 # WEEKLY TOPPERS VIEW
@@ -727,6 +740,7 @@ class WeeklyToppersView(APIView):
                 "toppers": week_toppers,
             })
         return Response(toppers_data)
+
 
 # ----------------------------
 # STUDENT WEEK REVIEW VIEW
@@ -760,6 +774,7 @@ class StudentWeekReviewView(generics.RetrieveUpdateAPIView):
                 student_module.completed_at = timezone.now()
                 student_module.save()
 
+
 # ----------------------------
 # WEEK UPDATE VIEWSET
 # ----------------------------
@@ -768,6 +783,10 @@ class WeekUpdateViewSet(viewsets.ModelViewSet):
     serializer_class = WeekUpdateSerializer
     permission_classes = [IsAuthenticated]
 
+
+# ----------------------------
+# REVIEW FOLDER VIEWSET
+# ----------------------------
 class ReviewFolderViewSet(viewsets.ModelViewSet):
     serializer_class = ReviewFolderSerializer
     permission_classes = [IsAuthenticated]
@@ -794,6 +813,9 @@ class ReviewFolderViewSet(viewsets.ModelViewSet):
         serializer.save(updated_by=self.request.user)
 
 
+# ----------------------------
+# CHAT VIEWS
+# ----------------------------
 class ChatRoomList(generics.ListAPIView):
     serializer_class = ChatRoomSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -820,22 +842,6 @@ class ChatMessageList(generics.ListAPIView):
         room_id = self.kwargs['room_id']
         return ChatMessage.objects.filter(room_id=room_id).order_by('timestamp')
 
-
-class CreateMessageView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        room_id = request.data.get('room_id')
-        content = request.data.get('content')
-        if not room_id or not content:
-            return Response({"error": "room_id and content required"}, status=400)
-        try:
-            room = ChatRoom.objects.get(id=room_id)
-        except ChatRoom.DoesNotExist:
-            return Response({"error": "Room not found"}, status=404)
-        message = ChatMessage.objects.create(room=room, sender=request.user, content=content)
-        serializer = ChatMessageSerializer(message)
-        return Response(serializer.data, status=201)
 
 class ChatMessageListCreateView(generics.ListCreateAPIView):
     serializer_class = ChatMessageSerializer
@@ -886,6 +892,9 @@ class MarkMessagesReadView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+# ----------------------------
+# STUDENT COURSE STATUS VIEW
+# ----------------------------
 class StudentCourseStatusView(generics.RetrieveUpdateAPIView):
     serializer_class = CourseStatusSerializer
     permission_classes = [IsAuthenticated]
@@ -905,25 +914,9 @@ class StudentCourseStatusView(generics.RetrieveUpdateAPIView):
         return status_obj
 
 
-class UploadStudentDocumentView(APIView):
-    parser_classes = (MultiPartParser, FormParser)
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        file_obj = request.data.get('file')
-        student_id = request.data.get('student')
-        description = request.data.get('description', '')
-        if not file_obj or not student_id:
-            return Response({"error": "file and student are required"}, status=400)
-        try:
-            student = Student.objects.get(id=student_id)
-        except Student.DoesNotExist:
-            return Response({"error": "Student not found"}, status=404)
-        doc = Document.objects.create(file=file_obj, description=description)
-        student.documents.add(doc)
-        return Response({"id": doc.id, "url": doc.file.url}, status=201)
-
-
+# ----------------------------
+# NOTIFICATION VIEWSET
+# ----------------------------
 class NotificationViewSet(viewsets.ModelViewSet):
     serializer_class = NotificationSerializer
     permission_classes = [IsAuthenticated]
@@ -935,4 +928,89 @@ class NotificationViewSet(viewsets.ModelViewSet):
     def mark_all_read(self, request):
         self.get_queryset().update(is_read=True)
         return Response({'status': 'all marked read'})
-    
+
+
+# ----------------------------
+# STUDENT DOCUMENTS (using StudentDocument model)
+# ----------------------------
+class StudentDocumentListView(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request, student_id):
+        try:
+            student = Student.objects.get(id=student_id)
+            docs = student.student_documents.all()
+            # 🔥 Pass request context to serializer to build absolute URLs
+            serializer = StudentDocumentSerializer(docs, many=True, context={'request': request})
+            return Response(serializer.data)
+        except Student.DoesNotExist:
+            return Response({'error': 'Student not found'}, status=404)
+
+class UploadStudentDocumentView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        file = request.FILES.get('file')
+        student_id = request.data.get('student')
+        if not file or not student_id:
+            return Response({'error': 'file and student id required'}, status=400)
+        try:
+            student = Student.objects.get(id=student_id)
+            doc = StudentDocument.objects.create(student=student, file=file)
+            # 🔥 Also pass context to ensure absolute URL appears in response
+            serializer = StudentDocumentSerializer(doc, context={'request': request})
+            return Response(serializer.data, status=201)
+        except Student.DoesNotExist:
+            return Response({'error': 'Student not found'}, status=404)
+
+class StudentDocumentDeleteView(APIView):
+    permission_classes = [IsAuthenticated]
+    def delete(self, request, doc_id):
+        try:
+            doc = StudentDocument.objects.get(id=doc_id)
+            doc.delete()
+            return Response(status=204)
+        except StudentDocument.DoesNotExist:
+            return Response({'error': 'Document not found'}, status=404)
+        
+
+# ----------------------------
+# MENTOR DOCUMENTS (using MentorDocument model)
+# ----------------------------
+class MentorDocumentListView(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request, mentor_id):
+        try:
+            mentor = Mentor.objects.get(id=mentor_id)
+            docs = mentor.mentor_documents.all()   # ✅ correct related_name
+            serializer = MentorDocumentSerializer(docs, many=True)
+            return Response(serializer.data)
+        except Mentor.DoesNotExist:
+            return Response({'error': 'Mentor not found'}, status=404)
+
+class UploadMentorDocumentView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        file = request.FILES.get('file')
+        mentor_id = request.data.get('mentor')
+        if not file or not mentor_id:
+            return Response({'error': 'file and mentor id required'}, status=400)
+        try:
+            mentor = Mentor.objects.get(id=mentor_id)
+            doc = MentorDocument.objects.create(mentor=mentor, file=file)
+            serializer = MentorDocumentSerializer(doc)
+            return Response(serializer.data, status=201)
+        except Mentor.DoesNotExist:
+            return Response({'error': 'Mentor not found'}, status=404)
+
+class MentorDocumentDeleteView(APIView):
+    permission_classes = [IsAuthenticated]
+    def delete(self, request, doc_id):
+        try:
+            doc = MentorDocument.objects.get(id=doc_id)
+            doc.delete()
+            return Response(status=204)
+        except MentorDocument.DoesNotExist:
+            return Response({'error': 'Document not found'}, status=404)

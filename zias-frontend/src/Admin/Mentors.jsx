@@ -1,4 +1,4 @@
-// src/Admin/Mentors.jsx (username removed – uses Full Name & email)
+// src/Admin/Mentors.jsx
 import { useEffect, useState, useRef } from "react";
 import API from "../api/api";
 
@@ -24,16 +24,17 @@ function Toast({ message, type, onClose }) {
   );
 }
 
-function ConfirmModal({ isOpen, onClose, onConfirm, mentorName }) {
+function ConfirmModal({ isOpen, onClose, onConfirm, mentorName, isDocumentDelete = false }) {
   if (!isOpen) return null;
+  const title = isDocumentDelete ? "Confirm Delete Document" : "Confirm Delete Mentor";
+  const message = isDocumentDelete 
+    ? "Are you sure you want to delete this document?" 
+    : `Are you sure you want to delete ${mentorName}? This action cannot be undone.`;
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl max-w-md w-full border border-gray-200 shadow-xl p-6 mx-4">
-        <h3 className="text-lg font-semibold text-gray-800 mb-2">Confirm Delete</h3>
-        <p className="text-gray-600 mb-6">
-          Are you sure you want to delete <span className="text-gray-900 font-medium">{mentorName}</span>?<br />
-          This action cannot be undone.
-        </p>
+        <h3 className="text-lg font-semibold text-gray-800 mb-2">{title}</h3>
+        <p className="text-gray-600 mb-6">{message}</p>
         <div className="flex gap-3 justify-end">
           <button onClick={onClose} className="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition">Cancel</button>
           <button onClick={onConfirm} className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white transition">Delete</button>
@@ -54,12 +55,20 @@ function Mentors() {
   const itemsPerPage = 10;
   const [viewingMentor, setViewingMentor] = useState(null);
   const [formData, setFormData] = useState({
-    name: "",        // Full name (UI only)
+    name: "",
     email: "",
     phone: "",
     expertise: "",
     batch: "",
   });
+
+  // Document states
+  const [selectedFiles, setSelectedFiles] = useState([]);
+  const [viewerDocuments, setViewerDocuments] = useState([]);
+  const [uploadingDocs, setUploadingDocs] = useState(false);
+  const [newDocs, setNewDocs] = useState([]);
+  const [docToDelete, setDocToDelete] = useState(null);
+  const [showDocConfirmModal, setShowDocConfirmModal] = useState(false);
 
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [mentorToDelete, setMentorToDelete] = useState(null);
@@ -92,9 +101,7 @@ function Mentors() {
   }, []);
 
   useEffect(() => {
-    if (showForm) {
-      fetchBatches();
-    }
+    if (showForm) fetchBatches();
   }, [showForm]);
 
   const handleDeleteClick = (mentorId, mentorName) => {
@@ -117,16 +124,31 @@ function Mentors() {
     }
   };
 
-  // Generate a username from full name (lowercase, spaces -> underscores)
   const generateUsername = (name, email) => {
     let base = name ? name.toLowerCase().trim().replace(/\s+/g, '_') : '';
     if (!base) base = email ? email.split('@')[0] : 'mentor';
-    // Remove any characters that are not alphanumeric or underscore
     base = base.replace(/[^a-z0-9_]/g, '');
     if (!base) base = 'mentor';
-    // Add random suffix to reduce collisions (backend will still enforce uniqueness)
     const suffix = Math.floor(Math.random() * 10000);
     return `${base}${suffix}`;
+  };
+
+  const uploadDocumentsForMentor = async (mentorId, files = selectedFiles) => {
+    if (!files.length) return;
+    for (const file of files) {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('mentor', mentorId);
+      try {
+        await API.post('upload-mentor-document/', fd, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+      } catch (err) {
+        console.error(`Failed to upload ${file.name}`, err);
+        showToast(`Failed to upload ${file.name}`, "error");
+      }
+    }
+    setSelectedFiles([]);
   };
 
   const handleSubmit = async (e) => {
@@ -147,42 +169,58 @@ function Mentors() {
       expertise: formData.expertise,
       batch: formData.batch || null,
     };
+    let mentorId = null;
     try {
       if (editingId) {
         await API.patch(`mentors/${editingId}/`, payload);
         showToast("Mentor updated successfully", "success");
+        mentorId = editingId;
+        setShowForm(false);
+        setEditingId(null);
+        resetForm();
+        fetchMentors();
       } else {
-        await API.post("mentors/", payload);
+        const createRes = await API.post("mentors/", payload);
         showToast("Mentor added successfully", "success");
+        mentorId = createRes.data.id;
+        setShowForm(false);
+        resetForm();
+        fetchMentors();
+        setCurrentPage(1);
       }
-      setShowForm(false);
-      setEditingId(null);
-      setFormData({
-        name: "", email: "", phone: "", expertise: "", batch: "",
-      });
-      setPhoneError("");
-      fetchMentors();
+      // Upload documents after mentor creation/update
+      if (mentorId && selectedFiles.length) {
+        await uploadDocumentsForMentor(mentorId);
+      }
     } catch (error) {
       if (error.response) {
         const errorMsg = Object.values(error.response.data).flat().join(", ");
-        showToast(`Error: ${errorMsg || error.response.statusText}`, "error");
-        console.error(error.response.data);
+        showToast(`Error: ${errorMsg}`, "error");
       } else {
         showToast(error.message, "error");
       }
     }
   };
 
+  const resetForm = () => {
+    setFormData({
+      name: "", email: "", phone: "", expertise: "", batch: "",
+    });
+    setPhoneError("");
+    setSelectedFiles([]);
+  };
+
   const handleEdit = (mentor) => {
     setEditingId(mentor.id);
     setFormData({
-      name: mentor.username,   // Show the existing username as name
+      name: mentor.username,
       email: mentor.email,
       phone: mentor.phone || "",
       expertise: mentor.expertise,
       batch: mentor.batch || "",
     });
     setPhoneError("");
+    setSelectedFiles([]);
     setShowForm(true);
   };
 
@@ -199,6 +237,56 @@ function Mentors() {
     } else {
       setFormData(prev => ({ ...prev, [name]: value }));
     }
+  };
+
+  // Document functions
+  const fetchMentorDocuments = async (mentorId) => {
+    try {
+      const res = await API.get(`mentors/${mentorId}/documents/`);
+      setViewerDocuments(res.data);
+    } catch (err) {
+      console.error(err);
+      setViewerDocuments([]);
+    }
+  };
+
+  const uploadDocsToCurrentMentor = async () => {
+    if (!viewingMentor || newDocs.length === 0) return;
+    setUploadingDocs(true);
+    for (const file of newDocs) {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('mentor', viewingMentor.id);
+      try {
+        await API.post('upload-mentor-document/', fd);
+        showToast(`Uploaded ${file.name}`, "success");
+      } catch (err) {
+        console.error(err);
+        showToast(`Failed to upload ${file.name}`, "error");
+      }
+    }
+    await fetchMentorDocuments(viewingMentor.id);
+    setNewDocs([]);
+    setUploadingDocs(false);
+  };
+
+  const deleteDocument = async (docId) => {
+    try {
+      await API.delete(`mentor-documents/${docId}/`);
+      showToast("Document deleted", "success");
+      if (viewingMentor) await fetchMentorDocuments(viewingMentor.id);
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to delete document", "error");
+    }
+    setShowDocConfirmModal(false);
+    setDocToDelete(null);
+  };
+
+  const openViewModal = (mentor) => {
+    setViewingMentor(mentor);
+    fetchMentorDocuments(mentor.id);
+    setNewDocs([]);
   };
 
   const filteredMentors = mentors.filter(m =>
@@ -282,12 +370,12 @@ function Mentors() {
           .mentor-table tbody td { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; border-bottom: 1px solid #e5e7eb; text-align: right; gap: 1rem; }
           .mentor-table tbody td:last-child { border-bottom: none; }
           .mentor-table tbody td::before { content: attr(data-label); font-weight: 600; color: #6b7280; text-align: left; flex: 1; }
-          .mentor-table tbody td .action-buttons { margin-left: auto; display: flex; gap: 0.5rem; }
         }
       `}</style>
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
       <ConfirmModal isOpen={showConfirmModal} onClose={() => setShowConfirmModal(false)} onConfirm={confirmDelete} mentorName={mentorToDelete?.name} />
+      <ConfirmModal isOpen={showDocConfirmModal} onClose={() => setShowDocConfirmModal(false)} onConfirm={() => deleteDocument(docToDelete)} mentorName="" isDocumentDelete={true} />
 
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-4 sm:py-8">
 
@@ -325,10 +413,9 @@ function Mentors() {
             <button
               onClick={() => {
                 setEditingId(null);
-                setFormData({
-                  name: "", email: "", phone: "", expertise: "", batch: "",
-                });
+                setFormData({ name: "", email: "", phone: "", expertise: "", batch: "" });
                 setPhoneError("");
+                setSelectedFiles([]);
                 setShowForm(true);
               }}
               className="shine flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 shadow-md w-full sm:w-auto"
@@ -339,7 +426,7 @@ function Mentors() {
           </div>
         </div>
 
-        {/* Add/Edit Modal */}
+        {/* Add/Edit Modal with Document Upload */}
         {showForm && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={() => setShowForm(false)}>
             <form onSubmit={handleSubmit} className="modal-enter bg-white rounded-2xl w-full max-w-2xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -368,6 +455,23 @@ function Mentors() {
                   <div><label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Expertise *</label><input type="text" name="expertise" value={formData.expertise} onChange={handleChange} required className={inputClass} /></div>
                   <div><label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Batch</label><select name="batch" value={formData.batch} onChange={handleChange} className={inputClass}><option value="">Select a batch</option>{batchesList.map(batch => <option key={batch.id} value={batch.id}>{batch.name}</option>)}</select></div>
                 </div>
+
+                {/* Document upload during add/edit */}
+                <div className="border-t border-gray-200 pt-4">
+                  <h4 className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-3">Documents (PDF, images)</h4>
+                  <input
+                    type="file"
+                    multiple
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    onChange={(e) => setSelectedFiles(Array.from(e.target.files))}
+                    className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                  />
+                  {selectedFiles.length > 0 && (
+                    <ul className="mt-2 text-xs text-gray-500 list-disc pl-5">
+                      {selectedFiles.map((f, idx) => <li key={idx}>📎 {f.name}</li>)}
+                    </ul>
+                  )}
+                </div>
               </div>
 
               <div className="flex gap-2 px-4 sm:px-6 py-4 border-t border-gray-200">
@@ -382,10 +486,10 @@ function Mentors() {
           </div>
         )}
 
-        {/* View Details Modal */}
+        {/* View Details Modal with Documents */}
         {viewingMentor && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={() => setViewingMentor(null)}>
-            <div className="bg-white rounded-2xl w-full max-w-2xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-white rounded-2xl w-full max-w-3xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
               <div className="sticky top-0 bg-white z-10 flex justify-between items-center px-4 sm:px-6 py-4 border-b border-gray-200">
                 <div className="flex items-center gap-3">
                   <div className="w-7 h-7 rounded-lg bg-green-100 border border-green-200 flex items-center justify-center">
@@ -395,7 +499,7 @@ function Mentors() {
                   </div>
                   <div>
                     <h3 className="text-sm font-semibold text-gray-800">Mentor Details</h3>
-                    <p className="text-gray-500 text-xs">View all information</p>
+                    <p className="text-gray-500 text-xs">View all information & manage documents</p>
                   </div>
                 </div>
                 <button type="button" onClick={() => setViewingMentor(null)} className="text-gray-400 hover:text-gray-600 transition p-1.5 rounded-lg hover:bg-gray-100">
@@ -409,6 +513,61 @@ function Mentors() {
                   <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Phone</label><input type="text" value={viewingMentor.phone || "—"} readOnly className={readOnlyClass} /></div>
                   <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Expertise</label><input type="text" value={viewingMentor.expertise || "—"} readOnly className={readOnlyClass} /></div>
                   <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Batch</label><input type="text" value={getBatchName(viewingMentor.batch)} readOnly className={readOnlyClass} /></div>
+                </div>
+
+                {/* Documents Section */}
+                <div className="border-t border-gray-200 pt-4">
+                  <h4 className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-3">Documents</h4>
+                  {/* Upload new documents */}
+                  <div className="mb-4">
+                    <input
+                      type="file"
+                      multiple
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      onChange={(e) => setNewDocs(Array.from(e.target.files))}
+                      className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                    />
+                    {newDocs.length > 0 && (
+                      <div className="mt-2 flex justify-between items-center">
+                        <ul className="text-xs text-gray-500 list-disc pl-5">
+                          {newDocs.map((f, idx) => <li key={idx}>📎 {f.name}</li>)}
+                        </ul>
+                        <button
+                          onClick={uploadDocsToCurrentMentor}
+                          disabled={uploadingDocs}
+                          className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-lg text-xs font-medium disabled:opacity-50"
+                        >
+                          {uploadingDocs ? "Uploading..." : "Upload"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* List existing documents */}
+                  {viewerDocuments.length === 0 ? (
+                    <p className="text-gray-400 text-sm">No documents uploaded yet.</p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {viewerDocuments.map(doc => (
+                        <li key={doc.id} className="flex items-center justify-between gap-2 text-sm bg-gray-50 p-2 rounded-lg">
+                          <a href={doc.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-blue-600 hover:underline truncate">
+                            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                            <span className="truncate">{doc.file_name || "Document"}</span>
+                          </a>
+                          <button
+                            onClick={() => {
+                              setDocToDelete(doc.id);
+                              setShowDocConfirmModal(true);
+                            }}
+                            className="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-50 transition"
+                            title="Delete document"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               </div>
               <div className="sticky bottom-0 bg-white px-4 sm:px-6 py-4 border-t border-gray-200 flex justify-end">
@@ -433,7 +592,7 @@ function Mentors() {
                     <td data-label="Mentor" className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${getColor(m.username)} flex items-center justify-center text-white text-xs font-bold shrink-0`}>{getInitials(m.username)}</div>
-                        <button onClick={() => setViewingMentor(m)} className="text-gray-800 text-sm font-medium hover:text-green-600 transition-colors cursor-pointer">{m.username}</button>
+                        <button onClick={() => openViewModal(m)} className="text-gray-800 text-sm font-medium hover:text-green-600 transition-colors cursor-pointer">{m.username}</button>
                       </div>
                     </td>
                     <td data-label="Email" className="px-4 py-3 text-gray-500 text-sm break-all">{m.email}</td>
