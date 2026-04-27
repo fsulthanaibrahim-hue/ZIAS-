@@ -1,4 +1,5 @@
 from rest_framework import viewsets, status
+from rest_framework.generics import RetrieveAPIView
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.decorators import action, api_view, permission_classes
@@ -547,7 +548,9 @@ class RecentMessagesView(APIView):
         } for m in messages]
         return Response(data)
 
-class ContactMessageDetailView(APIView):
+class ContactMessageDetailView(RetrieveAPIView):
+    queryset = ContactMessage.objects.all()
+    serializer_class = ContactMessageSerializer
     permission_classes = [IsAuthenticated]
     def patch(self, request, pk):
         if not request.user.is_admin:
@@ -932,4 +935,4 @@ class NotificationViewSet(viewsets.ModelViewSet):
     def mark_all_read(self, request):
         self.get_queryset().update(is_read=True)
         return Response({'status': 'all marked read'})
-
+    
