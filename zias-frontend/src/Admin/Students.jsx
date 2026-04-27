@@ -1,5 +1,6 @@
 // src/Admin/Students.jsx
 import { useEffect, useState, useRef, useCallback } from "react";
+import { useLocation, useNavigate } from "react-router-dom";   // added useLocation, useNavigate
 import API from "../api/api";
 
 function Toast({ message, type, onClose }) {
@@ -39,6 +40,9 @@ function ConfirmModal({ isOpen, onClose, onConfirm, studentName }) {
 }
 
 function Students() {
+  const location = useLocation();
+  const navigate = useNavigate();
+
   const [students, setStudents] = useState([]);
   const [coursesList, setCoursesList] = useState([]);
   const [batchesList, setBatchesList] = useState([]);
@@ -47,6 +51,7 @@ function Students() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [batchFilter, setBatchFilter] = useState("");   // for URL batch param
   const [viewingStudent, setViewingStudent] = useState(null);
   const [phoneError, setPhoneError] = useState("");
   const [fathersContactError, setFathersContactError] = useState("");
@@ -63,7 +68,6 @@ function Students() {
   const [viewerDocuments, setViewerDocuments] = useState([]);
   const [uploadingDocs, setUploadingDocs] = useState(false);
   const [newDocs, setNewDocs] = useState([]);
-  // For edit modal existing documents
   const [editDocuments, setEditDocuments] = useState([]);
   const [loadingEditDocs, setLoadingEditDocs] = useState(false);
 
@@ -77,6 +81,18 @@ function Students() {
   const hideToast = useCallback(() => setToast(null), []);
 
   const hasLoaded = useRef(false);
+
+  // Read batch query param on mount and when URL changes
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const batch = params.get("batch");
+    if (batch) {
+      setBatchFilter(batch);
+      setSearchTerm(""); // optional: clear search when batch filter is applied
+    } else {
+      setBatchFilter("");
+    }
+  }, [location.search]);
 
   const fetchAllData = useCallback(async () => {
     if (hasLoaded.current) return;
@@ -338,7 +354,6 @@ function Students() {
       parent_phone: student.parent_phone || "",
       emergency_contact: student.emergency_contact || "",
     });
-    // Load existing documents for edit modal
     setLoadingEditDocs(true);
     const docs = await fetchStudentDocuments(student.id);
     setEditDocuments(docs);
@@ -367,7 +382,6 @@ function Students() {
       try {
         await API.post('upload-student-document/', fd);
         showToast(`Uploaded ${file.name}`, "success");
-        // Refresh document list after upload
         const updatedDocs = await fetchStudentDocuments(studentId);
         setEditDocuments(updatedDocs);
       } catch (err) {
@@ -380,7 +394,6 @@ function Students() {
 
   const handleEditSubmit = async (e) => {
     e.preventDefault();
-    // Same validation as handleSubmit
     const phoneFields = [
       { field: 'phone', setError: setPhoneError, label: 'Student phone' },
       { field: 'fathers_contact', setError: setFathersContactError, label: "Father's contact" },
@@ -476,7 +489,6 @@ function Students() {
         showToast(`Failed to upload ${file.name}`, "error");
       }
     }
-    // Refresh documents list in view modal
     const updatedDocs = await fetchStudentDocuments(viewingStudent.id);
     setViewerDocuments(updatedDocs);
     setNewDocs([]);
@@ -490,13 +502,16 @@ function Students() {
     setNewDocs([]);
   };
 
-  const filteredStudents = students.filter(s =>
-    (s.full_name || s.username)?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    s.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    s.course?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    s.batch?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    s.phone?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Filter students: search term + batch filter
+  const filteredStudents = students.filter(s => {
+    const matchesSearch = (s.full_name || s.username)?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      s.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      s.course?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      s.batch?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      s.phone?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesBatch = !batchFilter || s.batch === batchFilter;
+    return matchesSearch && matchesBatch;
+  });
 
   const totalFiltered = filteredStudents.length;
   const totalPages = Math.max(1, Math.ceil(totalFiltered / itemsPerPage));
@@ -530,7 +545,13 @@ function Students() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm]);
+  }, [searchTerm, batchFilter]);
+
+  // Clear batch filter function
+  const clearBatchFilter = () => {
+    setBatchFilter("");
+    navigate("/admin/students");  // remove query param
+  };
 
   const inputClass = `w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/30 transition-all duration-200 text-sm`;
   const readOnlyClass = `w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 text-gray-600 cursor-not-allowed text-sm`;
@@ -612,6 +633,17 @@ function Students() {
               )}
             </div>
 
+            {/* Clear batch filter button (if active) */}
+            {batchFilter && (
+              <button
+                onClick={clearBatchFilter}
+                className="flex items-center justify-center gap-2 bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium transition-all"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                Clear Batch: {batchFilter}
+              </button>
+            )}
+
             <button
               onClick={() => {
                 setEditingId(null);
@@ -626,7 +658,7 @@ function Students() {
           </div>
         </div>
 
-        {/* Add/Edit Modal */}
+        {/* Add/Edit Modal (unchanged) */}
         {showForm && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={() => setShowForm(false)}>
             <form
@@ -634,7 +666,7 @@ function Students() {
               className="modal-enter bg-white rounded-2xl w-full max-w-3xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Header */}
+              {/* ... same as before ... */}
               <div className="sticky top-0 bg-white z-10 flex justify-between items-center px-4 sm:px-6 py-4 border-b border-gray-200">
                 <div className="flex items-center gap-3">
                   <div className="w-7 h-7 rounded-lg bg-green-100 border border-green-200 flex items-center justify-center">
@@ -653,7 +685,7 @@ function Students() {
               </div>
 
               <div className="px-4 sm:px-6 py-5 space-y-6">
-                {/* Basic Information (same as before) */}
+                {/* Basic Information */}
                 <div>
                   <h4 className="text-xs font-semibold text-green-600 uppercase tracking-wider mb-3">Basic Information</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -736,7 +768,6 @@ function Students() {
                     </div>
                   )}
 
-                  {/* Upload new documents */}
                   <div>
                     <label className="block text-gray-600 text-xs font-medium mb-1.5">
                       {editingId ? "Upload Additional Documents" : "Upload Documents (PDF, images)"}
@@ -766,10 +797,11 @@ function Students() {
           </div>
         )}
 
-        {/* View Details Modal – documents without delete */}
+        {/* View Details Modal (unchanged, keep as before) */}
         {viewingStudent && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={() => setViewingStudent(null)}>
             <div className="bg-white rounded-2xl w-full max-w-3xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+              {/* ... same as original ... */}
               <div className="sticky top-0 bg-white z-10 flex justify-between items-center px-4 sm:px-6 py-4 border-b border-gray-200">
                 <div className="flex items-center gap-3">
                   <div className="w-7 h-7 rounded-lg bg-green-100 border border-green-200 flex items-center justify-center">

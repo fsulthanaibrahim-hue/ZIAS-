@@ -1,44 +1,50 @@
-// src/Admin/Batches.jsx
+// src/Admin/Batches.jsx – table layout with click on batch name
 import { useEffect, useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import API from "../api/api";
 
-// Toast Component
 function Toast({ message, type, onClose }) {
   useEffect(() => {
     const timer = setTimeout(onClose, 3000);
     return () => clearTimeout(timer);
   }, [onClose]);
 
-  const bgColor = type === "success" 
-    ? "bg-green-600" 
-    : type === "error" 
-    ? "bg-red-600" 
-    : "bg-gray-600";
+  const bgColor = type === "success"
+    ? "bg-emerald-500"
+    : type === "error"
+    ? "bg-red-500"
+    : "bg-slate-600";
   const icon = type === "success" ? "✓" : type === "error" ? "✕" : "ℹ";
 
   return (
-    <div className={`fixed top-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg ${bgColor} text-white text-sm font-medium animate-in slide-in-from-top-2 max-w-[90vw] sm:max-w-md`}>
-      <span className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold">{icon}</span>
+    <div className={`fixed top-5 right-5 z-50 flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-2xl ${bgColor} text-white text-sm font-medium max-w-sm`}
+      style={{ animation: "slideDown 0.25s cubic-bezier(0.16,1,0.3,1)" }}>
+      <span className="w-6 h-6 rounded-full bg-white/25 flex items-center justify-center text-xs font-bold shrink-0">{icon}</span>
       <span className="flex-1">{message}</span>
-      <button onClick={onClose} className="ml-2 text-white/70 hover:text-white text-lg leading-none">×</button>
+      <button onClick={onClose} className="text-white/60 hover:text-white text-lg leading-none ml-1">×</button>
     </div>
   );
 }
 
-// Custom confirmation modal for delete
+// Modern delete confirmation modal (matches Courses/Modules style)
 function ConfirmModal({ isOpen, onClose, onConfirm, batchName }) {
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl max-w-md w-full border border-gray-200 shadow-xl p-6 mx-4">
-        <h3 className="text-lg font-semibold text-gray-800 mb-2">Confirm Delete</h3>
-        <p className="text-gray-600 mb-6">
-          Are you sure you want to delete <span className="text-gray-900 font-medium">{batchName}</span>?<br />
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-3xl max-w-sm w-full shadow-2xl p-7 mx-4" style={{ animation: "modalIn 0.2s cubic-bezier(0.16,1,0.3,1)" }}>
+        <div className="w-12 h-12 bg-red-100 rounded-2xl flex items-center justify-center mb-4">
+          <svg className="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+        </div>
+        <h3 className="text-lg font-bold text-gray-900 mb-1">Delete Batch?</h3>
+        <p className="text-gray-500 text-sm mb-6 leading-relaxed">
+          <span className="font-semibold text-gray-700">"{batchName}"</span> will be removed.<br />
           Students assigned to it will lose batch association. This action cannot be undone.
         </p>
-        <div className="flex gap-3 justify-end">
-          <button onClick={onClose} className="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition">Cancel</button>
-          <button onClick={onConfirm} className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white transition">Delete</button>
+        <div className="flex gap-2">
+          <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium text-sm transition-colors">Cancel</button>
+          <button onClick={onConfirm} className="flex-1 px-4 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-medium text-sm transition-colors">Delete</button>
         </div>
       </div>
     </div>
@@ -46,6 +52,7 @@ function ConfirmModal({ isOpen, onClose, onConfirm, batchName }) {
 }
 
 function Batches() {
+  const navigate = useNavigate();
   const [batches, setBatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -63,14 +70,14 @@ function Batches() {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [batchToDelete, setBatchToDelete] = useState(null);
   const [toast, setToast] = useState(null);
-  const showToast = (msg, type) => setToast({ message: msg, type });
+  const showToast = (msg, type = "success") => setToast({ message: msg, type });
   const hideToast = () => setToast(null);
 
   const fetched = useRef(false);
 
   const fetchBatches = () => {
     API.get("batches/")
-      .then((res) => {
+      .then(res => {
         setBatches(res.data);
         setLoading(false);
       })
@@ -106,7 +113,6 @@ function Batches() {
     }
   };
 
-  // Validate dates before submission
   const validateDates = () => {
     if (formData.start_date && formData.end_date) {
       const start = new Date(formData.start_date);
@@ -150,7 +156,11 @@ function Batches() {
     setShowForm(true);
   };
 
-  const filteredBatches = batches.filter((b) =>
+  const handleBatchNameClick = (batchName) => {
+    navigate(`/admin/students?batch=${encodeURIComponent(batchName)}`);
+  };
+
+  const filteredBatches = batches.filter(b =>
     b.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -188,22 +198,26 @@ function Batches() {
     setCurrentPage(1);
   }, [searchTerm]);
 
-  const inputClass = `
-    w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-800
-    placeholder-gray-400 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/30
-    transition-all duration-200 text-sm
-  `;
+  const inputClass = "w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 text-sm";
+
+  const ModalWrapper = ({ onClose, children, maxW = "max-w-lg" }) => (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className={`bg-white rounded-3xl w-full ${maxW} shadow-2xl max-h-[90vh] overflow-y-auto`} onClick={e => e.stopPropagation()}>
+        {children}
+      </div>
+    </div>
+  );
 
   if (loading) {
     return (
       <div className="w-full min-h-[60vh] flex items-center justify-center bg-gray-50">
-        <div className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen w-full bg-gray-50 text-gray-800" style={{ fontFamily: "'Geist', 'SF Pro Display', system-ui, sans-serif" }}>
+    <div className="min-h-screen w-full bg-gray-50 text-gray-800" style={{ fontFamily: "'DM Sans', 'Geist', system-ui, sans-serif" }}>
       <style>{`
         .table-row-hover:hover { background: rgba(34,197,94,0.04); }
         .modal-enter { animation: modalIn 0.2s cubic-bezier(0.16,1,0.3,1); }
@@ -211,19 +225,14 @@ function Batches() {
         .shine { position:relative; overflow:hidden; }
         .shine::after { content:''; position:absolute; top:0; left:-100%; width:60%; height:100%; background:linear-gradient(90deg,transparent,rgba(255,255,255,0.3),transparent); animation: shine 3s infinite; }
         @keyframes shine { to { left:150%; } }
-        @keyframes slide-in-from-top-2 {
-          from { opacity:0; transform:translateY(-1rem); }
-          to { opacity:1; transform:translateY(0); }
-        }
+        @keyframes slide-in-from-top-2 { from { opacity:0; transform:translateY(-1rem); } to { opacity:1; transform:translateY(0); } }
         .animate-in { animation: slide-in-from-top-2 0.2s ease-out; }
-        /* Mobile card layout */
         @media (max-width: 640px) {
           .batches-table thead { display: none; }
           .batches-table tbody tr { display: block; margin-bottom: 1rem; border: 1px solid #e5e7eb; border-radius: 0.75rem; background: white; }
           .batches-table tbody td { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; border-bottom: 1px solid #e5e7eb; text-align: right; gap: 1rem; }
           .batches-table tbody td:last-child { border-bottom: none; }
           .batches-table tbody td::before { content: attr(data-label); font-weight: 600; color: #6b7280; text-align: left; flex: 1; }
-          .batches-table tbody td .action-buttons { margin-left: auto; display: flex; gap: 0.5rem; }
         }
       `}</style>
 
@@ -260,7 +269,7 @@ function Batches() {
               />
               {searchTerm && (
                 <button onClick={() => setSearchTerm("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition">
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
               )}
             </div>
@@ -273,16 +282,16 @@ function Batches() {
               }}
               className="shine flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 shadow-md w-full sm:w-auto"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" /></svg>
               Add Batch
             </button>
           </div>
         </div>
 
-        {/* Modal - Responsive */}
+        {/* Add/Edit Modal */}
         {showForm && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={() => setShowForm(false)}>
-            <form onSubmit={handleSubmit} className="modal-enter bg-white rounded-2xl w-full max-w-md border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={() => setShowForm(false)}>
+            <form onSubmit={handleSubmit} className="modal-enter bg-white rounded-3xl w-full max-w-md border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
               <div className="sticky top-0 bg-white z-10 flex justify-between items-center px-4 sm:px-6 py-4 border-b border-gray-200">
                 <div className="flex items-center gap-3">
                   <div className="w-7 h-7 rounded-lg bg-green-100 border border-green-200 flex items-center justify-center">
@@ -296,7 +305,7 @@ function Batches() {
                   </div>
                 </div>
                 <button type="button" onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600 transition p-1.5 rounded-lg hover:bg-gray-100">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
               </div>
 
@@ -349,9 +358,16 @@ function Batches() {
               {paginatedBatches.length > 0 ? (
                 paginatedBatches.map((batch) => (
                   <tr key={batch.id} className="table-row-hover transition-colors duration-150 group">
-                    <td data-label="Name" className="px-4 py-3 text-gray-800 text-sm font-medium break-words">{batch.name}</td>
-                    <td data-label="Start Date" className="px-4 py-3 text-gray-500 text-sm">{batch.start_date || "—"}</td>
-                    <td data-label="End Date" className="px-4 py-3 text-gray-500 text-sm">{batch.end_date || "—"}</td>
+                    <td data-label="Name" className="px-4 py-3">
+                      <button
+                        onClick={() => handleBatchNameClick(batch.name)}
+                        className="text-gray-800 text-sm font-medium hover:text-emerald-600 transition-colors cursor-pointer text-left"
+                      >
+                        {batch.name}
+                      </button>
+                    </td>
+                    <td data-label="Start Date" className="px-4 py-3 text-gray-500 text-sm">{batch.start_date ? new Date(batch.start_date).toLocaleDateString() : "—"}</td>
+                    <td data-label="End Date" className="px-4 py-3 text-gray-500 text-sm">{batch.end_date ? new Date(batch.end_date).toLocaleDateString() : "—"}</td>
                     <td data-label="Status" className="px-4 py-3">
                       <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${batch.is_active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>
                         {batch.is_active ? "Active" : "Inactive"}
@@ -360,11 +376,11 @@ function Batches() {
                     <td data-label="Actions" className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <button onClick={() => handleEdit(batch)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-gray-500 hover:text-green-600 hover:bg-green-50 border border-transparent hover:border-green-200 transition-all text-xs font-medium" title="Edit">
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                           <span className="hidden sm:inline">Edit</span>
                         </button>
                         <button onClick={() => handleDeleteClick(batch.id, batch.name)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-all text-xs font-medium" title="Delete">
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                           <span className="hidden sm:inline">Delete</span>
                         </button>
                       </div>
