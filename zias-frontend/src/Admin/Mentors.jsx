@@ -1,5 +1,4 @@
-// src/Admin/Mentors.jsx
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import API from "../api/api";
 
 function Toast({ message, type, onClose }) {
@@ -8,11 +7,7 @@ function Toast({ message, type, onClose }) {
     return () => clearTimeout(timer);
   }, [onClose]);
 
-  const bgColor = type === "success" 
-    ? "bg-green-600" 
-    : type === "error" 
-    ? "bg-red-600" 
-    : "bg-gray-600";
+  const bgColor = type === "success" ? "bg-green-600" : type === "error" ? "bg-red-600" : "bg-gray-600";
   const icon = type === "success" ? "✓" : type === "error" ? "✕" : "ℹ";
 
   return (
@@ -55,7 +50,7 @@ function Mentors() {
   const itemsPerPage = 10;
   const [viewingMentor, setViewingMentor] = useState(null);
   const [formData, setFormData] = useState({
-    name: "",
+    full_name: "",
     email: "",
     phone: "",
     expertise: "",
@@ -67,42 +62,47 @@ function Mentors() {
   const [viewerDocuments, setViewerDocuments] = useState([]);
   const [uploadingDocs, setUploadingDocs] = useState(false);
   const [newDocs, setNewDocs] = useState([]);
-  const [docToDelete, setDocToDelete] = useState(null);
-  const [showDocConfirmModal, setShowDocConfirmModal] = useState(false);
+  const [editDocuments, setEditDocuments] = useState([]);
+  const [loadingEditDocs, setLoadingEditDocs] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [mentorToDelete, setMentorToDelete] = useState(null);
   const [toast, setToast] = useState(null);
-  const showToast = (message, type = "success") => setToast({ message, type });
-  const hideToast = () => setToast(null);
+  const showToast = useCallback((message, type = "success") => setToast({ message, type }), []);
+  const hideToast = useCallback(() => setToast(null), []);
 
   const initialFetchDone = useRef(false);
+  const batchesFetched = useRef(false);
 
-  const fetchMentors = () => {
-    API.get("mentors/")
-      .then(res => setMentors(res.data))
-      .catch(err => {
-        console.error(err);
-        showToast("Failed to load mentors", "error");
-      });
-  };
+  const fetchMentors = useCallback(async () => {
+    try {
+      const res = await API.get("mentors/");
+      setMentors(res.data);
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to load mentors", "error");
+    }
+  }, [showToast]);
 
-  const fetchBatches = () => {
-    API.get("batches/")
-      .then(res => setBatchesList(res.data))
-      .catch(() => showToast("Failed to load batches", "error"));
-  };
+  const fetchBatches = useCallback(async () => {
+    if (batchesFetched.current) return;
+    batchesFetched.current = true;
+    try {
+      const res = await API.get("batches/");
+      setBatchesList(res.data);
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to load batches", "error");
+    }
+  }, [showToast]);
 
   useEffect(() => {
     if (initialFetchDone.current) return;
     initialFetchDone.current = true;
     fetchMentors();
     fetchBatches();
-  }, []);
-
-  useEffect(() => {
-    if (showForm) fetchBatches();
-  }, [showForm]);
+  }, [fetchMentors, fetchBatches]);
 
   const handleDeleteClick = (mentorId, mentorName) => {
     setMentorToDelete({ id: mentorId, name: mentorName });
@@ -113,7 +113,7 @@ function Mentors() {
     if (!mentorToDelete) return;
     try {
       await API.delete(`mentors/${mentorToDelete.id}/`);
-      fetchMentors();
+      await fetchMentors();
       showToast("Mentor deleted successfully", "success");
     } catch (err) {
       console.error(err);
@@ -124,8 +124,8 @@ function Mentors() {
     }
   };
 
-  const generateUsername = (name, email) => {
-    let base = name ? name.toLowerCase().trim().replace(/\s+/g, '_') : '';
+  const generateUsername = (fullName, email) => {
+    let base = fullName ? fullName.toLowerCase().trim().replace(/\s+/g, '_') : '';
     if (!base) base = email ? email.split('@')[0] : 'mentor';
     base = base.replace(/[^a-z0-9_]/g, '');
     if (!base) base = 'mentor';
@@ -133,7 +133,17 @@ function Mentors() {
     return `${base}${suffix}`;
   };
 
-  const uploadDocumentsForMentor = async (mentorId, files = selectedFiles) => {
+  const fetchMentorDocuments = useCallback(async (mentorId) => {
+    try {
+      const res = await API.get(`mentors/${mentorId}/documents/`);
+      return res.data;
+    } catch (err) {
+      console.error(err);
+      return [];
+    }
+  }, []);
+
+  const uploadDocumentsForMentor = async (mentorId, files) => {
     if (!files.length) return;
     for (const file of files) {
       const fd = new FormData();
@@ -151,9 +161,19 @@ function Mentors() {
     setSelectedFiles([]);
   };
 
+  const resetForm = () => {
+    setFormData({
+      full_name: "", email: "", phone: "", expertise: "", batch: "",
+    });
+    setPhoneError("");
+    setSelectedFiles([]);
+    setEditDocuments([]);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+    if (submitting) return;
+
     if (formData.phone && !/^\d{10}$/.test(formData.phone)) {
       showToast("Phone number must be exactly 10 digits", "error");
       setPhoneError("Phone number must be exactly 10 digits");
@@ -161,59 +181,53 @@ function Mentors() {
     }
     setPhoneError("");
 
-    const generatedUsername = generateUsername(formData.name, formData.email);
+    const generatedUsername = generateUsername(formData.full_name, formData.email);
     const payload = {
       username: generatedUsername,
       email: formData.email,
       phone: formData.phone,
       expertise: formData.expertise,
       batch: formData.batch || null,
+      full_name: formData.full_name,
     };
+    setSubmitting(true);
     let mentorId = null;
     try {
       if (editingId) {
         await API.patch(`mentors/${editingId}/`, payload);
         showToast("Mentor updated successfully", "success");
         mentorId = editingId;
+        if (selectedFiles.length) {
+          await uploadDocumentsForMentor(mentorId, selectedFiles);
+        }
         setShowForm(false);
         setEditingId(null);
         resetForm();
-        fetchMentors();
+        await fetchMentors();
       } else {
         const createRes = await API.post("mentors/", payload);
         showToast("Mentor added successfully", "success");
         mentorId = createRes.data.id;
+        if (selectedFiles.length) {
+          await uploadDocumentsForMentor(mentorId, selectedFiles);
+        }
         setShowForm(false);
         resetForm();
-        fetchMentors();
+        await fetchMentors();
         setCurrentPage(1);
       }
-      // Upload documents after mentor creation/update
-      if (mentorId && selectedFiles.length) {
-        await uploadDocumentsForMentor(mentorId);
-      }
     } catch (error) {
-      if (error.response) {
-        const errorMsg = Object.values(error.response.data).flat().join(", ");
-        showToast(`Error: ${errorMsg}`, "error");
-      } else {
-        showToast(error.message, "error");
-      }
+      const errorMsg = error.response ? Object.values(error.response.data).flat().join(", ") : error.message;
+      showToast(`Error: ${errorMsg}`, "error");
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  const resetForm = () => {
-    setFormData({
-      name: "", email: "", phone: "", expertise: "", batch: "",
-    });
-    setPhoneError("");
-    setSelectedFiles([]);
-  };
-
-  const handleEdit = (mentor) => {
+  const handleEdit = async (mentor) => {
     setEditingId(mentor.id);
     setFormData({
-      name: mentor.username,
+      full_name: mentor.full_name || "",
       email: mentor.email,
       phone: mentor.phone || "",
       expertise: mentor.expertise,
@@ -221,7 +235,22 @@ function Mentors() {
     });
     setPhoneError("");
     setSelectedFiles([]);
+    setLoadingEditDocs(true);
+    const docs = await fetchMentorDocuments(mentor.id);
+    setEditDocuments(docs);
+    setLoadingEditDocs(false);
     setShowForm(true);
+  };
+
+  const deleteEditDocument = async (docId) => {
+    try {
+      await API.delete(`mentor-documents/${docId}/`);
+      setEditDocuments(prev => prev.filter(d => d.id !== docId));
+      showToast("Document removed", "success");
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to delete document", "error");
+    }
   };
 
   const handleChange = (e) => {
@@ -236,17 +265,6 @@ function Mentors() {
       }
     } else {
       setFormData(prev => ({ ...prev, [name]: value }));
-    }
-  };
-
-  // Document functions
-  const fetchMentorDocuments = async (mentorId) => {
-    try {
-      const res = await API.get(`mentors/${mentorId}/documents/`);
-      setViewerDocuments(res.data);
-    } catch (err) {
-      console.error(err);
-      setViewerDocuments([]);
     }
   };
 
@@ -265,32 +283,21 @@ function Mentors() {
         showToast(`Failed to upload ${file.name}`, "error");
       }
     }
-    await fetchMentorDocuments(viewingMentor.id);
+    const updatedDocs = await fetchMentorDocuments(viewingMentor.id);
+    setViewerDocuments(updatedDocs);
     setNewDocs([]);
     setUploadingDocs(false);
   };
 
-  const deleteDocument = async (docId) => {
-    try {
-      await API.delete(`mentor-documents/${docId}/`);
-      showToast("Document deleted", "success");
-      if (viewingMentor) await fetchMentorDocuments(viewingMentor.id);
-    } catch (err) {
-      console.error(err);
-      showToast("Failed to delete document", "error");
-    }
-    setShowDocConfirmModal(false);
-    setDocToDelete(null);
-  };
-
-  const openViewModal = (mentor) => {
+  const openViewModal = async (mentor) => {
     setViewingMentor(mentor);
-    fetchMentorDocuments(mentor.id);
+    const docs = await fetchMentorDocuments(mentor.id);
+    setViewerDocuments(docs);
     setNewDocs([]);
   };
 
   const filteredMentors = mentors.filter(m =>
-    m.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (m.full_name || m.username)?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     m.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     m.phone?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     m.expertise?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -330,15 +337,8 @@ function Mentors() {
     setCurrentPage(1);
   }, [searchTerm]);
 
-  const inputClass = `
-    w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-800
-    placeholder-gray-400 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/30
-    transition-all duration-200 text-sm
-  `;
-  const readOnlyClass = `
-    w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 text-gray-600
-    cursor-not-allowed text-sm
-  `;
+  const inputClass = `w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/30 transition-all duration-200 text-sm`;
+  const readOnlyClass = `w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 text-gray-600 cursor-not-allowed text-sm`;
 
   const getInitials = (name) => (name || "?")[0].toUpperCase();
   const avatarColors = [
@@ -353,6 +353,8 @@ function Mentors() {
     return batch ? batch.name : "—";
   };
 
+  if (false) return null; // placeholder
+
   return (
     <div className="min-h-screen w-full bg-gray-50 text-gray-800" style={{ fontFamily: "'Geist', 'SF Pro Display', system-ui, sans-serif" }}>
       <style>{`
@@ -364,6 +366,7 @@ function Mentors() {
         @keyframes shine { to { left:150%; } }
         @keyframes slide-in-from-top-2 { from { opacity:0; transform:translateY(-1rem); } to { opacity:1; transform:translateY(0); } }
         .animate-in { animation: slide-in-from-top-2 0.2s ease-out; }
+        .cursor-pointer { cursor: pointer; }
         @media (max-width: 640px) {
           .mentor-table thead { display: none; }
           .mentor-table tbody tr { display: block; margin-bottom: 1rem; border: 1px solid #e5e7eb; border-radius: 0.75rem; background: white; }
@@ -375,10 +378,8 @@ function Mentors() {
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
       <ConfirmModal isOpen={showConfirmModal} onClose={() => setShowConfirmModal(false)} onConfirm={confirmDelete} mentorName={mentorToDelete?.name} />
-      <ConfirmModal isOpen={showDocConfirmModal} onClose={() => setShowDocConfirmModal(false)} onConfirm={() => deleteDocument(docToDelete)} mentorName="" isDocumentDelete={true} />
 
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-4 sm:py-8">
-
         {/* Top Bar */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
           <div className="flex items-center gap-4">
@@ -413,9 +414,7 @@ function Mentors() {
             <button
               onClick={() => {
                 setEditingId(null);
-                setFormData({ name: "", email: "", phone: "", expertise: "", batch: "" });
-                setPhoneError("");
-                setSelectedFiles([]);
+                resetForm();
                 setShowForm(true);
               }}
               className="shine flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 shadow-md w-full sm:w-auto"
@@ -426,10 +425,14 @@ function Mentors() {
           </div>
         </div>
 
-        {/* Add/Edit Modal with Document Upload */}
+        {/* Add/Edit Modal */}
         {showForm && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={() => setShowForm(false)}>
-            <form onSubmit={handleSubmit} className="modal-enter bg-white rounded-2xl w-full max-w-2xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <form
+              onSubmit={handleSubmit}
+              className="modal-enter bg-white rounded-2xl w-full max-w-3xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="sticky top-0 bg-white z-10 flex justify-between items-center px-4 sm:px-6 py-4 border-b border-gray-200">
                 <div className="flex items-center gap-3">
                   <div className="w-7 h-7 rounded-lg bg-green-100 border border-green-200 flex items-center justify-center">
@@ -447,46 +450,96 @@ function Mentors() {
                 </button>
               </div>
 
-              <div className="px-4 sm:px-6 py-5 space-y-5">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div><label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Full Name *</label><input type="text" name="name" value={formData.name} onChange={handleChange} required className={inputClass} /></div>
-                  <div><label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Email *</label><input type="email" name="email" value={formData.email} onChange={handleChange} required className={inputClass} /></div>
-                  <div><label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Phone</label><input type="tel" name="phone" value={formData.phone} onChange={handleChange} className={`${inputClass} ${phoneError ? "border-red-500" : ""}`} placeholder="10-digit mobile" />{phoneError && <p className="text-red-500 text-xs mt-1">{phoneError}</p>}</div>
-                  <div><label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Expertise *</label><input type="text" name="expertise" value={formData.expertise} onChange={handleChange} required className={inputClass} /></div>
-                  <div><label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Batch</label><select name="batch" value={formData.batch} onChange={handleChange} className={inputClass}><option value="">Select a batch</option>{batchesList.map(batch => <option key={batch.id} value={batch.id}>{batch.name}</option>)}</select></div>
+              <div className="px-4 sm:px-6 py-5 space-y-6">
+                {/* Basic Information */}
+                <div>
+                  <h4 className="text-xs font-semibold text-green-600 uppercase tracking-wider mb-3">Basic Information</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Full Name *</label><input type="text" name="full_name" value={formData.full_name} onChange={handleChange} required className={inputClass} /></div>
+                    <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Email *</label><input type="email" name="email" value={formData.email} onChange={handleChange} required className={inputClass} /></div>
+                    <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Phone</label><input type="tel" name="phone" value={formData.phone} onChange={handleChange} className={`${inputClass} ${phoneError ? "border-red-500" : ""}`} placeholder="10-digit mobile" />{phoneError && <p className="text-red-500 text-xs mt-1">{phoneError}</p>}</div>
+                    <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Expertise *</label><input type="text" name="expertise" value={formData.expertise} onChange={handleChange} required className={inputClass} /></div>
+                    <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Batch</label><select name="batch" value={formData.batch} onChange={handleChange} className={inputClass}><option value="">Select a batch</option>{batchesList.map(batch => <option key={batch.id} value={batch.id}>{batch.name}</option>)}</select></div>
+                  </div>
                 </div>
 
-                {/* Document upload during add/edit */}
-                <div className="border-t border-gray-200 pt-4">
-                  <h4 className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-3">Documents (PDF, images)</h4>
-                  <input
-                    type="file"
-                    multiple
-                    accept=".pdf,.jpg,.jpeg,.png"
-                    onChange={(e) => setSelectedFiles(Array.from(e.target.files))}
-                    className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
-                  />
-                  {selectedFiles.length > 0 && (
-                    <ul className="mt-2 text-xs text-gray-500 list-disc pl-5">
-                      {selectedFiles.map((f, idx) => <li key={idx}>📎 {f.name}</li>)}
-                    </ul>
-                  )}
-                </div>
+                {/* Document Section */}
+                {editingId && (
+                  <div className="border-t border-gray-200 pt-4">
+                    <h4 className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-3">Documents</h4>
+                    <div className="mb-4">
+                      <label className="block text-gray-600 text-xs font-medium mb-1.5">Existing Documents</label>
+                      {loadingEditDocs ? (
+                        <p className="text-gray-400 text-sm">Loading documents...</p>
+                      ) : editDocuments.length === 0 ? (
+                        <p className="text-gray-400 text-sm">No documents uploaded yet.</p>
+                      ) : (
+                        <ul className="space-y-2">
+                          {editDocuments.map(doc => (
+                            <li key={doc.id} className="flex items-center justify-between gap-2 text-sm bg-gray-50 p-2 rounded-lg">
+                              <a href={doc.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-blue-600 hover:underline truncate cursor-pointer">
+                                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                                <span className="truncate">{doc.file_name || "Document"}</span>
+                              </a>
+                              <button
+                                type="button"
+                                onClick={() => deleteEditDocument(doc.id)}
+                                className="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-50 transition"
+                                title="Delete document"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-gray-600 text-xs font-medium mb-1.5">Upload Additional Documents</label>
+                      <input
+                        type="file"
+                        multiple
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        onChange={(e) => setSelectedFiles(Array.from(e.target.files))}
+                        className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                      />
+                      {selectedFiles.length > 0 && (
+                        <ul className="mt-2 text-xs text-gray-500 list-disc pl-5">
+                          {selectedFiles.map((f, idx) => <li key={idx}>📎 {f.name}</li>)}
+                        </ul>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {!editingId && (
+                  <div className="border-t border-gray-200 pt-4">
+                    <h4 className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-3">Documents (PDF, images)</h4>
+                    <input
+                      type="file"
+                      multiple
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      onChange={(e) => setSelectedFiles(Array.from(e.target.files))}
+                      className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                    />
+                    {selectedFiles.length > 0 && (
+                      <ul className="mt-2 text-xs text-gray-500 list-disc pl-5">
+                        {selectedFiles.map((f, idx) => <li key={idx}>📎 {f.name}</li>)}
+                      </ul>
+                    )}
+                  </div>
+                )}
               </div>
 
-              <div className="flex gap-2 px-4 sm:px-6 py-4 border-t border-gray-200">
-                <button type="submit" className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg transition-all text-sm font-medium shadow-sm">
-                  {editingId ? "Save Changes" : "Add Mentor"}
-                </button>
-                <button type="button" onClick={() => setShowForm(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded-lg">
-                  Cancel
+              <div className="sticky bottom-0 bg-white px-4 sm:px-6 py-4 border-t border-gray-200">
+                <button type="submit" disabled={submitting} className="w-full bg-green-600 hover:bg-green-700 text-white py-2.5 rounded-lg transition-all text-sm font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                  {submitting ? (editingId ? "Saving..." : "Adding...") : (editingId ? "Save Changes" : "Add Mentor")}
                 </button>
               </div>
             </form>
           </div>
         )}
 
-        {/* View Details Modal with Documents */}
+        {/* View Details Modal – no upload, only documents list */}
         {viewingMentor && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={() => setViewingMentor(null)}>
             <div className="bg-white rounded-2xl w-full max-w-3xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -499,79 +552,56 @@ function Mentors() {
                   </div>
                   <div>
                     <h3 className="text-sm font-semibold text-gray-800">Mentor Details</h3>
-                    <p className="text-gray-500 text-xs">View all information & manage documents</p>
+                    <p className="text-gray-500 text-xs">View all information & documents</p>
                   </div>
                 </div>
                 <button type="button" onClick={() => setViewingMentor(null)} className="text-gray-400 hover:text-gray-600 transition p-1.5 rounded-lg hover:bg-gray-100">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
               </div>
-              <div className="px-4 sm:px-6 py-5 space-y-5">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Username</label><input type="text" value={viewingMentor.username || ""} readOnly className={readOnlyClass} /></div>
-                  <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Email</label><input type="text" value={viewingMentor.email || ""} readOnly className={readOnlyClass} /></div>
-                  <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Phone</label><input type="text" value={viewingMentor.phone || "—"} readOnly className={readOnlyClass} /></div>
-                  <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Expertise</label><input type="text" value={viewingMentor.expertise || "—"} readOnly className={readOnlyClass} /></div>
-                  <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Batch</label><input type="text" value={getBatchName(viewingMentor.batch)} readOnly className={readOnlyClass} /></div>
+
+              <div className="px-4 sm:px-6 py-5 space-y-6">
+                {/* Basic Information */}
+                <div>
+                  <h4 className="text-xs font-semibold text-green-600 uppercase tracking-wider mb-3">Basic Information</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div><label className="block text-gray-500 text-xs">Full Name</label><p className="text-gray-800 text-sm mt-1">{viewingMentor.full_name || "—"}</p></div>
+                    <div><label className="block text-gray-500 text-xs">Email</label><p className="text-gray-800 text-sm mt-1">{viewingMentor.email || "—"}</p></div>
+                    <div><label className="block text-gray-500 text-xs">Phone</label><p className="text-gray-800 text-sm mt-1">{viewingMentor.phone || "—"}</p></div>
+                    <div><label className="block text-gray-500 text-xs">Expertise</label><p className="text-gray-800 text-sm mt-1">{viewingMentor.expertise || "—"}</p></div>
+                    <div><label className="block text-gray-500 text-xs">Batch</label><p className="text-gray-800 text-sm mt-1">{getBatchName(viewingMentor.batch)}</p></div>
+                  </div>
                 </div>
 
-                {/* Documents Section */}
+                {/* Documents section – only list, no upload */}
                 <div className="border-t border-gray-200 pt-4">
                   <h4 className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-3">Documents</h4>
-                  {/* Upload new documents */}
-                  <div className="mb-4">
-                    <input
-                      type="file"
-                      multiple
-                      accept=".pdf,.jpg,.jpeg,.png"
-                      onChange={(e) => setNewDocs(Array.from(e.target.files))}
-                      className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
-                    />
-                    {newDocs.length > 0 && (
-                      <div className="mt-2 flex justify-between items-center">
-                        <ul className="text-xs text-gray-500 list-disc pl-5">
-                          {newDocs.map((f, idx) => <li key={idx}>📎 {f.name}</li>)}
-                        </ul>
-                        <button
-                          onClick={uploadDocsToCurrentMentor}
-                          disabled={uploadingDocs}
-                          className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-lg text-xs font-medium disabled:opacity-50"
-                        >
-                          {uploadingDocs ? "Uploading..." : "Upload"}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* List existing documents */}
                   {viewerDocuments.length === 0 ? (
-                    <p className="text-gray-400 text-sm">No documents uploaded yet.</p>
+                    <p className="text-gray-400 text-sm">No documents uploaded.</p>
                   ) : (
                     <ul className="space-y-2">
                       {viewerDocuments.map(doc => (
-                        <li key={doc.id} className="flex items-center justify-between gap-2 text-sm bg-gray-50 p-2 rounded-lg">
-                          <a href={doc.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-blue-600 hover:underline truncate">
-                            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                        <li key={doc.id} className="flex items-center gap-2 text-sm bg-gray-50 p-2 rounded-lg">
+                          <a
+                            href={doc.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 text-blue-600 hover:underline truncate cursor-pointer"
+                          >
+                            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                            </svg>
                             <span className="truncate">{doc.file_name || "Document"}</span>
                           </a>
-                          <button
-                            onClick={() => {
-                              setDocToDelete(doc.id);
-                              setShowDocConfirmModal(true);
-                            }}
-                            className="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-50 transition"
-                            title="Delete document"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                          </button>
                         </li>
                       ))}
                     </ul>
                   )}
                 </div>
               </div>
+
               <div className="sticky bottom-0 bg-white px-4 sm:px-6 py-4 border-t border-gray-200 flex justify-end">
-                <button onClick={() => setViewingMentor(null)} className="bg-gray-100 hover:bg-gray-200 border border-gray-200 text-gray-700 hover:text-gray-800 px-5 py-2 rounded-lg">Close</button>
+                <button onClick={() => setViewingMentor(null)} className="bg-gray-100 hover:bg-gray-200 border border-gray-200 text-gray-700 hover:text-gray-800 px-5 py-2 rounded-lg transition-all text-sm font-medium">Close</button>
               </div>
             </div>
           </div>
@@ -582,43 +612,43 @@ function Mentors() {
           <table className="mentor-table min-w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                {["Mentor", "Email", "Phone", "Expertise", "Batch", ""].map((h, i) => <th key={i} className="text-left px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">{h}</th>)}
+                <th className="text-left px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Mentor</th>
+                <th className="text-left px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Email</th>
+                <th className="text-left px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Phone</th>
+                <th className="text-left px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Expertise</th>
+                <th className="text-left px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Batch</th>
+                <th className="text-left px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-100">
-              {paginatedMentors.length > 0 ? (
-                paginatedMentors.map((m) => (
-                  <tr key={m.id} className="table-row-hover transition-colors duration-150 group">
-                    <td data-label="Mentor" className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${getColor(m.username)} flex items-center justify-center text-white text-xs font-bold shrink-0`}>{getInitials(m.username)}</div>
-                        <button onClick={() => openViewModal(m)} className="text-gray-800 text-sm font-medium hover:text-green-600 transition-colors cursor-pointer">{m.username}</button>
-                      </div>
-                    </td>
-                    <td data-label="Email" className="px-4 py-3 text-gray-500 text-sm break-all">{m.email}</td>
-                    <td data-label="Phone" className="px-4 py-3 text-gray-500 text-sm">{m.phone || "—"}</td>
-                    <td data-label="Expertise" className="px-4 py-3"><span className="inline-flex items-center gap-1.5 bg-green-100 text-green-700 border border-green-200 text-xs font-medium px-2 py-1 rounded-full">{m.expertise}</span></td>
-                    <td data-label="Batch" className="px-4 py-3">{m.batch ? <span className="inline-flex items-center gap-1.5 bg-purple-100 text-purple-700 border border-purple-200 text-xs font-medium px-2 py-1 rounded-full">{getBatchName(m.batch)}</span> : <span className="text-gray-400 text-xs">—</span>}</td>
-                    <td data-label="Actions" className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => handleEdit(m)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-gray-500 hover:text-green-600 hover:bg-green-50 border border-transparent hover:border-green-200 transition-all text-xs font-medium">
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                          <span className="hidden sm:inline">Edit</span>
-                        </button>
-                        <button onClick={() => handleDeleteClick(m.id, m.username)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-all text-xs font-medium">
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                          <span className="hidden sm:inline">Delete</span>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan="6" className="text-center py-12 sm:py-20 text-gray-500">
-                    {searchTerm ? "No mentors match your search" : "No mentors yet"}
+              {paginatedMentors.map(m => (
+                <tr key={m.id} className="table-row-hover group">
+                  <td data-label="Mentor" className="px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${getColor(m.full_name || m.username)} flex items-center justify-center text-white text-xs font-bold shrink-0`}>{getInitials(m.full_name || m.username)}</div>
+                      <button onClick={() => openViewModal(m)} className="text-gray-800 text-sm font-medium hover:text-green-600 transition-colors cursor-pointer">{m.full_name || m.username}</button>
+                    </div>
+                  </td>
+                  <td data-label="Email" className="px-4 py-3 text-gray-500 text-sm break-all">{m.email}</td>
+                  <td data-label="Phone" className="px-4 py-3 text-gray-500 text-sm">{m.phone || "—"}</td>
+                  <td data-label="Expertise" className="px-4 py-3"><span className="inline-flex items-center gap-1.5 bg-green-100 text-green-700 border border-green-200 text-xs font-medium px-2 py-1 rounded-full">{m.expertise}</span></td>
+                  <td data-label="Batch" className="px-4 py-3">{m.batch ? <span className="inline-flex items-center gap-1.5 bg-purple-100 text-purple-700 border border-purple-200 text-xs font-medium px-2 py-1 rounded-full">{getBatchName(m.batch)}</span> : <span className="text-gray-400 text-xs">—</span>}</td>
+                  <td data-label="Actions" className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => handleEdit(m)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-gray-500 hover:text-green-600 hover:bg-green-50 border border-transparent hover:border-green-200 transition-all text-xs font-medium">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                        <span className="hidden sm:inline">Edit</span>
+                      </button>
+                      <button onClick={() => handleDeleteClick(m.id, m.full_name || m.username)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-all text-xs font-medium">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        <span className="hidden sm:inline">Delete</span>
+                      </button>
+                    </div>
                   </td>
                 </tr>
+              ))}
+              {paginatedMentors.length === 0 && (
+                <tr><td colSpan="6" className="text-center py-12 text-gray-500">{searchTerm ? "No mentors match your search" : "No mentors yet"}</td></tr>
               )}
             </tbody>
           </table>

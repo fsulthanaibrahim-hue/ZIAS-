@@ -196,14 +196,16 @@ class StudentSerializer(serializers.ModelSerializer):
 
 
 # ----------------------------
-# MENTOR SERIALIZER (explicit update)
+# MENTOR SERIALIZER (with full_name)
 # ----------------------------
 class MentorSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username')
     email = serializers.EmailField(source='user.email')
+    
     class Meta:
         model = Mentor
-        fields = ['id', 'username', 'email', 'phone', 'expertise', 'batch']
+        fields = ['id', 'username', 'email', 'phone', 'expertise', 'batch', 'full_name']  # added full_name
+
     def create(self, validated_data):
         user_data = validated_data.pop('user')
         username = user_data['username']
@@ -227,7 +229,7 @@ class MentorSerializer(serializers.ModelSerializer):
         if Mentor.objects.filter(user=user).exists():
             raise serializers.ValidationError({"username": "This user already has a mentor profile."})
         
-        # ---------- Send email ----------
+        # Email sending (unchanged)
         expiry_days = settings.PASSWORD_EXPIRY_DAYS
         domain = getattr(settings, 'SITE_DOMAIN', 'localhost:5173')
         context = {
@@ -244,13 +246,16 @@ class MentorSerializer(serializers.ModelSerializer):
         except Exception as e:
             print(f"Email sending failed: {e}")
 
-        return Mentor.objects.create(user=user, **validated_data)
+        return Mentor.objects.create(user=user, **validated_data)   # full_name is included here
+
     def update(self, instance, validated_data):
-        # Explicitly update all mentor fields
+        # Update mentor fields
         instance.phone = validated_data.get('phone', instance.phone)
         instance.expertise = validated_data.get('expertise', instance.expertise)
         instance.batch = validated_data.get('batch', instance.batch)
+        instance.full_name = validated_data.get('full_name', instance.full_name)   # added
         instance.save()
+        
         user_data = validated_data.pop('user', None)
         if user_data:
             new_username = user_data.get('username', instance.user.username)
@@ -261,8 +266,9 @@ class MentorSerializer(serializers.ModelSerializer):
                 instance.user.save()
         return instance
 
+
 # ----------------------------
-# REVIEWER SERIALIZER (explicit update)
+# REVIEWER SERIALIZER (with full_name)
 # ----------------------------
 class ReviewerSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username')
@@ -271,7 +277,7 @@ class ReviewerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Reviewer
         fields = ['id', 'username', 'email', 'department', 'qualification', 'experience', 'batch',
-                  'available_from', 'available_to', 'available_days']
+                  'available_from', 'available_to', 'available_days', 'full_name']   # added full_name
 
     def create(self, validated_data):
         user_data = validated_data.pop('user')
@@ -315,14 +321,15 @@ class ReviewerSerializer(serializers.ModelSerializer):
         if Reviewer.objects.filter(user=user).exists():
             raise serializers.ValidationError({"username": "This user already has a reviewer profile."})
 
-        reviewer = Reviewer.objects.create(user=user, **validated_data)
-        return reviewer
+        return Reviewer.objects.create(user=user, **validated_data)   # full_name included
 
     def update(self, instance, validated_data):
+        # Update reviewer fields
         instance.department = validated_data.get('department', instance.department)
         instance.qualification = validated_data.get('qualification', instance.qualification)
         instance.experience = validated_data.get('experience', instance.experience)
         instance.batch = validated_data.get('batch', instance.batch)
+        instance.full_name = validated_data.get('full_name', instance.full_name)   # added
         instance.save()
 
         user_data = validated_data.pop('user', None)
@@ -334,7 +341,8 @@ class ReviewerSerializer(serializers.ModelSerializer):
                 instance.user.email = new_email
                 instance.user.save()
         return instance
-
+    
+    
 # ----------------------------
 # STUDENT MODULE SERIALIZER
 # ----------------------------

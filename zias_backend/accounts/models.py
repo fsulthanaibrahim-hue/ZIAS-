@@ -88,9 +88,10 @@ class Mentor(models.Model):
     phone = models.CharField(max_length=20, blank=True, null=True)
     expertise = models.CharField(max_length=100)
     batch = models.ForeignKey(Batch, on_delete=models.SET_NULL, null=True, blank=True, related_name='mentors')
+    full_name = models.CharField(max_length=255, blank=True, null=True)   
 
     def __str__(self):
-        return self.user.username
+        return self.full_name or self.user.username
 
 # Reviewer Profile
 class Reviewer(models.Model):
@@ -103,9 +104,10 @@ class Reviewer(models.Model):
     available_from = models.TimeField(null=True, blank=True, help_text="Start time (e.g. 09:00)")
     available_to = models.TimeField(null=True, blank=True, help_text="End time (e.g. 17:00)")
     available_days = models.JSONField(default=list, blank=True, help_text="List of weekdays (0=Monday, 6=Sunday)")
-
+    full_name = models.CharField(max_length=255, blank=True, null=True)   
     def __str__(self):
-        return self.user.username
+        return self.full_name or self.user.username
+    
 
 # Course Model
 class Course(models.Model):
@@ -404,4 +406,3 @@ class MentorDocument(models.Model):
         if not self.file_name:
             self.file_name = self.file.name
         super().save(*args, **kwargs)
-        
