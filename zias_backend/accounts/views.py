@@ -20,14 +20,14 @@ from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
 from .models import (
     User, Student, Mentor, Reviewer, Course, Module, Day, Task, Batch,
     StudentModule, PasswordResetToken, ContactMessage, StudentWeekReview, WeekUpdate, ReviewFolder,
-    ChatRoom, ChatMessage, CourseStatus, Document
+    ChatRoom, ChatMessage, CourseStatus, Document, Notification
 )
 
 from .serializers import (
     StudentSerializer, MentorSerializer, ReviewerSerializer, UserSerializer,
     CourseSerializer, ModuleSerializer, DaySerializer, TaskSerializer, BatchSerializer,
     ContactMessageSerializer, StudentModuleSerializer, StudentWeekReviewSerializer, WeekUpdateSerializer,
-    ReviewFolderSerializer, ChatRoomSerializer, ChatMessageSerializer, CourseStatusSerializer
+    ReviewFolderSerializer, ChatRoomSerializer, ChatMessageSerializer, CourseStatusSerializer, NotificationSerializer
 )
 
 from .permissions import (
@@ -920,4 +920,16 @@ class UploadStudentDocumentView(APIView):
         student.documents.add(doc)
         return Response({"id": doc.id, "url": doc.file.url}, status=201)
 
+
+class NotificationViewSet(viewsets.ModelViewSet):
+    serializer_class = NotificationSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Notification.objects.filter(user=self.request.user).order_by('-created_at')
+
+    @action(detail=False, methods=['post'])
+    def mark_all_read(self, request):
+        self.get_queryset().update(is_read=True)
+        return Response({'status': 'all marked read'})
 

@@ -49,6 +49,8 @@ import Batches from "./Admin/Batches";
 import ReviewSheets from "./Admin/ReviewSheets";
 import StudentReviewEdit from "./Admin/StudentReviewEdit";
 import AdminProfile from "./Admin/AdminProfile";
+import NotificationsPage from "./Admin/NotificationsPage";
+
 // Common pages
 import Navbar from "./components/Navbar";
 import Home from "./pages/Home";
@@ -60,6 +62,7 @@ import ResetPassword from "./pages/ResetPassword";
 // Sidebars
 import MentorSidebar from "./components/MentorSidebar";
 import ReviewerSidebar from "./components/ReviewerSidebar";
+import ContactMessageDetail from "./Admin/ContactMessageDetail";
 
 
 
@@ -276,6 +279,8 @@ function App() {
       <Route path="/admin/review-sheets" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><ReviewSheets /></div></AdminRoute>} />
       <Route path="/admin/student-review-edit" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><StudentReviewEdit /></div></AdminRoute>} />
       <Route path="/admin/profile" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><AdminProfile /></div></AdminRoute>} />
+      <Route path="/admin/notifications" element={<AdminRoute><div style={{display: "flex"}}><Sidebar /><NotificationsPage /></div> </AdminRoute>} />
+      <Route path="/admin/contact-messages/:id" element={<AdminRoute><div style={{display: "flex"}}><Sidebar /><ContactMessageDetail /></div></AdminRoute>} />
 
       {/* 404 page */}
       <Route path="*" element={

@@ -204,11 +204,14 @@ class ContactMessage(models.Model):
         return f"{self.name} - {self.subject}"
 
 # Notification Model
+# accounts/models.py
 class Notification(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
     message = models.CharField(max_length=255)
-    is_read = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
+    is_read = models.BooleanField(default=False)
+    link = models.CharField(max_length=500, blank=True, null=True)   # 👈 add this
+    
 
     def __str__(self):
         return f"{self.user.username} - {self.message}"
@@ -372,4 +375,3 @@ class CourseStatus(models.Model):
             self.ended_at = timezone.now()
             self.save(update_fields=['ended_at'])
 
-            

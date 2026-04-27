@@ -1,60 +1,38 @@
-// src/components/NotificationBell.jsx
-import { useEffect, useState, useRef } from "react";
-import { Link } from "react-router-dom";
-import API from "../api/api";
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import API from '../api/api';
 
-function NotificationBell() {
+const NotificationBell = () => {
   const [unreadCount, setUnreadCount] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const intervalRef = useRef(null);
-  const fetched = useRef(false);
-
-  const fetchUnreadCount = async () => {
-    setLoading(true);
-    try {
-      const res = await API.get("unread-messages/");
-      setUnreadCount(res.data.unread_count);
-    } catch (err) {
-      console.error("Failed to fetch unread count", err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const navigate = useNavigate();
 
   useEffect(() => {
-    if (fetched.current) return;
-    fetched.current = true;
-    fetchUnreadCount();
-
-    // Poll every 30 seconds to keep count fresh
-    intervalRef.current = setInterval(fetchUnreadCount, 30000);
-
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+    const fetchUnreadCount = async () => {
+      try {
+        const res = await API.get('notifications/');
+        const unread = res.data.filter(n => !n.is_read).length;
+        setUnreadCount(unread);
+      } catch (err) {
+        console.error('Failed to fetch notifications', err);
+      }
     };
+    fetchUnreadCount();
+    const interval = setInterval(fetchUnreadCount, 10000);
+    return () => clearInterval(interval);
   }, []);
 
-  const handleClick = () => {
-    fetchUnreadCount();
-  };
+  const handleClick = () => navigate('/admin/notifications');
 
   return (
-    <Link
-      to="/admin/messages"
-      className="relative p-2 rounded-lg hover:bg-gray-100 transition text-gray-800"
-      onClick={handleClick}
-    >
-      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <button onClick={handleClick} className="relative p-2">
+      <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
       </svg>
       {unreadCount > 0 && (
-        <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white bg-red-600 rounded-full transform translate-x-1 -translate-y-1">
-          {unreadCount > 99 ? '99+' : unreadCount}
-        </span>
+        <span className="absolute top-0 right-0 bg-red-500 text-white rounded-full text-xs px-1">{unreadCount}</span>
       )}
-      {loading && <span className="absolute -bottom-5 left-1/2 transform -translate-x-1/2 text-[10px] text-gray-500">...</span>}
-    </Link>
+    </button>
   );
-}
+};
 
 export default NotificationBell;

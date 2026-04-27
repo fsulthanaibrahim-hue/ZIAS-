@@ -1,6 +1,7 @@
+# accounts/urls.py
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView  # ✅ ADD THIS LINE
 from .views import (
     StudentViewSet, MentorViewSet, ReviewerViewSet, CurrentUserView,
     ChangePasswordView, SendBulkEmailView, CourseViewSet,
@@ -10,11 +11,12 @@ from .views import (
     CustomLoginView, LogoutView, UpdateDashboardAccessView,
     CompleteModuleView, StudentWeekReviewView, StudentListView, WeeklyToppersView,
     WeekUpdateViewSet, ReviewFolderViewSet, ChatRoomList, ChatMessageList, 
-    ChatMessageListCreateView, ClearChatMessagesView, MarkMessagesReadView, UploadStudentDocumentView
+    ChatMessageListCreateView, ClearChatMessagesView, MarkMessagesReadView, 
+    UploadStudentDocumentView, NotificationViewSet
 )
 
 router = DefaultRouter()
-router.register('students', StudentViewSet, basename='student')          # ✅ ADDED
+router.register('students', StudentViewSet, basename='student')
 router.register('mentors', MentorViewSet)
 router.register('reviewers', ReviewerViewSet)
 router.register('courses', CourseViewSet)
@@ -25,6 +27,7 @@ router.register('batches', BatchViewSet)
 router.register('student-modules', StudentModuleViewSet, basename='student-module')
 router.register('week-updates', WeekUpdateViewSet, basename='week-update')
 router.register('review-folders', ReviewFolderViewSet, basename='review-folder')
+router.register('notifications', NotificationViewSet, basename='notification')
 
 urlpatterns = [
     path('api/students/list/', StudentListView.as_view(), name='student-list'),

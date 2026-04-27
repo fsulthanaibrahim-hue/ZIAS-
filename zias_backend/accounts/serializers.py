@@ -10,7 +10,7 @@ from rest_framework import serializers
 from .models import (
     User, Student, Mentor, Reviewer, Course, Module, Day, Task, Batch,
     StudentModule, ContactMessage, StudentWeekReview, WeekUpdate, ReviewFolder,
-    ChatRoom, ChatMessage, CourseStatus  
+    ChatRoom, ChatMessage, CourseStatus, Notification
 )
 
 
@@ -487,4 +487,10 @@ class CourseStatusSerializer(serializers.ModelSerializer):
         model = CourseStatus
         fields = ['id', 'student', 'student_name', 'course', 'course_name',
                   'started_at', 'ended_at', 'current_week']
-        
+
+
+class NotificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notification
+        fields = ['id', 'message', 'created_at', 'is_read', 'link']
+
