@@ -38,6 +38,7 @@ except ImportError:
 @receiver(post_save, sender=Notification)
 def send_notification_via_channels(sender, instance, created, **kwargs):
     if created and channels_available:
+        print(f"🔔 Sending WebSocket notification to user {instance.user.id}")
         try:
             channel_layer = get_channel_layer()
             group_name = f'notifications_{instance.user.id}'
