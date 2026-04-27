@@ -50,7 +50,13 @@ function Modules() {
   const [loading, setLoading] = useState(true);
   const [showModuleModal, setShowModuleModal] = useState(false);
   const [editingModule, setEditingModule] = useState(null);
-  const [moduleForm, setModuleForm] = useState({ course: "", title: "", content: "", is_common: true });
+  const [moduleForm, setModuleForm] = useState({ 
+    course: "", 
+    title: "", 
+    content: "", 
+    is_common: true,
+    order: ""          // NEW: week number
+  });
   const [searchTerm, setSearchTerm] = useState("");
   const [user, setUser] = useState(null);
 
@@ -79,6 +85,10 @@ function Modules() {
   const hideToast = () => setToast(null);
 
   const fetched = useRef(false);
+
+  // Week options: 1 to 52 (adjustable)
+  const maxWeeks = 52;
+  const weekOptions = Array.from({ length: maxWeeks }, (_, i) => i + 1);
 
   useEffect(() => {
     const userStr = localStorage.getItem("user");
@@ -133,7 +143,7 @@ function Modules() {
   }, [expandedDayId, tasksByDay]);
 
   const resetModuleForm = () => {
-    setModuleForm({ course: "", title: "", content: "", is_common: true });
+    setModuleForm({ course: "", title: "", content: "", is_common: true, order: "" });
   };
 
   const resetDayForm = () => setDayForm({ module: "", title: "", content: "" });
@@ -152,6 +162,7 @@ function Modules() {
       title: mod.title,
       content: mod.content || "",
       is_common: mod.is_common ?? true,
+      order: mod.order ? mod.order.toString() : "",
     });
     setShowModuleModal(true);
   };
@@ -189,7 +200,7 @@ function Modules() {
       title: moduleForm.title, 
       content: moduleForm.content,
       is_common: moduleForm.is_common,
-      order: 0
+      order: moduleForm.order ? parseInt(moduleForm.order) : null
     };
     try {
       if (editingModule) {
@@ -428,10 +439,10 @@ function Modules() {
           </div>
         </div>
 
-        {/* Module Modal */}
+        {/* Module Modal – with Week dropdown */}
         {showModuleModal && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={() => setShowModuleModal(false)}>
-            <form onSubmit={handleModuleSubmit} className="modal-enter bg-white rounded-2xl w-full max-w-md border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <form onSubmit={handleModuleSubmit} className="modal-enter bg-white rounded-2xl w-full max-w-lg border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
               <div className="sticky top-0 bg-white z-10 flex justify-between items-center px-4 sm:px-6 py-4 border-b border-gray-200">
                 <h3 className="text-sm font-semibold text-gray-800">{editingModule ? "Edit Module" : "New Module"}</h3>
                 <button type="button" onClick={() => setShowModuleModal(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
@@ -442,6 +453,15 @@ function Modules() {
                   {courses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
                 <input type="text" placeholder="Title" value={moduleForm.title} onChange={e => setModuleForm({ ...moduleForm, title: e.target.value })} required className={inputClass} />
+                
+                {/* Week dropdown */}
+                <select value={moduleForm.order} onChange={e => setModuleForm({ ...moduleForm, order: e.target.value })} className={inputClass}>
+                  <option value="">Select Week (optional)</option>
+                  {weekOptions.map(week => (
+                    <option key={week} value={week}>Week {week}</option>
+                  ))}
+                </select>
+
                 <textarea
                   placeholder="Content (optional)"
                   value={moduleForm.content}
@@ -463,7 +483,7 @@ function Modules() {
           </div>
         )}
 
-        {/* Day Modal */}
+        {/* Day Modal (unchanged) */}
         {showDayModal && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={() => setShowDayModal(false)}>
             <form onSubmit={handleDaySubmit} className="modal-enter bg-white rounded-2xl w-full max-w-md border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -483,7 +503,7 @@ function Modules() {
           </div>
         )}
 
-        {/* Task Modal */}
+        {/* Task Modal (unchanged) */}
         {showTaskModal && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={() => setShowTaskModal(false)}>
             <form onSubmit={handleTaskSubmit} className="modal-enter bg-white rounded-2xl w-full max-w-md border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -504,11 +524,12 @@ function Modules() {
           </div>
         )}
 
-        {/* Main Table - Responsive */}
+        {/* Main Table */}
         <div className="overflow-hidden rounded-xl border border-gray-200 shadow-sm bg-white">
           <table className="modules-table min-w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
+                <th className="px-4 py-3 text-left text-gray-500 text-xs font-semibold uppercase">Week</th>
                 <th className="px-4 py-3 text-left text-gray-500 text-xs font-semibold uppercase">Course</th>
                 <th className="px-4 py-3 text-left text-gray-500 text-xs font-semibold uppercase">Title</th>
                 <th className="px-4 py-3 text-left text-gray-500 text-xs font-semibold uppercase">Type</th>
@@ -520,6 +541,7 @@ function Modules() {
               {paginatedModules.map(mod => (
                 <React.Fragment key={mod.id}>
                   <tr className="module-row table-row-hover group">
+                    <td data-label="Week" className="px-4 py-3 text-gray-800 text-sm">{mod.order ? `Week ${mod.order}` : "—"}</td>
                     <td data-label="Course" className="px-4 py-3 text-gray-800 text-sm">{mod.course_name || mod.course?.name || "—"}</td>
                     <td data-label="Title" className="px-4 py-3 text-gray-700 text-sm break-words">{mod.title}</td>
                     <td data-label="Type" className="px-4 py-3">
@@ -545,10 +567,10 @@ function Modules() {
                     </td>
                   </tr>
 
-                  {/* Expanded Days Row */}
+                  {/* Expanded Days Row (unchanged) */}
                   {expandedModuleId === mod.id && (
                     <tr>
-                      <td colSpan="5" className="px-4 py-3 bg-gray-50">
+                      <td colSpan="6" className="px-4 py-3 bg-gray-50">
                         <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4">
                           {mod.content && (
                             <div className="mb-4 pb-3 border-b border-gray-200">
@@ -643,14 +665,12 @@ function Modules() {
                 </React.Fragment>
               ))}
               {paginatedModules.length === 0 && (
-                <tr>
-                  <td colSpan="5" className="text-center py-12 sm:py-20 text-gray-500">No modules found</td>
-                </tr>
+                <tr><td colSpan="6" className="text-center py-12 sm:py-20 text-gray-500">No modules found</td></tr>
               )}
             </tbody>
           </table>
 
-          {/* Pagination */}
+          {/* Pagination (unchanged) */}
           {paginatedModules.length > 0 && (
             <div className="bg-gray-50 border-t border-gray-200 px-4 py-3 flex flex-col sm:flex-row justify-between gap-3 items-center">
               <div className="text-gray-500 text-xs">Showing {startIndex+1} to {Math.min(startIndex+itemsPerPage, totalFiltered)} of {totalFiltered} modules</div>

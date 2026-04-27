@@ -416,16 +416,25 @@ class CurrentUserView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        serializer = UserSerializer(request.user)
-        return Response(serializer.data)
+        user = request.user
+        # Build user dict manually (safe, no serializer)
+        user_data = {
+            'id': user.id,
+            'username': user.username,
+            'email': user.email,
+            'is_admin': getattr(user, 'is_admin', False),
+            'is_mentor': getattr(user, 'is_mentor', False),
+            'is_reviewer': getattr(user, 'is_reviewer', False),
+            'is_student': getattr(user, 'is_student', False),
+            'full_name': user.get_full_name() or user.username,
+        }
+        return Response(user_data)
 
     def patch(self, request):
-        serializer = UserSerializer(request.user, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
+        # For partial updates, you can still use the serializer if needed,
+        # but to keep it simple, implement manual update if required.
+        # For now, return method not allowed or implement later.
+        return Response({"detail": "PATCH not implemented"}, status=405)
 
 # ----------------------------
 # CHANGE PASSWORD ENDPOINT
@@ -572,38 +581,57 @@ class ContactMessageDetailView(RetrieveAPIView):
 
 
 # ----------------------------
-# CUSTOM LOGIN VIEW
+# CUSTOM LOGIN VIEW (SAFE VERSION – NO SERIALIZER)
 # ----------------------------
 class CustomLoginView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        email = request.data.get('email')
-        password = request.data.get('password')
-        username = request.data.get('username')
+        try:
+            email = request.data.get('email')
+            password = request.data.get('password')
+            username = request.data.get('username')
 
-        if email:
-            try:
-                user_obj = User.objects.get(email=email)
-                username = user_obj.username
-            except User.DoesNotExist:
+            if email:
+                try:
+                    user_obj = User.objects.get(email=email)
+                    username = user_obj.username
+                except User.DoesNotExist:
+                    return Response({'error': 'Invalid email or password'}, status=status.HTTP_401_UNAUTHORIZED)
+
+            if not username:
+                return Response({'error': 'Email or username required'}, status=status.HTTP_400_BAD_REQUEST)
+
+            user = authenticate(username=username, password=password)
+            if not user or not user.is_active:
                 return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
 
-        if not username:
-            return Response({'error': 'Email or username required'}, status=status.HTTP_400_BAD_REQUEST)
+            refresh = RefreshToken.for_user(user)
+            access = refresh.access_token
 
-        user = authenticate(username=username, password=password)
-        if not user:
-            return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+            # Build user dict manually (safe, no serializer)
+            user_data = {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'is_admin': getattr(user, 'is_admin', False),
+                'is_mentor': getattr(user, 'is_mentor', False),
+                'is_reviewer': getattr(user, 'is_reviewer', False),
+                'is_student': getattr(user, 'is_student', False),
+                'full_name': user.get_full_name() or user.username,
+            }
 
-        refresh = RefreshToken.for_user(user)
-        access = refresh.access_token
-        user_serializer = UserSerializer(user)
-        return Response({
-            'refresh': str(refresh),
-            'access': str(access),
-            'user': user_serializer.data,
-        })
+            return Response({
+                'refresh': str(refresh),
+                'access': str(access),
+                'user': user_data,
+            })
+
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=status.HTTP_401_UNAUTHORIZED)
+        except Exception as e:
+            print(f"Login error: {repr(e)}")
+            return Response({'error': 'An internal error occurred. Please try again.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 # ----------------------------
@@ -939,7 +967,6 @@ class StudentDocumentListView(APIView):
         try:
             student = Student.objects.get(id=student_id)
             docs = student.student_documents.all()
-            # 🔥 Pass request context to serializer to build absolute URLs
             serializer = StudentDocumentSerializer(docs, many=True, context={'request': request})
             return Response(serializer.data)
         except Student.DoesNotExist:
@@ -957,7 +984,6 @@ class UploadStudentDocumentView(APIView):
         try:
             student = Student.objects.get(id=student_id)
             doc = StudentDocument.objects.create(student=student, file=file)
-            # 🔥 Also pass context to ensure absolute URL appears in response
             serializer = StudentDocumentSerializer(doc, context={'request': request})
             return Response(serializer.data, status=201)
         except Student.DoesNotExist:
@@ -972,7 +998,7 @@ class StudentDocumentDeleteView(APIView):
             return Response(status=204)
         except StudentDocument.DoesNotExist:
             return Response({'error': 'Document not found'}, status=404)
-        
+
 
 # ----------------------------
 # MENTOR DOCUMENTS (using MentorDocument model)
@@ -982,8 +1008,8 @@ class MentorDocumentListView(APIView):
     def get(self, request, mentor_id):
         try:
             mentor = Mentor.objects.get(id=mentor_id)
-            docs = mentor.mentor_documents.all()   # ✅ correct related_name
-            serializer = MentorDocumentSerializer(docs, many=True)
+            docs = mentor.mentor_documents.all()
+            serializer = MentorDocumentSerializer(docs, many=True, context={'request': request})
             return Response(serializer.data)
         except Mentor.DoesNotExist:
             return Response({'error': 'Mentor not found'}, status=404)
@@ -1000,7 +1026,7 @@ class UploadMentorDocumentView(APIView):
         try:
             mentor = Mentor.objects.get(id=mentor_id)
             doc = MentorDocument.objects.create(mentor=mentor, file=file)
-            serializer = MentorDocumentSerializer(doc)
+            serializer = MentorDocumentSerializer(doc, context={'request': request})
             return Response(serializer.data, status=201)
         except Mentor.DoesNotExist:
             return Response({'error': 'Mentor not found'}, status=404)

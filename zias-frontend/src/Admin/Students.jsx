@@ -1,3 +1,4 @@
+// src/Admin/Students.jsx
 import { useEffect, useState, useRef, useCallback } from "react";
 import API from "../api/api";
 
@@ -60,6 +61,9 @@ function Students() {
   const [submitting, setSubmitting] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [viewerDocuments, setViewerDocuments] = useState([]);
+  const [uploadingDocs, setUploadingDocs] = useState(false);
+  const [newDocs, setNewDocs] = useState([]);
+  // For edit modal existing documents
   const [editDocuments, setEditDocuments] = useState([]);
   const [loadingEditDocs, setLoadingEditDocs] = useState(false);
 
@@ -334,6 +338,7 @@ function Students() {
       parent_phone: student.parent_phone || "",
       emergency_contact: student.emergency_contact || "",
     });
+    // Load existing documents for edit modal
     setLoadingEditDocs(true);
     const docs = await fetchStudentDocuments(student.id);
     setEditDocuments(docs);
@@ -353,11 +358,6 @@ function Students() {
     }
   };
 
-  const getDocumentUrl = (url) => {
-  if (url.startsWith('http')) return url;
-  return `http://127.0.0.1:8000${url}`;
-};
-
   const uploadDocumentsForEdit = async (studentId, files) => {
     if (!files.length) return;
     for (const file of files) {
@@ -367,6 +367,7 @@ function Students() {
       try {
         await API.post('upload-student-document/', fd);
         showToast(`Uploaded ${file.name}`, "success");
+        // Refresh document list after upload
         const updatedDocs = await fetchStudentDocuments(studentId);
         setEditDocuments(updatedDocs);
       } catch (err) {
@@ -379,6 +380,7 @@ function Students() {
 
   const handleEditSubmit = async (e) => {
     e.preventDefault();
+    // Same validation as handleSubmit
     const phoneFields = [
       { field: 'phone', setError: setPhoneError, label: 'Student phone' },
       { field: 'fathers_contact', setError: setFathersContactError, label: "Father's contact" },
@@ -459,10 +461,33 @@ function Students() {
     }
   };
 
+  const uploadDocsToCurrentStudent = async () => {
+    if (!viewingStudent || newDocs.length === 0) return;
+    setUploadingDocs(true);
+    for (const file of newDocs) {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('student', viewingStudent.id);
+      try {
+        await API.post('upload-student-document/', fd);
+        showToast(`Uploaded ${file.name}`, "success");
+      } catch (err) {
+        console.error(err);
+        showToast(`Failed to upload ${file.name}`, "error");
+      }
+    }
+    // Refresh documents list in view modal
+    const updatedDocs = await fetchStudentDocuments(viewingStudent.id);
+    setViewerDocuments(updatedDocs);
+    setNewDocs([]);
+    setUploadingDocs(false);
+  };
+
   const openViewModal = async (student) => {
     setViewingStudent(student);
     const docs = await fetchStudentDocuments(student.id);
     setViewerDocuments(docs);
+    setNewDocs([]);
   };
 
   const filteredStudents = students.filter(s =>
@@ -540,7 +565,6 @@ function Students() {
         @keyframes shine { to { left:150%; } }
         @keyframes slide-in-from-top-2 { from { opacity:0; transform:translateY(-1rem); } to { opacity:1; transform:translateY(0); } }
         .animate-in { animation: slide-in-from-top-2 0.2s ease-out; }
-        .cursor-pointer { cursor: pointer; }
         @media (max-width: 640px) {
           .student-table thead { display: none; }
           .student-table tbody tr { display: block; margin-bottom: 1rem; border: 1px solid #e5e7eb; border-radius: 0.75rem; background: white; }
@@ -610,6 +634,7 @@ function Students() {
               className="modal-enter bg-white rounded-2xl w-full max-w-3xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
+              {/* Header */}
               <div className="sticky top-0 bg-white z-10 flex justify-between items-center px-4 sm:px-6 py-4 border-b border-gray-200">
                 <div className="flex items-center gap-3">
                   <div className="w-7 h-7 rounded-lg bg-green-100 border border-green-200 flex items-center justify-center">
@@ -628,7 +653,7 @@ function Students() {
               </div>
 
               <div className="px-4 sm:px-6 py-5 space-y-6">
-                {/* Basic Information */}
+                {/* Basic Information (same as before) */}
                 <div>
                   <h4 className="text-xs font-semibold text-green-600 uppercase tracking-wider mb-3">Basic Information</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -673,10 +698,11 @@ function Students() {
                   </div>
                 </div>
 
-                {/* Document Section – only in edit mode */}
-                {editingId && (
-                  <div className="border-t border-gray-200 pt-4">
-                    <h4 className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-3">Documents</h4>
+                {/* Document Section – show existing documents with delete for edit mode */}
+                <div className="border-t border-gray-200 pt-4">
+                  <h4 className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-3">Documents</h4>
+                  
+                  {editingId && (
                     <div className="mb-4">
                       <label className="block text-gray-600 text-xs font-medium mb-1.5">Existing Documents</label>
                       {loadingEditDocs ? (
@@ -687,8 +713,10 @@ function Students() {
                         <ul className="space-y-2">
                           {editDocuments.map(doc => (
                             <li key={doc.id} className="flex items-center justify-between gap-2 text-sm bg-gray-50 p-2 rounded-lg">
-                              <a href={doc.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-blue-600 hover:underline truncate cursor-pointer">
-                                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                              <a href={doc.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-blue-600 hover:underline truncate">
+                                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                </svg>
                                 <span className="truncate">{doc.file_name || "Document"}</span>
                               </a>
                               <button
@@ -697,30 +725,36 @@ function Students() {
                                 className="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-50 transition"
                                 title="Delete document"
                               >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
                               </button>
                             </li>
                           ))}
                         </ul>
                       )}
                     </div>
-                    <div>
-                      <label className="block text-gray-600 text-xs font-medium mb-1.5">Upload Additional Documents</label>
-                      <input
-                        type="file"
-                        multiple
-                        accept=".pdf,.jpg,.jpeg,.png"
-                        onChange={(e) => setSelectedFiles(Array.from(e.target.files))}
-                        className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
-                      />
-                      {selectedFiles.length > 0 && (
-                        <ul className="mt-2 text-xs text-gray-500 list-disc pl-5">
-                          {selectedFiles.map((f, idx) => <li key={idx}>📎 {f.name}</li>)}
-                        </ul>
-                      )}
-                    </div>
+                  )}
+
+                  {/* Upload new documents */}
+                  <div>
+                    <label className="block text-gray-600 text-xs font-medium mb-1.5">
+                      {editingId ? "Upload Additional Documents" : "Upload Documents (PDF, images)"}
+                    </label>
+                    <input
+                      type="file"
+                      multiple
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      onChange={(e) => setSelectedFiles(Array.from(e.target.files))}
+                      className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                    />
+                    {selectedFiles.length > 0 && (
+                      <ul className="mt-2 text-xs text-gray-500 list-disc pl-5">
+                        {selectedFiles.map((f, idx) => <li key={idx}>📎 {f.name}</li>)}
+                      </ul>
+                    )}
                   </div>
-                )}
+                </div>
               </div>
 
               <div className="sticky bottom-0 bg-white px-4 sm:px-6 py-4 border-t border-gray-200">
@@ -732,7 +766,7 @@ function Students() {
           </div>
         )}
 
-        {/* View Details Modal – no upload, only documents list */}
+        {/* View Details Modal – documents without delete */}
         {viewingStudent && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={() => setViewingStudent(null)}>
             <div className="bg-white rounded-2xl w-full max-w-3xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -745,7 +779,7 @@ function Students() {
                   </div>
                   <div>
                     <h3 className="text-sm font-semibold text-gray-800">Student Details</h3>
-                    <p className="text-gray-500 text-xs">View all information & documents</p>
+                    <p className="text-gray-500 text-xs">View all information & manage documents</p>
                   </div>
                 </div>
                 <button type="button" onClick={() => setViewingStudent(null)} className="text-gray-400 hover:text-gray-600 transition p-1.5 rounded-lg hover:bg-gray-100">
@@ -803,11 +837,36 @@ function Students() {
                   </div>
                 </div>
 
-                {/* Documents section – only list, no upload */}
+                {/* Documents section – upload & view (no delete) */}
                 <div className="border-t border-gray-200 pt-4">
                   <h4 className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-3">Documents</h4>
+
+                  <div className="mb-4">
+                    <input
+                      type="file"
+                      multiple
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      onChange={(e) => setNewDocs(Array.from(e.target.files))}
+                      className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                    />
+                    {newDocs.length > 0 && (
+                      <div className="mt-2 flex justify-between items-center">
+                        <ul className="text-xs text-gray-500 list-disc pl-5">
+                          {newDocs.map((f, idx) => <li key={idx}>📎 {f.name}</li>)}
+                        </ul>
+                        <button
+                          onClick={uploadDocsToCurrentStudent}
+                          disabled={uploadingDocs}
+                          className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-lg text-xs font-medium disabled:opacity-50"
+                        >
+                          {uploadingDocs ? "Uploading..." : "Upload"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
                   {viewerDocuments.length === 0 ? (
-                    <p className="text-gray-400 text-sm">No documents uploaded.</p>
+                    <p className="text-gray-400 text-sm">No documents uploaded yet.</p>
                   ) : (
                     <ul className="space-y-2">
                       {viewerDocuments.map(doc => (
@@ -816,7 +875,7 @@ function Students() {
                             href={doc.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex items-center gap-2 text-blue-600 hover:underline truncate cursor-pointer"
+                            className="flex items-center gap-2 text-blue-600 hover:underline truncate"
                           >
                             <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />

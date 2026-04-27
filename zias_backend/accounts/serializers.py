@@ -22,14 +22,23 @@ def generate_random_password(length=10):
 # USER SERIALIZER
 # ----------------------------
 class UserSerializer(serializers.ModelSerializer):
+    is_admin = serializers.BooleanField(source='is_admin', read_only=True)
+    is_mentor = serializers.BooleanField(source='is_mentor', read_only=True)
+    is_reviewer = serializers.BooleanField(source='is_reviewer', read_only=True)
+    is_student = serializers.BooleanField(source='is_student', read_only=True)
+    full_name = serializers.SerializerMethodField()
+
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'is_admin', 'is_student', 'is_mentor', 'is_reviewer']
-        extra_kwargs = {'password': {'write_only': True, 'required': False}}
+        fields = ['id', 'username', 'email', 'is_admin', 'is_mentor', 'is_reviewer', 'is_student', 'full_name']
+        extra_kwargs = {'password': {'write_only': True, 'required': False}}   # ✅ inside Meta
+
+    def get_full_name(self, obj):
+        return obj.get_full_name() or obj.username
 
     def update(self, instance, validated_data):
         validated_data.pop('password', None)
-        return super().update(instance, validated_data)
+        return super().update(instance, validated_data)    
 
 # ----------------------------
 # BATCH SERIALIZER
@@ -342,7 +351,7 @@ class ReviewerSerializer(serializers.ModelSerializer):
                 instance.user.save()
         return instance
     
-    
+
 # ----------------------------
 # STUDENT MODULE SERIALIZER
 # ----------------------------
