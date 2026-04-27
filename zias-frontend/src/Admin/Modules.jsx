@@ -1,4 +1,4 @@
-// src/Admin/Modules.jsx
+// src/Admin/Modules.jsx – custom confirm modals for days and tasks
 import React, { useEffect, useState, useRef } from "react";
 import API from "../api/api";
 
@@ -8,39 +8,166 @@ function Toast({ message, type, onClose }) {
     return () => clearTimeout(timer);
   }, [onClose]);
 
-  const bgColor = type === "success" 
-    ? "bg-green-600" 
-    : type === "error" 
-    ? "bg-red-600" 
-    : "bg-gray-600";
+  const bgColor = type === "success"
+    ? "bg-emerald-500"
+    : type === "error"
+    ? "bg-red-500"
+    : "bg-slate-600";
   const icon = type === "success" ? "✓" : type === "error" ? "✕" : "ℹ";
 
   return (
-    <div className={`fixed top-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg ${bgColor} text-white text-sm font-medium animate-in slide-in-from-top-2 max-w-[90vw] sm:max-w-md`}>
-      <span className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold">{icon}</span>
+    <div className={`fixed top-5 right-5 z-50 flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-2xl ${bgColor} text-white text-sm font-medium max-w-sm`}
+      style={{ animation: "slideDown 0.25s cubic-bezier(0.16,1,0.3,1)" }}>
+      <span className="w-6 h-6 rounded-full bg-white/25 flex items-center justify-center text-xs font-bold shrink-0">{icon}</span>
       <span className="flex-1">{message}</span>
-      <button onClick={onClose} className="ml-2 text-white/70 hover:text-white text-lg leading-none">×</button>
+      <button onClick={onClose} className="text-white/60 hover:text-white text-lg leading-none ml-1">×</button>
     </div>
   );
 }
 
-// Custom confirmation modal for delete
-function ConfirmModal({ isOpen, onClose, onConfirm, moduleTitle }) {
+// Custom delete confirmation modal (reusable)
+function ConfirmDeleteModal({ isOpen, onClose, onConfirm, title, message }) {
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl max-w-md w-full border border-gray-200 shadow-xl p-6 mx-4">
-        <h3 className="text-lg font-semibold text-gray-800 mb-2">Confirm Delete</h3>
-        <p className="text-gray-600 mb-6">
-          Are you sure you want to delete <span className="text-gray-900 font-medium">{moduleTitle}</span>?<br />
-          All its days & tasks will be deleted. This action cannot be undone.
-        </p>
-        <div className="flex gap-3 justify-end">
-          <button onClick={onClose} className="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition">Cancel</button>
-          <button onClick={onConfirm} className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white transition">Delete</button>
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-3xl max-w-sm w-full shadow-2xl p-7 mx-4" style={{ animation: "modalIn 0.2s cubic-bezier(0.16,1,0.3,1)" }}>
+        <div className="w-12 h-12 bg-red-100 rounded-2xl flex items-center justify-center mb-4">
+          <svg className="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+        </div>
+        <h3 className="text-lg font-bold text-gray-900 mb-1">{title}</h3>
+        <p className="text-gray-500 text-sm mb-6 leading-relaxed">{message}</p>
+        <div className="flex gap-2">
+          <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium text-sm transition-colors">Cancel</button>
+          <button onClick={onConfirm} className="flex-1 px-4 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-medium text-sm transition-colors">Delete</button>
         </div>
       </div>
     </div>
+  );
+}
+
+// Module delete modal (specific for modules, but we can reuse the same)
+function ConfirmModuleDeleteModal({ isOpen, onClose, onConfirm, moduleTitle }) {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-3xl max-w-sm w-full shadow-2xl p-7 mx-4" style={{ animation: "modalIn 0.2s cubic-bezier(0.16,1,0.3,1)" }}>
+        <div className="w-12 h-12 bg-red-100 rounded-2xl flex items-center justify-center mb-4">
+          <svg className="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+        </div>
+        <h3 className="text-lg font-bold text-gray-900 mb-1">Delete Module?</h3>
+        <p className="text-gray-500 text-sm mb-6 leading-relaxed">
+          <span className="font-semibold text-gray-700">"{moduleTitle}"</span> and all its days & tasks will be permanently removed.
+        </p>
+        <div className="flex gap-2">
+          <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium text-sm transition-colors">Cancel</button>
+          <button onClick={onConfirm} className="flex-1 px-4 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-medium text-sm transition-colors">Delete</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Badge({ children, variant = "blue" }) {
+  const variants = {
+    blue: "bg-blue-50 text-blue-600 border-blue-100",
+    purple: "bg-purple-50 text-purple-600 border-purple-100",
+    green: "bg-emerald-50 text-emerald-600 border-emerald-100",
+    gray: "bg-gray-100 text-gray-500 border-gray-200",
+  };
+  return (
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${variants[variant]}`}>
+      {children}
+    </span>
+  );
+}
+
+const ModalWrapper = ({ onClose, children, maxW = "max-w-lg" }) => (
+  <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={onClose}>
+    <div className={`bg-white rounded-3xl w-full ${maxW} shadow-2xl max-h-[90vh] overflow-y-auto`} onClick={e => e.stopPropagation()}>
+      {children}
+    </div>
+  </div>
+);
+
+// Day Modal (no parent re‑renders)
+function DayModal({ isOpen, onClose, initialDay, onSave }) {
+  const [title, setTitle] = useState(initialDay?.title || "");
+  const [content, setContent] = useState(initialDay?.content || "");
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (isOpen && inputRef.current) inputRef.current.focus();
+  }, [isOpen]);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSave({ title, content });
+    onClose();
+  };
+
+  if (!isOpen) return null;
+  const inputClass = "w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 text-sm";
+  return (
+    <ModalWrapper onClose={onClose} maxW="max-w-md">
+      <form onSubmit={handleSubmit}>
+        <div className="flex justify-between items-center px-6 py-5 border-b border-gray-100">
+          <h3 className="text-base font-bold text-gray-900">{initialDay?.id ? "Edit Day" : "New Day"}</h3>
+          <button type="button" onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-gray-100 text-gray-400 text-lg">×</button>
+        </div>
+        <div className="px-6 py-5 space-y-3.5">
+          <input ref={inputRef} type="text" placeholder="Day title" value={title} onChange={(e) => setTitle(e.target.value)} required className={inputClass} />
+          <textarea placeholder="Content" value={content} onChange={(e) => setContent(e.target.value)} rows="4" className={`${inputClass} resize-none`} />
+        </div>
+        <div className="flex gap-2 px-6 py-4 border-t border-gray-100">
+          <button type="submit" className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white py-2.5 rounded-xl font-medium text-sm transition-colors">Save Day</button>
+          <button type="button" onClick={onClose} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 py-2.5 rounded-xl">Cancel</button>
+        </div>
+      </form>
+    </ModalWrapper>
+  );
+}
+
+// Task Modal (separate state)
+function TaskModal({ isOpen, onClose, initialTask, onSave }) {
+  const [title, setTitle] = useState(initialTask?.title || "");
+  const [order, setOrder] = useState(initialTask?.order || 0);
+  const [description, setDescription] = useState(initialTask?.description || "");
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (isOpen && inputRef.current) inputRef.current.focus();
+  }, [isOpen]);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSave({ title, order: parseInt(order), description });
+    onClose();
+  };
+
+  if (!isOpen) return null;
+  const inputClass = "w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 text-sm";
+  return (
+    <ModalWrapper onClose={onClose} maxW="max-w-md">
+      <form onSubmit={handleSubmit}>
+        <div className="flex justify-between items-center px-6 py-5 border-b border-gray-100">
+          <h3 className="text-base font-bold text-gray-900">{initialTask?.id ? "Edit Task" : "New Task"}</h3>
+          <button type="button" onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-gray-100 text-gray-400 text-lg">×</button>
+        </div>
+        <div className="px-6 py-5 space-y-3.5">
+          <input ref={inputRef} type="text" placeholder="Task title" value={title} onChange={(e) => setTitle(e.target.value)} required className={inputClass} />
+          <input type="number" placeholder="Order" value={order} onChange={(e) => setOrder(e.target.value)} required className={inputClass} />
+          <textarea placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} rows="3" className={`${inputClass} resize-none`} />
+        </div>
+        <div className="flex gap-2 px-6 py-4 border-t border-gray-100">
+          <button type="submit" className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white py-2.5 rounded-xl font-medium text-sm transition-colors">Save Task</button>
+          <button type="button" onClick={onClose} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 py-2.5 rounded-xl">Cancel</button>
+        </div>
+      </form>
+    </ModalWrapper>
   );
 }
 
@@ -50,43 +177,34 @@ function Modules() {
   const [loading, setLoading] = useState(true);
   const [showModuleModal, setShowModuleModal] = useState(false);
   const [editingModule, setEditingModule] = useState(null);
-  const [moduleForm, setModuleForm] = useState({ 
-    course: "", 
-    title: "", 
-    content: "", 
-    is_common: true,
-    order: ""          // NEW: week number
-  });
+  const [moduleForm, setModuleForm] = useState({ course: "", title: "", content: "", is_common: true, order: "" });
   const [searchTerm, setSearchTerm] = useState("");
   const [user, setUser] = useState(null);
 
   const [expandedModuleId, setExpandedModuleId] = useState(null);
   const [daysByModule, setDaysByModule] = useState({});
-  const [showDayModal, setShowDayModal] = useState(false);
-  const [editingDay, setEditingDay] = useState(null);
-  const [dayForm, setDayForm] = useState({ module: "", title: "", content: "" });
-  const [currentModuleForDay, setCurrentModuleForDay] = useState(null);
+  const [dayModal, setDayModal] = useState({ isOpen: false, initialDay: null, moduleId: null });
 
   const [expandedDayId, setExpandedDayId] = useState(null);
   const [tasksByDay, setTasksByDay] = useState({});
-  const [showTaskModal, setShowTaskModal] = useState(false);
-  const [editingTask, setEditingTask] = useState(null);
-  const [taskForm, setTaskForm] = useState({ day: "", title: "", description: "", order: 0 });
-  const [currentDayForTask, setCurrentDayForTask] = useState(null);
+  const [taskModal, setTaskModal] = useState({ isOpen: false, initialTask: null, dayId: null });
 
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const itemsPerPage = 9;
 
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  // Delete confirmation states
   const [moduleToDelete, setModuleToDelete] = useState(null);
+  const [showModuleConfirmModal, setShowModuleConfirmModal] = useState(false);
+  const [dayToDelete, setDayToDelete] = useState(null);
+  const [showDayConfirmModal, setShowDayConfirmModal] = useState(false);
+  const [taskToDelete, setTaskToDelete] = useState(null);
+  const [showTaskConfirmModal, setShowTaskConfirmModal] = useState(false);
 
   const [toast, setToast] = useState(null);
   const showToast = (msg, type = "success") => setToast({ message: msg, type });
   const hideToast = () => setToast(null);
-
   const fetched = useRef(false);
 
-  // Week options: 1 to 52 (adjustable)
   const maxWeeks = 52;
   const weekOptions = Array.from({ length: maxWeeks }, (_, i) => i + 1);
 
@@ -95,32 +213,28 @@ function Modules() {
     if (userStr) setUser(JSON.parse(userStr));
   }, []);
 
-  const fetchModules = () => {
-    API.get("modules/")
-      .then(res => setModules(res.data))
-      .catch(() => showToast("Failed to load modules", "error"))
-      .finally(() => setLoading(false));
-  };
-  const fetchCourses = () => {
-    API.get("courses/")
-      .then(res => setCourses(res.data))
-      .catch(() => showToast("Failed to load courses", "error"));
-  };
+  const fetchModules = () =>
+    API.get("modules/").then(res => setModules(res.data)).catch(() => showToast("Failed to load modules", "error")).finally(() => setLoading(false));
+
+  const fetchCourses = () =>
+    API.get("courses/").then(res => setCourses(res.data)).catch(() => showToast("Failed to load courses", "error"));
+
   const fetchDays = async (moduleId) => {
+    const numId = Number(moduleId);
+    if (isNaN(numId)) return;
     try {
-      const res = await API.get(`days/?module=${moduleId}`);
-      setDaysByModule(prev => ({ ...prev, [moduleId]: res.data }));
-    } catch (err) {
-      showToast("Failed to load days", "error");
-    }
+      const res = await API.get(`days/?module=${numId}`);
+      setDaysByModule(prev => ({ ...prev, [numId]: res.data }));
+    } catch { showToast("Failed to load days", "error"); }
   };
+
   const fetchTasks = async (dayId) => {
+    const numId = Number(dayId);
+    if (isNaN(numId)) return;
     try {
-      const res = await API.get(`tasks/?day=${dayId}`);
-      setTasksByDay(prev => ({ ...prev, [dayId]: res.data }));
-    } catch (err) {
-      showToast("Failed to load tasks", "error");
-    }
+      const res = await API.get(`tasks/?day=${numId}`);
+      setTasksByDay(prev => ({ ...prev, [numId]: res.data }));
+    } catch { showToast("Failed to load tasks", "error"); }
   };
 
   useEffect(() => {
@@ -131,198 +245,137 @@ function Modules() {
   }, []);
 
   useEffect(() => {
-    if (expandedModuleId && !daysByModule[expandedModuleId]) {
-      fetchDays(expandedModuleId);
+    if (expandedModuleId != null) {
+      const numId = Number(expandedModuleId);
+      if (!daysByModule[numId]) fetchDays(numId);
     }
-  }, [expandedModuleId, daysByModule]);
+  }, [expandedModuleId]);
 
   useEffect(() => {
-    if (expandedDayId && !tasksByDay[expandedDayId]) {
-      fetchTasks(expandedDayId);
+    if (expandedDayId != null) {
+      const numId = Number(expandedDayId);
+      if (!tasksByDay[numId]) fetchTasks(numId);
     }
-  }, [expandedDayId, tasksByDay]);
+  }, [expandedDayId]);
 
-  const resetModuleForm = () => {
-    setModuleForm({ course: "", title: "", content: "", is_common: true, order: "" });
-  };
+  const resetModuleForm = () => setModuleForm({ course: "", title: "", content: "", is_common: true, order: "" });
 
-  const resetDayForm = () => setDayForm({ module: "", title: "", content: "" });
-  const resetTaskForm = () => setTaskForm({ day: "", title: "", description: "", order: 0 });
-
-  const openAddModuleModal = () => {
-    setEditingModule(null);
-    resetModuleForm();
-    setShowModuleModal(true);
-  };
-
+  const openAddModuleModal = () => { setEditingModule(null); resetModuleForm(); setShowModuleModal(true); };
   const openEditModuleModal = (mod) => {
     setEditingModule(mod);
-    setModuleForm({
-      course: mod.course,
-      title: mod.title,
-      content: mod.content || "",
-      is_common: mod.is_common ?? true,
-      order: mod.order ? mod.order.toString() : "",
-    });
+    setModuleForm({ course: mod.course, title: mod.title, content: mod.content || "", is_common: mod.is_common ?? true, order: mod.order ? mod.order.toString() : "" });
     setShowModuleModal(true);
   };
 
   const handleDeleteClick = (moduleId, moduleTitle) => {
     setModuleToDelete({ id: moduleId, title: moduleTitle });
-    setShowConfirmModal(true);
+    setShowModuleConfirmModal(true);
   };
-
   const confirmDeleteModule = async () => {
     if (!moduleToDelete) return;
     try {
       await API.delete(`modules/${moduleToDelete.id}/`);
-      showToast("Module deleted successfully", "success");
-      if (expandedModuleId === moduleToDelete.id) setExpandedModuleId(null);
-      setDaysByModule(prev => {
-        const newState = { ...prev };
-        delete newState[moduleToDelete.id];
-        return newState;
-      });
+      showToast("Module deleted", "success");
+      if (Number(expandedModuleId) === Number(moduleToDelete.id)) setExpandedModuleId(null);
+      setDaysByModule({});
       fetchModules();
-    } catch (err) {
-      console.error(err);
-      showToast("Failed to delete module", "error");
-    } finally {
-      setShowConfirmModal(false);
-      setModuleToDelete(null);
-    }
+    } catch { showToast("Failed to delete module", "error"); }
+    finally { setShowModuleConfirmModal(false); setModuleToDelete(null); }
   };
 
   const handleModuleSubmit = async (e) => {
     e.preventDefault();
-    const payload = { 
-      course: moduleForm.course, 
-      title: moduleForm.title, 
-      content: moduleForm.content,
-      is_common: moduleForm.is_common,
-      order: moduleForm.order ? parseInt(moduleForm.order) : null
-    };
+    const payload = { course: moduleForm.course, title: moduleForm.title, content: moduleForm.content, is_common: moduleForm.is_common, order: moduleForm.order ? parseInt(moduleForm.order) : null };
     try {
-      if (editingModule) {
-        await API.patch(`modules/${editingModule.id}/`, payload);
-        showToast("Module updated", "success");
-      } else {
-        await API.post("modules/", payload);
-        showToast("Module added", "success");
-      }
-      setShowModuleModal(false);
-      setEditingModule(null);
-      resetModuleForm();
-      setExpandedModuleId(null);
-      setExpandedDayId(null);
-      setDaysByModule({});
-      setTasksByDay({});
+      if (editingModule) { await API.patch(`modules/${editingModule.id}/`, payload); showToast("Module updated"); }
+      else { await API.post("modules/", payload); showToast("Module added"); }
+      setShowModuleModal(false); setEditingModule(null); resetModuleForm();
+      setExpandedModuleId(null); setExpandedDayId(null); setDaysByModule({}); setTasksByDay({});
       fetchModules();
-    } catch (err) {
-      showToast("Error saving module", "error");
-    }
+    } catch { showToast("Error saving module", "error"); }
   };
 
-  const handleDaySubmit = async (e) => {
-    e.preventDefault();
-    if (!dayForm.module) {
-      showToast("Module ID is missing", "error");
-      return;
-    }
-    const payload = { 
-      module: dayForm.module, 
-      title: dayForm.title, 
-      content: dayForm.content,
-      order: 0
-    };
+  const handleDaySave = async (dayData) => {
+    const { title, content } = dayData;
+    const moduleId = Number(dayModal.moduleId);
+    if (!moduleId) return;
+    const payload = { module: moduleId, title, content, order: 0 };
     try {
-      if (editingDay) {
-        await API.patch(`days/${editingDay.id}/`, payload);
-        showToast("Day updated", "success");
+      if (dayModal.initialDay?.id) {
+        await API.patch(`days/${dayModal.initialDay.id}/`, payload);
+        showToast("Day updated");
       } else {
         await API.post("days/", payload);
-        showToast("Day added", "success");
+        showToast("Day added");
       }
-      setShowDayModal(false);
-      setEditingDay(null);
-      resetDayForm();
-      if (dayForm.module) fetchDays(dayForm.module);
-    } catch (err) {
-      showToast("Error saving day", "error");
-    }
+      if (expandedModuleId) fetchDays(Number(expandedModuleId));
+    } catch { showToast("Error saving day", "error"); }
   };
 
-  const handleEditDay = (day) => {
-    setEditingDay(day);
-    setDayForm({
-      module: day.module,
-      title: day.title,
-      content: day.content || "",
-    });
-    setShowDayModal(true);
+  const openAddDayModal = (moduleId) => {
+    setDayModal({ isOpen: true, initialDay: null, moduleId: Number(moduleId) });
+  };
+  const openEditDayModal = (day) => {
+    setDayModal({ isOpen: true, initialDay: day, moduleId: Number(day.module) });
   };
 
-  const handleDeleteDay = async (dayId) => {
-    if (!window.confirm("Delete this day? All tasks inside will be deleted.")) return;
+  const handleDeleteDayClick = (dayId, dayTitle) => {
+    setDayToDelete({ id: dayId, title: dayTitle });
+    setShowDayConfirmModal(true);
+  };
+  const confirmDeleteDay = async () => {
+    if (!dayToDelete) return;
     try {
-      await API.delete(`days/${dayId}/`);
+      await API.delete(`days/${dayToDelete.id}/`);
       showToast("Day deleted", "success");
-      if (expandedModuleId) fetchDays(expandedModuleId);
-    } catch (err) {
-      showToast("Delete failed", "error");
-    }
+      if (expandedModuleId) fetchDays(Number(expandedModuleId));
+    } catch { showToast("Delete failed", "error"); }
+    finally { setShowDayConfirmModal(false); setDayToDelete(null); }
   };
 
   const toggleDayCompletion = async (dayId, completed) => {
     try {
       await API.patch(`days/${dayId}/`, { is_completed: completed });
-      showToast(completed ? "Day completed" : "Day marked incomplete", "success");
-      if (expandedModuleId) fetchDays(expandedModuleId);
-    } catch (err) {
-      showToast("Failed to update", "error");
-    }
+      showToast(completed ? "Day completed" : "Day marked incomplete");
+      if (expandedModuleId) fetchDays(Number(expandedModuleId));
+    } catch { showToast("Failed to update", "error"); }
   };
 
-  const handleTaskSubmit = async (e) => {
-    e.preventDefault();
-    const payload = { ...taskForm, order: parseInt(taskForm.order) };
+  const handleTaskSave = async (taskData) => {
+    const dayId = Number(taskModal.dayId);
+    if (!dayId) return;
+    const payload = { day: dayId, title: taskData.title, order: taskData.order, description: taskData.description };
     try {
-      if (editingTask) {
-        await API.patch(`tasks/${editingTask.id}/`, payload);
-        showToast("Task updated", "success");
+      if (taskModal.initialTask?.id) {
+        await API.patch(`tasks/${taskModal.initialTask.id}/`, payload);
+        showToast("Task updated");
       } else {
         await API.post("tasks/", payload);
-        showToast("Task added", "success");
+        showToast("Task added");
       }
-      setShowTaskModal(false);
-      setEditingTask(null);
-      resetTaskForm();
       if (expandedDayId) fetchTasks(expandedDayId);
-    } catch (err) {
-      showToast("Error saving task", "error");
-    }
+    } catch { showToast("Error saving task", "error"); }
   };
 
-  const handleEditTask = (task) => {
-    setEditingTask(task);
-    setTaskForm({
-      day: task.day,
-      title: task.title,
-      description: task.description || "",
-      order: task.order,
-    });
-    setShowTaskModal(true);
+  const openAddTaskModal = (dayId) => {
+    setTaskModal({ isOpen: true, initialTask: null, dayId: Number(dayId) });
+  };
+  const openEditTaskModal = (task) => {
+    setTaskModal({ isOpen: true, initialTask: task, dayId: Number(task.day) });
   };
 
-  const handleDeleteTask = async (taskId) => {
-    if (!window.confirm("Delete this task?")) return;
+  const handleDeleteTaskClick = (taskId, taskTitle) => {
+    setTaskToDelete({ id: taskId, title: taskTitle });
+    setShowTaskConfirmModal(true);
+  };
+  const confirmDeleteTask = async () => {
+    if (!taskToDelete) return;
     try {
-      await API.delete(`tasks/${taskId}/`);
+      await API.delete(`tasks/${taskToDelete.id}/`);
       showToast("Task deleted", "success");
       if (expandedDayId) fetchTasks(expandedDayId);
-    } catch (err) {
-      showToast("Delete failed", "error");
-    }
+    } catch { showToast("Delete failed", "error"); }
+    finally { setShowTaskConfirmModal(false); setTaskToDelete(null); }
   };
 
   const filteredModules = modules.filter(mod =>
@@ -333,356 +386,323 @@ function Modules() {
   const totalPages = Math.max(1, Math.ceil(totalFiltered / itemsPerPage));
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedModules = filteredModules.slice(startIndex, startIndex + itemsPerPage);
+
   const getPageNumbers = () => {
     const pages = [];
-    const maxVisible = 5;
-    if (totalPages <= maxVisible) {
-      for (let i = 1; i <= totalPages; i++) pages.push(i);
-    } else {
-      if (currentPage <= 3) {
-        for (let i = 1; i <= 4; i++) pages.push(i);
-        pages.push("...");
-        pages.push(totalPages);
-      } else if (currentPage >= totalPages - 2) {
-        pages.push(1);
-        pages.push("...");
-        for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i);
-      } else {
-        pages.push(1);
-        pages.push("...");
-        for (let i = currentPage - 1; i <= currentPage + 1; i++) pages.push(i);
-        pages.push("...");
-        pages.push(totalPages);
-      }
-    }
+    if (totalPages <= 5) { for (let i = 1; i <= totalPages; i++) pages.push(i); }
+    else if (currentPage <= 3) { for (let i = 1; i <= 4; i++) pages.push(i); pages.push("..."); pages.push(totalPages); }
+    else if (currentPage >= totalPages - 2) { pages.push(1); pages.push("..."); for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i); }
+    else { pages.push(1); pages.push("..."); for (let i = currentPage - 1; i <= currentPage + 1; i++) pages.push(i); pages.push("..."); pages.push(totalPages); }
     return pages;
   };
 
-  const inputClass = "w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/30 transition-all duration-200 text-sm";
-  const smallInputClass = "w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-green-500 transition-all text-sm";
-
+  const inputClass = "w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 text-sm";
   const isAdmin = user?.is_admin === true;
 
   if (loading) {
     return (
-      <div className="w-full min-h-[60vh] flex items-center justify-center bg-gray-50">
-        <div className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
+      <div className="w-full min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-gray-400 text-sm">Loading modules…</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen w-full bg-gray-50 text-gray-800" style={{ fontFamily: "'Geist', 'SF Pro Display', system-ui, sans-serif" }}>
+    <div className="min-h-screen w-full bg-gray-50 text-gray-800" style={{ fontFamily: "'DM Sans', 'Geist', system-ui, sans-serif" }}>
       <style>{`
-        .table-row-hover:hover { background: rgba(34,197,94,0.04); }
-        .modal-enter { animation: modalIn 0.2s cubic-bezier(0.16,1,0.3,1); }
-        @keyframes modalIn { from { opacity:0; transform:scale(0.96) translateY(8px); } to { opacity:1; transform:scale(1) translateY(0); } }
-        .shine { position:relative; overflow:hidden; }
-        .shine::after { content:''; position:absolute; top:0; left:-100%; width:60%; height:100%; background:linear-gradient(90deg,transparent,rgba(255,255,255,0.3),transparent); animation: shine 3s infinite; }
-        @keyframes shine { to { left:150%; } }
-        .scrollbar::-webkit-scrollbar { width: 4px; }
-        .scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
-        .scrollbar::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
-        @keyframes slide-in-from-top-2 {
-          from { opacity:0; transform:translateY(-1rem); }
-          to { opacity:1; transform:translateY(0); }
-        }
-        .animate-in { animation: slide-in-from-top-2 0.2s ease-out; }
-        /* Mobile card layout for modules */
-        @media (max-width: 640px) {
-          .modules-table thead { display: none; }
-          .modules-table tbody tr.module-row { display: block; margin-bottom: 1rem; border: 1px solid #e5e7eb; border-radius: 0.75rem; background: white; }
-          .modules-table tbody td { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; border-bottom: 1px solid #e5e7eb; text-align: right; gap: 1rem; }
-          .modules-table tbody td:last-child { border-bottom: none; }
-          .modules-table tbody td::before { content: attr(data-label); font-weight: 600; color: #6b7280; text-align: left; flex: 1; }
-          .modules-table tbody td .action-buttons { margin-left: auto; display: flex; gap: 0.5rem; }
-          .day-header { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
-          .day-actions { margin-top: 0.5rem; }
-          .task-item { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
-          .task-actions { margin-left: 0; margin-top: 0.25rem; }
-        }
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap');
+        @keyframes slideDown { from { opacity:0; transform:translateY(-12px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+        .card-hover { transition: all 0.2s ease; }
+        .card-hover:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(0,0,0,0.10); }
+        .module-card { animation: fadeUp 0.3s ease both; }
+        .week-pill { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+        .task-chip { background: #f0fdf4; border: 1px solid #d1fae5; }
       `}</style>
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
-      <ConfirmModal isOpen={showConfirmModal} onClose={() => setShowConfirmModal(false)} onConfirm={confirmDeleteModule} moduleTitle={moduleToDelete?.title} />
+      
+      {/* Confirm Delete Modals */}
+      <ConfirmModuleDeleteModal
+        isOpen={showModuleConfirmModal}
+        onClose={() => setShowModuleConfirmModal(false)}
+        onConfirm={confirmDeleteModule}
+        moduleTitle={moduleToDelete?.title}
+      />
+      <ConfirmDeleteModal
+        isOpen={showDayConfirmModal}
+        onClose={() => setShowDayConfirmModal(false)}
+        onConfirm={confirmDeleteDay}
+        title="Delete Day?"
+        message={`Are you sure you want to delete "${dayToDelete?.title}"? All tasks inside will be deleted.`}
+      />
+      <ConfirmDeleteModal
+        isOpen={showTaskConfirmModal}
+        onClose={() => setShowTaskConfirmModal(false)}
+        onConfirm={confirmDeleteTask}
+        title="Delete Task?"
+        message={`Are you sure you want to delete "${taskToDelete?.title}"? This action cannot be undone.`}
+      />
 
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-4 sm:py-8">
-
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-green-100 border border-green-200 flex items-center justify-center shrink-0">
-              <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-              </svg>
+      {/* Module Modal */}
+      {showModuleModal && (
+        <ModalWrapper onClose={() => setShowModuleModal(false)}>
+          <form onSubmit={handleModuleSubmit}>
+            <div className="flex justify-between items-center px-6 py-5 border-b border-gray-100">
+              <div><h3 className="text-base font-bold">{editingModule ? "Edit Module" : "New Module"}</h3><p className="text-xs text-gray-400">Fill in the module details</p></div>
+              <button type="button" onClick={() => setShowModuleModal(false)} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-gray-100 text-gray-400 text-lg">×</button>
             </div>
-            <div>
-              <h1 className="text-xl font-semibold text-gray-800 tracking-tight">Modules</h1>
-              <p className="text-gray-500 text-xs mt-0.5">{modules.length} total · {filteredModules.length} shown</p>
+            <div className="px-6 py-5 space-y-3.5">
+              <select value={moduleForm.course} onChange={e => setModuleForm({ ...moduleForm, course: e.target.value })} required className={inputClass}>
+                <option value="">Select Course</option>
+                {courses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              <input type="text" placeholder="Module title" value={moduleForm.title} onChange={e => setModuleForm({ ...moduleForm, title: e.target.value })} required className={inputClass} />
+              <select value={moduleForm.order} onChange={e => setModuleForm({ ...moduleForm, order: e.target.value })} className={inputClass}>
+                <option value="">Select Week (optional)</option>
+                {weekOptions.map(w => <option key={w} value={w}>Week {w}</option>)}
+              </select>
+              <textarea placeholder="Content (optional)" value={moduleForm.content} onChange={e => setModuleForm({ ...moduleForm, content: e.target.value })} rows="3" className={`${inputClass} resize-none`} />
+              <label className="flex items-center gap-3 p-3.5 rounded-xl border border-gray-200 bg-gray-50 cursor-pointer hover:bg-emerald-50">
+                <input type="checkbox" checked={moduleForm.is_common} onChange={(e) => setModuleForm({ ...moduleForm, is_common: e.target.checked })} className="w-4 h-4 rounded border-gray-300 accent-emerald-500" />
+                <div><p className="text-sm font-medium text-gray-700">Foundation Module</p><p className="text-xs text-gray-400">Visible to all students (weeks 1–8)</p></div>
+              </label>
+            </div>
+            <div className="flex gap-2 px-6 py-4 border-t border-gray-100">
+              <button type="submit" className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white py-2.5 rounded-xl font-medium text-sm">Save Module</button>
+              <button type="button" onClick={() => setShowModuleModal(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 py-2.5 rounded-xl">Cancel</button>
+            </div>
+          </form>
+        </ModalWrapper>
+      )}
+
+      <DayModal isOpen={dayModal.isOpen} onClose={() => setDayModal({ isOpen: false, initialDay: null, moduleId: null })} initialDay={dayModal.initialDay} onSave={handleDaySave} />
+      <TaskModal isOpen={taskModal.isOpen} onClose={() => setTaskModal({ isOpen: false, initialTask: null, dayId: null })} initialTask={taskModal.initialTask} onSave={handleTaskSave} />
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+          <div><h1 className="text-2xl font-bold tracking-tight">Modules</h1><p className="text-gray-400 text-sm mt-0.5">{modules.length} total · {filteredModules.length} shown</p></div>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative">
+              <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" /></svg>
+              <input type="text" placeholder="Search modules or courses…" value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }} className="w-full sm:w-64 bg-white border border-gray-200 rounded-xl pl-10 pr-9 py-2.5 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 text-sm shadow-sm" />
+              {searchTerm && <button onClick={() => setSearchTerm("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm">✕</button>}
+            </div>
+            <button onClick={openAddModuleModal} className="flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold shadow-md shadow-emerald-500/30 transition-all active:scale-95">+ Add Module</button>
+          </div>
+        </div>
+
+        {/* Card Grid */}
+        {paginatedModules.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-24 gap-4">
+            <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center"><svg className="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253" /></svg></div>
+            <p className="text-gray-400 font-medium">No modules found</p>
+            {searchTerm && <button onClick={() => setSearchTerm("")} className="text-emerald-500 text-sm hover:underline">Clear search</button>}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+            {paginatedModules.map((mod, idx) => (
+              <ModuleCard
+                key={mod.id}
+                mod={mod}
+                idx={idx}
+                isAdmin={isAdmin}
+                expandedModuleId={expandedModuleId}
+                setExpandedModuleId={setExpandedModuleId}
+                expandedDayId={expandedDayId}
+                setExpandedDayId={setExpandedDayId}
+                daysByModule={daysByModule}
+                tasksByDay={tasksByDay}
+                openEditModuleModal={openEditModuleModal}
+                handleDeleteClick={handleDeleteClick}
+                openAddDayModal={openAddDayModal}
+                openEditDayModal={openEditDayModal}
+                handleDeleteDayClick={handleDeleteDayClick}
+                toggleDayCompletion={toggleDayCompletion}
+                openAddTaskModal={openAddTaskModal}
+                openEditTaskModal={openEditTaskModal}
+                handleDeleteTaskClick={handleDeleteTaskClick}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Pagination */}
+        {paginatedModules.length > 0 && totalPages > 1 && (
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-3 bg-white rounded-2xl border border-gray-200 px-5 py-3.5 shadow-sm">
+            <p className="text-gray-400 text-xs">Showing {startIndex + 1}–{Math.min(startIndex + itemsPerPage, totalFiltered)} of {totalFiltered}</p>
+            <div className="flex gap-1">
+              <button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1} className="px-3 py-1.5 rounded-lg text-sm disabled:text-gray-300 text-gray-500 hover:bg-gray-100">←</button>
+              {getPageNumbers().map((p, i) => p === "..." ? <span key={i} className="px-2 py-1.5 text-gray-400">…</span> : <button key={p} onClick={() => setCurrentPage(p)} className={`px-3 py-1.5 rounded-lg text-sm font-medium ${currentPage === p ? "bg-emerald-500 text-white shadow-sm" : "text-gray-600 hover:bg-gray-100"}`}>{p}</button>)}
+              <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages} className="px-3 py-1.5 rounded-lg text-sm disabled:text-gray-300 text-gray-500 hover:bg-gray-100">→</button>
             </div>
           </div>
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            <div className="relative w-full sm:w-64">
-              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
-              </svg>
-              <input type="text" placeholder="Search modules..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-white border border-gray-300 rounded-lg pl-9 pr-4 py-2 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-green-500 transition-all text-sm" />
-              {searchTerm && <button onClick={() => setSearchTerm("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">✕</button>}
-            </div>
-            <button
-              onClick={openAddModuleModal}
-              className="shine flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-md w-full sm:w-auto"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-              Add Module
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ModuleCard – all identifiers are numbers
+function ModuleCard({
+  mod, idx, isAdmin,
+  expandedModuleId, setExpandedModuleId,
+  expandedDayId, setExpandedDayId,
+  daysByModule, tasksByDay,
+  openEditModuleModal, handleDeleteClick,
+  openAddDayModal, openEditDayModal, handleDeleteDayClick, toggleDayCompletion,
+  openAddTaskModal, openEditTaskModal, handleDeleteTaskClick
+}) {
+  const modIdNum = Number(mod.id);
+  const isExpanded = expandedModuleId === modIdNum;
+  const days = daysByModule[modIdNum] || [];
+  const dayCount = days.length;
+
+  const accents = [
+    { border: "border-t-emerald-400", icon: "bg-emerald-100 text-emerald-600" },
+    { border: "border-t-blue-400", icon: "bg-blue-100 text-blue-600" },
+    { border: "border-t-violet-400", icon: "bg-violet-100 text-violet-600" },
+    { border: "border-t-amber-400", icon: "bg-amber-100 text-amber-600" },
+    { border: "border-t-rose-400", icon: "bg-rose-100 text-rose-600" },
+    { border: "border-t-cyan-400", icon: "bg-cyan-100 text-cyan-600" },
+  ];
+  const accent = accents[(typeof mod.course === "number" ? mod.course : parseInt(mod.course) || 0) % accents.length];
+
+  return (
+    <div className={`module-card bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden card-hover border-t-4 ${accent.border} flex flex-col`} style={{ animationDelay: `${idx * 0.05}s` }}>
+      <div className="p-5 flex-1">
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            {mod.order && <span className="week-pill text-white text-[11px] font-bold px-2.5 py-0.5 rounded-full">W{mod.order}</span>}
+            <Badge variant={mod.is_common ? "blue" : "purple"}>{mod.is_common ? "Foundation" : "Custom"}</Badge>
+          </div>
+          <div className="flex items-center gap-0.5 shrink-0">
+            <button onClick={() => openEditModuleModal(mod)} title="Edit" className="p-1.5 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+            </button>
+            <button onClick={() => handleDeleteClick(mod.id, mod.title)} title="Delete" className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
             </button>
           </div>
         </div>
+        <h3 className="font-bold text-gray-900 text-base leading-snug mb-1.5">{mod.title}</h3>
+        <p className="text-xs text-gray-400 font-medium mb-3">{mod.course_name || mod.course?.name || "No Course"}</p>
+        {mod.content && <p className="text-gray-500 text-xs leading-relaxed line-clamp-2">{mod.content}</p>}
+      </div>
 
-        {/* Module Modal – with Week dropdown */}
-        {showModuleModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={() => setShowModuleModal(false)}>
-            <form onSubmit={handleModuleSubmit} className="modal-enter bg-white rounded-2xl w-full max-w-lg border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-              <div className="sticky top-0 bg-white z-10 flex justify-between items-center px-4 sm:px-6 py-4 border-b border-gray-200">
-                <h3 className="text-sm font-semibold text-gray-800">{editingModule ? "Edit Module" : "New Module"}</h3>
-                <button type="button" onClick={() => setShowModuleModal(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+      <div className="border-t border-gray-100 px-5 py-3 flex items-center justify-between bg-gray-50/60">
+        <div className="flex items-center gap-1.5 text-gray-400 text-xs">
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+          {isExpanded && dayCount > 0 ? `${dayCount} day${dayCount !== 1 ? "s" : ""}` : "Days"}
+        </div>
+        <button onClick={() => setExpandedModuleId(isExpanded ? null : modIdNum)} className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600 hover:text-emerald-700 transition-colors">
+          {isExpanded ? "Hide" : "View Days"}
+          <svg className={`w-3.5 h-3.5 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" /></svg>
+        </button>
+      </div>
+
+      <div className="grid transition-all duration-300 ease-in-out" style={{ gridTemplateRows: isExpanded ? "1fr" : "0fr" }}>
+        <div className="overflow-hidden">
+          <div className="border-t border-gray-200 bg-gray-50 p-4">
+            {mod.content && (
+              <div className="mb-3 pb-3 border-b border-gray-200">
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">Week Content</p>
+                <p className="text-gray-600 text-xs leading-relaxed whitespace-pre-wrap">{mod.content}</p>
               </div>
-              <div className="px-4 sm:px-6 py-5 space-y-4">
-                <select value={moduleForm.course} onChange={e => setModuleForm({ ...moduleForm, course: e.target.value })} required className={inputClass}>
-                  <option value="">Select Course</option>
-                  {courses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-                <input type="text" placeholder="Title" value={moduleForm.title} onChange={e => setModuleForm({ ...moduleForm, title: e.target.value })} required className={inputClass} />
-                
-                {/* Week dropdown */}
-                <select value={moduleForm.order} onChange={e => setModuleForm({ ...moduleForm, order: e.target.value })} className={inputClass}>
-                  <option value="">Select Week (optional)</option>
-                  {weekOptions.map(week => (
-                    <option key={week} value={week}>Week {week}</option>
-                  ))}
-                </select>
+            )}
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Days</p>
+              <button onClick={() => openAddDayModal(mod.id)} className="flex items-center gap-1 text-xs font-semibold text-emerald-600 hover:text-emerald-700">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" /></svg>Add Day
+              </button>
+            </div>
+            {days.length === 0 ? (
+              <p className="text-gray-400 text-xs text-center py-4">No days yet. Add one above.</p>
+            ) : (
+              <div className="space-y-2">
+                {days.map(day => (
+                  <DayItem
+                    key={day.id}
+                    day={day}
+                    isAdmin={isAdmin}
+                    expandedDayId={expandedDayId}
+                    setExpandedDayId={setExpandedDayId}
+                    tasksByDay={tasksByDay}
+                    openEditDayModal={openEditDayModal}
+                    handleDeleteDayClick={handleDeleteDayClick}
+                    toggleDayCompletion={toggleDayCompletion}
+                    openAddTaskModal={openAddTaskModal}
+                    openEditTaskModal={openEditTaskModal}
+                    handleDeleteTaskClick={handleDeleteTaskClick}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-                <textarea
-                  placeholder="Content (optional)"
-                  value={moduleForm.content}
-                  onChange={e => setModuleForm({ ...moduleForm, content: e.target.value })}
-                  rows="3"
-                  className={`${inputClass} resize-none`}
-                />
-                <div className="flex items-center gap-3 flex-wrap">
-                  <input type="checkbox" id="is_common" checked={moduleForm.is_common} onChange={(e) => setModuleForm({ ...moduleForm, is_common: e.target.checked })} className="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500" />
-                  <label htmlFor="is_common" className="text-sm text-gray-700">Common Module (visible to all students - Foundation Weeks)</label>
+// DayItem – uses numeric day IDs
+function DayItem({ day, isAdmin, expandedDayId, setExpandedDayId, tasksByDay, openEditDayModal, handleDeleteDayClick, toggleDayCompletion, openAddTaskModal, openEditTaskModal, handleDeleteTaskClick }) {
+  const dayIdNum = Number(day.id);
+  const isExpanded = expandedDayId === dayIdNum;
+  const tasks = tasksByDay[dayIdNum] || [];
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="flex items-center gap-2 px-3 py-2.5 cursor-pointer hover:bg-gray-50 transition-colors" onClick={() => setExpandedDayId(isExpanded ? null : dayIdNum)}>
+        {!isAdmin && (
+          <input type="checkbox" checked={day.is_completed || false} onChange={(e) => { e.stopPropagation(); toggleDayCompletion(day.id, e.target.checked); }} className="w-3.5 h-3.5 accent-emerald-500 cursor-pointer shrink-0" />
+        )}
+        <p className={`flex-1 text-sm font-medium ${day.is_completed ? "line-through text-gray-400" : "text-gray-800"}`}>{day.title}</p>
+        <div className="flex items-center gap-0.5" onClick={e => e.stopPropagation()}>
+          <button onClick={() => openEditDayModal(day)} className="p-1 rounded text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 text-[10px] transition-colors">Edit</button>
+          <button onClick={() => handleDeleteDayClick(day.id, day.title)} className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 text-[10px] transition-colors">Del</button>
+        </div>
+        <svg className={`w-3 h-3 text-gray-400 transition-transform duration-200 shrink-0 ${isExpanded ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" /></svg>
+      </div>
+      {isExpanded && (
+        <div className="border-t border-gray-100 bg-gray-50 px-3 py-3">
+          {day.content && (
+            <div className="mb-2 pb-2 border-b border-gray-200">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">Day Content</p>
+              <p className="text-gray-600 text-xs leading-relaxed whitespace-pre-wrap">{day.content}</p>
+            </div>
+          )}
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Tasks</p>
+            <button onClick={() => openAddTaskModal(day.id)} className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 hover:text-emerald-700">
+              <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" /></svg>Add Task
+            </button>
+          </div>
+          {tasks.length === 0 ? (
+            <p className="text-gray-400 text-[11px] text-center py-2">No tasks yet.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {tasks.map(task => (
+                <div key={task.id} className="task-chip rounded-lg px-3 py-2 flex items-start gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-gray-800 text-xs font-semibold truncate">{task.title}</p>
+                    {task.description && <p className="text-gray-500 text-[11px] mt-0.5 line-clamp-2">{task.description}</p>}
+                    <p className="text-gray-400 text-[10px] mt-0.5">#{task.order}</p>
+                  </div>
+                  <div className="flex gap-0.5 shrink-0">
+                    <button onClick={() => openEditTaskModal(task)} className="p-1 rounded text-gray-400 hover:text-emerald-600 hover:bg-white text-[10px] transition-colors">Edit</button>
+                    <button onClick={() => handleDeleteTaskClick(task.id, task.title)} className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-white text-[10px] transition-colors">Del</button>
+                  </div>
                 </div>
-                <p className="text-gray-400 text-xs -mt-2">✅ Check this for weeks 1-8 (Foundation modules)</p>
-              </div>
-              <div className="flex gap-2 px-4 sm:px-6 py-4 border-t border-gray-200">
-                <button type="submit" className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg">Save</button>
-                <button type="button" onClick={() => setShowModuleModal(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded-lg">Cancel</button>
-              </div>
-            </form>
-          </div>
-        )}
-
-        {/* Day Modal (unchanged) */}
-        {showDayModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={() => setShowDayModal(false)}>
-            <form onSubmit={handleDaySubmit} className="modal-enter bg-white rounded-2xl w-full max-w-md border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-              <div className="sticky top-0 bg-white z-10 flex justify-between items-center px-4 sm:px-6 py-4 border-b border-gray-200">
-                <h3 className="text-sm font-semibold text-gray-800">{editingDay ? "Edit Day" : "New Day"}</h3>
-                <button type="button" onClick={() => setShowDayModal(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
-              </div>
-              <div className="px-4 sm:px-6 py-5 space-y-4">
-                <input type="text" placeholder="Title" value={dayForm.title} onChange={e => setDayForm({ ...dayForm, title: e.target.value })} required className={inputClass} />
-                <textarea placeholder="Content (HTML/plain text)" value={dayForm.content} onChange={e => setDayForm({ ...dayForm, content: e.target.value })} rows="4" className={`${inputClass} resize-none`} />
-              </div>
-              <div className="flex gap-2 px-4 sm:px-6 py-4 border-t border-gray-200">
-                <button type="submit" className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg">Save</button>
-                <button type="button" onClick={() => setShowDayModal(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded-lg">Cancel</button>
-              </div>
-            </form>
-          </div>
-        )}
-
-        {/* Task Modal (unchanged) */}
-        {showTaskModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={() => setShowTaskModal(false)}>
-            <form onSubmit={handleTaskSubmit} className="modal-enter bg-white rounded-2xl w-full max-w-md border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-              <div className="sticky top-0 bg-white z-10 flex justify-between items-center px-4 sm:px-6 py-4 border-b border-gray-200">
-                <h3 className="text-sm font-semibold text-gray-800">{editingTask ? "Edit Task" : "New Task"}</h3>
-                <button type="button" onClick={() => setShowTaskModal(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
-              </div>
-              <div className="px-4 sm:px-6 py-5 space-y-4">
-                <input type="text" placeholder="Title" value={taskForm.title} onChange={e => setTaskForm({ ...taskForm, title: e.target.value })} required className={inputClass} />
-                <input type="number" placeholder="Order" value={taskForm.order} onChange={e => setTaskForm({ ...taskForm, order: e.target.value })} required className={inputClass} />
-                <textarea placeholder="Description (optional)" value={taskForm.description} onChange={e => setTaskForm({ ...taskForm, description: e.target.value })} rows="3" className={`${inputClass} resize-none`} />
-              </div>
-              <div className="flex gap-2 px-4 sm:px-6 py-4 border-t border-gray-200">
-                <button type="submit" className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg">Save</button>
-                <button type="button" onClick={() => setShowTaskModal(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded-lg">Cancel</button>
-              </div>
-            </form>
-          </div>
-        )}
-
-        {/* Main Table */}
-        <div className="overflow-hidden rounded-xl border border-gray-200 shadow-sm bg-white">
-          <table className="modules-table min-w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="px-4 py-3 text-left text-gray-500 text-xs font-semibold uppercase">Week</th>
-                <th className="px-4 py-3 text-left text-gray-500 text-xs font-semibold uppercase">Course</th>
-                <th className="px-4 py-3 text-left text-gray-500 text-xs font-semibold uppercase">Title</th>
-                <th className="px-4 py-3 text-left text-gray-500 text-xs font-semibold uppercase">Type</th>
-                <th className="px-4 py-3 text-left text-gray-500 text-xs font-semibold uppercase">Content</th>
-                <th className="px-4 py-3 text-left text-gray-500 text-xs font-semibold uppercase">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-100">
-              {paginatedModules.map(mod => (
-                <React.Fragment key={mod.id}>
-                  <tr className="module-row table-row-hover group">
-                    <td data-label="Week" className="px-4 py-3 text-gray-800 text-sm">{mod.order ? `Week ${mod.order}` : "—"}</td>
-                    <td data-label="Course" className="px-4 py-3 text-gray-800 text-sm">{mod.course_name || mod.course?.name || "—"}</td>
-                    <td data-label="Title" className="px-4 py-3 text-gray-700 text-sm break-words">{mod.title}</td>
-                    <td data-label="Type" className="px-4 py-3">
-                      {mod.is_common ? (
-                        <span className="inline-flex bg-blue-100 text-blue-700 border border-blue-200 text-xs px-2 py-1 rounded-full">Foundation</span>
-                      ) : (
-                        <span className="inline-flex bg-purple-100 text-purple-700 border border-purple-200 text-xs px-2 py-1 rounded-full">Custom</span>
-                      )}
-                    </td>
-                    <td data-label="Content" className="px-4 py-3 text-gray-500 text-sm break-words max-w-xs">{mod.content || "—"}</td>
-                    <td data-label="Actions" className="px-4 py-3">
-                      <div className="flex items-center gap-1">
-                        <button onClick={() => openEditModuleModal(mod)} className="p-1.5 rounded-lg text-gray-500 hover:text-green-600 hover:bg-green-50" title="Edit">
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                        </button>
-                        <button onClick={() => setExpandedModuleId(expandedModuleId === mod.id ? null : mod.id)} className="p-1.5 rounded-lg text-gray-500 hover:text-green-600 hover:bg-green-50" title="Days">
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                        </button>
-                        <button onClick={() => handleDeleteClick(mod.id, mod.title)} className="p-1.5 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50" title="Delete">
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-
-                  {/* Expanded Days Row (unchanged) */}
-                  {expandedModuleId === mod.id && (
-                    <tr>
-                      <td colSpan="6" className="px-4 py-3 bg-gray-50">
-                        <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4">
-                          {mod.content && (
-                            <div className="mb-4 pb-3 border-b border-gray-200">
-                              <div className="text-xs font-semibold text-gray-500 uppercase mb-1">Week Content</div>
-                              <div className="text-gray-700 text-sm whitespace-pre-wrap break-words">{mod.content}</div>
-                            </div>
-                          )}
-                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-3">
-                            <h4 className="text-sm font-semibold text-gray-800">Days</h4>
-                            <button
-                              onClick={() => {
-                                setDayForm({ module: mod.id, title: "", content: "" });
-                                setEditingDay(null);
-                                setShowDayModal(true);
-                              }}
-                              className="text-xs text-green-600 hover:text-green-700 flex items-center gap-1"
-                            >
-                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>Add Day
-                            </button>
-                          </div>
-                          {(daysByModule[mod.id] || []).length === 0 ? (
-                            <p className="text-gray-400 text-sm">No days yet.</p>
-                          ) : (
-                            <div className="space-y-2">
-                              {daysByModule[mod.id].map(day => (
-                                <div key={day.id} className="border border-gray-200 rounded-lg overflow-hidden">
-                                  <div className="bg-white p-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 cursor-pointer hover:bg-gray-50 day-header" onClick={() => setExpandedDayId(expandedDayId === day.id ? null : day.id)}>
-                                    <div className="flex items-center gap-3 flex-wrap">
-                                      {!isAdmin && (
-                                        <input
-                                          type="checkbox"
-                                          checked={day.is_completed || false}
-                                          onChange={(e) => {
-                                            e.stopPropagation();
-                                            toggleDayCompletion(day.id, e.target.checked);
-                                          }}
-                                          className="w-4 h-4 accent-green-500 cursor-pointer"
-                                        />
-                                      )}
-                                      <p className={`text-sm font-medium break-words ${day.is_completed ? "line-through text-gray-500" : "text-gray-800"}`}>
-                                        {day.title}
-                                      </p>
-                                    </div>
-                                    <div className="flex gap-2 day-actions" onClick={e => e.stopPropagation()}>
-                                      <button onClick={() => handleEditDay(day)} className="px-2 py-1 text-xs text-gray-500 hover:text-green-600 hover:bg-green-50 rounded">Edit</button>
-                                      <button onClick={() => handleDeleteDay(day.id)} className="px-2 py-1 text-xs text-gray-500 hover:text-red-600 hover:bg-red-50 rounded">Delete</button>
-                                    </div>
-                                  </div>
-                                  {expandedDayId === day.id && (
-                                    <div className="bg-gray-50 p-3 sm:p-4 pl-4 sm:pl-8 border-t border-gray-200">
-                                      {day.content && (
-                                        <div className="mb-3 pb-2 border-b border-gray-200">
-                                          <div className="text-xs font-semibold text-gray-500 uppercase mb-1">Day Content</div>
-                                          <div className="text-gray-700 text-sm whitespace-pre-wrap break-words">{day.content}</div>
-                                        </div>
-                                      )}
-                                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-2">
-                                        <h5 className="text-xs font-semibold text-gray-500 uppercase">Tasks</h5>
-                                        <button onClick={() => { setCurrentDayForTask(day.id); setEditingTask(null); resetTaskForm(); setTaskForm({ ...taskForm, day: day.id }); setShowTaskModal(true); }} className="text-xs text-green-600 hover:text-green-700 flex items-center gap-1">
-                                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>Add Task
-                                        </button>
-                                      </div>
-                                      {(tasksByDay[day.id] || []).length === 0 ? (
-                                        <p className="text-gray-400 text-xs">No tasks yet.</p>
-                                      ) : (
-                                        <div className="space-y-1.5">
-                                          {tasksByDay[day.id].map(task => (
-                                            <div key={task.id} className="bg-white rounded p-2 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 task-item border border-gray-100">
-                                              <div className="flex-1">
-                                                <p className="text-gray-800 text-xs font-medium break-words">{task.title}</p>
-                                                {task.description && <p className="text-gray-500 text-[11px] break-words">{task.description}</p>}
-                                                <p className="text-gray-400 text-[10px]">Order: {task.order}</p>
-                                              </div>
-                                              <div className="flex gap-1 task-actions">
-                                                <button onClick={() => handleEditTask(task)} className="px-1.5 py-0.5 text-xs text-gray-500 hover:text-green-600 hover:bg-green-50 rounded">Edit</button>
-                                                <button onClick={() => handleDeleteTask(task.id)} className="px-1.5 py-0.5 text-xs text-gray-500 hover:text-red-600 hover:bg-red-50 rounded">Delete</button>
-                                              </div>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
               ))}
-              {paginatedModules.length === 0 && (
-                <tr><td colSpan="6" className="text-center py-12 sm:py-20 text-gray-500">No modules found</td></tr>
-              )}
-            </tbody>
-          </table>
-
-          {/* Pagination (unchanged) */}
-          {paginatedModules.length > 0 && (
-            <div className="bg-gray-50 border-t border-gray-200 px-4 py-3 flex flex-col sm:flex-row justify-between gap-3 items-center">
-              <div className="text-gray-500 text-xs">Showing {startIndex+1} to {Math.min(startIndex+itemsPerPage, totalFiltered)} of {totalFiltered} modules</div>
-              <div className="flex gap-1 flex-wrap justify-center">
-                <button onClick={() => setCurrentPage(p => Math.max(p-1,1))} disabled={currentPage===1} className="px-2.5 py-1.5 rounded-lg text-sm disabled:text-gray-300 text-gray-500 hover:bg-gray-100">←</button>
-                {getPageNumbers().map((p, i) => p === "..." ? <span key={i} className="px-2 py-1.5 text-gray-400">...</span> : <button key={p} onClick={() => setCurrentPage(p)} className={`px-3 py-1.5 rounded-lg text-sm ${currentPage===p ? "bg-green-600 text-white shadow-sm" : "text-gray-600 hover:bg-gray-100"}`}>{p}</button>)}
-                <button onClick={() => setCurrentPage(p => Math.min(p+1, totalPages))} disabled={currentPage===totalPages} className="px-2.5 py-1.5 rounded-lg text-sm disabled:text-gray-300 text-gray-500 hover:bg-gray-100">→</button>
-              </div>
             </div>
           )}
         </div>
-      </div>
+      )}
     </div>
   );
 }
