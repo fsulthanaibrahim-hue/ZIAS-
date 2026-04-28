@@ -473,32 +473,11 @@ function Students() {
     }
   };
 
-  const uploadDocsToCurrentStudent = async () => {
-    if (!viewingStudent || newDocs.length === 0) return;
-    setUploadingDocs(true);
-    for (const file of newDocs) {
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('student', viewingStudent.id);
-      try {
-        await API.post('upload-student-document/', fd);
-        showToast(`Uploaded ${file.name}`, "success");
-      } catch (err) {
-        console.error(err);
-        showToast(`Failed to upload ${file.name}`, "error");
-      }
-    }
-    const updatedDocs = await fetchStudentDocuments(viewingStudent.id);
-    setViewerDocuments(updatedDocs);
-    setNewDocs([]);
-    setUploadingDocs(false);
-  };
-
   const openViewModal = async (student) => {
     setViewingStudent(student);
     const docs = await fetchStudentDocuments(student.id);
     setViewerDocuments(docs);
-    setNewDocs([]);
+    // No upload functionality inside view modal – removed later
   };
 
   const filteredStudents = students.filter(s => {
@@ -654,7 +633,7 @@ function Students() {
           </div>
         </div>
 
-        {/* Add/Edit Modal (unchanged) */}
+        {/* Add/Edit Modal (unchanged – includes document management) */}
         {showForm && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={() => setShowForm(false)}>
             <form
@@ -662,6 +641,7 @@ function Students() {
               className="modal-enter bg-white rounded-2xl w-full max-w-3xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
+              {/* Header */}
               <div className="sticky top-0 bg-white z-10 flex justify-between items-center px-4 sm:px-6 py-4 border-b border-gray-200">
                 <div className="flex items-center gap-3">
                   <div className="w-7 h-7 rounded-lg bg-green-100 border border-green-200 flex items-center justify-center">
@@ -734,7 +714,7 @@ function Students() {
                   </div>
                 </div>
 
-                {/* Document Section */}
+                {/* Document Section – contains existing docs (with delete) and upload */}
                 <div className="border-t border-gray-200 pt-4">
                   <h4 className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-3">Documents</h4>
                   {editingId && (
@@ -799,7 +779,7 @@ function Students() {
           </div>
         )}
 
-        {/* View Details Modal */}
+        {/* View Details Modal – NO UPLOAD, only list existing documents */}
         {viewingStudent && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={() => setViewingStudent(null)}>
             <div className="bg-white rounded-2xl w-full max-w-3xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -812,7 +792,7 @@ function Students() {
                   </div>
                   <div>
                     <h3 className="text-sm font-semibold text-gray-800">Student Details</h3>
-                    <p className="text-gray-500 text-xs">View all information & manage documents</p>
+                    <p className="text-gray-500 text-xs">View all information & documents</p>
                   </div>
                 </div>
                 <button type="button" onClick={() => setViewingStudent(null)} className="text-gray-400 hover:text-gray-600 transition p-1.5 rounded-lg hover:bg-gray-100">
@@ -821,6 +801,7 @@ function Students() {
               </div>
 
               <div className="px-4 sm:px-6 py-5 space-y-6">
+                {/* Basic Information (unchanged) */}
                 <div>
                   <h4 className="text-xs font-semibold text-green-600 uppercase tracking-wider mb-3">Basic Information</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -844,6 +825,7 @@ function Students() {
                   </div>
                 </div>
 
+                {/* Parents, Address, Education (unchanged) */}
                 <div className="border-t border-gray-200 pt-4">
                   <h4 className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-3">Parents</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -870,33 +852,11 @@ function Students() {
                   </div>
                 </div>
 
+                {/* Documents section – NO UPLOAD, only list (click to open) */}
                 <div className="border-t border-gray-200 pt-4">
                   <h4 className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-3">Documents</h4>
-                  <div className="mb-4">
-                    <input
-                      type="file"
-                      multiple
-                      accept=".pdf,.jpg,.jpeg,.png"
-                      onChange={(e) => setNewDocs(Array.from(e.target.files))}
-                      className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
-                    />
-                    {newDocs.length > 0 && (
-                      <div className="mt-2 flex justify-between items-center">
-                        <ul className="text-xs text-gray-500 list-disc pl-5">
-                          {newDocs.map((f, idx) => <li key={idx}>📎 {f.name}</li>)}
-                        </ul>
-                        <button
-                          onClick={uploadDocsToCurrentStudent}
-                          disabled={uploadingDocs}
-                          className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-lg text-xs font-medium disabled:opacity-50"
-                        >
-                          {uploadingDocs ? "Uploading..." : "Upload"}
-                        </button>
-                      </div>
-                    )}
-                  </div>
                   {viewerDocuments.length === 0 ? (
-                    <p className="text-gray-400 text-sm">No documents uploaded yet.</p>
+                    <p className="text-gray-400 text-sm">No documents uploaded.</p>
                   ) : (
                     <ul className="space-y-2">
                       {viewerDocuments.map(doc => (
@@ -926,7 +886,7 @@ function Students() {
           </div>
         )}
 
-        {/* Students Table */}
+        {/* Students Table (unchanged) */}
         <div className="overflow-hidden rounded-xl border border-gray-200 shadow-sm bg-white">
           <table className="student-table min-w-full">
             <thead className="bg-gray-50 border-b border-gray-200">

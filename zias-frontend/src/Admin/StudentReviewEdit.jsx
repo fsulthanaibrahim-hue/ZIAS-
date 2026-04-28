@@ -3,10 +3,9 @@ import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import API from "../api/api";
 
-let initialDataFetched = false;
-
-const extractWeekNumber = (title) => {
-  const match = title?.match(/Week\s*(\d+)/i);
+const extractWeekNumber = (module) => {
+  if (module.order) return parseInt(module.order, 10);
+  const match = module.title?.match(/Week\s*(\d+)/i);
   return match ? parseInt(match[1], 10) : 9999;
 };
 
@@ -25,98 +24,133 @@ function debounce(func, delay) {
 }
 
 function StudentReviewEdit() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const studentId = searchParams.get("student_id");
+  const rangeParam = searchParams.get("range") || "0-12";
 
   const [student, setStudent] = useState(null);
-  const [weeks, setWeeks] = useState([]);
+  const [allWeeks, setAllWeeks] = useState([]);
+  const [filteredWeeks, setFilteredWeeks] = useState([]);
   const [reviews, setReviews] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const dataFetched = useRef(false);
+  const fetchStarted = useRef(false);
   
   const [reviewersList, setReviewersList] = useState([]);
+  const [mentorsList, setMentorsList] = useState([]);
 
+  const parseRange = (range) => {
+    const parts = range.split("-");
+    return parts.length === 2 ? [parseInt(parts[0], 10), parseInt(parts[1], 10)] : [0, 999];
+  };
+  const [rangeMin, rangeMax] = parseRange(rangeParam);
+
+  // Fetch static lists (reviewers, mentors)
   useEffect(() => {
-    const fetchReviewers = async () => {
+    const fetchLists = async () => {
       try {
+        // Reviewers
         let reviewerNames = [];
         try {
-          const res = await API.get("/reviewers/");
-          reviewerNames = res.data.map(rev => {
+          const revRes = await API.get("/reviewers/");
+          reviewerNames = revRes.data.map((rev) => {
             let name = rev.name || rev.user?.username || rev.username;
             if (!name) return "";
             name = name.charAt(0).toUpperCase() + name.slice(1);
             return `${name} Sir`;
           });
-        } catch (err) {
+        } catch {
           const usersRes = await API.get("/users/?is_reviewer=true");
-          reviewerNames = usersRes.data.map(user => {
+          reviewerNames = usersRes.data.map((user) => {
             let name = user.full_name || user.username;
             if (!name) return "";
             name = name.charAt(0).toUpperCase() + name.slice(1);
             return `${name} Sir`;
           });
         }
-        const uniqueNames = [...new Set(reviewerNames.filter(n => n && n !== " Sir"))];
-        setReviewersList(uniqueNames);
+        setReviewersList([...new Set(reviewerNames.filter((n) => n && n !== " Sir"))]);
+
+        // Mentors
+        const mentorRes = await API.get("/mentors/");
+        const mentorNames = mentorRes.data
+          .map((mentor) => {
+            let name = mentor.full_name || mentor.username;
+            if (!name) return "";
+            name = name.charAt(0).toUpperCase() + name.slice(1);
+            return name;
+          })
+          .filter(Boolean);
+        setMentorsList(mentorNames);
       } catch (err) {
+        console.error("Failed to fetch lists", err);
         setReviewersList([]);
+        setMentorsList([]);
       }
     };
-    fetchReviewers();
+    fetchLists();
   }, []);
 
-  const rows = useMemo(() => [
-    {
-      label: "Status",
-      field: "task_status",
-      type: "select",
-      options: ["Task Completed", "Task Need Improvement", "Task Critical", "Task Not Completed"],
-    },
-    { label: "Project Updates", field: "feedback", type: "textarea", rows: 2 },
-    {
-      label: "Reviewer Name",
-      field: "reviewer_name",
-      type: "select",
-      options: reviewersList.length ? reviewersList : ["No reviewers available"],
-    },
-    { label: "Advisor Name", field: "advisor_name", type: "text", placeholder: "Advisor" },
-    {
-      label: "Score [20]",
-      field: "total_score",
-      type: "number",
-      placeholder: "0-20",
-      min: 0,
-      max: 20,
-      step: 1,
-    },
-    {
-      label: "Extra Workouts Review",
-      field: "extra_workouts",
-      type: "select",
-      options: ["Completed", "Need Improvement", "Not Completed"],
-    },
-    { label: "Review Date", field: "review_date", type: "date" },
-    {
-      label: "English Score [20]",
-      field: "english_score",
-      type: "number",
-      placeholder: "0-20",
-      min: 0,
-      max: 20,
-      step: 1,
-    },
-  ], [reviewersList]);
+  const rows = useMemo(
+    () => [
+      {
+        label: "Status",
+        field: "task_status",
+        type: "select",
+        options: ["Task Completed", "Task Need Improvement", "Task Critical", "Task Not Completed"],
+      },
+      { label: "Project Updates", field: "feedback", type: "textarea", rows: 2 },
+      {
+        label: "Reviewer Name",
+        field: "reviewer_name",
+        type: "select",
+        options: reviewersList.length ? reviewersList : ["No reviewers available"],
+      },
+      {
+        label: "Mentor Name",
+        field: "advisor_name",
+        type: "select",
+        options: mentorsList.length ? mentorsList : ["No mentors available"],
+      },
+      {
+        label: "Score [20]",
+        field: "total_score",
+        type: "number",
+        placeholder: "0-20",
+        min: 0,
+        max: 20,
+        step: 1,
+      },
+      {
+        label: "Extra Workouts Review",
+        field: "extra_workouts",
+        type: "select",
+        options: ["Completed", "Need Improvement", "Not Completed"],
+      },
+      { label: "Review Date", field: "review_date", type: "date" },
+      {
+        label: "English Score [20]",
+        field: "english_score",
+        type: "number",
+        placeholder: "0-20",
+        min: 0,
+        max: 20,
+        step: 1,
+      },
+    ],
+    [reviewersList, mentorsList]
+  );
 
-  const saveField = useCallback(async (weekId, field, value) => {
-    try {
-      await API.patch(`week-review/${weekId}/?student_id=${studentId}`, { [field]: value });
-    } catch (err) {
-      console.error("Auto-save failed", err);
-    }
-  }, [studentId]);
+  const saveField = useCallback(
+    async (weekId, field, value) => {
+      try {
+        await API.patch(`week-review/${weekId}/?student_id=${studentId}`, { [field]: value });
+      } catch (err) {
+        console.error("Auto-save failed", err);
+      }
+    },
+    [studentId]
+  );
 
   const debouncedSave = useCallback(debounce(saveField, 800), [saveField]);
 
@@ -139,6 +173,7 @@ function StudentReviewEdit() {
     debouncedSave(weekId, field, value);
   };
 
+  // Fetch student info
   useEffect(() => {
     if (!studentId) {
       navigate("/admin/review-sheets");
@@ -155,41 +190,53 @@ function StudentReviewEdit() {
     fetchStudent();
   }, [studentId, navigate]);
 
+  // Fetch weeks and reviews (only once)
   useEffect(() => {
     if (!studentId) return;
-    if (!initialDataFetched && !dataFetched.current) {
-      initialDataFetched = true;
-      dataFetched.current = true;
-      const fetchData = async () => {
-        setLoading(true);
-        setError(null);
-        try {
-          const modulesRes = await API.get(`modules/student-modules/?student_id=${studentId}`);
-          let allWeeks = modulesRes.data;
-          allWeeks.sort((a, b) => extractWeekNumber(a.title) - extractWeekNumber(b.title));
-          setWeeks(allWeeks);
+    if (fetchStarted.current) return;
+    fetchStarted.current = true;
+    const fetchData = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const modulesRes = await API.get(`modules/student-modules/?student_id=${studentId}`);
+        let weeksData = modulesRes.data;
+        weeksData.sort((a, b) => extractWeekNumber(a) - extractWeekNumber(b));
+        setAllWeeks(weeksData);
 
-          const reviewsData = {};
-          for (const week of allWeeks) {
-            try {
-              const reviewRes = await API.get(`week-review/${week.id}/?student_id=${studentId}`);
-              reviewsData[week.id] = reviewRes.data;
-            } catch {
-              reviewsData[week.id] = {};
-            }
+        const reviewsData = {};
+        for (const week of weeksData) {
+          try {
+            const reviewRes = await API.get(`week-review/${week.id}/?student_id=${studentId}`);
+            reviewsData[week.id] = reviewRes.data;
+          } catch {
+            reviewsData[week.id] = {};
           }
-          setReviews(reviewsData);
-        } catch (err) {
-          setError("Failed to load review data.");
-        } finally {
-          setLoading(false);
         }
-      };
-      fetchData();
-    } else {
-      setLoading(false);
-    }
+        setReviews(reviewsData);
+      } catch (err) {
+        console.error(err);
+        setError("Failed to load review data.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
   }, [studentId]);
+
+  // Filter weeks when range changes or allWeeks updates
+  useEffect(() => {
+    if (allWeeks.length === 0) return;
+    const filtered = allWeeks.filter((week) => {
+      const weekNum = extractWeekNumber(week);
+      return weekNum >= rangeMin && weekNum <= rangeMax;
+    });
+    setFilteredWeeks(filtered);
+  }, [allWeeks, rangeMin, rangeMax]);
+
+  const handleRangeClick = (range) => {
+    setSearchParams({ student_id: studentId, range });
+  };
 
   const renderCell = (weekId, row) => {
     let value = reviews[weekId]?.[row.field] ?? "";
@@ -265,8 +312,25 @@ function StudentReviewEdit() {
     );
   };
 
-  if (loading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><div className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin" /></div>;
-  if (error) return <div className="min-h-screen bg-gray-50 text-red-600 flex items-center justify-center p-8 text-center">{error}</div>;
+  if (loading) {
+    return (
+      <div className="fixed inset-0 bg-gray-50 flex items-center justify-center z-50">
+        <div className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 text-red-600 flex items-center justify-center p-8 text-center">
+        {error}
+      </div>
+    );
+  }
+  if (!student) {
+    return (
+      <div className="min-h-screen bg-gray-50 text-center p-8">Student not found</div>
+    );
+  }
 
   return (
     <div className="min-h-screen w-full bg-gray-50 text-gray-800 font-sans">
@@ -275,10 +339,16 @@ function StudentReviewEdit() {
           <div>
             <h1 className="text-xl font-semibold text-gray-800">Edit Review Sheet</h1>
             <p className="text-gray-500 text-sm mt-1">
-              {student?.full_name || student?.username} • {student?.course} • {student?.batch}
+              {student.full_name || student.username} • {student.course} • {student.batch}
             </p>
+            <p className="text-gray-400 text-xs mt-1">Showing weeks {rangeMin} – {rangeMax}</p>
           </div>
-          <button onClick={() => navigate("/admin/review-sheets")} className="bg-gray-200 hover:bg-gray-300 text-gray-700 hover:text-gray-900 px-4 py-2 rounded-lg text-sm font-medium transition">← Back</button>
+          <button
+            onClick={() => navigate("/admin/review-sheets")}
+            className="bg-gray-200 hover:bg-gray-300 text-gray-700 hover:text-gray-900 px-4 py-2 rounded-lg text-sm font-medium transition"
+          >
+            ← Back
+          </button>
         </div>
 
         {/* Desktop Table */}
@@ -286,15 +356,30 @@ function StudentReviewEdit() {
           <table className="min-w-full border-collapse">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="sticky left-0 bg-gray-50 z-10 px-4 py-3 text-left text-gray-500 text-xs font-semibold uppercase w-48">FIELD / WEEK</th>
-                {weeks.map(week => <th key={week.id} className="px-3 py-3 text-left text-gray-800 text-sm font-medium min-w-[200px] border-l border-gray-200">{cleanTitle(week.title)}</th>)}
+                <th className="sticky left-0 bg-gray-50 z-10 px-4 py-3 text-left text-gray-500 text-xs font-semibold uppercase w-48">
+                  FIELD / WEEK
+                </th>
+                {filteredWeeks.map((week) => (
+                  <th
+                    key={week.id}
+                    className="px-3 py-3 text-left text-gray-800 text-sm font-medium min-w-[200px] border-l border-gray-200"
+                  >
+                    {cleanTitle(week.title)}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-100">
-              {rows.map(row => (
+              {rows.map((row) => (
                 <tr key={row.field} className="hover:bg-gray-50/40">
-                  <td className="sticky left-0 bg-white px-4 py-3 text-gray-600 text-sm font-medium border-r border-gray-200">{row.label}</td>
-                  {weeks.map(week => <td key={week.id} className="px-3 py-2 border-l border-gray-200 align-top">{renderCell(week.id, row)}</td>)}
+                  <td className="sticky left-0 bg-white px-4 py-3 text-gray-600 text-sm font-medium border-r border-gray-200">
+                    {row.label}
+                  </td>
+                  {filteredWeeks.map((week) => (
+                    <td key={week.id} className="px-3 py-2 border-l border-gray-200 align-top">
+                      {renderCell(week.id, row)}
+                    </td>
+                  ))}
                 </tr>
               ))}
             </tbody>
@@ -303,13 +388,17 @@ function StudentReviewEdit() {
 
         {/* Mobile Cards */}
         <div className="md:hidden space-y-6">
-          {weeks.map(week => (
+          {filteredWeeks.map((week) => (
             <div key={week.id} className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-              <h2 className="text-lg font-semibold text-gray-800 mb-3 border-b border-gray-200 pb-2">{cleanTitle(week.title)}</h2>
+              <h2 className="text-lg font-semibold text-gray-800 mb-3 border-b border-gray-200 pb-2">
+                {cleanTitle(week.title)}
+              </h2>
               <div className="space-y-3">
-                {rows.map(row => (
+                {rows.map((row) => (
                   <div key={row.field} className="flex flex-col gap-1">
-                    <label className="text-gray-500 text-xs font-medium uppercase tracking-wide">{row.label}</label>
+                    <label className="text-gray-500 text-xs font-medium uppercase tracking-wide">
+                      {row.label}
+                    </label>
                     <div>{renderCell(week.id, row)}</div>
                   </div>
                 ))}
@@ -318,14 +407,63 @@ function StudentReviewEdit() {
           ))}
         </div>
 
+        {/* Personal Details – clickable ranges */}
         <div className="mt-6 bg-white rounded-xl border border-gray-200 shadow-sm p-4">
           <h3 className="text-sm font-semibold text-gray-800 mb-2">Personal Details</h3>
           <div className="flex flex-wrap gap-4 text-xs text-gray-500">
-            <span>Week 0 - 12</span><span>Week 13 - 16</span><span>Week 17 - 24</span>
-            <span>Week 25 - 32</span><span>Week 33 - 40</span><span>Week 41 - 44</span>
+            <span
+              onClick={() => handleRangeClick("0-12")}
+              className={`cursor-pointer hover:text-green-600 transition-colors ${
+                rangeParam === "0-12" ? "text-green-600 font-semibold" : ""
+              }`}
+            >
+              Week 0 - 12
+            </span>
+            <span
+              onClick={() => handleRangeClick("13-16")}
+              className={`cursor-pointer hover:text-green-600 transition-colors ${
+                rangeParam === "13-16" ? "text-green-600 font-semibold" : ""
+              }`}
+            >
+              Week 13 - 16
+            </span>
+            <span
+              onClick={() => handleRangeClick("17-24")}
+              className={`cursor-pointer hover:text-green-600 transition-colors ${
+                rangeParam === "17-24" ? "text-green-600 font-semibold" : ""
+              }`}
+            >
+              Week 17 - 24
+            </span>
+            <span
+              onClick={() => handleRangeClick("25-32")}
+              className={`cursor-pointer hover:text-green-600 transition-colors ${
+                rangeParam === "25-32" ? "text-green-600 font-semibold" : ""
+              }`}
+            >
+              Week 25 - 32
+            </span>
+            <span
+              onClick={() => handleRangeClick("33-40")}
+              className={`cursor-pointer hover:text-green-600 transition-colors ${
+                rangeParam === "33-40" ? "text-green-600 font-semibold" : ""
+              }`}
+            >
+              Week 33 - 40
+            </span>
+            <span
+              onClick={() => handleRangeClick("41-44")}
+              className={`cursor-pointer hover:text-green-600 transition-colors ${
+                rangeParam === "41-44" ? "text-green-600 font-semibold" : ""
+              }`}
+            >
+              Week 41 - 44
+            </span>
           </div>
         </div>
-        <div className="mt-4 text-right text-gray-400 text-xs">💡 Click any cell to edit. Changes auto‑save.</div>
+        <div className="mt-4 text-right text-gray-400 text-xs">
+          💡 Click any cell to edit. Changes auto‑save.
+        </div>
       </div>
     </div>
   );
