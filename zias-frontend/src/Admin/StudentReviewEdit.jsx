@@ -26,9 +26,7 @@ function StudentReviewEdit() {
   const [student, setStudent] = useState(null);
   const [allWeeks, setAllWeeks] = useState([]);
   const [filteredWeeks, setFilteredWeeks] = useState([]);
-  // Store original reviews for comparison
   const [originalReviews, setOriginalReviews] = useState({});
-  // Store edited values locally
   const [editedReviews, setEditedReviews] = useState({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -45,11 +43,41 @@ function StudentReviewEdit() {
   };
   const [rangeMin, rangeMax] = parseRange(rangeParam);
 
-  // Show toast helper
   const showToast = (msg, type = "success") => {
     setToastMessage({ msg, type });
     setTimeout(() => setToastMessage(null), 3000);
   };
+
+  // Helper to generate english_review text from score
+  const generateEnglishReview = (score) => {
+    const num = parseFloat(score);
+    if (isNaN(num)) return "";
+    if (num >= 18) return "Excellent - Outstanding performance";
+    if (num >= 15) return "Good - Above average";
+    if (num >= 12) return "Satisfactory - Average";
+    if (num >= 8) return "Needs improvement - Below average";
+    if (num >= 0) return "Poor - Requires significant effort";
+    return "";
+  };
+
+  // Auto‑update english_review when english_score changes
+  useEffect(() => {
+    let updated = false;
+    const newEdits = { ...editedReviews };
+    for (const weekId in newEdits) {
+      const score = newEdits[weekId]?.english_score;
+      if (score !== undefined && score !== "" && score !== null) {
+        const newReview = generateEnglishReview(score);
+        if (newEdits[weekId]?.english_review !== newReview) {
+          newEdits[weekId].english_review = newReview;
+          updated = true;
+        }
+      }
+    }
+    if (updated) {
+      setEditedReviews(newEdits);
+    }
+  }, [editedReviews]); // runs after any change; only updates if score changed
 
   // Fetch reviewers and mentors
   useEffect(() => {
@@ -187,7 +215,6 @@ function StudentReviewEdit() {
             try {
               const reviewRes = await API.get(`week-review/${week.id}/?student_id=${studentId}`);
               reviewsData[week.id] = reviewRes.data;
-              // Initialize edited state with current values
               editsData[week.id] = { ...reviewRes.data };
             } catch {
               reviewsData[week.id] = {};
@@ -232,7 +259,6 @@ function StudentReviewEdit() {
       value = "";
     }
     if (row.type === "number" && typeof value === "number") {
-      // ensure number is displayed correctly
       value = value.toString();
     }
     const onChange = (val) => handleFieldChange(weekId, row.field, val);
@@ -309,7 +335,6 @@ function StudentReviewEdit() {
   const handleSaveAll = async () => {
     setSaving(true);
     const promises = [];
-    // For each week, send a PATCH request if there are any changes
     for (const week of filteredWeeks) {
       const weekId = week.id;
       const original = originalReviews[weekId] || {};
@@ -320,6 +345,10 @@ function StudentReviewEdit() {
         if (original[field] !== edited[field]) {
           changes[field] = edited[field];
         }
+      }
+      // Also include english_review if it was auto‑generated and differs from original
+      if (edited.english_review !== original.english_review) {
+        changes.english_review = edited.english_review;
       }
       if (Object.keys(changes).length > 0) {
         promises.push(
@@ -335,7 +364,6 @@ function StudentReviewEdit() {
     try {
       await Promise.all(promises);
       showToast("All changes saved successfully", "success");
-      // Refresh original data after save
       const newOriginal = {};
       for (const week of filteredWeeks) {
         const weekId = week.id;
@@ -370,7 +398,6 @@ function StudentReviewEdit() {
 
   return (
     <div className="min-h-screen w-full bg-gray-50 text-gray-800 font-sans">
-      {/* Toast */}
       {toastMessage && (
         <div className="fixed top-5 right-5 z-50 bg-emerald-500 text-white px-4 py-2 rounded-lg shadow-lg text-sm">
           {toastMessage.msg}
