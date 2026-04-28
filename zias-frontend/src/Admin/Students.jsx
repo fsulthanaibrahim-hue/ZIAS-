@@ -1,6 +1,6 @@
 // src/Admin/Students.jsx
 import { useEffect, useState, useRef, useCallback } from "react";
-import { useLocation, useNavigate } from "react-router-dom";   // added useLocation, useNavigate
+import { useLocation, useNavigate } from "react-router-dom";
 import API from "../api/api";
 
 function Toast({ message, type, onClose }) {
@@ -51,7 +51,7 @@ function Students() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [batchFilter, setBatchFilter] = useState("");   // for URL batch param
+  const [batchFilter, setBatchFilter] = useState("");
   const [viewingStudent, setViewingStudent] = useState(null);
   const [phoneError, setPhoneError] = useState("");
   const [fathersContactError, setFathersContactError] = useState("");
@@ -82,13 +82,12 @@ function Students() {
 
   const hasLoaded = useRef(false);
 
-  // Read batch query param on mount and when URL changes
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const batch = params.get("batch");
     if (batch) {
       setBatchFilter(batch);
-      setSearchTerm(""); // optional: clear search when batch filter is applied
+      setSearchTerm("");
     } else {
       setBatchFilter("");
     }
@@ -502,7 +501,6 @@ function Students() {
     setNewDocs([]);
   };
 
-  // Filter students: search term + batch filter
   const filteredStudents = students.filter(s => {
     const matchesSearch = (s.full_name || s.username)?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       s.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -547,10 +545,9 @@ function Students() {
     setCurrentPage(1);
   }, [searchTerm, batchFilter]);
 
-  // Clear batch filter function
   const clearBatchFilter = () => {
     setBatchFilter("");
-    navigate("/admin/students");  // remove query param
+    navigate("/admin/students");
   };
 
   const inputClass = `w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/30 transition-all duration-200 text-sm`;
@@ -633,7 +630,6 @@ function Students() {
               )}
             </div>
 
-            {/* Clear batch filter button (if active) */}
             {batchFilter && (
               <button
                 onClick={clearBatchFilter}
@@ -666,7 +662,6 @@ function Students() {
               className="modal-enter bg-white rounded-2xl w-full max-w-3xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
-              {/* ... same as before ... */}
               <div className="sticky top-0 bg-white z-10 flex justify-between items-center px-4 sm:px-6 py-4 border-b border-gray-200">
                 <div className="flex items-center gap-3">
                   <div className="w-7 h-7 rounded-lg bg-green-100 border border-green-200 flex items-center justify-center">
@@ -693,7 +688,16 @@ function Students() {
                     <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Email *</label><input type="email" name="email" value={formData.email} onChange={handleChange} required className={inputClass} /></div>
                     <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Course *</label><select name="course" value={formData.course} onChange={handleChange} required className={inputClass}><option value="">Select a course</option>{coursesList.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select></div>
                     <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Batch *</label><select name="batch" value={formData.batch} onChange={handleChange} required className={inputClass}><option value="">Select a batch</option>{batchesList.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}</select></div>
-                    <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Mentor (optional)</label><select name="mentor" value={formData.mentor} onChange={handleChange} className={inputClass}><option value="">Select a mentor</option>{mentorsList.map(mentor => <option key={mentor.id} value={mentor.id}>{mentor.username} ({mentor.expertise || "No expertise"})</option>)}</select></div>
+                    <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Mentor (optional)</label>
+                      <select name="mentor" value={formData.mentor} onChange={handleChange} className={inputClass}>
+                        <option value="">Select a mentor</option>
+                        {mentorsList.map(mentor => (
+                          <option key={mentor.id} value={mentor.id}>
+                            {mentor.full_name || mentor.username} ({mentor.expertise || "No expertise"})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                     <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Phone</label><input type="text" name="phone" value={formData.phone} onChange={handleChange} className={inputClass} />{phoneError && <p className="text-red-500 text-xs mt-1">{phoneError}</p>}</div>
                     <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Date of Birth</label><input type="date" name="date_of_birth" value={formData.date_of_birth} onChange={handleChange} className={inputClass} /></div>
                     <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Age</label><input type="text" name="age" value={formData.age} readOnly className={inputClass + " cursor-not-allowed opacity-80"} /></div>
@@ -730,10 +734,9 @@ function Students() {
                   </div>
                 </div>
 
-                {/* Document Section – show existing documents with delete for edit mode */}
+                {/* Document Section */}
                 <div className="border-t border-gray-200 pt-4">
                   <h4 className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-3">Documents</h4>
-                  
                   {editingId && (
                     <div className="mb-4">
                       <label className="block text-gray-600 text-xs font-medium mb-1.5">Existing Documents</label>
@@ -767,7 +770,6 @@ function Students() {
                       )}
                     </div>
                   )}
-
                   <div>
                     <label className="block text-gray-600 text-xs font-medium mb-1.5">
                       {editingId ? "Upload Additional Documents" : "Upload Documents (PDF, images)"}
@@ -797,11 +799,10 @@ function Students() {
           </div>
         )}
 
-        {/* View Details Modal (unchanged, keep as before) */}
+        {/* View Details Modal */}
         {viewingStudent && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={() => setViewingStudent(null)}>
             <div className="bg-white rounded-2xl w-full max-w-3xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-              {/* ... same as original ... */}
               <div className="sticky top-0 bg-white z-10 flex justify-between items-center px-4 sm:px-6 py-4 border-b border-gray-200">
                 <div className="flex items-center gap-3">
                   <div className="w-7 h-7 rounded-lg bg-green-100 border border-green-200 flex items-center justify-center">
@@ -820,7 +821,6 @@ function Students() {
               </div>
 
               <div className="px-4 sm:px-6 py-5 space-y-6">
-                {/* Basic Information */}
                 <div>
                   <h4 className="text-xs font-semibold text-green-600 uppercase tracking-wider mb-3">Basic Information</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -830,7 +830,11 @@ function Students() {
                     <div><label className="block text-gray-500 text-xs">Batch</label><p className="text-gray-800 text-sm mt-1">{viewingStudent.batch}</p></div>
                     <div><label className="block text-gray-500 text-xs">Mentor</label>
                       <p className="text-gray-800 text-sm mt-1">
-                        {viewingStudent.mentor ? (mentorsList.find(m => m.id === viewingStudent.mentor)?.username || "—") : "—"}
+                        {viewingStudent.mentor
+                          ? (mentorsList.find(m => m.id === viewingStudent.mentor)?.full_name ||
+                             mentorsList.find(m => m.id === viewingStudent.mentor)?.username ||
+                             "—")
+                          : "—"}
                       </p>
                     </div>
                     <div><label className="block text-gray-500 text-xs">Phone</label><p className="text-gray-800 text-sm mt-1">{viewingStudent.phone || "—"}</p></div>
@@ -840,7 +844,6 @@ function Students() {
                   </div>
                 </div>
 
-                {/* Parents */}
                 <div className="border-t border-gray-200 pt-4">
                   <h4 className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-3">Parents</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -851,13 +854,11 @@ function Students() {
                   </div>
                 </div>
 
-                {/* Address */}
                 <div className="border-t border-gray-200 pt-4">
                   <h4 className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-3">Address</h4>
                   <p className="text-gray-800 text-sm">{viewingStudent.address || "—"}</p>
                 </div>
 
-                {/* Education */}
                 <div className="border-t border-gray-200 pt-4">
                   <h4 className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-3">Education</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -869,10 +870,8 @@ function Students() {
                   </div>
                 </div>
 
-                {/* Documents section – upload & view (no delete) */}
                 <div className="border-t border-gray-200 pt-4">
                   <h4 className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-3">Documents</h4>
-
                   <div className="mb-4">
                     <input
                       type="file"
@@ -896,7 +895,6 @@ function Students() {
                       </div>
                     )}
                   </div>
-
                   {viewerDocuments.length === 0 ? (
                     <p className="text-gray-400 text-sm">No documents uploaded yet.</p>
                   ) : (

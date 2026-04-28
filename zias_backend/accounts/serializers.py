@@ -210,11 +210,11 @@ class StudentSerializer(serializers.ModelSerializer):
 class MentorSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username')
     email = serializers.EmailField(source='user.email')
-    
+
     class Meta:
         model = Mentor
-        fields = ['id', 'username', 'email', 'phone', 'expertise', 'batch', 'full_name']  # added full_name
-
+        fields = ['id', 'username', 'email', 'phone', 'expertise', 'batch', 'full_name']
+        
     def create(self, validated_data):
         user_data = validated_data.pop('user')
         username = user_data['username']

@@ -88,8 +88,9 @@ class Mentor(models.Model):
     phone = models.CharField(max_length=20, blank=True, null=True)
     expertise = models.CharField(max_length=100)
     batch = models.ForeignKey(Batch, on_delete=models.SET_NULL, null=True, blank=True, related_name='mentors')
-    full_name = models.CharField(max_length=255, blank=True, null=True)   
+    full_name = models.CharField(max_length=255, blank=True, null=True)   # 👈 add this field
 
+    
     def __str__(self):
         return self.full_name or self.user.username
 
