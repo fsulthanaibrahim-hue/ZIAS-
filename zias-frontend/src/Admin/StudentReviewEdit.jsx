@@ -3,6 +3,8 @@ import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import API from "../api/api";
 
+let initialDataFetched = false;
+
 const extractWeekNumber = (module) => {
   if (module.order) return parseInt(module.order, 10);
   const match = module.title?.match(/Week\s*(\d+)/i);
@@ -15,14 +17,6 @@ const cleanTitle = (title) => {
   return title.replace(pattern, "").trim();
 };
 
-function debounce(func, delay) {
-  let timeoutId;
-  return function (...args) {
-    clearTimeout(timeoutId);
-    timeoutId = setTimeout(() => func.apply(this, args), delay);
-  };
-}
-
 function StudentReviewEdit() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -32,10 +26,15 @@ function StudentReviewEdit() {
   const [student, setStudent] = useState(null);
   const [allWeeks, setAllWeeks] = useState([]);
   const [filteredWeeks, setFilteredWeeks] = useState([]);
-  const [reviews, setReviews] = useState({});
+  // Store original reviews for comparison
+  const [originalReviews, setOriginalReviews] = useState({});
+  // Store edited values locally
+  const [editedReviews, setEditedReviews] = useState({});
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
-  const fetchStarted = useRef(false);
+  const [toastMessage, setToastMessage] = useState(null);
+  const dataFetched = useRef(false);
   
   const [reviewersList, setReviewersList] = useState([]);
   const [mentorsList, setMentorsList] = useState([]);
@@ -46,21 +45,26 @@ function StudentReviewEdit() {
   };
   const [rangeMin, rangeMax] = parseRange(rangeParam);
 
-  // Fetch static lists (reviewers, mentors)
+  // Show toast helper
+  const showToast = (msg, type = "success") => {
+    setToastMessage({ msg, type });
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  // Fetch reviewers and mentors
   useEffect(() => {
-    const fetchLists = async () => {
+    const fetchReviewers = async () => {
       try {
-        // Reviewers
         let reviewerNames = [];
         try {
-          const revRes = await API.get("/reviewers/");
-          reviewerNames = revRes.data.map((rev) => {
+          const res = await API.get("/reviewers/");
+          reviewerNames = res.data.map((rev) => {
             let name = rev.name || rev.user?.username || rev.username;
             if (!name) return "";
             name = name.charAt(0).toUpperCase() + name.slice(1);
             return `${name} Sir`;
           });
-        } catch {
+        } catch (err) {
           const usersRes = await API.get("/users/?is_reviewer=true");
           reviewerNames = usersRes.data.map((user) => {
             let name = user.full_name || user.username;
@@ -69,11 +73,17 @@ function StudentReviewEdit() {
             return `${name} Sir`;
           });
         }
-        setReviewersList([...new Set(reviewerNames.filter((n) => n && n !== " Sir"))]);
+        const uniqueNames = [...new Set(reviewerNames.filter((n) => n && n !== " Sir"))];
+        setReviewersList(uniqueNames);
+      } catch (err) {
+        setReviewersList([]);
+      }
+    };
 
-        // Mentors
-        const mentorRes = await API.get("/mentors/");
-        const mentorNames = mentorRes.data
+    const fetchMentors = async () => {
+      try {
+        const res = await API.get("/mentors/");
+        const names = res.data
           .map((mentor) => {
             let name = mentor.full_name || mentor.username;
             if (!name) return "";
@@ -81,14 +91,14 @@ function StudentReviewEdit() {
             return name;
           })
           .filter(Boolean);
-        setMentorsList(mentorNames);
+        setMentorsList(names);
       } catch (err) {
-        console.error("Failed to fetch lists", err);
-        setReviewersList([]);
         setMentorsList([]);
       }
     };
-    fetchLists();
+
+    fetchReviewers();
+    fetchMentors();
   }, []);
 
   const rows = useMemo(
@@ -141,39 +151,6 @@ function StudentReviewEdit() {
     [reviewersList, mentorsList]
   );
 
-  const saveField = useCallback(
-    async (weekId, field, value) => {
-      try {
-        await API.patch(`week-review/${weekId}/?student_id=${studentId}`, { [field]: value });
-      } catch (err) {
-        console.error("Auto-save failed", err);
-      }
-    },
-    [studentId]
-  );
-
-  const debouncedSave = useCallback(debounce(saveField, 800), [saveField]);
-
-  const handleChange = (weekId, field, value) => {
-    const row = rows.find((r) => r.field === field);
-    if (row?.type === "number") {
-      let num = parseFloat(value);
-      if (isNaN(num)) {
-        value = "";
-      } else {
-        if (row.min !== undefined && num < row.min) num = row.min;
-        if (row.max !== undefined && num > row.max) num = row.max;
-        value = num;
-      }
-    }
-    setReviews((prev) => ({
-      ...prev,
-      [weekId]: { ...prev[weekId], [field]: value },
-    }));
-    debouncedSave(weekId, field, value);
-  };
-
-  // Fetch student info
   useEffect(() => {
     if (!studentId) {
       navigate("/admin/review-sheets");
@@ -190,41 +167,45 @@ function StudentReviewEdit() {
     fetchStudent();
   }, [studentId, navigate]);
 
-  // Fetch weeks and reviews (only once)
   useEffect(() => {
     if (!studentId) return;
-    if (fetchStarted.current) return;
-    fetchStarted.current = true;
-    const fetchData = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const modulesRes = await API.get(`modules/student-modules/?student_id=${studentId}`);
-        let weeksData = modulesRes.data;
-        weeksData.sort((a, b) => extractWeekNumber(a) - extractWeekNumber(b));
-        setAllWeeks(weeksData);
+    if (!initialDataFetched && !dataFetched.current) {
+      initialDataFetched = true;
+      dataFetched.current = true;
+      const fetchData = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+          const modulesRes = await API.get(`modules/student-modules/?student_id=${studentId}`);
+          let weeksData = modulesRes.data;
+          weeksData.sort((a, b) => extractWeekNumber(a) - extractWeekNumber(b));
+          setAllWeeks(weeksData);
 
-        const reviewsData = {};
-        for (const week of weeksData) {
-          try {
-            const reviewRes = await API.get(`week-review/${week.id}/?student_id=${studentId}`);
-            reviewsData[week.id] = reviewRes.data;
-          } catch {
-            reviewsData[week.id] = {};
+          const reviewsData = {};
+          const editsData = {};
+          for (const week of weeksData) {
+            try {
+              const reviewRes = await API.get(`week-review/${week.id}/?student_id=${studentId}`);
+              reviewsData[week.id] = reviewRes.data;
+              // Initialize edited state with current values
+              editsData[week.id] = { ...reviewRes.data };
+            } catch {
+              reviewsData[week.id] = {};
+              editsData[week.id] = {};
+            }
           }
+          setOriginalReviews(reviewsData);
+          setEditedReviews(editsData);
+        } catch (err) {
+          setError("Failed to load review data.");
+        } finally {
+          setLoading(false);
         }
-        setReviews(reviewsData);
-      } catch (err) {
-        console.error(err);
-        setError("Failed to load review data.");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
+      };
+      fetchData();
+    }
   }, [studentId]);
 
-  // Filter weeks when range changes or allWeeks updates
   useEffect(() => {
     if (allWeeks.length === 0) return;
     const filtered = allWeeks.filter((week) => {
@@ -238,12 +219,23 @@ function StudentReviewEdit() {
     setSearchParams({ student_id: studentId, range });
   };
 
+  const handleFieldChange = (weekId, field, value) => {
+    setEditedReviews((prev) => ({
+      ...prev,
+      [weekId]: { ...prev[weekId], [field]: value },
+    }));
+  };
+
   const renderCell = (weekId, row) => {
-    let value = reviews[weekId]?.[row.field] ?? "";
+    let value = editedReviews[weekId]?.[row.field] ?? "";
     if (row.type === "number" && (value === null || value === undefined || value === "")) {
       value = "";
     }
-    const onChange = (val) => handleChange(weekId, row.field, val);
+    if (row.type === "number" && typeof value === "number") {
+      // ensure number is displayed correctly
+      value = value.toString();
+    }
+    const onChange = (val) => handleFieldChange(weekId, row.field, val);
 
     if (row.type === "select") {
       return (
@@ -254,7 +246,9 @@ function StudentReviewEdit() {
         >
           <option value="">—</option>
           {row.options.map((opt) => (
-            <option key={opt} value={opt}>{opt}</option>
+            <option key={opt} value={opt}>
+              {opt}
+            </option>
           ))}
         </select>
       );
@@ -278,14 +272,14 @@ function StudentReviewEdit() {
             min={row.min}
             max={row.max}
             step={row.step}
-            value={value === "" ? "" : value}
+            value={value}
             onChange={(e) => onChange(e.target.value)}
             className="w-full bg-white border border-gray-300 rounded px-2 py-1 text-sm text-gray-800 focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none"
             placeholder={row.placeholder || ""}
           />
-          {row.field === "english_score" && reviews[weekId]?.english_review && (
+          {row.field === "english_score" && editedReviews[weekId]?.english_review && (
             <div className="mt-1 text-xs text-gray-500">
-              📝 {reviews[weekId].english_review}
+              📝 {editedReviews[weekId].english_review}
             </div>
           )}
         </div>
@@ -312,6 +306,50 @@ function StudentReviewEdit() {
     );
   };
 
+  const handleSaveAll = async () => {
+    setSaving(true);
+    const promises = [];
+    // For each week, send a PATCH request if there are any changes
+    for (const week of filteredWeeks) {
+      const weekId = week.id;
+      const original = originalReviews[weekId] || {};
+      const edited = editedReviews[weekId] || {};
+      const changes = {};
+      for (const row of rows) {
+        const field = row.field;
+        if (original[field] !== edited[field]) {
+          changes[field] = edited[field];
+        }
+      }
+      if (Object.keys(changes).length > 0) {
+        promises.push(
+          API.patch(`week-review/${weekId}/?student_id=${studentId}`, changes)
+        );
+      }
+    }
+    if (promises.length === 0) {
+      showToast("No changes to save", "info");
+      setSaving(false);
+      return;
+    }
+    try {
+      await Promise.all(promises);
+      showToast("All changes saved successfully", "success");
+      // Refresh original data after save
+      const newOriginal = {};
+      for (const week of filteredWeeks) {
+        const weekId = week.id;
+        newOriginal[weekId] = { ...editedReviews[weekId] };
+      }
+      setOriginalReviews((prev) => ({ ...prev, ...newOriginal }));
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to save some changes", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="fixed inset-0 bg-gray-50 flex items-center justify-center z-50">
@@ -319,36 +357,51 @@ function StudentReviewEdit() {
       </div>
     );
   }
-  if (error) {
+  if (error)
     return (
       <div className="min-h-screen bg-gray-50 text-red-600 flex items-center justify-center p-8 text-center">
         {error}
       </div>
     );
-  }
-  if (!student) {
+  if (!student)
     return (
       <div className="min-h-screen bg-gray-50 text-center p-8">Student not found</div>
     );
-  }
 
   return (
     <div className="min-h-screen w-full bg-gray-50 text-gray-800 font-sans">
+      {/* Toast */}
+      {toastMessage && (
+        <div className="fixed top-5 right-5 z-50 bg-emerald-500 text-white px-4 py-2 rounded-lg shadow-lg text-sm">
+          {toastMessage.msg}
+        </div>
+      )}
       <div className="max-w-full mx-auto px-4 sm:px-6 py-4 sm:py-8">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
             <h1 className="text-xl font-semibold text-gray-800">Edit Review Sheet</h1>
             <p className="text-gray-500 text-sm mt-1">
-              {student.full_name || student.username} • {student.course} • {student.batch}
+              {student?.full_name || student?.username} • {student?.course} • {student?.batch}
             </p>
-            <p className="text-gray-400 text-xs mt-1">Showing weeks {rangeMin} – {rangeMax}</p>
+            <p className="text-gray-400 text-xs mt-1">
+              Showing weeks {rangeMin} – {rangeMax}
+            </p>
           </div>
-          <button
-            onClick={() => navigate("/admin/review-sheets")}
-            className="bg-gray-200 hover:bg-gray-300 text-gray-700 hover:text-gray-900 px-4 py-2 rounded-lg text-sm font-medium transition"
-          >
-            ← Back
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => navigate("/admin/review-sheets")}
+              className="bg-gray-200 hover:bg-gray-300 text-gray-700 hover:text-gray-900 px-4 py-2 rounded-lg text-sm font-medium transition"
+            >
+              ← Back
+            </button>
+            <button
+              onClick={handleSaveAll}
+              disabled={saving}
+              className="bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50"
+            >
+              {saving ? "Saving..." : "Save All Changes"}
+            </button>
+          </div>
         </div>
 
         {/* Desktop Table */}
@@ -389,7 +442,10 @@ function StudentReviewEdit() {
         {/* Mobile Cards */}
         <div className="md:hidden space-y-6">
           {filteredWeeks.map((week) => (
-            <div key={week.id} className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+            <div
+              key={week.id}
+              className="bg-white rounded-xl border border-gray-200 shadow-sm p-4"
+            >
               <h2 className="text-lg font-semibold text-gray-800 mb-3 border-b border-gray-200 pb-2">
                 {cleanTitle(week.title)}
               </h2>
@@ -462,7 +518,7 @@ function StudentReviewEdit() {
           </div>
         </div>
         <div className="mt-4 text-right text-gray-400 text-xs">
-          💡 Click any cell to edit. Changes auto‑save.
+          💡 Edit any cell, then click "Save All Changes" to apply.
         </div>
       </div>
     </div>
