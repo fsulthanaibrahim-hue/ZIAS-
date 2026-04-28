@@ -45,7 +45,7 @@ function MentorReviewFolders() {
 
   const industryExperts = ["Akif Sir", "Rizan Sir", "Prameesh Sir"];
 
-  const hasFetched = useRef(false);   // prevent duplicate initial fetches
+  const hasFetched = useRef(false);
 
   const showToast = (message, type = "success") => setToast({ message, type });
   const hideToast = () => setToast(null);
@@ -118,7 +118,7 @@ function MentorReviewFolders() {
     .sort((a, b) => new Date(b.modified) - new Date(a.modified));
 
   const rawEntries = selectedFolder ? foldersMap[selectedFolder]?.entries || [] : [];
-  const uniqueWeeks = [...new Set(rawEntries.map(e => e.week).filter(w => w))].sort().reverse(); // newest first
+  const uniqueWeeks = [...new Set(rawEntries.map(e => e.week).filter(w => w))].sort().reverse();
   const filteredEntries = rawEntries.filter(entry => {
     if (!searchTerm && !selectedWeek) return true;
     const matchesSearch = !searchTerm || 
@@ -190,6 +190,7 @@ function MentorReviewFolders() {
   const startEdit = (entry) => {
     setEditingId(entry.id);
     setEditData({
+      review_date: entry.review_date || "",
       week: entry.week,
       work_documents: entry.work_documents || "",
       industry_expert: entry.industry_expert || "",
@@ -277,7 +278,7 @@ function MentorReviewFolders() {
     }
   };
 
-  // SVG icons (unchanged)
+  // Icons
   const EditIcon = () => (
     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -460,7 +461,7 @@ function MentorReviewFolders() {
               </div>
 
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-x-auto">
-                <div className="min-w-[800px]">
+                <div className="min-w-[900px]">
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
@@ -485,7 +486,20 @@ function MentorReviewFolders() {
                       ) : (
                         filteredEntries.map(entry => (
                           <tr key={entry.id} className="hover:bg-gray-50">
-                            <td className="px-4 py-3 text-sm text-gray-700">{entry.review_date}</td>
+                            {/* Date column – editable */}
+                            <td className="px-4 py-3 text-sm text-gray-700">
+                              {editingId === entry.id ? (
+                                <input
+                                  type="date"
+                                  name="review_date"
+                                  value={editData.review_date || ""}
+                                  onChange={handleEditChange}
+                                  className="border border-gray-300 rounded px-1 py-0.5 w-32"
+                                />
+                              ) : (
+                                entry.review_date || "—"
+                              )}
+                            </td>
                             <td className="px-4 py-3 text-sm text-gray-700">{entry.student_name}</td>
                             <td className="px-4 py-3 text-sm">
                               {editingId === entry.id ? (
