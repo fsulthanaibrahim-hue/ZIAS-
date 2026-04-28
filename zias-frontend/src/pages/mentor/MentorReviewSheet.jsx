@@ -14,6 +14,15 @@ const cleanTitle = (title) => {
   return title.replace(pattern, "").trim();
 };
 
+const weekRanges = [
+  { label: "Week 0 - 12", start: 1, end: 12 },
+  { label: "Week 13 - 16", start: 13, end: 16 },
+  { label: "Week 17 - 24", start: 17, end: 24 },
+  { label: "Week 25 - 32", start: 25, end: 32 },
+  { label: "Week 33 - 40", start: 33, end: 40 },
+  { label: "Week 41 - 44", start: 41, end: 44 },
+];
+
 function MentorReviewSheet() {
   const [searchParams] = useSearchParams();
   const studentId = searchParams.get("student_id");
@@ -23,28 +32,54 @@ function MentorReviewSheet() {
   const [reviews, setReviews] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [mentors, setMentors] = useState([]);
+  const [updating, setUpdating] = useState({});
 
-  // Exactly the same rows as in the admin edit page (StudentReviewEdit)
+  // ✅ LABEL IS NOW "Mentor Name"
   const rows = useMemo(() => [
     { label: "Status", field: "task_status" },
     { label: "Project Updates", field: "feedback" },
     { label: "Reviewer Name", field: "reviewer_name" },
-    { label: "Advisor Name", field: "advisor_name" },
+    { label: "Mentor Name", field: "advisor_name" },   // <-- changed here
     { label: "Score [20]", field: "total_score" },
     { label: "Extra Workouts Review", field: "extra_workouts" },
     { label: "Review Date", field: "review_date" },
     { label: "English Review", field: "english_review" },
   ], []);
 
-  // Week ranges for Personal Details (exactly as in admin)
-  const weekRanges = [
-    { label: "Week 0 - 12", start: 1, end: 12 },
-    { label: "Week 13 - 16", start: 13, end: 16 },
-    { label: "Week 17 - 24", start: 17, end: 24 },
-    { label: "Week 25 - 32", start: 25, end: 32 },
-    { label: "Week 33 - 40", start: 33, end: 40 },
-    { label: "Week 41 - 44", start: 41, end: 44 },
-  ];
+  const fetchMentors = async () => {
+    try {
+      const res = await API.get("mentors/");
+      setMentors(res.data);
+    } catch (err) {
+      console.error("Failed to load mentors", err);
+    }
+  };
+
+  const updateMentor = async (weekId, newMentorName) => {
+    setUpdating(prev => ({ ...prev, [weekId]: true }));
+    try {
+      await API.patch(`week-review/${weekId}/`, {
+        advisor_name: newMentorName,
+        student_id: studentId,
+      });
+      setReviews(prev => ({
+        ...prev,
+        [weekId]: { ...prev[weekId], advisor_name: newMentorName },
+      }));
+    } catch (err) {
+      console.error("Failed to update mentor", err);
+      alert("Could not update mentor. Please try again.");
+    } finally {
+      setUpdating(prev => ({ ...prev, [weekId]: false }));
+    }
+  };
+
+  const getValue = (weekId, field) => {
+    const val = reviews[weekId]?.[field];
+    if (val === null || val === undefined || val === "") return "—";
+    return val;
+  };
 
   useEffect(() => {
     if (!studentId) {
@@ -75,6 +110,7 @@ function MentorReviewSheet() {
           }
         }
         setReviews(reviewsData);
+        await fetchMentors();
       } catch (err) {
         console.error(err);
         setError("Failed to load review data.");
@@ -86,27 +122,8 @@ function MentorReviewSheet() {
     fetchData();
   }, [studentId]);
 
-  const getValue = (weekId, field) => {
-    const val = reviews[weekId]?.[field];
-    if (val === null || val === undefined || val === "") return "—";
-    return val;
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <div className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50 p-8 text-center">
-        <div className="text-red-600">{error}</div>
-      </div>
-    );
-  }
+  if (loading) return <div className="flex justify-center items-center min-h-screen"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div></div>;
+  if (error) return <div className="text-red-600 text-center p-8">{error}</div>;
 
   return (
     <div className="min-h-screen w-full bg-gray-50 text-gray-800 font-sans">
@@ -119,43 +136,57 @@ function MentorReviewSheet() {
               {student?.full_name || student?.username} • {student?.course} • {student?.batch}
             </p>
           </div>
-          <Link
-            to="/mentor/students"
-            className="bg-gray-200 hover:bg-gray-300 text-gray-700 hover:text-gray-900 px-4 py-2 rounded-lg text-sm font-medium transition text-center"
-          >
-            ← Back to Students
-          </Link>
+          <Link to="/mentor/students" className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm">← Back to Students</Link>
         </div>
 
-        {/* Desktop: scrollable table with sticky first column */}
-        <div className="hidden md:block overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
+        {/* Personal Details with week ranges */}
+        <div className="mb-8 bg-white rounded-xl border shadow-sm overflow-hidden">
+          <div className="bg-gray-50 px-4 py-3 border-b font-semibold">Personal Details</div>
+          <div className="p-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-sm mb-4">
+              <div><label className="text-gray-500 text-xs">Full Name</label><div>{student?.full_name || student?.username || "—"}</div></div>
+              <div><label className="text-gray-500 text-xs">Email</label><div>{student?.email || "—"}</div></div>
+              <div><label className="text-gray-500 text-xs">Phone</label><div>{student?.phone || "—"}</div></div>
+              <div><label className="text-gray-500 text-xs">Course</label><div>{student?.course || "—"}</div></div>
+              <div><label className="text-gray-500 text-xs">Batch</label><div>{student?.batch || "—"}</div></div>
+              <div><label className="text-gray-500 text-xs">Guardian</label><div>{student?.guardian_name || "—"}</div></div>
+              <div><label className="text-gray-500 text-xs">Guardian Contact</label><div>{student?.guardian_phone || "—"}</div></div>
+              <div><label className="text-gray-500 text-xs">Address</label><div>{student?.address || "—"}</div></div>
+            </div>
+            <div className="border-t pt-4">
+              <h4 className="text-xs font-semibold text-gray-500 uppercase mb-2">Week Ranges</h4>
+              <div className="flex flex-wrap gap-2">
+                {weekRanges.map((range) => <span key={range.label} className="bg-gray-100 text-gray-700 text-xs px-3 py-1 rounded-full">{range.label}</span>)}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Table with all weeks as columns */}
+        <div className="hidden md:block overflow-x-auto rounded-xl border bg-white shadow-sm">
           <div className="min-w-[800px]">
             <table className="min-w-full border-collapse">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="sticky left-0 bg-gray-50 z-10 px-4 py-3 text-left text-gray-500 text-xs font-semibold uppercase w-48">
-                    FIELD / WEEK
-                  </th>
-                  {weeks.map(week => (
-                    <th key={week.id} className="px-3 py-3 text-left text-gray-800 text-sm font-medium min-w-[180px] border-l border-gray-200">
-                      {cleanTitle(week.title)}
-                    </th>
-                  ))}
-                </tr>
+              <thead className="bg-gray-50 border-b">
+                <tr><th className="sticky left-0 bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase w-48">FIELD / WEEK</th>{weeks.map(week => <th key={week.id} className="px-3 py-3 text-left text-sm font-medium min-w-[180px] border-l">{cleanTitle(week.title)}</th>)}</tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-100">
+              <tbody>
                 {rows.map(row => (
                   <tr key={row.field} className="hover:bg-gray-50/40">
-                    <td className="sticky left-0 bg-white px-4 py-3 text-gray-600 text-sm font-medium border-r border-gray-200">
-                      {row.label}
-                    </td>
-                    {weeks.map(week => (
-                      <td key={week.id} className="px-3 py-2 border-l border-gray-200 align-top">
-                        <div className="whitespace-pre-wrap break-words text-gray-800 text-sm">
-                          {getValue(week.id, row.field)}
-                        </div>
-                      </td>
-                    ))}
+                    <td className="sticky left-0 bg-white px-4 py-3 text-sm font-medium border-r">{row.label}</td>
+                    {weeks.map(week => {
+                      if (row.field === "advisor_name") {
+                        const currentMentor = reviews[week.id]?.advisor_name || "";
+                        return (
+                          <td key={week.id} className="px-3 py-2 border-l align-top">
+                            <select value={currentMentor} onChange={(e) => updateMentor(week.id, e.target.value)} disabled={updating[week.id]} className="w-full px-2 py-1 text-sm border rounded-md">
+                              <option value="">— Select Mentor —</option>
+                              {mentors.map(mentor => <option key={mentor.id} value={mentor.name || mentor.username}>{mentor.name || mentor.username}</option>)}
+                            </select>
+                          </td>
+                        );
+                      }
+                      return <td key={week.id} className="px-3 py-2 border-l align-top"><div className="whitespace-pre-wrap text-sm">{getValue(week.id, row.field)}</div></td>;
+                    })}
                   </tr>
                 ))}
               </tbody>
@@ -163,47 +194,36 @@ function MentorReviewSheet() {
           </div>
         </div>
 
-        {/* Mobile: vertical cards */}
+        {/* Mobile view (cards) */}
         <div className="md:hidden space-y-6">
           {weeks.map(week => (
-            <div key={week.id} className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-              <h2 className="text-lg font-semibold text-gray-800 mb-3 border-b border-gray-200 pb-2">
-                {cleanTitle(week.title)}
-              </h2>
-              <div className="space-y-3">
-                {rows.map(row => (
-                  <div key={row.field} className="flex flex-col gap-1">
-                    <label className="text-gray-500 text-xs font-medium uppercase tracking-wide">
-                      {row.label}
-                    </label>
-                    <div className="text-gray-800 text-sm break-words">
-                      {getValue(week.id, row.field)}
+            <div key={week.id} className="bg-white rounded-xl border p-4">
+              <h2 className="text-lg font-semibold border-b pb-2 mb-3">{cleanTitle(week.title)}</h2>
+              {rows.map(row => {
+                if (row.field === "advisor_name") {
+                  const currentMentor = reviews[week.id]?.advisor_name || "";
+                  return (
+                    <div key={row.field} className="mb-3">
+                      <label className="text-xs font-medium uppercase text-gray-500">{row.label}</label>
+                      <select value={currentMentor} onChange={(e) => updateMentor(week.id, e.target.value)} disabled={updating[week.id]} className="w-full mt-1 px-2 py-1 text-sm border rounded-md">
+                        <option value="">— Select Mentor —</option>
+                        {mentors.map(mentor => <option key={mentor.id} value={mentor.name || mentor.username}>{mentor.name || mentor.username}</option>)}
+                      </select>
                     </div>
+                  );
+                }
+                return (
+                  <div key={row.field} className="mb-3">
+                    <label className="text-xs font-medium uppercase text-gray-500">{row.label}</label>
+                    <div className="text-sm mt-1">{getValue(week.id, row.field)}</div>
                   </div>
-                ))}
-              </div>
+                );
+              })}
             </div>
           ))}
         </div>
 
-        {/* Empty state */}
-        {weeks.length === 0 && (
-          <div className="text-center py-12 bg-white rounded-xl border border-gray-200 shadow-sm">
-            <p className="text-gray-500">No weeks available for this student.</p>
-          </div>
-        )}
-
-        {/* Personal Details Section – exactly like admin side */}
-        <div className="mt-6 bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-          <h3 className="text-sm font-semibold text-gray-800 mb-2">Personal Details</h3>
-          <div className="flex flex-wrap gap-4 text-xs">
-            {weekRanges.map((range) => (
-              <span key={range.label} className="text-gray-500">
-                {range.label}
-              </span>
-            ))}
-          </div>
-        </div>
+        {weeks.length === 0 && <div className="text-center py-12 bg-white rounded-xl">No weeks available.</div>}
       </div>
     </div>
   );

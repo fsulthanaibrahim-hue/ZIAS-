@@ -1,6 +1,7 @@
 // src/pages/mentor/MentorReviewSheetRange.jsx
-import { useEffect, useState, useCallback, useRef } from "react";
-import { useParams, useSearchParams, Link } from "react-router-dom";
+import { useEffect, useState, useRef } from "react";
+import { useParams, useSearchParams, Link, useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 import API from "../../api/api";
 
 const extractWeekNumber = (title) => {
@@ -14,52 +15,33 @@ const cleanTitle = (title) => {
   return title.replace(pattern, "").trim();
 };
 
-function debounce(func, delay) {
-  let timeoutId;
-  return function (...args) {
-    clearTimeout(timeoutId);
-    timeoutId = setTimeout(() => func.apply(this, args), delay);
-  };
-}
-
 function MentorReviewSheetRange() {
   const { start, end } = useParams();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const studentId = searchParams.get("student_id");
 
   const [student, setStudent] = useState(null);
   const [weeks, setWeeks] = useState([]);
   const [reviews, setReviews] = useState({});
+  const [originalReviews, setOriginalReviews] = useState({});
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const dataFetched = useRef(false);
 
   const editableFields = new Set(["advisor_name", "extra_workouts", "review_date", "english_score"]);
 
-  // Same rows as MentorReviewEdit (admin style)
   const rows = [
     { label: "Status", field: "task_status", editable: false },
     { label: "Project Updates", field: "feedback", editable: false },
     { label: "Reviewer Name", field: "reviewer_name", editable: false },
-    { label: "Advisor Name", field: "advisor_name", editable: true, type: "text" },
+    { label: "Mentor Name", field: "advisor_name", editable: true, type: "text" },
     { label: "Score [20]", field: "total_score", editable: false },
     { label: "Extra Workouts Review", field: "extra_workouts", editable: true, type: "select", options: ["Completed", "Need Improvement", "Not Completed"] },
     { label: "Review Date", field: "review_date", editable: true, type: "date" },
     { label: "English Score [20]", field: "english_score", editable: true, type: "number", min: 0, max: 20, step: 1 },
   ];
-
-  const saveField = useCallback(async (weekId, field, value) => {
-    if (!editableFields.has(field)) return;
-    try {
-      await API.patch(`week-review/${weekId}/?student_id=${studentId}`, { [field]: value });
-      const updatedReview = await API.get(`week-review/${weekId}/?student_id=${studentId}`);
-      setReviews(prev => ({ ...prev, [weekId]: updatedReview.data }));
-    } catch (err) {
-      console.error("Auto-save failed", err);
-    }
-  }, [studentId]);
-
-  const debouncedSave = useCallback(debounce(saveField, 800), [saveField]);
 
   const handleChange = (weekId, field, value) => {
     const row = rows.find(r => r.field === field);
@@ -76,13 +58,64 @@ function MentorReviewSheetRange() {
       ...prev,
       [weekId]: { ...prev[weekId], [field]: value },
     }));
-    debouncedSave(weekId, field, value);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError(null);
+    const updates = [];
+
+    for (const week of weeks) {
+      const weekId = week.id;
+      const original = originalReviews[weekId] || {};
+      const current = reviews[weekId] || {};
+      const changedFields = {};
+      for (const field of editableFields) {
+        if (current[field] !== original[field]) {
+          changedFields[field] = current[field] ?? "";
+        }
+      }
+      if (Object.keys(changedFields).length > 0) {
+        updates.push({ weekId, data: changedFields });
+      }
+    }
+
+    if (updates.length === 0) {
+      toast("No changes to save.", { icon: "ℹ️" });
+      setSaving(false);
+      return;
+    }
+
+    try {
+      await Promise.all(
+        updates.map(({ weekId, data }) =>
+          API.patch(`week-review/${weekId}/?student_id=${studentId}`, data)
+        )
+      );
+      const freshReviews = {};
+      for (const week of weeks) {
+        try {
+          const res = await API.get(`week-review/${week.id}/?student_id=${studentId}`);
+          freshReviews[week.id] = res.data;
+        } catch {
+          freshReviews[week.id] = {};
+        }
+      }
+      setReviews(freshReviews);
+      setOriginalReviews(JSON.parse(JSON.stringify(freshReviews)));
+      toast.success("Changes saved successfully!");
+    } catch (err) {
+      console.error("Save failed", err);
+      toast.error("Failed to save changes. Please try again.");
+      setError("Failed to save changes. Please try again.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   useEffect(() => {
     if (!studentId) {
-      setError("No student selected.");
-      setLoading(false);
+      navigate("/mentor/students");
       return;
     }
     const fetchStudent = async () => {
@@ -90,11 +123,12 @@ function MentorReviewSheetRange() {
         const res = await API.get(`students/${studentId}/`);
         setStudent(res.data);
       } catch (err) {
+        toast.error("Failed to load student");
         setError("Failed to load student");
       }
     };
     fetchStudent();
-  }, [studentId]);
+  }, [studentId, navigate]);
 
   useEffect(() => {
     if (!studentId) return;
@@ -125,7 +159,9 @@ function MentorReviewSheetRange() {
             }
           }
           setReviews(reviewsData);
+          setOriginalReviews(JSON.parse(JSON.stringify(reviewsData)));
         } catch (err) {
+          toast.error("Failed to load review data.");
           setError("Failed to load review data.");
         } finally {
           setLoading(false);
@@ -146,7 +182,6 @@ function MentorReviewSheetRange() {
       return <div className="text-gray-800 text-sm py-1 px-1">{displayValue}</div>;
     }
 
-    // Editable fields
     if (row.type === "select") {
       return (
         <select
@@ -196,7 +231,7 @@ function MentorReviewSheetRange() {
         value={value}
         onChange={(e) => handleChange(weekId, row.field, e.target.value)}
         className="w-full bg-white border border-gray-300 rounded px-2 py-1 text-sm text-gray-800 focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none"
-        placeholder="Enter value"
+        placeholder="Enter mentor name"
       />
     );
   };
@@ -213,14 +248,23 @@ function MentorReviewSheetRange() {
             <p className="text-gray-500 text-sm mt-1">
               {student?.full_name || student?.username} • {student?.course} • {student?.batch}
             </p>
-            <p className="text-xs text-amber-600 mt-1">✏️ Only Advisor Name, Extra Workouts, Review Date, and English Score are editable.</p>
+            <p className="text-xs text-amber-600 mt-1">✏️ Editable: Mentor Name, Extra Workouts, Review Date, English Score</p>
           </div>
-          <Link
-            to={`/mentor/review-sheet?student_id=${studentId}`}
-            className="bg-gray-200 hover:bg-gray-300 text-gray-700 hover:text-gray-900 px-4 py-2 rounded-lg text-sm font-medium transition"
-          >
-            ← Back to Full Review Sheet
-          </Link>
+          <div className="flex gap-2">
+            <Link
+              to={`/mentor/review-sheet?student_id=${studentId}`}
+              className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium transition"
+            >
+              ← Back to Full Sheet
+            </Link>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50"
+            >
+              {saving ? "Saving..." : "Save Changes"}
+            </button>
+          </div>
         </div>
 
         {/* Desktop Table */}
@@ -268,7 +312,11 @@ function MentorReviewSheetRange() {
           ))}
         </div>
 
-        <div className="mt-4 text-right text-gray-400 text-xs">💡 Editable fields auto‑save. Other fields are read‑only.</div>
+        {weeks.length === 0 && (
+          <div className="text-center py-12 bg-white rounded-xl border border-gray-200 shadow-sm">
+            <p className="text-gray-500">No weeks found in this range.</p>
+          </div>
+        )}
       </div>
     </div>
   );

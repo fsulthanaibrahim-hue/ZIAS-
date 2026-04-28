@@ -1,6 +1,6 @@
-// src/pages/mentor/MentorReviewEdit.jsx
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useSearchParams, Link, useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 import API from "../../api/api";
 
 const extractWeekNumber = (title) => {
@@ -14,14 +14,6 @@ const cleanTitle = (title) => {
   return title.replace(pattern, "").trim();
 };
 
-function debounce(func, delay) {
-  let timeoutId;
-  return function (...args) {
-    clearTimeout(timeoutId);
-    timeoutId = setTimeout(() => func.apply(this, args), delay);
-  };
-}
-
 function MentorReviewEdit() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -30,39 +22,27 @@ function MentorReviewEdit() {
   const [student, setStudent] = useState(null);
   const [weeks, setWeeks] = useState([]);
   const [reviews, setReviews] = useState({});
+  const [originalReviews, setOriginalReviews] = useState({}); // snapshot for comparison
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const dataFetched = useRef(false);
 
+  // Editable fields (same as before)
   const editableFields = new Set(["advisor_name", "extra_workouts", "review_date", "english_score"]);
 
   const rows = useMemo(() => [
     { label: "Status", field: "task_status", type: "text", editable: false },
     { label: "Project Updates", field: "feedback", type: "textarea", editable: false },
     { label: "Reviewer Name", field: "reviewer_name", type: "text", editable: false },
-    { label: "Advisor Name", field: "advisor_name", type: "text", editable: true },
+    { label: "Mentor Name", field: "advisor_name", type: "text", editable: true },
     { label: "Score [20]", field: "total_score", type: "number", editable: false },
     { label: "Extra Workouts Review", field: "extra_workouts", type: "select", options: ["Completed", "Need Improvement", "Not Completed"], editable: true },
     { label: "Review Date", field: "review_date", type: "date", editable: true },
     { label: "English Score [20]", field: "english_score", type: "number", placeholder: "0-20", min: 0, max: 20, step: 1, editable: true },
   ], []);
 
-  const saveField = useCallback(async (weekId, field, value) => {
-    if (!editableFields.has(field)) return;
-    try {
-      await API.patch(`week-review/${weekId}/?student_id=${studentId}`, { [field]: value });
-      const updatedReview = await API.get(`week-review/${weekId}/?student_id=${studentId}`);
-      setReviews(prev => ({
-        ...prev,
-        [weekId]: updatedReview.data
-      }));
-    } catch (err) {
-      console.error("Auto-save failed", err);
-    }
-  }, [studentId]);
-
-  const debouncedSave = useCallback(debounce(saveField, 800), [saveField]);
-
+  // Local edit handler - only updates state, no API
   const handleChange = (weekId, field, value) => {
     const row = rows.find((r) => r.field === field);
     if (row?.type === "number") {
@@ -79,9 +59,66 @@ function MentorReviewEdit() {
       ...prev,
       [weekId]: { ...prev[weekId], [field]: value },
     }));
-    debouncedSave(weekId, field, value);
   };
 
+  // Save all changes: compare with original and PATCH each changed week
+  const handleSave = async () => {
+    setSaving(true);
+    setError(null);
+    const updates = [];
+
+    // Collect weeks that have any change in editable fields
+    for (const week of weeks) {
+      const weekId = week.id;
+      const original = originalReviews[weekId] || {};
+      const current = reviews[weekId] || {};
+      const changedFields = {};
+      for (const field of editableFields) {
+        if (current[field] !== original[field]) {
+          changedFields[field] = current[field] ?? "";
+        }
+      }
+      if (Object.keys(changedFields).length > 0) {
+        updates.push({ weekId, data: changedFields });
+      }
+    }
+
+    if (updates.length === 0) {
+      toast("No changes to save.", { icon: "ℹ️" });
+      setSaving(false);
+      return;
+    }
+
+    try {
+      // Send PATCH for each week that changed (could be done in parallel)
+      await Promise.all(
+        updates.map(({ weekId, data }) =>
+          API.patch(`week-review/${weekId}/?student_id=${studentId}`, data)
+        )
+      );
+      // After successful save, refresh the reviews from server to get latest data
+      const freshReviews = {};
+      for (const week of weeks) {
+        try {
+          const res = await API.get(`week-review/${week.id}/?student_id=${studentId}`);
+          freshReviews[week.id] = res.data;
+        } catch {
+          freshReviews[week.id] = {};
+        }
+      }
+      setReviews(freshReviews);
+      setOriginalReviews(freshReviews);
+      toast.success("Changes saved successfully!");
+    } catch (err) {
+      console.error("Save failed", err);
+      toast.error("Failed to save changes. Please try again.");
+      setError("Failed to save changes. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Load student and initial data
   useEffect(() => {
     if (!studentId) {
       navigate("/mentor/students");
@@ -92,6 +129,7 @@ function MentorReviewEdit() {
         const res = await API.get(`students/${studentId}/`);
         setStudent(res.data);
       } catch (err) {
+        toast.error("Failed to load student");
         setError("Failed to load student");
       }
     };
@@ -121,7 +159,9 @@ function MentorReviewEdit() {
             }
           }
           setReviews(reviewsData);
+          setOriginalReviews(JSON.parse(JSON.stringify(reviewsData))); // deep copy snapshot
         } catch (err) {
+          toast.error("Failed to load review data.");
           setError("Failed to load review data.");
         } finally {
           setLoading(false);
@@ -205,6 +245,7 @@ function MentorReviewEdit() {
         />
       );
     }
+    // Text input (Mentor Name or any other text field)
     return (
       <input
         type="text"
@@ -237,9 +278,23 @@ function MentorReviewEdit() {
             <p className="text-gray-500 text-sm mt-1">
               {student?.full_name || student?.username} • {student?.course} • {student?.batch}
             </p>
-            <p className="text-xs text-amber-600 mt-1">✏️ Only Advisor Name, Extra Workouts, Review Date, and English Score are editable.</p>
+            <p className="text-xs text-amber-600 mt-1">✏️ Editable: Mentor Name, Extra Workouts, Review Date, English Score</p>
           </div>
-          <button onClick={() => navigate("/mentor/students")} className="bg-gray-200 hover:bg-gray-300 text-gray-700 hover:text-gray-900 px-4 py-2 rounded-lg text-sm font-medium transition">← Back to Students</button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => navigate("/mentor/students")}
+              className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium transition"
+            >
+              ← Back to Students
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50"
+            >
+              {saving ? "Saving..." : "Save Changes"}
+            </button>
+          </div>
         </div>
 
         {/* Desktop Table */}
@@ -295,7 +350,9 @@ function MentorReviewEdit() {
           </div>
         </div>
 
-        <div className="mt-4 text-right text-gray-400 text-xs">💡 Editable fields auto‑save. Other fields are read‑only.</div>
+        <div className="mt-4 text-right text-gray-400 text-xs">
+          💡 Editable fields will be saved only when you click "Save Changes".
+        </div>
       </div>
     </div>
   );
