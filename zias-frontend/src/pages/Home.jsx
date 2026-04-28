@@ -5,7 +5,7 @@ import {
   FaCode, FaLaptopCode, FaServer, FaDatabase,
   FaProjectDiagram, FaChartLine, FaStar,
   FaUserGraduate, FaBriefcase, FaChalkboardTeacher,
-  FaQuoteLeft, FaNewspaper, FaCalendarAlt
+  FaQuoteLeft, FaNewspaper, FaCalendarAlt, FaPlayCircle
 } from "react-icons/fa";
 import Footer from "../components/Footer";
 import heroImg from "../assets/images/heroImg.png";
@@ -76,7 +76,7 @@ const Home = () => {
   const toggleFaq = (index) => setOpenFaq(openFaq === index ? null : index);
 
   const extraFaqs = [
-    { q: "What is the duration of the Full Stack course?", a: "The course is 6 months long, with 5 days of live classes per week and recorded backups available 24/7." },
+    { q: "What is the duration of the Full Stack course?", a: "The course is 6 months long, with self-paced learning and recorded sessions available 24/7." },
     { q: "Will I get a certificate after completion?", a: "Yes, you will receive an industry-recognized certificate upon successful completion of the course and projects." },
     { q: "Is there any EMI option available?", a: "Yes, we have flexible EMI plans. Contact our admission team for details." },
     { q: "Do you provide internship opportunities?", a: "We help students get internships with our partner companies based on their performance." },
@@ -89,7 +89,7 @@ const Home = () => {
   ];
 
   return (
-    <main className="font-serif overflow-x-hidden">
+    <main className="font-serif overflow-x-hidden bg-white">
       {/* Hero Section */}
       <section className="bg-gradient-to-r from-green-50 to-emerald-50 py-12 md:py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -116,15 +116,82 @@ const Home = () => {
         </div>
       </section>
 
+      {/* Video Section + Description - Full Width, Light Theme, No Background */}
+      <section className="py-12 md:py-16">
+        <div className="w-full px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-8 md:mb-12">
+            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4 flex items-center justify-center gap-2">
+              <FaPlayCircle className="text-green-600" /> Watch Our Introduction
+            </h2>
+            <p className="text-gray-600 max-w-2xl mx-auto">
+              See how ZIAS transforms beginners into professional developers
+            </p>
+          </div>
+          <div className="flex flex-col lg:flex-row gap-8 lg:gap-12 items-center lg:items-start">
+            {/* Left side - Video */}
+            <div className="w-full lg:w-1/2">
+              <div className="relative rounded-2xl overflow-hidden shadow-xl bg-gray-100">
+                <div className="relative pb-[56.25%] h-0">
+                  <video
+                    className="absolute top-0 left-0 w-full h-full object-cover"
+                    controls
+                    autoPlay
+                    muted
+                    loop
+                    poster="https://picsum.photos/id/100/1280/720"
+                  >
+                    <source src="/videos/mueen-sir.mp4" type="video/mp4" />
+                    Your browser does not support the video tag.
+                  </video>
+                </div>
+              </div>
+            </div>
+            {/* Right side - Self-Paced Course Description */}
+            <div className="w-full lg:w-1/2 space-y-4 text-center lg:text-left">
+              <h3 className="text-2xl md:text-3xl font-bold text-gray-900">
+                Full Stack Development Course
+              </h3>
+              <p className="text-gray-600 text-base md:text-lg leading-relaxed">
+                Learn at your own pace with our comprehensive self-paced Full Stack program.
+                Master frontend (React, Tailwind) and backend (Node.js, Express, MongoDB)
+                through structured modules, real-world projects, and lifetime access to all materials.
+              </p>
+              <ul className="space-y-3 text-gray-700">
+                <li className="flex items-center gap-2 justify-center lg:justify-start">
+                  <FaCheckCircle className="text-green-600" /> 100% self-paced learning – study anytime, anywhere
+                </li>
+                <li className="flex items-center gap-2 justify-center lg:justify-start">
+                  <FaCheckCircle className="text-green-600" /> Build 5 portfolio-worthy projects (MERN stack)
+                </li>
+                <li className="flex items-center gap-2 justify-center lg:justify-start">
+                  <FaCheckCircle className="text-green-600" /> Resume building, mock interviews & job referrals
+                </li>
+                <li className="flex items-center gap-2 justify-center lg:justify-start">
+                  <FaCheckCircle className="text-green-600" /> Certificate upon completion & lifetime access
+                </li>
+              </ul>
+              <div className="pt-4">
+                <Link
+                  to="/courses/fullstack"
+                  className="inline-block bg-green-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-green-700 transition"
+                >
+                  Enroll Now →
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Features Grid */}
       <section className="py-12 md:py-16 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-2xl md:text-3xl font-bold text-center mb-8 md:mb-12">Why Choose ZIAS?</h2>
+          <h2 className="text-2xl md:text-3xl font-bold text-center mb-8 md:mb-12 text-gray-900">Why Choose ZIAS?</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             <FeatureCard icon={FaUserGraduate} title="Expert Mentors" description="Learn from industry professionals with years of experience." />
             <FeatureCard icon={FaProjectDiagram} title="Real Projects" description="Build portfolio-worthy projects that showcase your skills." />
             <FeatureCard icon={FaBriefcase} title="Placement Support" description="Get resume reviews, mock interviews, and job referrals." />
-            <FeatureCard icon={FaChalkboardTeacher} title="Live Classes" description="Interactive online sessions with recorded backups." />
+            <FeatureCard icon={FaChalkboardTeacher} title="Self-Paced Learning" description="Study at your own rhythm with lifetime access to materials." />
           </div>
         </div>
       </section>
@@ -160,7 +227,7 @@ const Home = () => {
       {/* Areas of involvement */}
       <section className="py-12 md:py-16 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-2xl md:text-3xl font-bold text-center mb-8 md:mb-12">Areas of involvement</h2>
+          <h2 className="text-2xl md:text-3xl font-bold text-center mb-8 md:mb-12 text-gray-900">Areas of involvement</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
             {[
               { img: coursesImg, title: "Courses", desc: "Learn modern full stack technologies with structured lessons and expert guidance." },
@@ -171,7 +238,7 @@ const Home = () => {
                 <div className="flex justify-center mb-4">
                   <img src={item.img} alt={item.title} className="w-20 h-20 md:w-24 md:h-24 object-cover rounded-full" />
                 </div>
-                <h3 className="text-lg md:text-xl font-semibold mb-2">{item.title}</h3>
+                <h3 className="text-lg md:text-xl font-semibold mb-2 text-gray-900">{item.title}</h3>
                 <p className="text-gray-600 text-sm md:text-base">{item.desc}</p>
               </div>
             ))}
@@ -187,7 +254,7 @@ const Home = () => {
               <img src={journeyImg} alt="Journey" className="rounded-lg shadow-xl w-full" />
             </div>
             <div className="flex-1 text-center md:text-left">
-              <h2 className="text-2xl md:text-3xl font-bold mb-4">Start Your Developer Journey Today</h2>
+              <h2 className="text-2xl md:text-3xl font-bold mb-4 text-gray-900">Start Your Developer Journey Today</h2>
               <p className="text-base md:text-lg text-gray-600 mb-6 md:mb-8">Take the first step toward becoming a professional developer. Learn modern technologies, build real-world projects, and gain the skills needed for a successful career.</p>
               <Link to="/contact" className="bg-green-600 text-white px-6 md:px-8 py-2 md:py-3 rounded-lg font-semibold hover:bg-green-700 transition inline-block">
                 Start Now
@@ -200,7 +267,7 @@ const Home = () => {
       {/* Testimonials */}
       <section className="py-12 md:py-16 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-2xl md:text-3xl font-bold text-center mb-8 md:mb-12">What Our Students Say</h2>
+          <h2 className="text-2xl md:text-3xl font-bold text-center mb-8 md:mb-12 text-gray-900">What Our Students Say</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
             {[
               { name: "Udaifa K.K", role: "Full Stack Developer", text: "The hands-on projects and mentor support helped me land a job at a top tech company. Highly recommended!", initial: "U" },
@@ -229,7 +296,7 @@ const Home = () => {
       {/* Programs */}
       <section className="py-12 md:py-16 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-2xl md:text-3xl font-bold text-center mb-8 md:mb-12">Explore Our Programs</h2>
+          <h2 className="text-2xl md:text-3xl font-bold text-center mb-8 md:mb-12 text-gray-900">Explore Our Programs</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
             {[
               { Icon: FaCode, name: "Fullstack Development", desc: "Learn both frontend and backend technologies to become a complete developer." },
@@ -241,7 +308,7 @@ const Home = () => {
             ].map((p, i) => (
               <div key={i} className="bg-white p-4 md:p-6 rounded-xl shadow-md hover:shadow-xl transition text-center group">
                 <p.Icon className="text-green-600 text-3xl md:text-4xl mx-auto mb-3 md:mb-4 group-hover:scale-110 transition" />
-                <h3 className="text-lg md:text-xl font-semibold mb-2">{p.name}</h3>
+                <h3 className="text-lg md:text-xl font-semibold mb-2 text-gray-900">{p.name}</h3>
                 <p className="text-gray-600 text-sm md:text-base">{p.desc}</p>
               </div>
             ))}
@@ -254,7 +321,7 @@ const Home = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row items-center gap-8 md:gap-12">
             <div className="flex-1">
-              <h2 className="text-2xl md:text-3xl font-bold mb-6">Why Choose ZIAS</h2>
+              <h2 className="text-2xl md:text-3xl font-bold mb-6 text-gray-900">Why Choose ZIAS</h2>
               <ul className="space-y-4">
                 <li className="flex items-start gap-3"><FaCheckCircle className="text-green-600 text-xl mt-1" /><span className="text-gray-700 text-sm md:text-base">Real-world project experience.</span></li>
                 <li className="flex items-start gap-3"><FaUsers className="text-green-600 text-xl mt-1" /><span className="text-gray-700 text-sm md:text-base">Career-ready skill development.</span></li>
@@ -270,7 +337,7 @@ const Home = () => {
       {/* Latest News & Updates */}
       <section className="py-12 md:py-16 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-2xl md:text-3xl font-bold text-center mb-8 md:mb-12 flex items-center justify-center gap-2 flex-wrap">
+          <h2 className="text-2xl md:text-3xl font-bold text-center mb-8 md:mb-12 flex items-center justify-center gap-2 flex-wrap text-gray-900">
             <FaNewspaper className="text-green-600" /> Latest News & Updates
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -279,7 +346,7 @@ const Home = () => {
                 <div className="flex items-center gap-2 text-gray-500 text-xs md:text-sm mb-2">
                   <FaCalendarAlt /> {update.date}
                 </div>
-                <h3 className="text-lg md:text-xl font-semibold mb-2">{update.title}</h3>
+                <h3 className="text-lg md:text-xl font-semibold mb-2 text-gray-900">{update.title}</h3>
                 <p className="text-gray-600 text-sm md:text-base mb-3">{update.desc}</p>
                 <Link to="/news" className="text-green-600 text-sm font-medium hover:underline">Read more →</Link>
               </div>
@@ -291,11 +358,11 @@ const Home = () => {
       {/* FAQ Section */}
       <section className="py-12 md:py-16 bg-white">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-2xl md:text-3xl font-bold text-center mb-8 md:mb-12">Frequently Asked Questions</h2>
+          <h2 className="text-2xl md:text-3xl font-bold text-center mb-8 md:mb-12 text-gray-900">Frequently Asked Questions</h2>
           <div className="space-y-2 border rounded-xl p-4 md:p-6 bg-gray-50">
             {[
               { q: "What are the prerequisites for the Full Stack course?", a: "Basic knowledge of any programming language is helpful but not mandatory. We start from fundamentals." },
-              { q: "Is the course online or offline?", a: "All courses are delivered live online with recorded sessions available for revision." },
+              { q: "Is the course online or offline?", a: "All courses are delivered online with self-paced learning materials available 24/7." },
               { q: "Do you provide placement assistance?", a: "Yes, we offer resume building, mock interviews, and job referrals to our students." },
               { q: "Can I pay in installments?", a: "Yes, we have flexible payment plans. Contact our support for details." },
               ...extraFaqs

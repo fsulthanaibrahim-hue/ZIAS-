@@ -36,6 +36,8 @@ import MentorReviewEdit from "./pages/mentor/MentorReviewEdit";
 import MentorReviewSheetRange from "./pages/mentor/MentorReviewSheetRange";
 import MentorReviewFolders from "./pages/mentor/MentorReviewFolders";
 import MentorChat from "./pages/mentor/MentorChat";
+import MentorNotifications from "./pages/mentor/MentorNotifications";
+
 // Admin pages
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./Admin/Dashboard";
@@ -263,6 +265,14 @@ function App() {
           <div style={{ display: "flex" }}>
             <MentorSidebar />
             <MentorChat />
+          </div>
+        </PrivateRoute>
+      } />
+      <Route path="/mentor/notifications" element={
+        <PrivateRoute>
+          <div style={{ display: "flex" }}>
+            <MentorSidebar />
+            <MentorNotifications />
           </div>
         </PrivateRoute>
       } />

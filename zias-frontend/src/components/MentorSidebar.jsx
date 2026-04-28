@@ -110,7 +110,7 @@ function MentorSidebar() {
           )}
         </button>
 
-        {!isCollapsed && <NotificationBell />}
+        {!isCollapsed && <NotificationBell  role="mentor" />}
       </div>
 
       {/* Navigation with sections */}
