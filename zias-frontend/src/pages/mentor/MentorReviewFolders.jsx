@@ -8,10 +8,10 @@ function Toast({ message, type, onClose }) {
     return () => clearTimeout(timer);
   }, [onClose]);
 
-  const bgColor = type === "success" 
-    ? "bg-green-600" 
-    : type === "error" 
-    ? "bg-red-600" 
+  const bgColor = type === "success"
+    ? "bg-green-600"
+    : type === "error"
+    ? "bg-red-600"
     : "bg-gray-600";
   const icon = type === "success" ? "✓" : type === "error" ? "✕" : "ℹ";
 
@@ -45,8 +45,17 @@ function MentorReviewFolders() {
 
   const industryExperts = ["Akif Sir", "Rizan Sir", "Prameesh Sir"];
 
-  const hasFetched = useRef(false);   // prevent duplicate initial fetches
+  // Replace these IDs with actual user IDs from your database
+  const getReviewerUserId = (expertName) => {
+    const mapping = {
+      "Akif Sir": 1,
+      "Rizan Sir": 2,
+      "Prameesh Sir": 3,
+    };
+    return mapping[expertName];
+  };
 
+  const hasFetched = useRef(false);
   const showToast = (message, type = "success") => setToast({ message, type });
   const hideToast = () => setToast(null);
 
@@ -63,18 +72,18 @@ function MentorReviewFolders() {
     return <span className="text-gray-700 break-all">{url}</span>;
   };
 
-  useEffect(() => {
-    if (!hasFetched.current) {
-      hasFetched.current = true;
-      fetchStudents();
-      fetchAllFolders();
-    }
-  }, []);
-
+  // ✅ FIXED: fetch students and handle display name
   const fetchStudents = async () => {
     try {
       const res = await API.get("/students/");
-      setStudents(res.data);
+      const studentsWithNames = res.data.map(s => ({
+        ...s,
+        displayName: s.full_name || s.name || s.username || `Student ${s.id}`
+      }));
+      setStudents(studentsWithNames);
+      if (studentsWithNames.length === 0) {
+        showToast("No students assigned to you. Please contact admin.", "error");
+      }
     } catch (err) {
       console.error("Failed to fetch students", err);
       showToast("Failed to load students", "error");
@@ -93,6 +102,14 @@ function MentorReviewFolders() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!hasFetched.current) {
+      hasFetched.current = true;
+      fetchStudents();
+      fetchAllFolders();
+    }
+  }, []);
 
   const foldersMap = allFolders
     .filter(f => f.week_folder)
@@ -118,12 +135,11 @@ function MentorReviewFolders() {
     .sort((a, b) => new Date(b.modified) - new Date(a.modified));
 
   const rawEntries = selectedFolder ? foldersMap[selectedFolder]?.entries || [] : [];
-  const uniqueWeeks = [...new Set(rawEntries.map(e => e.week).filter(w => w))].sort().reverse(); // newest first
   const filteredEntries = rawEntries.filter(entry => {
     if (!searchTerm && !selectedWeek) return true;
-    const matchesSearch = !searchTerm || 
-      entry.student_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      entry.week?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = !searchTerm
+      || entry.student_name?.toLowerCase().includes(searchTerm.toLowerCase())
+      || entry.week?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesWeek = !selectedWeek || entry.week === selectedWeek;
     return matchesSearch && matchesWeek;
   });
@@ -190,6 +206,7 @@ function MentorReviewFolders() {
   const startEdit = (entry) => {
     setEditingId(entry.id);
     setEditData({
+      review_date: entry.review_date || "",
       week: entry.week,
       work_documents: entry.work_documents || "",
       industry_expert: entry.industry_expert || "",
@@ -203,12 +220,63 @@ function MentorReviewFolders() {
     setEditData({});
   };
 
+  // Save edit and send notifications
   const saveEdit = async (id) => {
+    const currentEntry = rawEntries.find(e => e.id === id);
+    const oldExpert = currentEntry?.industry_expert;
+    const newExpert = editData.industry_expert;
+    const studentName = currentEntry?.student_name || "a student";
+    const folderName = selectedFolder || currentEntry?.week_folder || "review folder";
+
     try {
       await API.patch(`/review-folders/${id}/`, editData);
       await fetchAllFolders();
       showToast("Entry updated successfully.", "success");
       cancelEdit();
+
+      if (newExpert && newExpert !== oldExpert) {
+        const reviewerUserId = getReviewerUserId(newExpert);
+        if (!reviewerUserId) {
+          showToast(`Could not find user ID for ${newExpert}.`, "error");
+          return;
+        }
+
+        // 1. In-app notification
+        try {
+          await API.post("/notifications/", {
+            recipient: reviewerUserId,
+            message: `📋 You have been assigned as industry expert for ${studentName}'s review in folder "${folderName}".`,
+            type: "review_assignment",
+          });
+          showToast(`In-app notification sent to ${newExpert}`, "success");
+        } catch (err) {
+          console.error("Failed to send notification", err);
+          showToast(`Failed to send notification to ${newExpert}`, "error");
+        }
+
+        // 2. Chat message (create room if missing)
+        try {
+          const roomsRes = await API.get("chat-rooms/");
+          let chatRoom = roomsRes.data.find(room => room.other_user_id === reviewerUserId);
+
+          if (!chatRoom) {
+            const createRoomRes = await API.post("chat-rooms/", {
+              room_type: "mentor_reviewer",
+              reviewer: reviewerUserId,
+            });
+            chatRoom = createRoomRes.data;
+          }
+
+          await API.post("chat-messages/", {
+            room: chatRoom.id,
+            content: `📌 You have been assigned as industry expert for ${studentName}'s review in folder "${folderName}".`,
+          });
+          showToast(`Chat message sent to ${newExpert}`, "success");
+        } catch (chatErr) {
+          console.error("Failed to send chat message", chatErr);
+          showToast(`Failed to send chat message to ${newExpert}`, "error");
+        }
+      }
     } catch (err) {
       console.error(err);
       showToast("Failed to update entry.", "error");
@@ -277,7 +345,7 @@ function MentorReviewFolders() {
     }
   };
 
-  // SVG icons (unchanged)
+  // Icons
   const EditIcon = () => (
     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -328,11 +396,11 @@ function MentorReviewFolders() {
               <form onSubmit={createMultipleEntries} className="space-y-4">
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Folder Name (e.g., April 4th Week)</label>
-                  <input name="week_folder" value={createForm.week_folder} onChange={handleCreateChange} required className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="e.g., April 4th Week" />
+                  <input type="text" name="week_folder" value={createForm.week_folder} onChange={handleCreateChange} required className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="e.g., April 4th Week" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Review Date</label>
-                  <input name="review_date" type="date" value={createForm.review_date} onChange={handleCreateChange} required className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                  <input type="date" name="review_date" value={createForm.review_date} onChange={handleCreateChange} required className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Select Students</label>
@@ -340,7 +408,9 @@ function MentorReviewFolders() {
                     <button type="button" onClick={selectAllStudents} className="text-xs bg-gray-200 px-2 py-1 rounded">Select All</button>
                   </div>
                   <select multiple size={6} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={createForm.students} onChange={handleStudentSelection}>
-                    {students.map(s => <option key={s.id} value={s.id}>{s.full_name || s.username}</option>)}
+                    {students.map(s => (
+                      <option key={s.id} value={s.id}>{s.displayName}</option>
+                    ))}
                   </select>
                   <p className="text-xs text-gray-400 mt-1">Hold Ctrl (Cmd) to select multiple students.</p>
                 </div>
@@ -354,7 +424,7 @@ function MentorReviewFolders() {
             </div>
           )}
 
-          {/* Folder list view */}
+          {/* Folder list view (unchanged) */}
           {!selectedFolder && (
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-x-auto">
               <div className="p-3 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
@@ -367,12 +437,7 @@ function MentorReviewFolders() {
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-green-500"
                   />
                   {folderSearchTerm && (
-                    <button
-                      onClick={() => setFolderSearchTerm("")}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    >
-                      ✕
-                    </button>
+                    <button onClick={() => setFolderSearchTerm("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">✕</button>
                   )}
                 </div>
               </div>
@@ -407,12 +472,8 @@ function MentorReviewFolders() {
                           <td className="px-4 py-3 text-sm text-gray-700">{folder.source}</td>
                           <td className="px-4 py-3 text-center">
                             <div className="flex gap-2 justify-center">
-                              <button onClick={() => editFolder(folder.name)} className="text-blue-600 hover:text-blue-800" title="Edit folder">
-                                <EditIcon />
-                              </button>
-                              <button onClick={() => deleteFolder(folder.name)} className="text-red-600 hover:text-red-800" title="Delete folder">
-                                <DeleteIcon />
-                              </button>
+                              <button onClick={() => editFolder(folder.name)} className="text-blue-600 hover:text-blue-800"><EditIcon /></button>
+                              <button onClick={() => deleteFolder(folder.name)} className="text-red-600 hover:text-red-800"><DeleteIcon /></button>
                             </div>
                           </td>
                         </tr>
@@ -424,7 +485,7 @@ function MentorReviewFolders() {
             </div>
           )}
 
-          {/* Entries table with search and week filter */}
+          {/* Entries table with edit and notifications (unchanged) */}
           {selectedFolder && (
             <>
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
@@ -444,23 +505,15 @@ function MentorReviewFolders() {
                       className="w-full sm:w-56 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-green-500"
                     />
                     {searchTerm && (
-                      <button
-                        onClick={() => setSearchTerm("")}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                        title="Clear"
-                      >
-                        ✕
-                      </button>
+                      <button onClick={() => setSearchTerm("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600" title="Clear">✕</button>
                     )}
                   </div>
-                  <button onClick={() => setSelectedFolder(null)} className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium">
-                    ← Back
-                  </button>
+                  <button onClick={() => setSelectedFolder(null)} className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium">← Back</button>
                 </div>
               </div>
 
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-x-auto">
-                <div className="min-w-[800px]">
+                <div className="min-w-[900px]">
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
@@ -478,23 +531,25 @@ function MentorReviewFolders() {
                     <tbody>
                       {filteredEntries.length === 0 ? (
                         <tr>
-                          <td colSpan="9" className="px-4 py-8 text-center text-gray-400">
-                            No matching entries found.
-                          </td>
+                          <td colSpan="9" className="px-4 py-8 text-center text-gray-400">No matching entries found.</td>
                         </tr>
                       ) : (
                         filteredEntries.map(entry => (
                           <tr key={entry.id} className="hover:bg-gray-50">
-                            <td className="px-4 py-3 text-sm text-gray-700">{entry.review_date}</td>
-                            <td className="px-4 py-3 text-sm text-gray-700">{entry.student_name}</td>
+                            <td className="px-4 py-3 text-sm text-gray-700">
+                              {editingId === entry.id ? (
+                                <input type="date" name="review_date" value={editData.review_date || ""} onChange={handleEditChange} className="border border-gray-300 rounded px-1 py-0.5 w-32" />
+                              ) : (entry.review_date || "—")}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-700">{students.find(s => s.id === entry.student)?.full_name || entry.student_name}</td>
                             <td className="px-4 py-3 text-sm">
                               {editingId === entry.id ? (
-                                <input name="week" value={editData.week || ""} onChange={handleEditChange} className="border border-gray-300 rounded px-1 py-0.5 w-24" />
+                                <input type="text" name="week" value={editData.week || ""} onChange={handleEditChange} className="border border-gray-300 rounded px-1 py-0.5 w-24" />
                               ) : (entry.week || "—")}
                             </td>
                             <td className="px-4 py-3 text-sm">
                               {editingId === entry.id ? (
-                                <input name="work_documents" value={editData.work_documents || ""} onChange={handleEditChange} className="border border-gray-300 rounded px-1 py-0.5 w-36" />
+                                <input type="text" name="work_documents" value={editData.work_documents || ""} onChange={handleEditChange} className="border border-gray-300 rounded px-1 py-0.5 w-36" />
                               ) : renderLink(entry.work_documents, "Work Doc")}
                             </td>
                             <td className="px-4 py-3 text-sm">
@@ -507,12 +562,12 @@ function MentorReviewFolders() {
                             </td>
                             <td className="px-4 py-3 text-sm">
                               {editingId === entry.id ? (
-                                <input name="meeting_link" value={editData.meeting_link || ""} onChange={handleEditChange} className="border border-gray-300 rounded px-1 py-0.5 w-32" />
+                                <input type="text" name="meeting_link" value={editData.meeting_link || ""} onChange={handleEditChange} className="border border-gray-300 rounded px-1 py-0.5 w-32" />
                               ) : renderLink(entry.meeting_link, "Meet Link")}
                             </td>
                             <td className="px-4 py-3 text-sm">
                               {editingId === entry.id ? (
-                                <input name="review_sheet" value={editData.review_sheet || ""} onChange={handleEditChange} className="border border-gray-300 rounded px-1 py-0.5 w-40" />
+                                <input type="text" name="review_sheet" value={editData.review_sheet || ""} onChange={handleEditChange} className="border border-gray-300 rounded px-1 py-0.5 w-40" />
                               ) : renderLink(entry.review_sheet, "Sheet")}
                             </td>
                             <td className="px-4 py-3 text-center">
@@ -531,13 +586,13 @@ function MentorReviewFolders() {
                             <td className="px-4 py-3 text-center">
                               {editingId === entry.id ? (
                                 <div className="flex gap-2 justify-center">
-                                  <button onClick={() => saveEdit(entry.id)} className="text-green-600 hover:text-green-800" title="Save"><SaveIcon /></button>
-                                  <button onClick={cancelEdit} className="text-gray-500 hover:text-gray-700" title="Cancel"><CancelIcon /></button>
+                                  <button onClick={() => saveEdit(entry.id)} className="text-green-600 hover:text-green-800"><SaveIcon /></button>
+                                  <button onClick={cancelEdit} className="text-gray-500 hover:text-gray-700"><CancelIcon /></button>
                                 </div>
                               ) : (
                                 <div className="flex gap-2 justify-center">
-                                  <button onClick={() => startEdit(entry)} className="text-blue-600 hover:text-blue-800" title="Edit"><EditIcon /></button>
-                                  <button onClick={() => deleteEntry(entry.id)} className="text-red-600 hover:text-red-800" title="Delete"><DeleteIcon /></button>
+                                  <button onClick={() => startEdit(entry)} className="text-blue-600 hover:text-blue-800"><EditIcon /></button>
+                                  <button onClick={() => deleteEntry(entry.id)} className="text-red-600 hover:text-red-800"><DeleteIcon /></button>
                                 </div>
                               )}
                             </td>

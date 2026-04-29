@@ -21,11 +21,10 @@ import StudentModules from "./pages/student/StudentModules";
 import ReviewerDashboard from "./pages/reviewer/ReviewerDashboard";
 import ReviewerProfile from "./pages/reviewer/ReviewerProfile";
 import ReviewerChat from "./pages/reviewer/ReviewerChat";
-import ReviewerStudents from "./pages/reviewer/ReviewerStudents";
 import ReviewerReviewFolders from "./pages/reviewer/ReviewerReviewFolders";
 import ReviewerReviewSheet from "./pages/reviewer/ReviewerReviewSheet";
 import ReviewerReviewSheetRange from "./pages/reviewer/ReviewerReviewSheetRange";
-
+import ReviewerNotifications from "./pages/reviewer/ReviewerNotifications";
 
 // Mentor pages
 import MentorDashboard from "./pages/mentor/MentorDashboard";
@@ -156,7 +155,7 @@ function App() {
         <PrivateRoute>
           <div style={{ display: "flex" }}>
             <ReviewerSidebar />
-            <ReviewerStudents />
+            <ReviewerNotifications />
           </div>
         </PrivateRoute>
       } />
