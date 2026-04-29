@@ -406,13 +406,28 @@ class ReviewFolderSerializer(serializers.ModelSerializer):
 
 # ========== CHAT SERIALIZERS ==========
 class ChatMessageSerializer(serializers.ModelSerializer):
-    sender_name = serializers.CharField(source='sender.username', read_only=True)
+    sender_name = serializers.SerializerMethodField()
 
     class Meta:
         model = ChatMessage
         fields = ['id', 'room', 'sender', 'sender_name', 'content', 'is_read', 'timestamp', 'read_at']
-        read_only_fields = ['sender', 'sender_name', 'timestamp', 'is_read', 'read_at']
+        read_only_fields = ['sender', 'timestamp', 'is_read', 'read_at']
 
+    def get_sender_name(self, obj):
+        user = obj.sender
+        # Check if the sender is a student
+        if hasattr(user, 'student'):
+            return user.student.full_name or user.username
+        # Check if the sender is a mentor
+        elif hasattr(user, 'mentor'):
+            return user.mentor.full_name or user.username
+        # Check if the sender is a reviewer
+        elif hasattr(user, 'reviewer'):
+            return user.reviewer.full_name or user.username
+        # Fallback
+        return user.username
+    
+    
 class ChatRoomSerializer(serializers.ModelSerializer):
     last_message = serializers.SerializerMethodField()
     unread_count = serializers.SerializerMethodField()
@@ -443,19 +458,19 @@ class ChatRoomSerializer(serializers.ModelSerializer):
         user = self.context['request'].user
         if user.is_student:
             if obj.mentor:
-                return obj.mentor.user.username
+                return obj.mentor.full_name or obj.mentor.user.name
             if obj.reviewer:
-                return obj.reviewer.user.username
+                return obj.reviewer.full_name or obj.reviewer.user.username
         elif user.is_mentor:
             if obj.student:
-                return obj.student.user.username
+                return obj.student.full_name or obj.student.user.username
             if obj.reviewer:
-                return obj.reviewer.user.username
+                return obj.reviewer.full_name or obj.reviewer.user.username
         elif user.is_reviewer:
             if obj.student:
-                return obj.student.user.username
+                return obj.student.full_name or obj.student.user.username
             if obj.mentor:
-                return obj.mentor.user.username
+                return obj.mentor.full_name or obj.mentor.user.username
         return "Unknown"
 
     def get_other_user_id(self, obj):

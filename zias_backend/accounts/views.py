@@ -855,7 +855,7 @@ class ChatRoomList(generics.ListAPIView):
             return ChatRoom.objects.filter(reviewer=reviewer, mentor__isnull=False, student__isnull=True)
         elif user.is_mentor:
             mentor = Mentor.objects.get(user=user)
-            return ChatRoom.objects.filter(mentor=mentor)
+            return ChatRoom.objects.filter(mentor=mentor).distinct()
         elif user.is_student:
             student = Student.objects.get(user=user)
             return ChatRoom.objects.filter(student=student)
