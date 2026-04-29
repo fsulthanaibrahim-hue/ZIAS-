@@ -45,10 +45,21 @@ function MentorReviewFolders() {
   });
 
   const industryExperts = ["Akif Sir", "Rizan Sir", "Prameesh Sir"];
-
   const hasFetched = useRef(false);
   const showToast = (message, type = "success") => setToast({ message, type });
   const hideToast = () => setToast(null);
+
+  // Static module mapping – change URLs to your actual work documents
+  const getWorkDocForWeek = async (week) => {
+    const docs = {
+      1: "https://docs.google.com/document/d/1_MODULE_1",
+      2: "https://docs.google.com/document/d/2_MODULE_2",
+      3: "https://docs.google.com/document/d/3_MODULE_3",
+      4: "https://docs.google.com/document/d/4_MODULE_4",
+      5: "https://docs.google.com/document/d/5_MODULE_5",
+    };
+    return docs[week] || "";
+  };
 
   const renderLink = (url, label = "Link") => {
     if (!url) return "—";
@@ -90,20 +101,6 @@ function MentorReviewFolders() {
       showToast("Failed to load folders", "error");
     } finally {
       setLoading(false);
-    }
-  };
-
-  // Helper: get the latest week number for a given student (from all existing review folders)
-  const getLastWeekForStudent = async (studentId) => {
-    try {
-      // We already have allFolders in state, but to be safe we can filter locally
-      const studentFolders = allFolders.filter(f => f.student === studentId && f.week !== null && f.week !== undefined);
-      if (studentFolders.length === 0) return 0;
-      const maxWeek = Math.max(...studentFolders.map(f => f.week));
-      return maxWeek;
-    } catch (err) {
-      console.error("Error getting last week", err);
-      return 0;
     }
   };
 
@@ -176,19 +173,29 @@ function MentorReviewFolders() {
     setCreating(true);
     try {
       for (const studentId of createForm.students) {
-        // Automatically compute next week number based on previous reviews of this student
-        const lastWeek = await getLastWeekForStudent(studentId);
-        const nextWeek = lastWeek + 1;
-        
+        // Get all reviews for this student
+        const studentReviews = allFolders.filter(f => f.student === studentId && f.week != null);
+        let maxWeek = 0;
+        let previousReviewSheet = "";
+        if (studentReviews.length > 0) {
+          maxWeek = Math.max(...studentReviews.map(r => r.week));
+          const previousEntry = studentReviews.find(r => r.week === maxWeek);
+          if (previousEntry && previousEntry.review_sheet) {
+            previousReviewSheet = previousEntry.review_sheet;
+          }
+        }
+        const newWeek = maxWeek + 1;
+        const workDocUrl = await getWorkDocForWeek(newWeek);
+
         await API.post("/review-folders/", {
           student: studentId,
           week_folder: createForm.week_folder,
-          week: nextWeek,           // auto‑incremented week number
+          week: newWeek,
           review_date: createForm.review_date,
-          work_documents: "",
+          work_documents: workDocUrl,
+          review_sheet: previousReviewSheet,
           industry_expert: "",
           meeting_link: "",
-          review_sheet: "",
           is_done: false,
         });
       }
@@ -232,42 +239,44 @@ function MentorReviewFolders() {
     setEditData({});
   };
 
-  // Smart chat room matching (handles name mismatches like "Rizan Sir" vs "Rizwan")
   const sendChatNotification = async (expertName, studentName, folderName) => {
     try {
       const roomsRes = await API.get("chat-rooms/");
-      let targetRoom = null;
-      for (const room of roomsRes.data) {
-        let otherName = null;
-        if (room.other_user_name) otherName = room.other_user_name;
-        else if (room.other_user?.name) otherName = room.other_user.name;
-        else if (room.other_user?.full_name) otherName = room.other_user.full_name;
-        else if (room.other_user?.username) otherName = room.other_user.username;
-        if (otherName && otherName === expertName) {
-          targetRoom = room;
-          break;
-        }
-      }
-      if (!targetRoom) {
+      const roomsWithNames = roomsRes.data.map(room => {
+        let name = null;
+        if (room.other_user_name) name = room.other_user_name;
+        else if (room.other_user?.name) name = room.other_user.name;
+        else if (room.other_user?.full_name) name = room.other_user.full_name;
+        else if (room.other_user?.username) name = room.other_user.username;
+        return { room, name };
+      });
+      let match = roomsWithNames.find(r => r.name === expertName);
+      if (!match) match = roomsWithNames.find(r => r.name?.toLowerCase() === expertName.toLowerCase());
+      if (!match) {
         const firstWord = expertName.split(" ")[0].toLowerCase();
-        for (const room of roomsRes.data) {
-          let otherName = null;
-          if (room.other_user_name) otherName = room.other_user_name;
-          else if (room.other_user?.name) otherName = room.other_user.name;
-          else if (room.other_user?.full_name) otherName = room.other_user.full_name;
-          else if (room.other_user?.username) otherName = room.other_user.username;
-          if (otherName && otherName.toLowerCase().includes(firstWord)) {
-            targetRoom = room;
-            break;
-          }
+        match = roomsWithNames.find(r => r.name?.toLowerCase().includes(firstWord));
+      }
+      if (!match && expertName === "Rizan Sir") {
+        const aliases = ["Rizwan", "rizwan", "Rizan", "rizan"];
+        for (const alias of aliases) {
+          match = roomsWithNames.find(r => r.name?.toLowerCase() === alias.toLowerCase());
+          if (match) break;
         }
       }
-      if (!targetRoom) {
+      if (!match) {
+        const words = expertName.toLowerCase().split(/\s+/);
+        for (const word of words) {
+          if (word.length < 2) continue;
+          match = roomsWithNames.find(r => r.name?.toLowerCase().includes(word));
+          if (match) break;
+        }
+      }
+      if (!match) {
         showToast(`No existing chat room with ${expertName}. Please start a conversation first.`, "error");
         return false;
       }
       await API.post("chat-messages/", {
-        room: targetRoom.id,
+        room: match.room.id,
         content: `📌 You have been assigned as industry expert for ${studentName}'s review in folder "${folderName}".`,
       });
       return true;
@@ -292,30 +301,18 @@ function MentorReviewFolders() {
     if (editData.review_date && editData.review_date.trim() !== "") {
       payload.review_date = editData.review_date;
     }
-
-    // Week: ensure it's never null
     let weekValue = currentEntry.week;
     if (editData.week !== undefined && editData.week !== null && editData.week.trim() !== "") {
       const parsed = parseInt(editData.week, 10);
-      if (!isNaN(parsed) && parsed > 0) {
-        weekValue = parsed;
-      }
+      if (!isNaN(parsed) && parsed > 0) weekValue = parsed;
     }
     if (weekValue === null || weekValue === undefined) weekValue = 0;
     payload.week = weekValue;
 
-    if (editData.work_documents !== undefined) {
-      payload.work_documents = editData.work_documents?.trim() || "";
-    }
-    if (editData.industry_expert !== undefined) {
-      payload.industry_expert = editData.industry_expert?.trim() || "";
-    }
-    if (editData.meeting_link !== undefined) {
-      payload.meeting_link = editData.meeting_link?.trim() || "";
-    }
-    if (editData.review_sheet !== undefined) {
-      payload.review_sheet = editData.review_sheet?.trim() || "";
-    }
+    if (editData.work_documents !== undefined) payload.work_documents = editData.work_documents?.trim() || "";
+    if (editData.industry_expert !== undefined) payload.industry_expert = editData.industry_expert?.trim() || "";
+    if (editData.meeting_link !== undefined) payload.meeting_link = editData.meeting_link?.trim() || "";
+    if (editData.review_sheet !== undefined) payload.review_sheet = editData.review_sheet?.trim() || "";
 
     Object.keys(payload).forEach(key => {
       if (payload[key] === undefined) delete payload[key];
@@ -389,8 +386,20 @@ function MentorReviewFolders() {
 
   const toggleDone = async (id, newValue, e) => {
     if (e) e.preventDefault();
+    const entry = rawEntries.find(e => e.id === id);
+    if (!entry) return;
+
     try {
       await API.patch(`/review-folders/${id}/`, { is_done: newValue });
+      if (newValue === true && entry.week && entry.week > 0 && entry.student) {
+        try {
+          await API.patch(`/students/${entry.student}/`, { last_reviewed_week: entry.week });
+          console.log(`Student ${entry.student} last_reviewed_week updated to ${entry.week}`);
+        } catch (updateErr) {
+          console.error("Failed to update student last_reviewed_week", updateErr);
+          showToast("Review marked done, but failed to update student week.", "error");
+        }
+      }
       await fetchAllFolders();
       showToast(`Status updated to ${newValue ? "Done" : "Pending"}.`, "success");
     } catch (err) {
@@ -477,7 +486,6 @@ function MentorReviewFolders() {
 
           {!selectedFolder && (
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-x-auto">
-              {/* Folder table unchanged */}
               <div className="p-3 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
                 <div className="relative w-full sm:w-64">
                   <input
@@ -570,7 +578,7 @@ function MentorReviewFolders() {
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Student</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Week</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Work Doc</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Work Document</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Industry Expert</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Meet Link</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Review Sheet</th>
@@ -601,8 +609,8 @@ function MentorReviewFolders() {
                             </td>
                             <td className="px-4 py-3 text-sm">
                               {editingId === entry.id ? (
-                                <input type="text" name="work_documents" value={editData.work_documents || ""} onChange={handleEditChange} className="border border-gray-300 rounded px-1 py-0.5 w-36" />
-                              ) : renderLink(entry.work_documents, "Work Doc")}
+                                <input type="text" name="work_documents" value={editData.work_documents || ""} onChange={handleEditChange} className="border border-gray-300 rounded px-1 py-0.5 w-48" placeholder="Module link" />
+                              ) : renderLink(entry.work_documents, "Module")}
                             </td>
                             <td className="px-4 py-3 text-sm">
                               {editingId === entry.id ? (
