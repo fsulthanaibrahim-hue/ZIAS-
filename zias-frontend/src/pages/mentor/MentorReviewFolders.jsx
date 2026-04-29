@@ -27,6 +27,7 @@ function Toast({ message, type, onClose }) {
 function MentorReviewFolders() {
   const [allFolders, setAllFolders] = useState([]);
   const [students, setStudents] = useState([]);
+  const [studentMap, setStudentMap] = useState(new Map());
   const [selectedFolder, setSelectedFolder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -43,17 +44,8 @@ function MentorReviewFolders() {
     students: [],
   });
 
+  // The names as they appear in your dropdown
   const industryExperts = ["Akif Sir", "Rizan Sir", "Prameesh Sir"];
-
-  // Replace these IDs with actual user IDs from your database
-  const getReviewerUserId = (expertName) => {
-    const mapping = {
-      "Akif Sir": 1,
-      "Rizan Sir": 2,
-      "Prameesh Sir": 3,
-    };
-    return mapping[expertName];
-  };
 
   const hasFetched = useRef(false);
   const showToast = (message, type = "success") => setToast({ message, type });
@@ -72,7 +64,6 @@ function MentorReviewFolders() {
     return <span className="text-gray-700 break-all">{url}</span>;
   };
 
-  // ✅ FIXED: fetch students and handle display name
   const fetchStudents = async () => {
     try {
       const res = await API.get("/students/");
@@ -81,9 +72,9 @@ function MentorReviewFolders() {
         displayName: s.full_name || s.name || s.username || `Student ${s.id}`
       }));
       setStudents(studentsWithNames);
-      if (studentsWithNames.length === 0) {
-        showToast("No students assigned to you. Please contact admin.", "error");
-      }
+      const map = new Map();
+      studentsWithNames.forEach(s => map.set(s.id, s.displayName));
+      setStudentMap(map);
     } catch (err) {
       console.error("Failed to fetch students", err);
       showToast("Failed to load students", "error");
@@ -207,7 +198,7 @@ function MentorReviewFolders() {
     setEditingId(entry.id);
     setEditData({
       review_date: entry.review_date || "",
-      week: entry.week,
+      week: entry.week || "",
       work_documents: entry.work_documents || "",
       industry_expert: entry.industry_expert || "",
       meeting_link: entry.meeting_link || "",
@@ -220,66 +211,135 @@ function MentorReviewFolders() {
     setEditData({});
   };
 
-  // Save edit and send notifications
+  // ============================================================
+  // SMART CHAT ROOM MATCHING – handles "Rizan Sir" vs "Rizwan"
+  // ============================================================
+  const sendChatNotification = async (expertName, studentName, folderName) => {
+    try {
+      const roomsRes = await API.get("chat-rooms/");
+      console.log("📋 All chat rooms:", roomsRes.data);
+      
+      // Extract all possible other user names from the rooms
+      const roomsWithNames = roomsRes.data.map(room => {
+        let name = null;
+        if (room.other_user_name) name = room.other_user_name;
+        else if (room.other_user?.name) name = room.other_user.name;
+        else if (room.other_user?.full_name) name = room.other_user.full_name;
+        else if (room.other_user?.username) name = room.other_user.username;
+        else if (room.name) name = room.name; // some backends put name directly
+        return { room, name };
+      });
+      
+      console.log("Available room names:", roomsWithNames.map(r => r.name));
+      
+      // First try exact match
+      let match = roomsWithNames.find(r => r.name === expertName);
+      
+      // If no exact match, try case-insensitive
+      if (!match) {
+        match = roomsWithNames.find(r => r.name && r.name.toLowerCase() === expertName.toLowerCase());
+      }
+      
+      // If still no match, try partial: e.g., "Rizan Sir" should match "Rizwan"
+      if (!match) {
+        // Extract first word from expertName (e.g., "Rizan" from "Rizan Sir")
+        const firstWord = expertName.split(" ")[0].toLowerCase();
+        match = roomsWithNames.find(r => 
+          r.name && r.name.toLowerCase().includes(firstWord)
+        );
+      }
+      
+      // If still no match, try aliases for known mismatches
+      if (!match) {
+        const aliasMap = {
+          "Rizan Sir": ["Rizwan", "rizwan"],
+          "Akif Sir": ["Akif", "akif"],
+          "Prameesh Sir": ["Prameesh", "prameesh"]
+        };
+        const aliases = aliasMap[expertName] || [];
+        for (const alias of aliases) {
+          match = roomsWithNames.find(r => 
+            r.name && r.name.toLowerCase() === alias.toLowerCase()
+          );
+          if (match) break;
+        }
+      }
+      
+      if (!match) {
+        console.error(`❌ No room found for ${expertName}. Available names:`, roomsWithNames.map(r => r.name));
+        showToast(`No existing chat room with ${expertName}. Please start a conversation first.`, "error");
+        return false;
+      }
+      
+      const targetRoom = match.room;
+      await API.post("chat-messages/", {
+        room: targetRoom.id,
+        content: `📌 You have been assigned as industry expert for ${studentName}'s review in folder "${folderName}".`,
+      });
+      return true;
+    } catch (chatErr) {
+      console.error(`Failed to send chat message to ${expertName}`, chatErr);
+      showToast(`Error sending message to ${expertName}`, "error");
+      return false;
+    }
+  };
+
   const saveEdit = async (id) => {
     const currentEntry = rawEntries.find(e => e.id === id);
     const oldExpert = currentEntry?.industry_expert;
     const newExpert = editData.industry_expert;
-    const studentName = currentEntry?.student_name || "a student";
+    const studentName = studentMap.get(currentEntry?.student) || currentEntry?.student_name || "a student";
     const folderName = selectedFolder || currentEntry?.week_folder || "review folder";
 
+    const payload = {};
+
+    if (editData.review_date && editData.review_date.trim() !== "") {
+      payload.review_date = editData.review_date;
+    }
+    if (editData.week && editData.week.trim() !== "") {
+      const weekNum = parseInt(editData.week, 10);
+      if (!isNaN(weekNum) && weekNum > 0) {
+        payload.week = weekNum;
+      }
+    }
+    if (editData.work_documents && editData.work_documents.trim() !== "") {
+      payload.work_documents = editData.work_documents;
+    }
+    if (editData.industry_expert && editData.industry_expert.trim() !== "") {
+      payload.industry_expert = editData.industry_expert;
+    }
+    if (editData.meeting_link && editData.meeting_link.trim() !== "") {
+      payload.meeting_link = editData.meeting_link;
+    }
+    if (editData.review_sheet && editData.review_sheet.trim() !== "") {
+      payload.review_sheet = editData.review_sheet;
+    }
+
+    if (Object.keys(payload).length === 0) {
+      showToast("No valid fields to update.", "error");
+      return;
+    }
+
     try {
-      await API.patch(`/review-folders/${id}/`, editData);
+      await API.patch(`/review-folders/${id}/`, payload);
       await fetchAllFolders();
       showToast("Entry updated successfully.", "success");
       cancelEdit();
 
-      if (newExpert && newExpert !== oldExpert) {
-        const reviewerUserId = getReviewerUserId(newExpert);
-        if (!reviewerUserId) {
-          showToast(`Could not find user ID for ${newExpert}.`, "error");
-          return;
-        }
-
-        // 1. In-app notification
-        try {
-          await API.post("/notifications/", {
-            recipient: reviewerUserId,
-            message: `📋 You have been assigned as industry expert for ${studentName}'s review in folder "${folderName}".`,
-            type: "review_assignment",
-          });
-          showToast(`In-app notification sent to ${newExpert}`, "success");
-        } catch (err) {
-          console.error("Failed to send notification", err);
-          showToast(`Failed to send notification to ${newExpert}`, "error");
-        }
-
-        // 2. Chat message (create room if missing)
-        try {
-          const roomsRes = await API.get("chat-rooms/");
-          let chatRoom = roomsRes.data.find(room => room.other_user_id === reviewerUserId);
-
-          if (!chatRoom) {
-            const createRoomRes = await API.post("chat-rooms/", {
-              room_type: "mentor_reviewer",
-              reviewer: reviewerUserId,
-            });
-            chatRoom = createRoomRes.data;
-          }
-
-          await API.post("chat-messages/", {
-            room: chatRoom.id,
-            content: `📌 You have been assigned as industry expert for ${studentName}'s review in folder "${folderName}".`,
-          });
+      if (newExpert && newExpert !== oldExpert && newExpert.trim() !== "") {
+        const success = await sendChatNotification(newExpert, studentName, folderName);
+        if (success) {
           showToast(`Chat message sent to ${newExpert}`, "success");
-        } catch (chatErr) {
-          console.error("Failed to send chat message", chatErr);
-          showToast(`Failed to send chat message to ${newExpert}`, "error");
         }
       }
     } catch (err) {
-      console.error(err);
-      showToast("Failed to update entry.", "error");
+      console.error("PATCH error:", err);
+      let errorMsg = "Update failed.";
+      if (err.response?.data) {
+        if (err.response.data.week) errorMsg = "Week field must be a valid number.";
+        else errorMsg = JSON.stringify(err.response.data);
+      }
+      showToast(errorMsg, "error");
     }
   };
 
@@ -345,7 +405,6 @@ function MentorReviewFolders() {
     }
   };
 
-  // Icons
   const EditIcon = () => (
     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -408,9 +467,7 @@ function MentorReviewFolders() {
                     <button type="button" onClick={selectAllStudents} className="text-xs bg-gray-200 px-2 py-1 rounded">Select All</button>
                   </div>
                   <select multiple size={6} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={createForm.students} onChange={handleStudentSelection}>
-                    {students.map(s => (
-                      <option key={s.id} value={s.id}>{s.displayName}</option>
-                    ))}
+                    {students.map(s => <option key={s.id} value={s.id}>{s.displayName}</option>)}
                   </select>
                   <p className="text-xs text-gray-400 mt-1">Hold Ctrl (Cmd) to select multiple students.</p>
                 </div>
@@ -424,7 +481,6 @@ function MentorReviewFolders() {
             </div>
           )}
 
-          {/* Folder list view (unchanged) */}
           {!selectedFolder && (
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-x-auto">
               <div className="p-3 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
@@ -485,7 +541,6 @@ function MentorReviewFolders() {
             </div>
           )}
 
-          {/* Entries table with edit and notifications (unchanged) */}
           {selectedFolder && (
             <>
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
@@ -541,7 +596,9 @@ function MentorReviewFolders() {
                                 <input type="date" name="review_date" value={editData.review_date || ""} onChange={handleEditChange} className="border border-gray-300 rounded px-1 py-0.5 w-32" />
                               ) : (entry.review_date || "—")}
                             </td>
-                            <td className="px-4 py-3 text-sm text-gray-700">{students.find(s => s.id === entry.student)?.full_name || entry.student_name}</td>
+                            <td className="px-4 py-3 text-sm text-gray-700">
+                              {studentMap.get(entry.student) || entry.student_name || "—"}
+                            </td>
                             <td className="px-4 py-3 text-sm">
                               {editingId === entry.id ? (
                                 <input type="text" name="week" value={editData.week || ""} onChange={handleEditChange} className="border border-gray-300 rounded px-1 py-0.5 w-24" />
