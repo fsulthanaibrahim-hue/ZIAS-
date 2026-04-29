@@ -44,7 +44,6 @@ function MentorReviewFolders() {
     students: [],
   });
 
-  // The names as they appear in your dropdown
   const industryExperts = ["Akif Sir", "Rizan Sir", "Prameesh Sir"];
 
   const hasFetched = useRef(false);
@@ -91,6 +90,20 @@ function MentorReviewFolders() {
       showToast("Failed to load folders", "error");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Helper: get the latest week number for a given student (from all existing review folders)
+  const getLastWeekForStudent = async (studentId) => {
+    try {
+      // We already have allFolders in state, but to be safe we can filter locally
+      const studentFolders = allFolders.filter(f => f.student === studentId && f.week !== null && f.week !== undefined);
+      if (studentFolders.length === 0) return 0;
+      const maxWeek = Math.max(...studentFolders.map(f => f.week));
+      return maxWeek;
+    } catch (err) {
+      console.error("Error getting last week", err);
+      return 0;
     }
   };
 
@@ -163,10 +176,14 @@ function MentorReviewFolders() {
     setCreating(true);
     try {
       for (const studentId of createForm.students) {
+        // Automatically compute next week number based on previous reviews of this student
+        const lastWeek = await getLastWeekForStudent(studentId);
+        const nextWeek = lastWeek + 1;
+        
         await API.post("/review-folders/", {
           student: studentId,
           week_folder: createForm.week_folder,
-          week: "",
+          week: nextWeek,           // auto‑incremented week number
           review_date: createForm.review_date,
           work_documents: "",
           industry_expert: "",
@@ -191,14 +208,18 @@ function MentorReviewFolders() {
   };
 
   const handleEditChange = (e) => {
-    setEditData({ ...editData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setEditData(prev => ({
+      ...prev,
+      [name]: value === "" ? null : value
+    }));
   };
 
   const startEdit = (entry) => {
     setEditingId(entry.id);
     setEditData({
       review_date: entry.review_date || "",
-      week: entry.week || "",
+      week: entry.week !== null && entry.week !== undefined ? String(entry.week) : "",
       work_documents: entry.work_documents || "",
       industry_expert: entry.industry_expert || "",
       meeting_link: entry.meeting_link || "",
@@ -211,67 +232,40 @@ function MentorReviewFolders() {
     setEditData({});
   };
 
-  // ============================================================
-  // SMART CHAT ROOM MATCHING – handles "Rizan Sir" vs "Rizwan"
-  // ============================================================
+  // Smart chat room matching (handles name mismatches like "Rizan Sir" vs "Rizwan")
   const sendChatNotification = async (expertName, studentName, folderName) => {
     try {
       const roomsRes = await API.get("chat-rooms/");
-      console.log("📋 All chat rooms:", roomsRes.data);
-      
-      // Extract all possible other user names from the rooms
-      const roomsWithNames = roomsRes.data.map(room => {
-        let name = null;
-        if (room.other_user_name) name = room.other_user_name;
-        else if (room.other_user?.name) name = room.other_user.name;
-        else if (room.other_user?.full_name) name = room.other_user.full_name;
-        else if (room.other_user?.username) name = room.other_user.username;
-        else if (room.name) name = room.name; // some backends put name directly
-        return { room, name };
-      });
-      
-      console.log("Available room names:", roomsWithNames.map(r => r.name));
-      
-      // First try exact match
-      let match = roomsWithNames.find(r => r.name === expertName);
-      
-      // If no exact match, try case-insensitive
-      if (!match) {
-        match = roomsWithNames.find(r => r.name && r.name.toLowerCase() === expertName.toLowerCase());
-      }
-      
-      // If still no match, try partial: e.g., "Rizan Sir" should match "Rizwan"
-      if (!match) {
-        // Extract first word from expertName (e.g., "Rizan" from "Rizan Sir")
-        const firstWord = expertName.split(" ")[0].toLowerCase();
-        match = roomsWithNames.find(r => 
-          r.name && r.name.toLowerCase().includes(firstWord)
-        );
-      }
-      
-      // If still no match, try aliases for known mismatches
-      if (!match) {
-        const aliasMap = {
-          "Rizan Sir": ["Rizwan", "rizwan"],
-          "Akif Sir": ["Akif", "akif"],
-          "Prameesh Sir": ["Prameesh", "prameesh"]
-        };
-        const aliases = aliasMap[expertName] || [];
-        for (const alias of aliases) {
-          match = roomsWithNames.find(r => 
-            r.name && r.name.toLowerCase() === alias.toLowerCase()
-          );
-          if (match) break;
+      let targetRoom = null;
+      for (const room of roomsRes.data) {
+        let otherName = null;
+        if (room.other_user_name) otherName = room.other_user_name;
+        else if (room.other_user?.name) otherName = room.other_user.name;
+        else if (room.other_user?.full_name) otherName = room.other_user.full_name;
+        else if (room.other_user?.username) otherName = room.other_user.username;
+        if (otherName && otherName === expertName) {
+          targetRoom = room;
+          break;
         }
       }
-      
-      if (!match) {
-        console.error(`❌ No room found for ${expertName}. Available names:`, roomsWithNames.map(r => r.name));
+      if (!targetRoom) {
+        const firstWord = expertName.split(" ")[0].toLowerCase();
+        for (const room of roomsRes.data) {
+          let otherName = null;
+          if (room.other_user_name) otherName = room.other_user_name;
+          else if (room.other_user?.name) otherName = room.other_user.name;
+          else if (room.other_user?.full_name) otherName = room.other_user.full_name;
+          else if (room.other_user?.username) otherName = room.other_user.username;
+          if (otherName && otherName.toLowerCase().includes(firstWord)) {
+            targetRoom = room;
+            break;
+          }
+        }
+      }
+      if (!targetRoom) {
         showToast(`No existing chat room with ${expertName}. Please start a conversation first.`, "error");
         return false;
       }
-      
-      const targetRoom = match.room;
       await API.post("chat-messages/", {
         room: targetRoom.id,
         content: `📌 You have been assigned as industry expert for ${studentName}'s review in folder "${folderName}".`,
@@ -286,39 +280,46 @@ function MentorReviewFolders() {
 
   const saveEdit = async (id) => {
     const currentEntry = rawEntries.find(e => e.id === id);
-    const oldExpert = currentEntry?.industry_expert;
+    if (!currentEntry) return;
+
+    const oldExpert = currentEntry.industry_expert;
     const newExpert = editData.industry_expert;
-    const studentName = studentMap.get(currentEntry?.student) || currentEntry?.student_name || "a student";
-    const folderName = selectedFolder || currentEntry?.week_folder || "review folder";
+    const studentName = studentMap.get(currentEntry.student) || currentEntry.student_name || "a student";
+    const folderName = selectedFolder || currentEntry.week_folder || "review folder";
 
     const payload = {};
 
     if (editData.review_date && editData.review_date.trim() !== "") {
       payload.review_date = editData.review_date;
     }
-    if (editData.week && editData.week.trim() !== "") {
-      const weekNum = parseInt(editData.week, 10);
-      if (!isNaN(weekNum) && weekNum > 0) {
-        payload.week = weekNum;
+
+    // Week: ensure it's never null
+    let weekValue = currentEntry.week;
+    if (editData.week !== undefined && editData.week !== null && editData.week.trim() !== "") {
+      const parsed = parseInt(editData.week, 10);
+      if (!isNaN(parsed) && parsed > 0) {
+        weekValue = parsed;
       }
     }
-    if (editData.work_documents && editData.work_documents.trim() !== "") {
-      payload.work_documents = editData.work_documents;
+    if (weekValue === null || weekValue === undefined) weekValue = 0;
+    payload.week = weekValue;
+
+    if (editData.work_documents !== undefined) {
+      payload.work_documents = editData.work_documents?.trim() || "";
     }
-    if (editData.industry_expert && editData.industry_expert.trim() !== "") {
-      payload.industry_expert = editData.industry_expert;
+    if (editData.industry_expert !== undefined) {
+      payload.industry_expert = editData.industry_expert?.trim() || "";
     }
-    if (editData.meeting_link && editData.meeting_link.trim() !== "") {
-      payload.meeting_link = editData.meeting_link;
+    if (editData.meeting_link !== undefined) {
+      payload.meeting_link = editData.meeting_link?.trim() || "";
     }
-    if (editData.review_sheet && editData.review_sheet.trim() !== "") {
-      payload.review_sheet = editData.review_sheet;
+    if (editData.review_sheet !== undefined) {
+      payload.review_sheet = editData.review_sheet?.trim() || "";
     }
 
-    if (Object.keys(payload).length === 0) {
-      showToast("No valid fields to update.", "error");
-      return;
-    }
+    Object.keys(payload).forEach(key => {
+      if (payload[key] === undefined) delete payload[key];
+    });
 
     try {
       await API.patch(`/review-folders/${id}/`, payload);
@@ -328,18 +329,11 @@ function MentorReviewFolders() {
 
       if (newExpert && newExpert !== oldExpert && newExpert.trim() !== "") {
         const success = await sendChatNotification(newExpert, studentName, folderName);
-        if (success) {
-          showToast(`Chat message sent to ${newExpert}`, "success");
-        }
+        if (success) showToast(`Chat message sent to ${newExpert}`, "success");
       }
     } catch (err) {
-      console.error("PATCH error:", err);
-      let errorMsg = "Update failed.";
-      if (err.response?.data) {
-        if (err.response.data.week) errorMsg = "Week field must be a valid number.";
-        else errorMsg = JSON.stringify(err.response.data);
-      }
-      showToast(errorMsg, "error");
+      console.error(err);
+      showToast("Update failed: " + (err.response?.data ? JSON.stringify(err.response.data) : err.message), "error");
     }
   };
 
@@ -483,6 +477,7 @@ function MentorReviewFolders() {
 
           {!selectedFolder && (
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-x-auto">
+              {/* Folder table unchanged */}
               <div className="p-3 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
                 <div className="relative w-full sm:w-64">
                   <input
@@ -602,7 +597,7 @@ function MentorReviewFolders() {
                             <td className="px-4 py-3 text-sm">
                               {editingId === entry.id ? (
                                 <input type="text" name="week" value={editData.week || ""} onChange={handleEditChange} className="border border-gray-300 rounded px-1 py-0.5 w-24" />
-                              ) : (entry.week || "—")}
+                              ) : (entry.week !== null && entry.week !== undefined ? entry.week : "—")}
                             </td>
                             <td className="px-4 py-3 text-sm">
                               {editingId === entry.id ? (
