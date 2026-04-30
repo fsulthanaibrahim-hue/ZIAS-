@@ -2,7 +2,7 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.utils import timezone
 
-# Custom User model – defined directly
+
 class User(AbstractUser):
     is_admin = models.BooleanField(default=False)
     is_student = models.BooleanField(default=False)
@@ -31,7 +31,7 @@ class User(AbstractUser):
     def __str__(self):
         return self.username
 
-# Batch Model
+
 class Batch(models.Model):
     name = models.CharField(max_length=100, unique=True)
     start_date = models.DateField(null=True, blank=True)
@@ -45,7 +45,7 @@ class Batch(models.Model):
     def __str__(self):
         return self.name
 
-# Document Model – moved BEFORE Student (so Student can reference it)
+
 class Document(models.Model):
     file = models.FileField(upload_to='student_documents/')
     uploaded_at = models.DateTimeField(auto_now_add=True)
@@ -54,7 +54,7 @@ class Document(models.Model):
     def __str__(self):
         return self.file.name
 
-# Student Profile
+
 class Student(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='student_profile')
     course = models.CharField(max_length=100)
@@ -82,35 +82,34 @@ class Student(models.Model):
     def __str__(self):
         return self.user.username
 
-# Mentor Profile
+
 class Mentor(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='mentor_profile')
     phone = models.CharField(max_length=20, blank=True, null=True)
     expertise = models.CharField(max_length=100)
     batch = models.ForeignKey(Batch, on_delete=models.SET_NULL, null=True, blank=True, related_name='mentors')
-    full_name = models.CharField(max_length=255, blank=True, null=True)   # 👈 add this field
+    full_name = models.CharField(max_length=255, blank=True, null=True)
 
-    
     def __str__(self):
         return self.full_name or self.user.username
 
-# Reviewer Profile
+
 class Reviewer(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     department = models.CharField(max_length=100, blank=True)
     qualification = models.CharField(max_length=100, blank=True)
     experience = models.IntegerField(null=True, blank=True)
     batch = models.ForeignKey(Batch, on_delete=models.SET_NULL, null=True, blank=True)
-    course = models.CharField(max_length=100, blank=True, null=True)  
+    course = models.CharField(max_length=100, blank=True, null=True)
     available_from = models.TimeField(null=True, blank=True, help_text="Start time (e.g. 09:00)")
     available_to = models.TimeField(null=True, blank=True, help_text="End time (e.g. 17:00)")
     available_days = models.JSONField(default=list, blank=True, help_text="List of weekdays (0=Monday, 6=Sunday)")
-    full_name = models.CharField(max_length=255, blank=True, null=True)   
+    full_name = models.CharField(max_length=255, blank=True, null=True)
+
     def __str__(self):
         return self.full_name or self.user.username
-    
 
-# Course Model
+
 class Course(models.Model):
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
@@ -120,7 +119,7 @@ class Course(models.Model):
     def __str__(self):
         return self.name
 
-# Module Model
+
 class Module(models.Model):
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='modules')
     title = models.CharField(max_length=200)
@@ -137,7 +136,7 @@ class Module(models.Model):
     def __str__(self):
         return f"{self.course.name} - {self.title}"
 
-# Student Module
+
 class StudentModule(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='custom_modules')
     module = models.ForeignKey(Module, on_delete=models.CASCADE)
@@ -151,7 +150,7 @@ class StudentModule(models.Model):
     def __str__(self):
         return f"{self.student.user.username} - {self.module.course.name} - {self.module.title}"
 
-# Day Model
+
 class Day(models.Model):
     module = models.ForeignKey(Module, on_delete=models.CASCADE, related_name='days')
     title = models.CharField(max_length=100)
@@ -165,7 +164,7 @@ class Day(models.Model):
     def __str__(self):
         return f"{self.module.title} - {self.title}"
 
-# Task Model
+
 class Task(models.Model):
     day = models.ForeignKey(Day, on_delete=models.CASCADE, related_name='tasks')
     title = models.CharField(max_length=200)
@@ -180,7 +179,7 @@ class Task(models.Model):
     def __str__(self):
         return self.title
 
-# Password Reset Token
+
 class PasswordResetToken(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     token = models.CharField(max_length=100, unique=True)
@@ -193,7 +192,7 @@ class PasswordResetToken(models.Model):
     def __str__(self):
         return f"{self.user.username} - {self.token}"
 
-# Contact Message
+
 class ContactMessage(models.Model):
     name = models.CharField(max_length=100)
     email = models.EmailField()
@@ -206,20 +205,18 @@ class ContactMessage(models.Model):
     def __str__(self):
         return f"{self.name} - {self.subject}"
 
-# Notification Model
-# accounts/models.py
+
 class Notification(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
     message = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
     is_read = models.BooleanField(default=False)
-    link = models.CharField(max_length=500, blank=True, null=True)   # 👈 add this
-
+    link = models.CharField(max_length=500, blank=True, null=True)
 
     def __str__(self):
         return f"{self.user.username} - {self.message}"
 
-# Student Week Review Model
+
 class StudentWeekReview(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='week_reviews')
     module = models.ForeignKey(Module, on_delete=models.CASCADE, related_name='student_reviews')
@@ -240,7 +237,7 @@ class StudentWeekReview(models.Model):
     ])
     english_review = models.TextField(blank=True)
     english_score = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Score out of 20")
-    star_rating = models.PositiveSmallIntegerField(null=True, blank=True, choices=[(i,i) for i in range(1,6)])
+    star_rating = models.PositiveSmallIntegerField(null=True, blank=True, choices=[(i, i) for i in range(1, 6)])
     total_score = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Total score out of 20")
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -269,7 +266,7 @@ class StudentWeekReview(models.Model):
     def __str__(self):
         return f"{self.student.user.username} - {self.module.title}"
 
-# Week Update Model
+
 class WeekUpdate(models.Model):
     week_review = models.ForeignKey(StudentWeekReview, on_delete=models.CASCADE, related_name='updates')
     update_date = models.DateField(auto_now_add=True)
@@ -279,6 +276,7 @@ class WeekUpdate(models.Model):
 
     def __str__(self):
         return f"Update for {self.week_review}"
+
 
 class ReviewFolder(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='review_folders')
@@ -294,6 +292,7 @@ class ReviewFolder(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     is_done = models.BooleanField(default=False)
+    course = models.CharField(max_length=100, blank=True, null=True)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='created_review_folders')
     updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='updated_review_folders')
 
@@ -310,9 +309,7 @@ class ReviewFolder(models.Model):
             return "Pending"
         return "Done"
 
-# ----------------------------
-# CHAT MODELS
-# ----------------------------
+
 class ChatRoom(models.Model):
     ROOM_TYPES = (
         ('student_mentor', 'Student ↔ Mentor'),
@@ -345,6 +342,7 @@ class ChatRoom(models.Model):
     def __str__(self):
         return self.name
 
+
 class ChatMessage(models.Model):
     room = models.ForeignKey(ChatRoom, on_delete=models.CASCADE, related_name='messages')
     sender = models.ForeignKey(User, on_delete=models.CASCADE)
@@ -355,6 +353,7 @@ class ChatMessage(models.Model):
 
     class Meta:
         ordering = ['timestamp']
+
 
 class CourseStatus(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='course_statuses')
@@ -378,12 +377,9 @@ class CourseStatus(models.Model):
             self.ended_at = timezone.now()
             self.save(update_fields=['ended_at'])
 
+
 class StudentDocument(models.Model):
-    student = models.ForeignKey(
-        'Student', 
-        on_delete=models.CASCADE, 
-        related_name='student_documents'   # ✅ change from 'documents'
-    )
+    student = models.ForeignKey('Student', on_delete=models.CASCADE, related_name='student_documents')
     file = models.FileField(upload_to='student_documents/')
     file_name = models.CharField(max_length=255, blank=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
@@ -393,12 +389,9 @@ class StudentDocument(models.Model):
             self.file_name = self.file.name
         super().save(*args, **kwargs)
 
+
 class MentorDocument(models.Model):
-    mentor = models.ForeignKey(
-        'Mentor', 
-        on_delete=models.CASCADE, 
-        related_name='mentor_documents'    # ✅ change from 'documents'
-    )
+    mentor = models.ForeignKey('Mentor', on_delete=models.CASCADE, related_name='mentor_documents')
     file = models.FileField(upload_to='mentor_documents/')
     file_name = models.CharField(max_length=255, blank=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)

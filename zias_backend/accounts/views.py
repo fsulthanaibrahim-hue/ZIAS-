@@ -1,3 +1,4 @@
+# accounts/views.py
 from rest_framework import viewsets, status, generics, permissions
 from rest_framework.generics import RetrieveAPIView
 from rest_framework.views import APIView
@@ -31,8 +32,9 @@ from .serializers import (
     NotificationSerializer, StudentDocumentSerializer, MentorDocumentSerializer
 )
 
+# ✅ Corrected import - only use permission classes that exist in permissions.py
 from .permissions import (
-    IsAdminUser, IsAdminOrReadOnly, IsStudentOwner, IsMentorOrReviewerOrAdmin, IsStudentReadOnly
+    IsAdminUser, IsAdminOrReadOnly, IsStudentOwner, IsMentorOrReviewerOrAdmin
 )
 
 

@@ -44,12 +44,41 @@ function MentorReviewFolders() {
     review_date: "",
     students: [],
   });
+  const [errorLogs, setErrorLogs] = useState([]);
+  const errorLogsRef = useRef([]);
+
+  const addErrorLog = (error, context = {}) => {
+    const logEntry = {
+      timestamp: new Date().toISOString(),
+      message: error?.message || String(error),
+      stack: error?.stack,
+      context,
+    };
+    errorLogsRef.current = [...errorLogsRef.current, logEntry];
+    setErrorLogs(errorLogsRef.current);
+    console.error("📋 ERROR LOG:", logEntry);
+  };
+
+  const downloadLogs = () => {
+    const dataStr = JSON.stringify(errorLogsRef.current, null, 2);
+    const blob = new Blob([dataStr], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `error_log_${new Date().toISOString()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast("Logs downloaded", "success");
+  };
 
   const industryExperts = ["Akif Sir", "Rizan Sir", "Prameesh Sir"];
   const hasFetched = useRef(false);
   const showToast = (message, type = "success") => setToast({ message, type });
   const hideToast = () => setToast(null);
 
+  // ---------- static module mapping (change these URLs to your actual work documents) ----------
   const getWorkDocForWeek = async (week) => {
     const docs = {
       1: "https://docs.google.com/document/d/1_MODULE_1",
@@ -60,6 +89,7 @@ function MentorReviewFolders() {
     };
     return docs[week] || "";
   };
+  // --------------------------------------------------------------------------------------------
 
   const renderLink = (url, label = "Link") => {
     if (!url) return "—";
@@ -92,7 +122,7 @@ function MentorReviewFolders() {
       setStudentMap(nameMap);
       setStudentCourseMap(courseMap);
     } catch (err) {
-      console.error("Failed to fetch students", err);
+      addErrorLog(err, { api: "/students/" });
       showToast("Failed to load students", "error");
     }
   };
@@ -103,7 +133,7 @@ function MentorReviewFolders() {
       const res = await API.get("/review-folders/");
       setAllFolders(res.data);
     } catch (err) {
-      console.error(err);
+      addErrorLog(err, { api: "/review-folders/" });
       showToast("Failed to load folders", "error");
     } finally {
       setLoading(false);
@@ -170,7 +200,7 @@ function MentorReviewFolders() {
     setCreateForm(prev => ({ ...prev, students: allIds }));
   };
 
-  // ========== CORRECTED createMultipleEntries with numeric week parsing ==========
+  // ========== Course‑aware week calculation (reset to 1 on course change) ==========
   const createMultipleEntries = async (e) => {
     e.preventDefault();
     if (!createForm.week_folder || !createForm.review_date || createForm.students.length === 0) {
@@ -180,32 +210,44 @@ function MentorReviewFolders() {
     setCreating(true);
     try {
       for (const studentId of createForm.students) {
-        // Get all reviews for THIS student only
+        const currentCourse = studentCourseMap.get(studentId) || "—";
         const studentReviews = allFolders.filter(f => f.student === studentId && f.week != null);
-        console.log(`Student ${studentId} existing weeks:`, studentReviews.map(r => ({ id: r.id, week: r.week, type: typeof r.week })));
         
         let maxWeek = 0;
         let previousReviewSheet = "";
+        let previousCourse = null;
+        let courseChanged = false;
+
         if (studentReviews.length > 0) {
-          // Convert week values to numbers (in case they are strings)
-          const weeks = studentReviews.map(r => parseInt(r.week, 10)).filter(w => !isNaN(w));
-          if (weeks.length > 0) {
-            maxWeek = Math.max(...weeks);
-            // Find the latest entry with that max week to copy review sheet
-            const latest = studentReviews.find(r => parseInt(r.week, 10) === maxWeek);
-            if (latest && latest.review_sheet) {
-              previousReviewSheet = latest.review_sheet;
-            }
+          const sorted = [...studentReviews].sort((a, b) => parseInt(b.week,10) - parseInt(a.week,10));
+          const latest = sorted[0];
+          maxWeek = parseInt(latest.week,10);
+          previousReviewSheet = latest.review_sheet || "";
+          previousCourse = latest.course || "";
+          if (previousCourse && previousCourse !== currentCourse) {
+            courseChanged = true;
+            console.log(`Course changed from "${previousCourse}" to "${currentCourse}". Resetting week to 1.`);
+          } else {
+            console.log(`Same course "${currentCourse}". Incrementing week.`);
           }
         }
-        const newWeek = maxWeek + 1;
-        console.log(`Creating week ${newWeek} for student ${studentId}, copying review sheet: "${previousReviewSheet}"`);
         
+        let newWeek;
+        if (courseChanged) {
+          newWeek = 1;
+          previousReviewSheet = "";
+        } else {
+          newWeek = maxWeek + 1;
+        }
+        
+        console.log(`Creating for student ${studentId}, course "${currentCourse}", new week = ${newWeek}`);
         const workDocUrl = await getWorkDocForWeek(newWeek);
+
         await API.post("/review-folders/", {
           student: studentId,
           week_folder: createForm.week_folder,
-          week: newWeek,
+          week: String(newWeek),
+          course: currentCourse,
           review_date: createForm.review_date,
           work_documents: workDocUrl,
           review_sheet: previousReviewSheet,
@@ -220,7 +262,7 @@ function MentorReviewFolders() {
       await fetchAllFolders();
       setSelectedFolder(createForm.week_folder);
     } catch (err) {
-      console.error(err);
+      addErrorLog(err, { action: "createMultipleEntries", studentIds: createForm.students });
       let errorMsg = "Error creating entries.";
       if (err.response && err.response.data) errorMsg = JSON.stringify(err.response.data);
       showToast(errorMsg, "error");
@@ -228,7 +270,7 @@ function MentorReviewFolders() {
       setCreating(false);
     }
   };
-  // =====================================================================
+  // ========================================================================================
 
   const handleEditChange = (e) => {
     const { name, value } = e.target;
@@ -297,7 +339,7 @@ function MentorReviewFolders() {
       });
       return true;
     } catch (chatErr) {
-      console.error(`Failed to send chat message to ${expertName}`, chatErr);
+      addErrorLog(chatErr, { action: "sendChatNotification", expertName, studentName, folderName });
       showToast(`Error sending message to ${expertName}`, "error");
       return false;
     }
@@ -317,7 +359,7 @@ function MentorReviewFolders() {
     let weekValue = currentEntry.week;
     if (editData.week !== undefined && editData.week !== null && editData.week.trim() !== "") {
       const parsed = parseInt(editData.week, 10);
-      if (!isNaN(parsed) && parsed > 0) weekValue = parsed;
+      if (!isNaN(parsed) && parsed >= 0) weekValue = parsed;
     }
     if (weekValue === null || weekValue === undefined) weekValue = 0;
     payload.week = weekValue;
@@ -340,7 +382,7 @@ function MentorReviewFolders() {
         if (success) showToast(`Chat message sent to ${newExpert}`, "success");
       }
     } catch (err) {
-      console.error(err);
+      addErrorLog(err, { action: "saveEdit", id, payload });
       showToast("Update failed: " + (err.response?.data ? JSON.stringify(err.response.data) : err.message), "error");
     }
   };
@@ -352,7 +394,7 @@ function MentorReviewFolders() {
         await fetchAllFolders();
         showToast("Entry deleted successfully.", "success");
       } catch (err) {
-        console.error(err);
+        addErrorLog(err, { action: "deleteEntry", id });
         showToast("Failed to delete entry.", "error");
       }
     }
@@ -374,7 +416,7 @@ function MentorReviewFolders() {
       await fetchAllFolders();
       showToast(`Folder renamed to "${newName}"`, "success");
     } catch (err) {
-      console.error(err);
+      addErrorLog(err, { action: "editFolder", oldName, newName });
       showToast("Failed to rename folder.", "error");
     }
   };
@@ -390,7 +432,7 @@ function MentorReviewFolders() {
       await fetchAllFolders();
       showToast(`Folder "${folderName}" deleted.`, "success");
     } catch (err) {
-      console.error(err);
+      addErrorLog(err, { action: "deleteFolder", folderName });
       showToast("Failed to delete folder.", "error");
     }
   };
@@ -401,19 +443,19 @@ function MentorReviewFolders() {
     if (!entry) return;
     try {
       await API.patch(`/review-folders/${id}/`, { is_done: newValue });
-      if (newValue === true && entry.week && entry.week > 0 && entry.student) {
+      if (newValue === true && entry.week && entry.week !== "0" && entry.student) {
         try {
           await API.patch(`/students/${entry.student}/`, { last_reviewed_week: entry.week });
           console.log(`Student ${entry.student} last_reviewed_week updated to ${entry.week}`);
         } catch (updateErr) {
-          console.error("Failed to update student last_reviewed_week", updateErr);
+          addErrorLog(updateErr, { action: "updateStudentLastReviewedWeek", studentId: entry.student, week: entry.week });
           showToast("Review marked done, but failed to update student week.", "error");
         }
       }
       await fetchAllFolders();
       showToast(`Status updated to ${newValue ? "Done" : "Pending"}.`, "success");
     } catch (err) {
-      console.error(err);
+      addErrorLog(err, { action: "toggleDone", id, newValue });
       showToast("Failed to update status.", "error");
     }
   };
@@ -454,12 +496,21 @@ function MentorReviewFolders() {
               <h1 className="text-xl sm:text-2xl font-bold text-gray-800">Review Folders</h1>
               <p className="text-gray-500 text-xs sm:text-sm">Organise weekly reviews like a file manager</p>
             </div>
-            <button
-              onClick={() => setShowCreateForm(!showCreateForm)}
-              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium w-full sm:w-auto"
-            >
-              {showCreateForm ? "Cancel" : "+ New Week Folder"}
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={downloadLogs}
+                className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-2 rounded-lg text-sm font-medium"
+                title="Download error logs"
+              >
+                📥 Download Logs
+              </button>
+              <button
+                onClick={() => setShowCreateForm(!showCreateForm)}
+                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
+              >
+                {showCreateForm ? "Cancel" : "+ New Week Folder"}
+              </button>
+            </div>
           </div>
 
           {showCreateForm && (
@@ -600,78 +651,78 @@ function MentorReviewFolders() {
                     <tbody>
                       {filteredEntries.length === 0 ? (
                         <tr>
-                          <td colSpan="10" className="px-4 py-8 text-center text-gray-400">No matching entries found.</td>
-                        </tr>
-                      ) : (
-                        filteredEntries.map(entry => {
-                          const courseName = studentCourseMap.get(entry.student) || "—";
-                          return (
-                            <tr key={entry.id} className="hover:bg-gray-50">
-                              <td className="px-4 py-3 text-sm text-gray-700">
-                                {editingId === entry.id ? (
-                                  <input type="date" name="review_date" value={editData.review_date || ""} onChange={handleEditChange} className="border border-gray-300 rounded px-1 py-0.5 w-32" />
-                                ) : (entry.review_date || "—")}
-                              </td>
-                              <td className="px-4 py-3 text-sm text-gray-700">
-                                {studentMap.get(entry.student) || entry.student_name || "—"}
-                              </td>
-                              <td className="px-4 py-3 text-sm text-gray-700">{courseName}</td>
-                              <td className="px-4 py-3 text-sm">
-                                {editingId === entry.id ? (
-                                  <input type="text" name="week" value={editData.week || ""} onChange={handleEditChange} className="border border-gray-300 rounded px-1 py-0.5 w-24" />
-                                ) : (entry.week !== null && entry.week !== undefined ? entry.week : "—")}
-                              </td>
-                              <td className="px-4 py-3 text-sm">
-                                {editingId === entry.id ? (
-                                  <input type="text" name="work_documents" value={editData.work_documents || ""} onChange={handleEditChange} className="border border-gray-300 rounded px-1 py-0.5 w-48" placeholder="Module link" />
-                                ) : renderLink(entry.work_documents, "Module")}
-                              </td>
-                              <td className="px-4 py-3 text-sm">
-                                {editingId === entry.id ? (
-                                  <select name="industry_expert" value={editData.industry_expert || ""} onChange={handleEditChange} className="border border-gray-300 rounded px-1 py-0.5">
-                                    <option value="">—</option>
-                                    {industryExperts.map(e => <option key={e} value={e}>{e}</option>)}
-                                  </select>
-                                ) : (entry.industry_expert || "—")}
-                              </td>
-                              <td className="px-4 py-3 text-sm">
-                                {editingId === entry.id ? (
-                                  <input type="text" name="meeting_link" value={editData.meeting_link || ""} onChange={handleEditChange} className="border border-gray-300 rounded px-1 py-0.5 w-32" />
-                                ) : renderLink(entry.meeting_link, "Meet Link")}
-                              </td>
-                              <td className="px-4 py-3 text-sm">
-                                {editingId === entry.id ? (
-                                  <input type="text" name="review_sheet" value={editData.review_sheet || ""} onChange={handleEditChange} className="border border-gray-300 rounded px-1 py-0.5 w-40" />
-                                ) : renderLink(entry.review_sheet, "Sheet")}
-                              </td>
-                              <td className="px-4 py-3 text-center">
-                                <button
-                                  type="button"
-                                  onClick={(e) => toggleDone(entry.id, !entry.is_done, e)}
-                                  className={`px-2 sm:px-3 py-1 rounded-full text-xs font-medium transition-colors ${entry.is_done ? "bg-green-100 text-green-800 hover:bg-green-200" : "bg-yellow-100 text-yellow-800 hover:bg-yellow-200"}`}
-                                >
-                                  {entry.is_done ? "Done" : "Pending"}
-                                </button>
-                              </td>
-                              <td className="px-4 py-3 text-center">
-                                {editingId === entry.id ? (
-                                  <div className="flex gap-2 justify-center">
-                                    <button onClick={() => saveEdit(entry.id)} className="text-green-600 hover:text-green-800"><SaveIcon /></button>
-                                    <button onClick={cancelEdit} className="text-gray-500 hover:text-gray-700"><CancelIcon /></button>
-                                  </div>
-                                ) : (
-                                  <div className="flex gap-2 justify-center">
-                                    <button onClick={() => startEdit(entry)} className="text-blue-600 hover:text-blue-800"><EditIcon /></button>
-                                    <button onClick={() => deleteEntry(entry.id)} className="text-red-600 hover:text-red-800"><DeleteIcon /></button>
-                                  </div>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })
-                      )}
-                    </tbody>
-                  </table>
+                          <td colSpan="10" className="px-4 py-8 text-center text-gray-400">No matching entries found. </td>
+                      </tr>
+                    ) : (
+                      filteredEntries.map(entry => {
+                        const courseName = studentCourseMap.get(entry.student) || "—";
+                        return (
+                          <tr key={entry.id} className="hover:bg-gray-50">
+                            <td className="px-4 py-3 text-sm text-gray-700">
+                              {editingId === entry.id ? (
+                                <input type="date" name="review_date" value={editData.review_date || ""} onChange={handleEditChange} className="border border-gray-300 rounded px-1 py-0.5 w-32" />
+                              ) : (entry.review_date || "—")}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-700">
+                              {studentMap.get(entry.student) || entry.student_name || "—"}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-700">{courseName}</td>
+                            <td className="px-4 py-3 text-sm">
+                              {editingId === entry.id ? (
+                                <input type="text" name="week" value={editData.week || ""} onChange={handleEditChange} className="border border-gray-300 rounded px-1 py-0.5 w-24" />
+                              ) : (entry.week !== null && entry.week !== undefined ? entry.week : "—")}
+                            </td>
+                            <td className="px-4 py-3 text-sm">
+                              {editingId === entry.id ? (
+                                <input type="text" name="work_documents" value={editData.work_documents || ""} onChange={handleEditChange} className="border border-gray-300 rounded px-1 py-0.5 w-48" placeholder="Module link" />
+                              ) : renderLink(entry.work_documents, "Module")}
+                            </td>
+                            <td className="px-4 py-3 text-sm">
+                              {editingId === entry.id ? (
+                                <select name="industry_expert" value={editData.industry_expert || ""} onChange={handleEditChange} className="border border-gray-300 rounded px-1 py-0.5">
+                                  <option value="">—</option>
+                                  {industryExperts.map(e => <option key={e} value={e}>{e}</option>)}
+                                </select>
+                              ) : (entry.industry_expert || "—")}
+                            </td>
+                            <td className="px-4 py-3 text-sm">
+                              {editingId === entry.id ? (
+                                <input type="text" name="meeting_link" value={editData.meeting_link || ""} onChange={handleEditChange} className="border border-gray-300 rounded px-1 py-0.5 w-32" />
+                              ) : renderLink(entry.meeting_link, "Meet Link")}
+                            </td>
+                            <td className="px-4 py-3 text-sm">
+                              {editingId === entry.id ? (
+                                <input type="text" name="review_sheet" value={editData.review_sheet || ""} onChange={handleEditChange} className="border border-gray-300 rounded px-1 py-0.5 w-40" />
+                              ) : renderLink(entry.review_sheet, "Sheet")}
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <button
+                                type="button"
+                                onClick={(e) => toggleDone(entry.id, !entry.is_done, e)}
+                                className={`px-2 sm:px-3 py-1 rounded-full text-xs font-medium transition-colors ${entry.is_done ? "bg-green-100 text-green-800 hover:bg-green-200" : "bg-yellow-100 text-yellow-800 hover:bg-yellow-200"}`}
+                              >
+                                {entry.is_done ? "Done" : "Pending"}
+                              </button>
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              {editingId === entry.id ? (
+                                <div className="flex gap-2 justify-center">
+                                  <button onClick={() => saveEdit(entry.id)} className="text-green-600 hover:text-green-800"><SaveIcon /></button>
+                                  <button onClick={cancelEdit} className="text-gray-500 hover:text-gray-700"><CancelIcon /></button>
+                                </div>
+                              ) : (
+                                <div className="flex gap-2 justify-center">
+                                  <button onClick={() => startEdit(entry)} className="text-blue-600 hover:text-blue-800"><EditIcon /></button>
+                                  <button onClick={() => deleteEntry(entry.id)} className="text-red-600 hover:text-red-800"><DeleteIcon /></button>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
                 </div>
               </div>
             </>
