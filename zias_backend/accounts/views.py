@@ -921,6 +921,38 @@ class MarkMessagesReadView(APIView):
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+class RespondToMessageView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, message_id):
+        try:
+            message = ChatMessage.objects.get(id=message_id)
+        except ChatMessage.DoesNotExist:
+            return Response({"error": "Message not found"}, status=404)
+
+        # Only the receiver (reviewer) can respond
+        room = message.room
+        user = request.user
+        # Check if user is the reviewer in that room
+        if room.reviewer and room.reviewer.user == user:
+            action = request.data.get('action')
+            suggested_time = request.data.get('suggested_time')
+            if action not in ['accepted', 'rejected']:
+                return Response({"error": "Invalid action"}, status=400)
+
+            message.action = action
+            if suggested_time:
+                message.suggested_time = suggested_time
+            message.responded_at = timezone.now()
+            message.save()
+
+            # Send a system message back to the mentor (or update the existing message)
+            # For simplicity, we'll just update the message and the UI will reflect it.
+
+            return Response(ChatMessageSerializer(message).data)
+        else:
+            return Response({"error": "Not authorized"}, status=403)
+
 
 # ----------------------------
 # STUDENT COURSE STATUS VIEW

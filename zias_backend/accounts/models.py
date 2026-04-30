@@ -344,6 +344,14 @@ class ChatRoom(models.Model):
 
 
 class ChatMessage(models.Model):
+    ACTION_CHOICES = (
+        ('pending', 'pending'),
+        ('accepted', 'accepted'),
+        ('rejected', 'rejected'),
+    )
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES, default='pending')
+    suggested_time = models.DateTimeField(null=True, blank=True)
+    responded_at = models.DateTimeField(null=True, blank=True)
     room = models.ForeignKey(ChatRoom, on_delete=models.CASCADE, related_name='messages')
     sender = models.ForeignKey(User, on_delete=models.CASCADE)
     content = models.TextField()
@@ -357,25 +365,27 @@ class ChatMessage(models.Model):
 
 class CourseStatus(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='course_statuses')
-    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='student_statuses')
+    course_name = models.CharField(max_length=100, null=True, blank=True)  
     started_at = models.DateTimeField(auto_now_add=True)
     ended_at = models.DateTimeField(null=True, blank=True)
-    current_week = models.PositiveIntegerField(default=1)
+    current_week = models.PositiveIntegerField(default=0)   # 0 means not started yet
 
     class Meta:
-        unique_together = ('student', 'course')
+        unique_together = ['student', 'course_name']   # one active status per course per student
         ordering = ['-started_at']
 
     def __str__(self):
-        return f"{self.student.user.username} - {self.course.name} (Week {self.current_week})"
+        return f"{self.student.user.username} - {self.course_name} (week {self.current_week})"
 
-    def advance_week(self, total_weeks):
-        if self.current_week < total_weeks:
-            self.current_week += 1
-            self.save(update_fields=['current_week'])
-        else:
-            self.ended_at = timezone.now()
-            self.save(update_fields=['ended_at'])
+    def advance_week(self):
+        """Increment current_week by 1. Only called when a week is completed."""
+        self.current_week += 1
+        self.save(update_fields=['current_week'])
+
+    def end_course(self):
+        """Mark the course as ended."""
+        self.ended_at = timezone.now()
+        self.save(update_fields=['ended_at'])
 
 
 class StudentDocument(models.Model):

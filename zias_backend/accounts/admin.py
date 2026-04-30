@@ -50,8 +50,10 @@ class ContactMessageAdmin(admin.ModelAdmin):
     mark_as_read.short_description = "Mark selected messages as read"
     
 
+
 @admin.register(CourseStatus)
 class CourseStatusAdmin(admin.ModelAdmin):
-    list_display = ['student', 'course', 'current_week', 'started_at', 'ended_at']
-    list_filter = ['course', 'ended_at']
-    search_fields = ['student__user__username', 'course__name']    
+    list_display = ['id', 'student', 'course_name', 'started_at', 'ended_at', 'current_week']
+    list_filter = ['course_name', 'started_at', 'ended_at']
+    search_fields = ['student__user__username', 'course_name']
+

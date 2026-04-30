@@ -413,8 +413,8 @@ class ChatMessageSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ChatMessage
-        fields = ['id', 'room', 'sender', 'sender_name', 'content', 'is_read', 'timestamp', 'read_at']
-        read_only_fields = ['sender', 'timestamp', 'is_read', 'read_at']
+        fields = ['id', 'room', 'sender', 'sender_name', 'content', 'action', 'suggested_time', 'responded_at', 'is_read', 'timestamp', 'read_at']
+        read_only_fields = ['sender', 'timestamp', 'is_read', 'read_at', 'action', 'suggested_time', 'responded_at']
 
     def get_sender_name(self, obj):
         user = obj.sender
