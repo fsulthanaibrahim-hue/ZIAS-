@@ -35,23 +35,7 @@ const Navbar = () => {
 
   return (
     <>
-      {/* ════════════════════════════════════════
-          ANNOUNCEMENT BAR
-      ════════════════════════════════════════ */}
-      <div className="relative overflow-hidden h-[38px] bg-[#0f172a] flex items-center justify-center gap-2.5 px-4 text-[12.5px] font-medium text-slate-400 tracking-wide">
-        <span className="pointer-events-none absolute inset-0 bg-gradient-to-r from-transparent via-emerald-500/10 to-transparent animate-[shimmer_3s_infinite]" />
-        <span className="w-[6px] h-[6px] rounded-full bg-emerald-500 flex-shrink-0 animate-pulse" />
-        <span className="relative">
-          🎓 2025–26 Admissions Open — Seats filling fast!&nbsp;&nbsp;
-          <Link
-            to="/contact"
-            className="text-emerald-400 font-bold border-b border-emerald-500/30 hover:border-emerald-400 transition-colors duration-150"
-          >
-            Secure Your Spot →
-          </Link>
-        </span>
-      </div>
-
+    
       {/* ════════════════════════════════════════
           NAVBAR
       ════════════════════════════════════════ */}
