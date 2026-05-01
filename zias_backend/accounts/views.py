@@ -1,4 +1,3 @@
-# accounts/views.py
 from rest_framework import viewsets, status, generics, permissions
 from .models import Notification
 from rest_framework.generics import RetrieveAPIView
@@ -6,6 +5,7 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
+from rest_framework import generics, permissions
 from rest_framework.filters import BaseFilterBackend
 from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
 from rest_framework.exceptions import ValidationError   
@@ -14,6 +14,7 @@ from django.shortcuts import get_object_or_404
 from django.utils.crypto import get_random_string
 from datetime import timedelta
 from django.core.mail import send_mail
+from django.core.exceptions import ObjectDoesNotExist
 from django.conf import settings
 from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken, TokenError
@@ -33,7 +34,6 @@ from .serializers import (
     NotificationSerializer, StudentDocumentSerializer, MentorDocumentSerializer, ReviewAssignmentSerializer
 )
 
-# ✅ Corrected import - only use permission classes that exist in permissions.py
 from .permissions import (
     IsAdminUser, IsAdminOrReadOnly, IsStudentOwner, IsMentorOrReviewerOrAdmin
 )
@@ -88,7 +88,6 @@ class StudentViewSet(viewsets.ModelViewSet):
             except Mentor.DoesNotExist:
                 queryset = queryset.none()
         elif user.is_reviewer:
-            # ✅ Reviewers see NO students
             queryset = Student.objects.none()
         else:
             queryset = queryset.filter(user=user)
@@ -98,7 +97,6 @@ class StudentViewSet(viewsets.ModelViewSet):
         queryset = self.get_queryset()
         user = request.user
         
-        # ✅ Mentors see their students; reviewers see empty list
         if user.is_mentor:
             data = []
             for student in queryset.select_related('user'):
@@ -111,7 +109,7 @@ class StudentViewSet(viewsets.ModelViewSet):
                 })
             return Response(data)
         elif user.is_reviewer:
-            return Response([])   # 👈 Empty list for reviewers
+            return Response([])
         else:
             serializer = self.get_serializer(queryset, many=True)
             return Response(serializer.data)
@@ -133,8 +131,6 @@ class StudentViewSet(viewsets.ModelViewSet):
             print(f"Auto-created student profile for {user.username}")
         serializer = self.get_serializer(student)
         return Response(serializer.data)
-
-
 
     def destroy(self, request, *args, **kwargs):
         student = self.get_object()
@@ -307,7 +303,7 @@ class ModuleViewSet(viewsets.ModelViewSet):
 
 
 # ----------------------------
-# COMPLETE MODULE VIEW (with CourseStatus update)
+# COMPLETE MODULE VIEW
 # ----------------------------
 class CompleteModuleView(APIView):
     permission_classes = [IsAuthenticated]
@@ -398,14 +394,12 @@ class TaskViewSet(viewsets.ModelViewSet):
 
 
 # ----------------------------
-# GET CURRENT USER INFO
+# CURRENT USER VIEW
 # ----------------------------
 class CurrentUserView(APIView):
     permission_classes = [IsAuthenticated]
-
     def get(self, request):
         user = request.user
-        # Build user dict manually (safe, no serializer)
         user_data = {
             'id': user.id,
             'username': user.username,
@@ -419,13 +413,11 @@ class CurrentUserView(APIView):
         return Response(user_data)
 
     def patch(self, request):
-        # For partial updates, you can still use the serializer if needed,
-        # but to keep it simple, implement manual update if required.
-        # For now, return method not allowed or implement later.
         return Response({"detail": "PATCH not implemented"}, status=405)
 
+
 # ----------------------------
-# CHANGE PASSWORD ENDPOINT
+# CHANGE PASSWORD
 # ----------------------------
 class ChangePasswordView(APIView):
     permission_classes = [IsAuthenticated]
@@ -471,7 +463,7 @@ class SendBulkEmailView(APIView):
 
 
 # ----------------------------
-# PASSWORD RESET VIEWS
+# PASSWORD RESET
 # ----------------------------
 class RequestPasswordResetView(APIView):
     def post(self, request):
@@ -569,7 +561,7 @@ class ContactMessageDetailView(RetrieveAPIView):
 
 
 # ----------------------------
-# CUSTOM LOGIN VIEW (SAFE VERSION – NO SERIALIZER)
+# CUSTOM LOGIN VIEW
 # ----------------------------
 class CustomLoginView(APIView):
     permission_classes = [AllowAny]
@@ -597,7 +589,6 @@ class CustomLoginView(APIView):
             refresh = RefreshToken.for_user(user)
             access = refresh.access_token
 
-            # Build user dict manually (safe, no serializer)
             user_data = {
                 'id': user.id,
                 'username': user.username,
@@ -640,7 +631,7 @@ class LogoutView(APIView):
 
 
 # ----------------------------
-# UPDATE DASHBOARD ACCESS VIEW
+# UPDATE DASHBOARD ACCESS
 # ----------------------------
 class UpdateDashboardAccessView(APIView):
     permission_classes = [IsAuthenticated]
@@ -808,12 +799,7 @@ class ReviewFolderViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        user = self.request.user
-        if user.is_mentor or user.is_reviewer or user.is_admin:
-            return ReviewFolder.objects.all()
-        elif user.is_student:
-            return ReviewFolder.objects.filter(student__user=user)
-        return ReviewFolder.objects.none()
+        return ReviewFolder.objects.all()
 
     def get_permissions(self):
         if self.request.method in ['POST', 'PUT', 'PATCH', 'DELETE']:
@@ -829,24 +815,31 @@ class ReviewFolderViewSet(viewsets.ModelViewSet):
         serializer.save(updated_by=self.request.user)
 
 
-# ----------------------------
-# CHAT VIEWS
-# ----------------------------
+# ========================
+# CHAT VIEWS – FIXED (NO CRASH)
+# ========================
 class ChatRoomList(generics.ListAPIView):
     serializer_class = ChatRoomSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_reviewer:
-            reviewer = Reviewer.objects.get(user=user)
-            return ChatRoom.objects.filter(reviewer=reviewer, mentor__isnull=False, student__isnull=True)
-        elif user.is_mentor:
-            mentor = Mentor.objects.get(user=user)
-            return ChatRoom.objects.filter(mentor=mentor).distinct()
-        elif user.is_student:
-            student = Student.objects.get(user=user)
-            return ChatRoom.objects.filter(student=student)
+        try:
+            if user.is_reviewer:
+                reviewer = Reviewer.objects.get(user=user)
+                return ChatRoom.objects.filter(reviewer=reviewer, mentor__isnull=False, student__isnull=True)
+            elif user.is_mentor:
+                mentor = Mentor.objects.get(user=user)
+                return ChatRoom.objects.filter(mentor=mentor)
+            elif user.is_student:
+                student = Student.objects.get(user=user)
+                return ChatRoom.objects.filter(student=student)
+        except ObjectDoesNotExist:
+            # No profile – return empty
+            return ChatRoom.objects.none()
+        except Exception as e:
+            print(f"ChatRoomList error: {e}")
+            return ChatRoom.objects.none()
         return ChatRoom.objects.none()
 
 
@@ -873,7 +866,6 @@ class ChatMessageListCreateView(generics.ListCreateAPIView):
         message = serializer.save(sender=self.request.user)
         room = message.room
 
-        # Determine the other participant (the one who did NOT send this message)
         other_user = None
         if room.student and room.student.user != self.request.user:
             other_user = room.student.user
@@ -883,7 +875,6 @@ class ChatMessageListCreateView(generics.ListCreateAPIView):
             other_user = room.reviewer.user
 
         if other_user:
-            # Build a link based on the recipient's role
             if other_user.is_mentor:
                 link = f"/mentor/chat?room={room.id}"
             elif other_user.is_reviewer:
@@ -935,6 +926,7 @@ class MarkMessagesReadView(APIView):
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
 class RespondToMessageView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -946,7 +938,6 @@ class RespondToMessageView(APIView):
 
         room = message.room
         user = request.user
-        # Only the reviewer can respond
         if room.reviewer and room.reviewer.user == user:
             action = request.data.get('action')
             suggested_time = request.data.get('suggested_time')
@@ -999,10 +990,10 @@ class NotificationViewSet(viewsets.ModelViewSet):
     def mark_all_read(self, request):
         self.get_queryset().update(is_read=True)
         return Response({'status': 'all marked read'})
-    
+
 
 # ----------------------------
-# STUDENT DOCUMENTS (using StudentDocument model)
+# STUDENT DOCUMENTS
 # ----------------------------
 class StudentDocumentListView(APIView):
     permission_classes = [IsAuthenticated]
@@ -1044,7 +1035,7 @@ class StudentDocumentDeleteView(APIView):
 
 
 # ----------------------------
-# MENTOR DOCUMENTS (using MentorDocument model)
+# MENTOR DOCUMENTS
 # ----------------------------
 class MentorDocumentListView(APIView):
     permission_classes = [IsAuthenticated]
@@ -1085,6 +1076,9 @@ class MentorDocumentDeleteView(APIView):
             return Response({'error': 'Document not found'}, status=404)
 
 
+# ----------------------------
+# REVIEW ASSIGNMENT VIEWSET
+# ----------------------------
 class ReviewAssignmentViewSet(viewsets.ModelViewSet):
     queryset = ReviewAssignment.objects.all()
     serializer_class = ReviewAssignmentSerializer
@@ -1104,7 +1098,6 @@ class ReviewAssignmentViewSet(viewsets.ModelViewSet):
         if self.request.user.is_mentor:
             mentor = Mentor.objects.get(user=self.request.user)
             assignment = serializer.save(mentor=mentor)
-            # Notify the reviewer
             Notification.objects.create(
                 user=assignment.reviewer.user,
                 message=f"You have a new review assignment from {mentor.full_name or mentor.user.username} for student {assignment.student.full_name or assignment.student.user.username} (Course: {assignment.course})",
@@ -1116,13 +1109,11 @@ class ReviewAssignmentViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         instance = self.get_object()
         if request.user.is_reviewer:
-            # Only allow status and comments update
             allowed_fields = ['status', 'comments']
             data = {k: v for k, v in request.data.items() if k in allowed_fields}
             serializer = self.get_serializer(instance, data=data, partial=True)
             serializer.is_valid(raise_exception=True)
             self.perform_update(serializer)
-            # Notify the mentor about the decision
             if 'status' in data and data['status'] in ['accepted', 'rejected']:
                 Notification.objects.create(
                     user=instance.mentor.user,
@@ -1134,4 +1125,3 @@ class ReviewAssignmentViewSet(viewsets.ModelViewSet):
             return super().update(request, *args, **kwargs)
         else:
             return Response({"error": "Not allowed"}, status=status.HTTP_403_FORBIDDEN)
-        

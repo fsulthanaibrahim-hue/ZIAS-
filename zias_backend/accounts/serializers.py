@@ -431,94 +431,39 @@ class ChatMessageSerializer(serializers.ModelSerializer):
     
 
 class ChatRoomSerializer(serializers.ModelSerializer):
-    last_message = serializers.SerializerMethodField()
-    unread_count = serializers.SerializerMethodField()
     other_user_name = serializers.SerializerMethodField()
-    other_user_id = serializers.SerializerMethodField()
-    other_user_type = serializers.SerializerMethodField()
-    current_user_is_reviewer = serializers.SerializerMethodField()
+    last_message = serializers.SerializerMethodField()
+
+    def get_other_user_name(self, obj):
+        request = self.context.get('request')
+        user = request.user if request else None
+        
+        # Determine the other participant
+        other = None
+        if obj.reviewer and obj.reviewer.user != user:
+            other = obj.reviewer
+        elif obj.mentor and obj.mentor.user != user:
+            other = obj.mentor
+        elif obj.student and obj.student.user != user:
+            other = obj.student
+        
+        if other:
+            # ✅ Return full_name if available, else username (without extra numbers)
+            full_name = getattr(other, 'full_name', None)
+            if full_name and full_name.strip():
+                return full_name
+            return other.user.username   # fallback: username (e.g., "mentor123")
+        return "Unknown"
+
+    def get_last_message(self, obj):
+        last = obj.messages.order_by('-timestamp').first()
+        if last:
+            return {"content": last.content, "timestamp": last.timestamp}
+        return None
 
     class Meta:
         model = ChatRoom
-        fields = ['id', 'name', 'room_type', 'last_message', 'unread_count',
-                  'other_user_name', 'other_user_id', 'other_user_type', 'created_at',
-                  'current_user_is_reviewer']
-
-    def get_last_message(self, obj):
-        msg = obj.messages.last()
-        if msg:
-            return {
-                'content': msg.content,
-                'timestamp': msg.timestamp.isoformat(),
-                'sender_id': msg.sender_id,
-            }
-        return None
-
-    def get_unread_count(self, obj):
-        user = self.context['request'].user
-        return obj.messages.filter(is_read=False).exclude(sender=user).count()
-
-    def get_other_user_name(self, obj):
-        user = self.context['request'].user
-        if user.is_student:
-            if obj.mentor:
-                return obj.mentor.full_name or obj.mentor.user.username
-            if obj.reviewer:
-                return obj.reviewer.full_name or obj.reviewer.user.username
-        elif user.is_mentor:
-            if obj.student:
-                return obj.student.full_name or obj.student.user.username
-            if obj.reviewer:
-                return obj.reviewer.full_name or obj.reviewer.user.username
-        elif user.is_reviewer:
-            if obj.student:
-                return obj.student.full_name or obj.student.user.username
-            if obj.mentor:
-                return obj.mentor.full_name or obj.mentor.user.username
-        return "Unknown"
-
-    def get_other_user_id(self, obj):
-        user = self.context['request'].user
-        if user.is_student:
-            if obj.mentor:
-                return obj.mentor.id
-            if obj.reviewer:
-                return obj.reviewer.id
-        elif user.is_mentor:
-            if obj.student:
-                return obj.student.id
-            if obj.reviewer:
-                return obj.reviewer.id
-        elif user.is_reviewer:
-            if obj.student:
-                return obj.student.id
-            if obj.mentor:
-                return obj.mentor.id
-        return None
-
-    def get_other_user_type(self, obj):
-        user = self.context['request'].user
-        if user.is_student:
-            if obj.mentor:
-                return 'mentor'
-            if obj.reviewer:
-                return 'reviewer'
-        elif user.is_mentor:
-            if obj.student:
-                return 'student'
-            if obj.reviewer:
-                return 'reviewer'
-        elif user.is_reviewer:
-            if obj.student:
-                return 'student'
-            if obj.mentor:
-                return 'mentor'
-        return ''
-
-    def get_current_user_is_reviewer(self, obj):
-        user = self.context['request'].user
-        # Safely check if the room's reviewer is not None and matches the current user
-        return obj.reviewer is not None and obj.reviewer.user == user
+        fields = '__all__'
     
 
 class CourseStatusSerializer(serializers.ModelSerializer):

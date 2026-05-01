@@ -27,7 +27,6 @@ import ReviewerReviewSheetRange from "./pages/reviewer/ReviewerReviewSheetRange"
 import ReviewerNotifications from "./pages/reviewer/ReviewerNotifications";
 import ReviewerAssignments from "./pages/reviewer/ReviewerAssignments";
 
-
 // Mentor pages
 import MentorDashboard from "./pages/mentor/MentorDashboard";
 import MentorProfile from "./pages/mentor/MentorProfile";
@@ -35,9 +34,10 @@ import MentorStudents from "./pages/mentor/MentorStudents";
 import MentorModules from "./pages/mentor/MentorModules";
 import MentorReviewEdit from "./pages/mentor/MentorReviewEdit";
 import MentorReviewSheetRange from "./pages/mentor/MentorReviewSheetRange";
-import MentorReviewFolders from "./pages/mentor/MentorReviewFolders";
 import MentorChat from "./pages/mentor/MentorChat";
 import MentorNotifications from "./pages/mentor/MentorNotifications";
+import ReviewTracker from "./pages/mentor/ReviewTracker";
+import ReviewFolder from "./pages/mentor/ReviewFolder";
 
 // Admin pages
 import Sidebar from "./components/Sidebar";
@@ -53,6 +53,7 @@ import ReviewSheets from "./Admin/ReviewSheets";
 import StudentReviewEdit from "./Admin/StudentReviewEdit";
 import AdminProfile from "./Admin/AdminProfile";
 import NotificationsPage from "./Admin/NotificationsPage";
+import ContactMessageDetail from "./Admin/ContactMessageDetail";
 
 // Common pages
 import Navbar from "./components/Navbar";
@@ -65,9 +66,6 @@ import ResetPassword from "./pages/ResetPassword";
 // Sidebars
 import MentorSidebar from "./components/MentorSidebar";
 import ReviewerSidebar from "./components/ReviewerSidebar";
-import ContactMessageDetail from "./Admin/ContactMessageDetail";
-
-
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem("access_token");
@@ -124,7 +122,7 @@ function App() {
       <Route path="/user/review-sheet" element={<Navigate to="/student/review-sheet" replace />} />
       <Route path="/user/change-password" element={<Navigate to="/change-password" replace />} />
 
-      {/* Redirect any /student/detailed-review to the new review sheet */}
+      {/* Redirect /student/detailed-review to review sheet */}
       <Route path="/student/detailed-review" element={<Navigate to="/student/review-sheet" replace />} />
 
       {/* Student routes */}
@@ -193,7 +191,7 @@ function App() {
           </div>
         </PrivateRoute>
       } />
-      <Route path="/reviewer/review-sheet" element={
+      <Route path="/reviewer/review-sheet/range/:start/:end" element={
         <PrivateRoute>
           <div style={{ display: "flex" }}>
             <ReviewerSidebar />
@@ -209,7 +207,6 @@ function App() {
           </div>
         </PrivateRoute>
       } />
-
 
       {/* Mentor routes with sidebar */}
       <Route path="/mentor/dashboard" element={
@@ -260,11 +257,19 @@ function App() {
           </div>
         </PrivateRoute>
       } />
+      <Route path="/mentor/review-tracker" element={
+        <PrivateRoute>
+          <div style={{ display: "flex" }}>
+            <MentorSidebar />
+            <ReviewTracker />
+          </div>
+        </PrivateRoute>
+      } />
       <Route path="/mentor/review-folders" element={
         <PrivateRoute>
           <div style={{ display: "flex" }}>
             <MentorSidebar />
-            <MentorReviewFolders />
+            <ReviewFolder />
           </div>
         </PrivateRoute>
       } />
@@ -297,7 +302,7 @@ function App() {
       <Route path="/admin/review-sheets" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><ReviewSheets /></div></AdminRoute>} />
       <Route path="/admin/student-review-edit" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><StudentReviewEdit /></div></AdminRoute>} />
       <Route path="/admin/profile" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><AdminProfile /></div></AdminRoute>} />
-      <Route path="/admin/notifications" element={<AdminRoute><div style={{display: "flex"}}><Sidebar /><NotificationsPage /></div> </AdminRoute>} />
+      <Route path="/admin/notifications" element={<AdminRoute><div style={{display: "flex"}}><Sidebar /><NotificationsPage /></div></AdminRoute>} />
       <Route path="/admin/contact-messages/:id" element={<AdminRoute><div style={{display: "flex"}}><Sidebar /><ContactMessageDetail /></div></AdminRoute>} />
 
       {/* 404 page */}

@@ -353,6 +353,7 @@ class ChatMessage(models.Model):
     action = models.CharField(max_length=20, blank=True, default='')
     suggested_time = models.DateTimeField(null=True, blank=True)
     responded_at = models.DateTimeField(null=True, blank=True)
+    is_system = models.BooleanField(default=True)
 
     class Meta:
         ordering = ['timestamp']

@@ -1,11 +1,31 @@
-// src/components/ChatWindow.jsx
 import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import api from '../api';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 
+const formatTime = (iso) => {
+  if (!iso) return "";
+  try {
+    return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return "";
+  }
+};
+
+const formatDay = (iso) => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const today = new Date();
+  const diff = today.setHours(0,0,0,0) - d.setHours(0,0,0,0);
+  if (diff === 0) return "Today";
+  if (diff === 86400000) return "Yesterday";
+  return new Date(iso).toLocaleDateString([], { month: "short", day: "numeric" });
+};
+
 const ChatWindow = forwardRef(({ room }, ref) => {
+  if (!room) return null;
+
   const { user } = useAuth();
   const socket = useSocket();
   const [messages, setMessages] = useState([]);
@@ -127,25 +147,25 @@ const ChatWindow = forwardRef(({ room }, ref) => {
     }
   };
 
-  const formatTime = (timestamp) => {
-    return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
-
-  // ========== ROBUST SENDER ID EXTRACTION ==========
   const isCurrentUserMessage = (msg) => {
     let senderId = msg.sender_id;
     if (senderId === undefined) senderId = msg.sender;
     if (senderId && typeof senderId === 'object') senderId = senderId.id;
     return String(senderId) === String(user?.id);
   };
-  // =================================================
 
   const renderSenderName = (msg, isMine) => {
     if (isMine) return "You";
     return msg.sender_name || "Unknown";
   };
 
-  if (!room) return null;
+  // Group messages by day
+  const groupedMessages = messages.reduce((acc, msg) => {
+    const day = formatDay(msg.timestamp);
+    if (!acc.length || acc[acc.length-1].day !== day) acc.push({ day, msgs: [] });
+    acc[acc.length-1].msgs.push(msg);
+    return acc;
+  }, []);
 
   return (
     <div className="flex flex-col h-full bg-gray-50">
@@ -155,58 +175,57 @@ const ChatWindow = forwardRef(({ room }, ref) => {
         ) : messages.length === 0 ? (
           <div className="text-center text-gray-400 mt-8">No messages yet. Say hello!</div>
         ) : (
-          messages.map((msg) => {
-            const isMine = isCurrentUserMessage(msg);
-            // ✅ Show response buttons ONLY for mentor‑reviewer rooms AND the message is pending
-            const showResponse = !isMine && isReviewer && msg.action === 'pending' && room?.room_type === 'mentor_reviewer' && msg.suggested_time === null;
-            const actionStatus = msg.action ? msg.action.toUpperCase() : 'PENDING';
-            return (
-              <div key={msg.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[70%] rounded-lg px-3 py-2 ${isMine ? 'bg-green-600 text-white' : 'bg-white text-gray-800 shadow-sm'}`}>
-                  <div className="text-xs font-semibold mb-1">{renderSenderName(msg, isMine)}</div>
-                  <div className="text-sm break-words">{msg.content}</div>
-                  <div className={`text-xs text-right mt-1 flex items-center justify-end gap-1 ${isMine ? 'text-green-100' : 'text-gray-400'}`}>
-                    {formatTime(msg.timestamp)}
-                    {isMine && <span>{msg.is_read ? '✓✓' : '✓'}</span>}
-                  </div>
+          groupedMessages.map(({ day, msgs }) => (
+            <div key={day}>
+              <div className="text-center text-xs text-gray-400 my-3">{day}</div>
+              {msgs.map((msg, idx) => {
+                const isMine = isCurrentUserMessage(msg);
+                const showResponse = !isMine && isReviewer && msg.action === 'pending' && room?.room_type === 'mentor_reviewer';
+                const prevMsg = idx > 0 ? msgs[idx-1] : null;
+                const sameSenderAsPrev = prevMsg && String(prevMsg.sender_id || prevMsg.sender) === String(msg.sender_id || msg.sender);
+                const displayName = renderSenderName(msg, isMine);
 
-                  {msg.action !== 'pending' && (
-                    <div className="mt-2 text-xs p-1 rounded bg-gray-100">
-                      <span className="font-semibold">Status: </span>
-                      <span className={msg.action === 'accepted' ? 'text-green-600' : 'text-red-600'}>
-                        {actionStatus}
-                      </span>
-                      {msg.suggested_time && (
-                        <div>📅 Suggested time: {new Date(msg.suggested_time).toLocaleString()}</div>
+                return (
+                  <div key={msg.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'} mb-3`}>
+                    <div className={`max-w-[70%] rounded-lg px-3 py-2 ${isMine ? 'bg-green-600 text-white' : 'bg-white text-gray-800 shadow-sm'}`}>
+                      {!sameSenderAsPrev && (
+                        <div className="text-xs font-semibold mb-1">{displayName}</div>
                       )}
-                    </div>
-                  )}
+                      <div className="text-sm break-words">{msg.content}</div>
+                      <div className={`text-xs text-right mt-1 flex items-center justify-end gap-1 ${isMine ? 'text-green-100' : 'text-gray-400'}`}>
+                        {formatTime(msg.timestamp)}
+                        {isMine && <span>{msg.is_read ? '✓✓' : '✓'}</span>}
+                      </div>
 
-                  {showResponse && (
-                    <div className="mt-2 pt-2 border-t border-gray-200">
-                      {respondingMessageId === msg.id ? (
-                        <div className="space-y-2">
-                          <input
-                            type="datetime-local"
-                            value={selectedTime}
-                            onChange={(e) => setSelectedTime(e.target.value)}
-                            className="w-full px-2 py-1 text-xs border rounded"
-                          />
-                          <div className="flex gap-2">
-                            <button onClick={() => handleResponse(msg.id, 'accepted')} className="px-3 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600">Accept</button>
-                            <button onClick={() => handleResponse(msg.id, 'rejected')} className="px-3 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600">Reject</button>
-                            <button onClick={() => setRespondingMessageId(null)} className="px-3 py-1 text-xs bg-gray-300 rounded">Cancel</button>
-                          </div>
+                      {/* ✅ NO STATUS BADGE – completely removed */}
+
+                      {showResponse && (
+                        <div className="mt-2 pt-2 border-t border-gray-200">
+                          {respondingMessageId === msg.id ? (
+                            <div className="space-y-2">
+                              <input
+                                type="datetime-local"
+                                value={selectedTime}
+                                onChange={e => setSelectedTime(e.target.value)}
+                                className="w-full px-2 py-1 text-xs border rounded"
+                              />
+                              <div className="flex gap-2">
+                                <button onClick={() => handleResponse(msg.id, 'accepted')} className="px-3 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600">Accept</button>
+                                <button onClick={() => handleResponse(msg.id, 'rejected')} className="px-3 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600">Reject</button>
+                                <button onClick={() => setRespondingMessageId(null)} className="px-3 py-1 text-xs bg-gray-300 rounded">Cancel</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <button onClick={() => setRespondingMessageId(msg.id)} className="text-xs text-blue-500 hover:underline">Respond (Accept / Reject with time)</button>
+                          )}
                         </div>
-                      ) : (
-                        <button onClick={() => setRespondingMessageId(msg.id)} className="text-xs text-blue-500 hover:underline">Respond (Accept / Reject with time)</button>
                       )}
                     </div>
-                  )}
-                </div>
-              </div>
-            );
-          })
+                  </div>
+                );
+              })}
+            </div>
+          ))
         )}
         {otherTyping && <div className="text-gray-500 text-sm italic ml-2">Typing...</div>}
         <div ref={bottomRef} />
