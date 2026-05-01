@@ -39,6 +39,7 @@ function ReviewerReviewFolders() {
       setAllFolders(res.data);
     } catch (err) {
       setError("Failed to load review folders.");
+      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -186,7 +187,7 @@ function ReviewerReviewFolders() {
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Student</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Student Name</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Week</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Work Doc</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Industry Expert</th>
@@ -205,8 +206,8 @@ function ReviewerReviewFolders() {
                     ) : (
                       filteredEntries.map((entry) => (
                         <tr key={entry.id} className="hover:bg-gray-50">
-                          <td className="px-4 py-3 text-sm text-gray-700">{entry.review_date}</td>
-                          <td className="px-4 py-3 text-sm text-gray-700">{entry.student_name}</td>
+                          <td className="px-4 py-3 text-sm text-gray-700">{entry.review_date || "—"}</td>
+                          <td className="px-4 py-3 text-sm text-gray-700 font-medium">{entry.student_name || "—"}</td>
                           <td className="px-4 py-3 text-sm">{entry.week || "—"}</td>
                           <td className="px-4 py-3 text-sm">{renderLink(entry.work_documents, "Work Doc")}</td>
                           <td className="px-4 py-3 text-sm">{entry.industry_expert || "—"}</td>

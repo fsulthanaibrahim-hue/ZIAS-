@@ -25,6 +25,8 @@ import ReviewerReviewFolders from "./pages/reviewer/ReviewerReviewFolders";
 import ReviewerReviewSheet from "./pages/reviewer/ReviewerReviewSheet";
 import ReviewerReviewSheetRange from "./pages/reviewer/ReviewerReviewSheetRange";
 import ReviewerNotifications from "./pages/reviewer/ReviewerNotifications";
+import ReviewerAssignments from "./pages/reviewer/ReviewerAssignments";
+
 
 // Mentor pages
 import MentorDashboard from "./pages/mentor/MentorDashboard";
@@ -151,7 +153,7 @@ function App() {
           </div>
         </PrivateRoute>
       } />
-      <Route path="/reviewer/students" element={
+      <Route path="/reviewer/notifications" element={
         <PrivateRoute>
           <div style={{ display: "flex" }}>
             <ReviewerSidebar />
@@ -199,7 +201,14 @@ function App() {
           </div>
         </PrivateRoute>
       } />
-
+      <Route path="/reviewer/assignments" element={
+        <PrivateRoute>
+          <div style={{ display: "flex" }}>
+            <ReviewerSidebar />
+            <ReviewerAssignments />
+          </div>
+        </PrivateRoute>
+      } />
 
 
       {/* Mentor routes with sidebar */}

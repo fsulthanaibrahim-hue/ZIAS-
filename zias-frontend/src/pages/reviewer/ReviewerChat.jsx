@@ -3,20 +3,14 @@ import { useState, useRef } from "react";
 import ChatList from "../../components/ChatList";
 import ChatWindow from "../../components/ChatWindow";
 import API from "../../api/api";
+import toast from "react-hot-toast";
 
 function ReviewerChat() {
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [isMobileListVisible, setIsMobileListVisible] = useState(true);
   const [showDropdown, setShowDropdown] = useState(false);
-  const [toast, setToast] = useState({ show: false, message: "", type: "success" });
-  const [confirmClear, setConfirmClear] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const chatWindowRef = useRef();
-
-  const showToast = (message, type = "success") => {
-    setToast({ show: true, message, type });
-    setTimeout(() => setToast({ show: false, message: "", type: "success" }), 3000);
-  };
 
   const handleSelectRoom = async (room) => {
     setSelectedRoom(room);
@@ -28,23 +22,26 @@ function ReviewerChat() {
     }
   };
 
+  // ========== CLEAR CHAT FUNCTIONALITY ==========
   const clearChat = async () => {
     if (!selectedRoom) return;
-    setConfirmClear(false);
     try {
       await API.delete(`chat-messages/clear/?room=${selectedRoom.id}`);
       if (chatWindowRef.current) chatWindowRef.current.clearMessages();
-      showToast("Chat cleared successfully", "success");
+      toast.success("Chat cleared successfully");
       setShowDropdown(false);
     } catch (err) {
-      showToast("Failed to clear chat", "error");
+      console.error(err);
+      toast.error("Failed to clear chat");
     }
   };
 
   const requestClear = () => {
-    setConfirmClear(true);
-    setShowDropdown(false);
+    if (window.confirm("Clear all messages in this chat?")) {
+      clearChat();
+    }
   };
+  // =============================================
 
   return (
     <div className="flex h-screen w-full bg-gray-50 overflow-hidden font-sans">
@@ -90,19 +87,26 @@ function ReviewerChat() {
                   <h3 className="font-semibold text-gray-800">{selectedRoom?.other_user_name || "Unknown"}</h3>
                 </div>
               </div>
-              <div className="relative">
-                <button onClick={() => setShowDropdown(!showDropdown)} className="p-2 rounded-full hover:bg-gray-100 transition-colors">
-                  <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                  </svg>
+              <div className="flex items-center gap-2">
+                {/* Three-dot menu for clear chat */}
+                <div className="relative">
+                  <button onClick={() => setShowDropdown(!showDropdown)} className="p-2 rounded-full hover:bg-gray-100 transition-colors">
+                    <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                    </svg>
+                  </button>
+                  {showDropdown && (
+                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10 border border-gray-100">
+                      <button onClick={requestClear} className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100">
+                        Clear chat
+                      </button>
+                    </div>
+                  )}
+                </div>
+                {/* Mobile sidebar toggle */}
+                <button onClick={() => setIsMobileListVisible(true)} className="md:hidden p-2 rounded-full hover:bg-gray-100">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
                 </button>
-                {showDropdown && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10 border border-gray-100">
-                    <button onClick={requestClear} className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100">
-                      Clear chat
-                    </button>
-                  </div>
-                )}
               </div>
             </div>
 
@@ -123,20 +127,6 @@ function ReviewerChat() {
           </div>
         )}
       </div>
-
-      {/* Toasts */}
-      {confirmClear && (
-        <div className="fixed bottom-20 left-1/2 transform -translate-x-1/2 bg-white rounded-lg shadow-lg px-4 py-3 flex items-center gap-4 z-50 border border-gray-200">
-          <span className="text-sm font-medium">Clear all messages?</span>
-          <button onClick={clearChat} className="px-3 py-1 bg-red-600 text-white text-sm rounded-md hover:bg-red-700">Yes</button>
-          <button onClick={() => setConfirmClear(false)} className="px-3 py-1 bg-gray-200 text-gray-800 text-sm rounded-md hover:bg-gray-300">No</button>
-        </div>
-      )}
-      {toast.show && (
-        <div className={`fixed bottom-5 left-1/2 transform -translate-x-1/2 px-4 py-2 rounded-full text-white text-sm z-50 ${toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'}`}>
-          {toast.message}
-        </div>
-      )}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 # accounts/views.py
 from rest_framework import viewsets, status, generics, permissions
+from .models import Notification
 from rest_framework.generics import RetrieveAPIView
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -21,7 +22,7 @@ from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
 from .models import (
     User, Student, Mentor, Reviewer, Course, Module, Day, Task, Batch,
     StudentModule, PasswordResetToken, ContactMessage, StudentWeekReview, WeekUpdate, ReviewFolder,
-    ChatRoom, ChatMessage, CourseStatus, Notification, StudentDocument, MentorDocument
+    ChatRoom, ChatMessage, CourseStatus, Notification, StudentDocument, MentorDocument, ReviewAssignment
 )
 
 from .serializers import (
@@ -29,7 +30,7 @@ from .serializers import (
     CourseSerializer, ModuleSerializer, DaySerializer, TaskSerializer, BatchSerializer,
     ContactMessageSerializer, StudentModuleSerializer, StudentWeekReviewSerializer, WeekUpdateSerializer,
     ReviewFolderSerializer, ChatRoomSerializer, ChatMessageSerializer, CourseStatusSerializer, 
-    NotificationSerializer, StudentDocumentSerializer, MentorDocumentSerializer
+    NotificationSerializer, StudentDocumentSerializer, MentorDocumentSerializer, ReviewAssignmentSerializer
 )
 
 # ✅ Corrected import - only use permission classes that exist in permissions.py
@@ -87,11 +88,8 @@ class StudentViewSet(viewsets.ModelViewSet):
             except Mentor.DoesNotExist:
                 queryset = queryset.none()
         elif user.is_reviewer:
-            try:
-                reviewer = Reviewer.objects.get(user=user)
-                queryset = queryset.filter(course=reviewer.course)
-            except Reviewer.DoesNotExist:
-                queryset = queryset.none()
+            # ✅ Reviewers see NO students
+            queryset = Student.objects.none()
         else:
             queryset = queryset.filter(user=user)
         return queryset
@@ -99,7 +97,9 @@ class StudentViewSet(viewsets.ModelViewSet):
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
         user = request.user
-        if user.is_mentor or user.is_reviewer:
+        
+        # ✅ Mentors see their students; reviewers see empty list
+        if user.is_mentor:
             data = []
             for student in queryset.select_related('user'):
                 data.append({
@@ -110,8 +110,11 @@ class StudentViewSet(viewsets.ModelViewSet):
                     "batch": student.batch,
                 })
             return Response(data)
-        serializer = self.get_serializer(queryset, many=True)
-        return Response(serializer.data)
+        elif user.is_reviewer:
+            return Response([])   # 👈 Empty list for reviewers
+        else:
+            serializer = self.get_serializer(queryset, many=True)
+            return Response(serializer.data)
 
     @action(detail=False, methods=['get'], url_path='me', permission_classes=[IsAuthenticated])
     def me(self, request):
@@ -131,24 +134,7 @@ class StudentViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(student)
         return Response(serializer.data)
 
-    @action(detail=False, methods=['get'], url_path='for-reviewer', permission_classes=[IsAuthenticated])
-    def for_reviewer(self, request):
-        user = request.user
-        if not user.is_reviewer:
-            return Response({"detail": "Not authorized"}, status=403)
-        try:
-            reviewer = Reviewer.objects.get(user=user)
-            students = Student.objects.filter(course=reviewer.course)
-            data = [{
-                "id": s.id,
-                "username": s.user.username,
-                "full_name": s.full_name,
-                "course": s.course,
-                "batch": s.batch,
-            } for s in students]
-            return Response(data)
-        except Reviewer.DoesNotExist:
-            return Response({"detail": "Reviewer profile not found"}, status=404)
+
 
     def destroy(self, request, *args, **kwargs):
         student = self.get_object()
@@ -157,7 +143,7 @@ class StudentViewSet(viewsets.ModelViewSet):
         user.save()
         student.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
-
+    
 
 # ----------------------------
 # MENTOR VIEWSET
@@ -879,12 +865,31 @@ class ChatMessageListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         room_id = self.request.query_params.get('room')
-        if room_id:
-            return ChatMessage.objects.filter(room_id=room_id).order_by('timestamp')
-        return ChatMessage.objects.none()
+        if not room_id:
+            return ChatMessage.objects.none()
+        return ChatMessage.objects.filter(room_id=room_id).order_by('timestamp')
 
     def perform_create(self, serializer):
-        serializer.save(sender=self.request.user)
+        message = serializer.save(sender=self.request.user)
+        room = message.room
+
+        # Only create notification for mentor-reviewer rooms (related to review folders)
+        if room.room_type == 'mentor_reviewer' and "review assignment" in message.content.lower():
+            message.action = 'pending'
+            message.save()
+            other_user = None
+            if room.reviewer and room.reviewer.user != self.request.user:
+                other_user = room.reviewer.user
+            elif room.mentor and room.mentor.user != self.request.user:
+                other_user = room.mentor.user
+
+            if other_user:
+                from .models import Notification
+                Notification.objects.create(
+                    user=other_user,
+                    message=f"New message from {self.request.user.username}: {message.content[:50]}",
+                    link=f"/{other_user.user_type}/chat?room={room.id}"
+                )
 
 
 class ClearChatMessagesView(APIView):
@@ -930,10 +935,9 @@ class RespondToMessageView(APIView):
         except ChatMessage.DoesNotExist:
             return Response({"error": "Message not found"}, status=404)
 
-        # Only the receiver (reviewer) can respond
         room = message.room
         user = request.user
-        # Check if user is the reviewer in that room
+        # Only the reviewer can respond
         if room.reviewer and room.reviewer.user == user:
             action = request.data.get('action')
             suggested_time = request.data.get('suggested_time')
@@ -945,10 +949,6 @@ class RespondToMessageView(APIView):
                 message.suggested_time = suggested_time
             message.responded_at = timezone.now()
             message.save()
-
-            # Send a system message back to the mentor (or update the existing message)
-            # For simplicity, we'll just update the message and the UI will reflect it.
-
             return Response(ChatMessageSerializer(message).data)
         else:
             return Response({"error": "Not authorized"}, status=403)
@@ -990,7 +990,7 @@ class NotificationViewSet(viewsets.ModelViewSet):
     def mark_all_read(self, request):
         self.get_queryset().update(is_read=True)
         return Response({'status': 'all marked read'})
-
+    
 
 # ----------------------------
 # STUDENT DOCUMENTS (using StudentDocument model)
@@ -1074,3 +1074,55 @@ class MentorDocumentDeleteView(APIView):
             return Response(status=204)
         except MentorDocument.DoesNotExist:
             return Response({'error': 'Document not found'}, status=404)
+
+
+class ReviewAssignmentViewSet(viewsets.ModelViewSet):
+    queryset = ReviewAssignment.objects.all()
+    serializer_class = ReviewAssignmentSerializer
+    permission_classes = [IsMentorOrReviewerOrAdmin]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_reviewer:
+            reviewer = Reviewer.objects.get(user=user)
+            return ReviewAssignment.objects.filter(reviewer=reviewer)
+        elif user.is_mentor:
+            mentor = Mentor.objects.get(user=user)
+            return ReviewAssignment.objects.filter(mentor=mentor)
+        return ReviewAssignment.objects.all()
+
+    def perform_create(self, serializer):
+        if self.request.user.is_mentor:
+            mentor = Mentor.objects.get(user=self.request.user)
+            assignment = serializer.save(mentor=mentor)
+            # Notify the reviewer
+            Notification.objects.create(
+                user=assignment.reviewer.user,
+                message=f"You have a new review assignment from {mentor.full_name or mentor.user.username} for student {assignment.student.full_name or assignment.student.user.username} (Course: {assignment.course})",
+                link="/reviewer/assignments"
+            )
+        else:
+            raise PermissionError("Only mentors can create assignments")
+
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if request.user.is_reviewer:
+            # Only allow status and comments update
+            allowed_fields = ['status', 'comments']
+            data = {k: v for k, v in request.data.items() if k in allowed_fields}
+            serializer = self.get_serializer(instance, data=data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            self.perform_update(serializer)
+            # Notify the mentor about the decision
+            if 'status' in data and data['status'] in ['accepted', 'rejected']:
+                Notification.objects.create(
+                    user=instance.mentor.user,
+                    message=f"Reviewer {instance.reviewer.full_name or instance.reviewer.user.username} has {data['status']} the assignment for student {instance.student.full_name or instance.student.user.username} (Course: {instance.course})",
+                    link="/mentor/assignments"
+                )
+            return Response(serializer.data)
+        elif request.user.is_mentor or request.user.is_admin:
+            return super().update(request, *args, **kwargs)
+        else:
+            return Response({"error": "Not allowed"}, status=status.HTTP_403_FORBIDDEN)
+        

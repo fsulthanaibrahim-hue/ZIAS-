@@ -344,20 +344,15 @@ class ChatRoom(models.Model):
 
 
 class ChatMessage(models.Model):
-    ACTION_CHOICES = (
-        ('pending', 'pending'),
-        ('accepted', 'accepted'),
-        ('rejected', 'rejected'),
-    )
-    action = models.CharField(max_length=20, choices=ACTION_CHOICES, default='pending')
-    suggested_time = models.DateTimeField(null=True, blank=True)
-    responded_at = models.DateTimeField(null=True, blank=True)
     room = models.ForeignKey(ChatRoom, on_delete=models.CASCADE, related_name='messages')
     sender = models.ForeignKey(User, on_delete=models.CASCADE)
     content = models.TextField()
     is_read = models.BooleanField(default=False)
     read_at = models.DateTimeField(null=True, blank=True)
     timestamp = models.DateTimeField(auto_now_add=True)
+    action = models.CharField(max_length=20, blank=True, default='')
+    suggested_time = models.DateTimeField(null=True, blank=True)
+    responded_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ['timestamp']
@@ -410,3 +405,28 @@ class MentorDocument(models.Model):
         if not self.file_name:
             self.file_name = self.file.name
         super().save(*args, **kwargs)
+
+
+class ReviewAssignment(models.Model):
+    STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('accepted', 'Accepted'),
+        ('rejected', 'Rejected'),
+    )
+
+    mentor = models.ForeignKey('Mentor', on_delete=models.CASCADE, related_name='assigned_reviews')
+    reviewer = models.ForeignKey('Reviewer', on_delete=models.CASCADE, related_name='assigned_reviews')
+    student = models.ForeignKey('Student', on_delete=models.CASCADE, related_name='review_assignments')
+    review_sheet = models.URLField(max_length=500, blank=True, null=True)
+    course = models.CharField(max_length=100, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    comments = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.reviewer.user.username} – {self.student.user.username} ({self.status})"
+    

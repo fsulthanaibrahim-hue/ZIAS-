@@ -10,7 +10,7 @@ from rest_framework import serializers
 from .models import (
     User, Student, Mentor, Reviewer, Course, Module, Day, Task, Batch,
     StudentModule, ContactMessage, StudentWeekReview, WeekUpdate, ReviewFolder,
-    ChatRoom, ChatMessage, CourseStatus, Notification, StudentDocument, MentorDocument
+    ChatRoom, ChatMessage, CourseStatus, Notification, StudentDocument, MentorDocument, ReviewAssignment
 )
 
 
@@ -398,7 +398,7 @@ class WeekUpdateSerializer(serializers.ModelSerializer):
 # REVIEW FOLDER SERIALIZER
 # ----------------------------
 class ReviewFolderSerializer(serializers.ModelSerializer):
-    student_name = serializers.CharField(source='student.user.username', read_only=True)
+    student_name = serializers.SerializerMethodField()
     review_status = serializers.ReadOnlyField()
 
     class Meta:
@@ -406,10 +406,19 @@ class ReviewFolderSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ['id', 'created_at', 'updated_at', 'created_by', 'updated_by', 'student_name']
 
+    def get_student_name(self, obj):
+        student = obj.student
+        if student.full_name:
+            return student.full_name
+        return student.user.username
+
 
 # ========== CHAT SERIALIZERS ==========
 class ChatMessageSerializer(serializers.ModelSerializer):
     sender_name = serializers.SerializerMethodField()
+    action = serializers.CharField(read_only=True)
+    suggested_time = serializers.DateTimeField(read_only=True)
+    responded_at = serializers.DateTimeField(read_only=True)
 
     class Meta:
         model = ChatMessage
@@ -417,15 +426,9 @@ class ChatMessageSerializer(serializers.ModelSerializer):
         read_only_fields = ['sender', 'timestamp', 'is_read', 'read_at', 'action', 'suggested_time', 'responded_at']
 
     def get_sender_name(self, obj):
-        user = obj.sender
-        if hasattr(user, 'student'):
-            return user.student.full_name or user.username
-        elif hasattr(user, 'mentor'):
-            return user.mentor.full_name or user.username
-        elif hasattr(user, 'reviewer'):
-            return user.reviewer.full_name or user.username
-        return user.username
-
+        return obj.sender.username
+    
+    
 
 class ChatRoomSerializer(serializers.ModelSerializer):
     last_message = serializers.SerializerMethodField()
@@ -433,11 +436,13 @@ class ChatRoomSerializer(serializers.ModelSerializer):
     other_user_name = serializers.SerializerMethodField()
     other_user_id = serializers.SerializerMethodField()
     other_user_type = serializers.SerializerMethodField()
+    current_user_is_reviewer = serializers.SerializerMethodField()
 
     class Meta:
         model = ChatRoom
         fields = ['id', 'name', 'room_type', 'last_message', 'unread_count',
-                  'other_user_name', 'other_user_id', 'other_user_type', 'created_at']
+                  'other_user_name', 'other_user_id', 'other_user_type', 'created_at',
+                  'current_user_is_reviewer']
 
     def get_last_message(self, obj):
         msg = obj.messages.last()
@@ -510,6 +515,11 @@ class ChatRoomSerializer(serializers.ModelSerializer):
                 return 'mentor'
         return ''
 
+    def get_current_user_is_reviewer(self, obj):
+        user = self.context['request'].user
+        # Safely check if the room's reviewer is not None and matches the current user
+        return obj.reviewer is not None and obj.reviewer.user == user
+    
 
 class CourseStatusSerializer(serializers.ModelSerializer):
     student_name = serializers.CharField(source='student.user.username', read_only=True)
@@ -553,3 +563,19 @@ class MentorDocumentSerializer(serializers.ModelSerializer):
         if request:
             return request.build_absolute_uri(obj.file.url)
         return obj.file.url
+
+
+class ReviewAssignmentSerializer(serializers.ModelSerializer):
+    mentor_name = serializers.CharField(source='mentor.user.username', read_only=True)
+    reviewer_name = serializers.CharField(source='reviewer.user.username', read_only=True)
+    student_name = serializers.CharField(source='student.user.username', read_only=True)
+
+    class Meta:
+        model = ReviewAssignment
+        fields = [
+            'id', 'mentor', 'mentor_name', 'reviewer', 'reviewer_name',
+            'student', 'student_name', 'review_sheet', 'course', 'status',
+            'comments', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+

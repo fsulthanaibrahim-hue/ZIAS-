@@ -3,44 +3,32 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../api/api";
 
-function NotificationBell({ role = "admin" }) {  // "admin" or "mentor"
+function NotificationBell({ role = "mentor" }) {
   const [unreadCount, setUnreadCount] = useState(0);
   const navigate = useNavigate();
   const intervalRef = useRef(null);
 
   const fetchUnreadCount = async () => {
     try {
-      // Use the same endpoint; backend should filter by current user.
-      // For mentor, you could also add a query param: ?type=chat
       const res = await API.get("notifications/");
-      let unread = res.data.filter(n => !n.is_read).length;
-
-      // If you want ONLY chat notifications for mentor:
-      if (role === "mentor") {
-        unread = res.data.filter(n => !n.is_read && n.type === "chat").length;
-      }
+      const unread = res.data.filter(n => !n.is_read).length;
       setUnreadCount(unread);
     } catch (err) {
       console.error("Failed to fetch notifications", err);
     }
   };
 
-  // Poll every 30 seconds (or use WebSocket for real‑time)
   useEffect(() => {
     fetchUnreadCount();
     intervalRef.current = setInterval(fetchUnreadCount, 30000);
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [role]);
+    return () => clearInterval(intervalRef.current);
+  }, []);
 
-  // Navigate to the correct notifications page
   const handleClick = () => {
-    if (role === "admin") {
-      navigate("/admin/notifications");
-    } else {
-      navigate("/mentor/notifications");  // create this page if needed
-    }
+    if (role === "admin") navigate("/admin/notifications");
+    else if (role === "mentor") navigate("/mentor/notifications");
+    else if (role === "reviewer") navigate("/reviewer/notifications");
+    else navigate("/notifications");
   };
 
   return (
@@ -49,8 +37,8 @@ function NotificationBell({ role = "admin" }) {  // "admin" or "mentor"
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
       </svg>
       {unreadCount > 0 && (
-        <span className="absolute top-0 right-0 bg-red-500 text-white rounded-full text-xs px-1">
-          {unreadCount > 99 ? '99+' : unreadCount}
+        <span className="absolute top-0 right-0 bg-red-500 text-white rounded-full text-xs px-1 min-w-[1.25rem] h-5 flex items-center justify-center">
+          {unreadCount > 99 ? "99+" : unreadCount}
         </span>
       )}
     </button>
