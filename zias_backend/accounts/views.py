@@ -865,31 +865,40 @@ class ChatMessageListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         room_id = self.request.query_params.get('room')
-        if not room_id:
-            return ChatMessage.objects.none()
-        return ChatMessage.objects.filter(room_id=room_id).order_by('timestamp')
+        if room_id:
+            return ChatMessage.objects.filter(room_id=room_id).order_by('timestamp')
+        return ChatMessage.objects.none()
 
     def perform_create(self, serializer):
         message = serializer.save(sender=self.request.user)
         room = message.room
 
-        # Only create notification for mentor-reviewer rooms (related to review folders)
-        if room.room_type == 'mentor_reviewer' and "review assignment" in message.content.lower():
-            message.action = 'pending'
-            message.save()
-            other_user = None
-            if room.reviewer and room.reviewer.user != self.request.user:
-                other_user = room.reviewer.user
-            elif room.mentor and room.mentor.user != self.request.user:
-                other_user = room.mentor.user
+        # Determine the other participant (the one who did NOT send this message)
+        other_user = None
+        if room.student and room.student.user != self.request.user:
+            other_user = room.student.user
+        elif room.mentor and room.mentor.user != self.request.user:
+            other_user = room.mentor.user
+        elif room.reviewer and room.reviewer.user != self.request.user:
+            other_user = room.reviewer.user
 
-            if other_user:
-                from .models import Notification
-                Notification.objects.create(
-                    user=other_user,
-                    message=f"New message from {self.request.user.username}: {message.content[:50]}",
-                    link=f"/{other_user.user_type}/chat?room={room.id}"
-                )
+        if other_user:
+            # Build a link based on the recipient's role
+            if other_user.is_mentor:
+                link = f"/mentor/chat?room={room.id}"
+            elif other_user.is_reviewer:
+                link = f"/reviewer/chat?room={room.id}"
+            elif other_user.is_student:
+                link = f"/student/chat?room={room.id}"
+            else:
+                link = "/chat"
+
+            Notification.objects.create(
+                user=other_user,
+                message=f"New message from {self.request.user.username}: {message.content[:50]}",
+                link=link,
+                is_read=False
+            )
 
 
 class ClearChatMessagesView(APIView):

@@ -2,6 +2,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useParams, useSearchParams, Link } from "react-router-dom";
 import API from "../../api/api";
+import StudentSidebar from "../../components/StudentSidebar";
 
 const extractWeekNumber = (title) => {
   const match = title?.match(/Week\s*(\d+)/i);
@@ -89,7 +90,6 @@ function StudentReviewSheetRange() {
     } catch (err) { console.error(err); }
   };
 
-  // Load user & student list
   useEffect(() => {
     const fetchUser = async () => {
       try {
@@ -113,7 +113,6 @@ function StudentReviewSheetRange() {
     fetchUser();
   }, []);
 
-  // Load weeks and reviews for the given range
   useEffect(() => {
     const fetchData = async () => {
       const isReviewer = userRole === "admin" || userRole === "mentor" || userRole === "reviewer";
@@ -125,7 +124,6 @@ function StudentReviewSheetRange() {
         if (isReviewer && selectedStudentId) modulesUrl += `?student_id=${selectedStudentId}`;
         const modulesRes = await API.get(modulesUrl);
         let allWeeks = modulesRes.data;
-        // Filter by week number range
         const startNum = parseInt(start, 10);
         const endNum = parseInt(end, 10);
         allWeeks = allWeeks.filter(week => {
@@ -250,147 +248,150 @@ function StudentReviewSheetRange() {
   if (error) return <div className="min-h-screen bg-gray-50 text-red-600 flex items-center justify-center p-8 text-center">{error}</div>;
 
   return (
-    <div className="min-h-screen w-full bg-gray-50 text-gray-800 font-sans">
-      <div className="max-w-full mx-auto px-4 sm:px-6 py-4 sm:py-8">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-          <div>
-            <h1 className="text-xl font-semibold text-gray-800 tracking-tight">
-              Weeks {start} – {end}
-            </h1>
-            <p className="text-gray-500 text-sm mt-1">
-              {isReviewer && selectedStudentId
-                ? students.find(s => s.id === selectedStudentId)?.name || "Select student"
-                : "Your Weekly Progress"}
-            </p>
-          </div>
-          <div className="flex gap-3 items-center flex-wrap">
-            {isReviewer && students.length > 0 && (
-              <select
-                value={selectedStudentId || ""}
-                onChange={(e) => setSelectedStudentId(parseInt(e.target.value))}
-                className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-800 focus:outline-none focus:border-green-500"
+    <div className="flex h-screen overflow-hidden">
+      <StudentSidebar />
+      <div className="flex-1 overflow-y-auto bg-gray-50">
+        <div className="max-w-full mx-auto px-4 sm:px-6 py-4 sm:py-8">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+            <div>
+              <h1 className="text-xl font-semibold text-gray-800 tracking-tight">
+                Weeks {start} – {end}
+              </h1>
+              <p className="text-gray-500 text-sm mt-1">
+                {isReviewer && selectedStudentId
+                  ? students.find(s => s.id === selectedStudentId)?.name || "Select student"
+                  : "Your Weekly Progress"}
+              </p>
+            </div>
+            <div className="flex gap-3 items-center flex-wrap">
+              {isReviewer && students.length > 0 && (
+                <select
+                  value={selectedStudentId || ""}
+                  onChange={(e) => setSelectedStudentId(parseInt(e.target.value))}
+                  className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-800 focus:outline-none focus:border-green-500"
+                >
+                  {students.map(s => <option key={s.id} value={s.id}>{s.name} ({s.username})</option>)}
+                </select>
+              )}
+              <Link to={dashboardLink} className="bg-gray-200 hover:bg-gray-300 text-gray-700 hover:text-gray-900 px-4 py-2 rounded-lg text-sm font-medium transition">
+                ← Dashboard
+              </Link>
+              <Link
+                to={isReviewer && selectedStudentId ? `/student/review-sheet?student_id=${selectedStudentId}` : "/student/review-sheet"}
+                className="bg-gray-200 hover:bg-gray-300 text-gray-700 hover:text-gray-900 px-4 py-2 rounded-lg text-sm font-medium transition"
               >
-                {students.map(s => <option key={s.id} value={s.id}>{s.name} ({s.username})</option>)}
-              </select>
-            )}
-            <Link to={dashboardLink} className="bg-gray-200 hover:bg-gray-300 text-gray-700 hover:text-gray-900 px-4 py-2 rounded-lg text-sm font-medium transition">
-              ← Dashboard
-            </Link>
-            <Link
-              to={isReviewer && selectedStudentId ? `/student/review-sheet?student_id=${selectedStudentId}` : "/student/review-sheet"}
-              className="bg-gray-200 hover:bg-gray-300 text-gray-700 hover:text-gray-900 px-4 py-2 rounded-lg text-sm font-medium transition"
-            >
-              All Weeks
-            </Link>
+                All Weeks
+              </Link>
+            </div>
           </div>
-        </div>
 
-        <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-sm bg-white">
-          <table className="min-w-full border-collapse">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="sticky left-0 bg-gray-50 z-10 px-4 py-3 text-left text-gray-500 text-xs font-semibold uppercase w-48">
-                  FIELD / WEEK
-                </th>
-                {weeks.map(week => {
-                  const weekNum = extractWeekNumber(week.title);
-                  return (
-                    <th
-                      key={week.id}
-                      className="px-3 py-3 text-left text-gray-800 text-sm font-medium min-w-[200px] border-l border-gray-200"
-                    >
-                      {cleanTitle(week.title)}
-                    </th>
-                  );
-                })}
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-100">
-              {rows.map(row => (
-                <tr key={row.key} className="hover:bg-gray-50/40">
-                  <td className="sticky left-0 bg-white px-4 py-3 text-gray-600 text-sm font-medium border-r border-gray-200">
-                    {row.label}
-                  </td>
-                  {weeks.map(week => (
-                    <td key={week.id} className="px-3 py-2 border-l border-gray-200 align-top">
-                      {renderCell(week.id, row)}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-              {/* Updates row */}
-              <tr className="hover:bg-gray-50/40">
-                <td className="sticky left-0 bg-white px-4 py-3 text-gray-600 text-sm font-medium border-r border-gray-200">
-                  Updates & Extra Scores
-                </td>
-                {weeks.map(week => {
-                  const rev = reviews[week.id] || {};
-                  const weekReviewId = rev.id;
-                  const weekUpdates = weekReviewId ? (updates[weekReviewId] || []) : [];
-                  const isExpanded = expandedWeekId === week.id;
-                  return (
-                    <td key={week.id} className="px-3 py-2 border-l border-gray-200 align-top">
-                      {isReviewer && weekReviewId && (
-                        <button
-                          onClick={() => addUpdate(weekReviewId)}
-                          className="text-xs bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded mb-2 shadow-sm"
-                        >
-                          + Add Update
-                        </button>
-                      )}
-                      <button
-                        onClick={() => setExpandedWeekId(isExpanded ? null : week.id)}
-                        className="text-xs text-gray-500 hover:text-gray-800 mb-2 block"
+          <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-sm bg-white">
+            <table className="min-w-full border-collapse">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="sticky left-0 bg-gray-50 z-10 px-4 py-3 text-left text-gray-500 text-xs font-semibold uppercase w-48">
+                    FIELD / WEEK
+                  </th>
+                  {weeks.map(week => {
+                    const weekNum = extractWeekNumber(week.title);
+                    return (
+                      <th
+                        key={week.id}
+                        className="px-3 py-3 text-left text-gray-800 text-sm font-medium min-w-[200px] border-l border-gray-200"
                       >
-                        {isExpanded ? "▼ Hide Updates" : "▶ Show Updates"}
-                      </button>
-                      {isExpanded && (
-                        <div className="space-y-2">
-                          {weekUpdates.length === 0 && <p className="text-gray-500 text-xs">No updates yet.</p>}
-                          {weekUpdates.map(upd => (
-                            <div key={upd.id} className="border-l-2 border-gray-200 pl-2 mb-2">
-                              {isReviewer ? (
-                                <>
-                                  <textarea
-                                    value={upd.update_text}
-                                    onChange={(e) => updateUpdate(upd.id, "update_text", e.target.value)}
-                                    rows="2"
-                                    className="w-full bg-white border border-gray-300 rounded px-2 py-1 text-xs text-gray-800"
-                                    placeholder="Update notes..."
-                                  />
-                                  <div className="flex gap-2 mt-1">
-                                    <input
-                                      type="number"
-                                      placeholder="Extra score"
-                                      value={upd.extra_score ?? ""}
-                                      onChange={(e) => updateUpdate(upd.id, "extra_score", e.target.value ? parseInt(e.target.value) : null)}
-                                      className="w-24 bg-white border border-gray-300 rounded px-2 py-1 text-xs text-gray-800"
-                                    />
-                                    <span className="text-gray-400 text-xs">{new Date(upd.update_date).toLocaleDateString()}</span>
-                                    <button onClick={() => deleteUpdate(upd.id)} className="text-red-500 hover:text-red-700 text-xs">🗑</button>
-                                  </div>
-                                </>
-                              ) : (
-                                <>
-                                  <div className="text-xs whitespace-pre-wrap break-words text-gray-700">{upd.update_text || "—"}</div>
-                                  {upd.extra_score && <div className="text-xs text-green-600">+{upd.extra_score} pts</div>}
-                                  <div className="text-gray-400 text-xs">{new Date(upd.update_date).toLocaleDateString()}</div>
-                                </>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                        {cleanTitle(week.title)}
+                      </th>
+                    );
+                  })}
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-100">
+                {rows.map(row => (
+                  <tr key={row.key} className="hover:bg-gray-50/40">
+                    <td className="sticky left-0 bg-white px-4 py-3 text-gray-600 text-sm font-medium border-r border-gray-200">
+                      {row.label}
                     </td>
-                  );
-                })}
-              </tr>
-            </tbody>
-          </table>
-        </div>
+                    {weeks.map(week => (
+                      <td key={week.id} className="px-3 py-2 border-l border-gray-200 align-top">
+                        {renderCell(week.id, row)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+                {/* Updates row */}
+                <tr className="hover:bg-gray-50/40">
+                  <td className="sticky left-0 bg-white px-4 py-3 text-gray-600 text-sm font-medium border-r border-gray-200">
+                    Updates & Extra Scores
+                  </td>
+                  {weeks.map(week => {
+                    const rev = reviews[week.id] || {};
+                    const weekReviewId = rev.id;
+                    const weekUpdates = weekReviewId ? (updates[weekReviewId] || []) : [];
+                    const isExpanded = expandedWeekId === week.id;
+                    return (
+                      <td key={week.id} className="px-3 py-2 border-l border-gray-200 align-top">
+                        {isReviewer && weekReviewId && (
+                          <button
+                            onClick={() => addUpdate(weekReviewId)}
+                            className="text-xs bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded mb-2 shadow-sm"
+                          >
+                            + Add Update
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setExpandedWeekId(isExpanded ? null : week.id)}
+                          className="text-xs text-gray-500 hover:text-gray-800 mb-2 block"
+                        >
+                          {isExpanded ? "▼ Hide Updates" : "▶ Show Updates"}
+                        </button>
+                        {isExpanded && (
+                          <div className="space-y-2">
+                            {weekUpdates.length === 0 && <p className="text-gray-500 text-xs">No updates yet.</p>}
+                            {weekUpdates.map(upd => (
+                              <div key={upd.id} className="border-l-2 border-gray-200 pl-2 mb-2">
+                                {isReviewer ? (
+                                  <>
+                                    <textarea
+                                      value={upd.update_text}
+                                      onChange={(e) => updateUpdate(upd.id, "update_text", e.target.value)}
+                                      rows="2"
+                                      className="w-full bg-white border border-gray-300 rounded px-2 py-1 text-xs text-gray-800"
+                                      placeholder="Update notes..."
+                                    />
+                                    <div className="flex gap-2 mt-1">
+                                      <input
+                                        type="number"
+                                        placeholder="Extra score"
+                                        value={upd.extra_score ?? ""}
+                                        onChange={(e) => updateUpdate(upd.id, "extra_score", e.target.value ? parseInt(e.target.value) : null)}
+                                        className="w-24 bg-white border border-gray-300 rounded px-2 py-1 text-xs text-gray-800"
+                                      />
+                                      <span className="text-gray-400 text-xs">{new Date(upd.update_date).toLocaleDateString()}</span>
+                                      <button onClick={() => deleteUpdate(upd.id)} className="text-red-500 hover:text-red-700 text-xs">🗑</button>
+                                    </div>
+                                  </>
+                                ) : (
+                                  <>
+                                    <div className="text-xs whitespace-pre-wrap break-words text-gray-700">{upd.update_text || "—"}</div>
+                                    {upd.extra_score && <div className="text-xs text-green-600">+{upd.extra_score} pts</div>}
+                                    <div className="text-gray-400 text-xs">{new Date(upd.update_date).toLocaleDateString()}</div>
+                                  </>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              </tbody>
+            </table>
+          </div>
 
-        <div className="mt-4 text-right text-gray-400 text-xs">
-          💡 {isReviewer ? "Click any cell to edit. Changes auto‑save." : "View‑only mode."}
+          <div className="mt-4 text-right text-gray-400 text-xs">
+            💡 {isReviewer ? "Click any cell to edit. Changes auto‑save." : "View‑only mode."}
+          </div>
         </div>
       </div>
     </div>

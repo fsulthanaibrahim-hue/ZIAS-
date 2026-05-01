@@ -4,15 +4,7 @@ import logo from "../assets/images/logo.png";
 
 const Navbar = () => {
   const [isOpen, setIsOpen]     = useState(false);
-  const [scrolled, setScrolled] = useState(false);
   const { pathname }            = useLocation();
-
-  /* ── scroll shadow ── */
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 10);
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
 
   /* ── close menu on navigation ── */
   useEffect(() => { setIsOpen(false); }, [pathname]);
@@ -25,7 +17,7 @@ const Navbar = () => {
 
   const navLinks = [
     { name: "Home",       path: "/" },
-    { name: "Courses",    path: "/courses", badge: "New" },
+    { name: "Courses",    path: "/courses"},
     { name: "About Us",   path: "/about" },
     { name: "Contact Us", path: "/contact" },
   ];
@@ -35,20 +27,10 @@ const Navbar = () => {
 
   return (
     <>
-    
       {/* ════════════════════════════════════════
-          NAVBAR
+          TRANSPARENT NAVBAR WITH BLACK TEXT
       ════════════════════════════════════════ */}
-      <header
-        className={`
-          sticky top-0 z-50 border-b border-[#e8edf2]
-          transition-all duration-300
-          ${scrolled
-            ? "bg-white/88 backdrop-blur-2xl shadow-[0_1px_0_#e8edf2,0_8px_32px_rgba(15,23,42,0.08)]"
-            : "bg-white/97"
-          }
-        `}
-      >
+      <header className="sticky top-0 z-50 transition-all duration-300 bg-transparent">
         <div className="max-w-[1200px] mx-auto px-5 sm:px-7 lg:px-8">
           <div className="flex items-center justify-between h-[72px] gap-5">
 
@@ -63,7 +45,7 @@ const Navbar = () => {
               />
             </Link>
 
-            {/* ── DESKTOP NAV LINKS ── */}
+            {/* ── DESKTOP NAV LINKS (black text for transparent bg) ── */}
             <nav className="hidden lg:flex items-center flex-1 justify-center">
               {navLinks.map((link) => (
                 <Link
@@ -75,15 +57,15 @@ const Navbar = () => {
                     text-[14.5px] font-semibold whitespace-nowrap
                     transition-colors duration-150
                     ${isActive(link.path)
-                      ? "text-emerald-500"
-                      : "text-slate-500 hover:text-[#0f172a] hover:bg-slate-50"
+                      ? "text-emerald-600"
+                      : "text-slate-700 hover:text-emerald-600 hover:bg-black/5"
                     }
                   `}
                 >
                   {link.name}
 
                   {link.badge && (
-                    <span className="text-[9.5px] font-extrabold uppercase tracking-[0.04em] bg-red-50 text-red-500 px-[6px] py-[2px] rounded-[5px] leading-[1.4]">
+                    <span className="text-[9.5px] font-extrabold uppercase tracking-[0.04em] bg-red-100 text-red-600 px-[6px] py-[2px] rounded-[5px] leading-[1.4]">
                       {link.badge}
                     </span>
                   )}
@@ -104,17 +86,17 @@ const Navbar = () => {
               ))}
             </nav>
 
-            {/* ── DESKTOP RIGHT ACTIONS ── */}
+            {/* ── DESKTOP RIGHT ACTIONS (black text, glass style) ── */}
             <div className="hidden lg:flex items-center gap-2.5 flex-shrink-0">
 
-              {/* phone pill */}
+              {/* phone pill - dark text on glass */}
               <a
                 href="tel:+919876543210"
                 className="
                   group/phone flex items-center gap-[7px]
                   px-[14px] py-[8px] rounded-full
-                  bg-slate-50 border border-[#e2e8f0]
-                  text-[13px] font-bold text-[#334155]
+                  bg-white/60 backdrop-blur-sm border border-white/40
+                  text-[13px] font-bold text-slate-800
                   transition-all duration-[180ms] ease-[cubic-bezier(0.4,0,0.2,1)]
                   hover:bg-emerald-500 hover:border-emerald-500 hover:text-white
                   hover:-translate-y-[1px] hover:shadow-[0_4px_12px_rgba(16,185,129,0.3)]
@@ -132,24 +114,24 @@ const Navbar = () => {
               </a>
 
               {/* divider */}
-              <span className="w-[1px] h-[22px] bg-[#e2e8f0] mx-0.5" />
+              <span className="w-[1px] h-[22px] bg-slate-300/50 mx-0.5" />
 
-              {/* Get Started */}
+              {/* Get Started - dark text on glass, hover emerald */}
               <Link
                 to="/login"
                 className="
                   group/cta relative overflow-hidden
                   flex items-center gap-2 px-[22px] py-[10px] rounded-xl
-                  text-[14px] font-bold text-white bg-[#0f172a]
+                  text-[14px] font-bold text-white bg-emerald-500
                   transition-all duration-[220ms] ease-[cubic-bezier(0.34,1.56,0.64,1)]
-                  hover:bg-emerald-500 hover:-translate-y-[2px]
+                  hover:bg-emerald-600 hover:-translate-y-[2px]
                   hover:shadow-[0_10px_24px_rgba(16,185,129,0.38)]
                 "
               >
                 {/* shimmer sweep */}
                 <span className="
                   pointer-events-none absolute inset-0
-                  bg-gradient-to-r from-transparent via-white/10 to-transparent
+                  bg-gradient-to-r from-transparent via-white/20 to-transparent
                   -translate-x-full group-hover/cta:translate-x-full
                   transition-transform duration-[400ms]
                 " />
@@ -159,9 +141,9 @@ const Navbar = () => {
                 {/* arrow icon box */}
                 <span className="
                   relative flex items-center justify-center
-                  w-5 h-5 rounded-[6px] bg-white/15 flex-shrink-0
+                  w-5 h-5 rounded-[6px] bg-white/20 flex-shrink-0
                   transition-all duration-[220ms] ease-[cubic-bezier(0.34,1.56,0.64,1)]
-                  group-hover/cta:translate-x-[3px] group-hover/cta:bg-white/25
+                  group-hover/cta:translate-x-[3px] group-hover/cta:bg-white/30
                 ">
                   <svg className="w-[12px] h-[12px]" viewBox="0 0 24 24" fill="none"
                     stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -171,7 +153,7 @@ const Navbar = () => {
               </Link>
             </div>
 
-            {/* ── MOBILE HAMBURGER ── */}
+            {/* ── MOBILE HAMBURGER (glass with dark lines) ── */}
             <button
               onClick={() => setIsOpen((p) => !p)}
               aria-label={isOpen ? "Close menu" : "Open menu"}
@@ -179,23 +161,23 @@ const Navbar = () => {
               className="
                 lg:hidden flex flex-col gap-[5px] items-center justify-center
                 w-[42px] h-[42px] rounded-[11px]
-                bg-slate-50 border border-[#e2e8f0]
+                bg-white/60 backdrop-blur-sm border border-white/40
                 transition-colors duration-150
-                hover:bg-slate-100 hover:border-slate-300
+                hover:bg-white/80
               "
             >
-              <span className={`block h-[1.8px] bg-slate-500 rounded-full transition-all duration-[250ms]
+              <span className={`block h-[1.8px] bg-slate-700 rounded-full transition-all duration-[250ms]
                 ${isOpen ? "w-5 translate-y-[6.8px] rotate-45" : "w-5"}`} />
-              <span className={`block h-[1.8px] bg-slate-500 rounded-full transition-all duration-[250ms]
+              <span className={`block h-[1.8px] bg-slate-700 rounded-full transition-all duration-[250ms]
                 ${isOpen ? "opacity-0 scale-x-0" : "w-[13px] ml-auto"}`} />
-              <span className={`block h-[1.8px] bg-slate-500 rounded-full transition-all duration-[250ms]
+              <span className={`block h-[1.8px] bg-slate-700 rounded-full transition-all duration-[250ms]
                 ${isOpen ? "w-5 -translate-y-[6.8px] -rotate-45" : "w-[17px]"}`} />
             </button>
           </div>
         </div>
 
         {/* ════════════════════════════════════════
-            MOBILE MENU DROPDOWN
+            MOBILE MENU DROPDOWN (white, dark text)
         ════════════════════════════════════════ */}
         {isOpen && (
           <div className="
@@ -219,13 +201,13 @@ const Navbar = () => {
                     transition-all duration-150
                     ${isActive(link.path)
                       ? "bg-emerald-50 text-emerald-600"
-                      : "text-slate-500 hover:bg-slate-50 hover:text-[#0f172a]"
+                      : "text-slate-700 hover:bg-slate-50 hover:text-[#0f172a]"
                     }
                   `}
                 >
                   {link.name}
                   {link.badge && (
-                    <span className="text-[10px] font-extrabold uppercase tracking-wide bg-red-50 text-red-500 px-2 py-[2px] rounded-[5px]">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wide bg-red-100 text-red-600 px-2 py-[2px] rounded-[5px]">
                       {link.badge}
                     </span>
                   )}
@@ -243,7 +225,7 @@ const Navbar = () => {
                 flex items-center justify-center gap-2
                 w-full py-[11px] mb-2.5 rounded-xl
                 bg-slate-50 border border-[#e2e8f0]
-                text-[14px] font-bold text-[#334155]
+                text-[14px] font-bold text-slate-700
                 transition-colors duration-150 hover:bg-slate-100
               "
             >
@@ -256,16 +238,14 @@ const Navbar = () => {
 
             {/* CTA row */}
             <div className="flex gap-2">
-
               <Link
                 to="/login"
                 onClick={() => setIsOpen(false)}
                 className="
                   flex-1 flex items-center justify-center gap-2 py-3 rounded-xl
-                  text-[14px] font-bold text-white bg-[#0f172a]
-                  hover:bg-emerald-500
-                  shadow-[0_4px_12px_rgba(15,23,42,0.2)]
-                  hover:shadow-[0_6px_16px_rgba(16,185,129,0.35)]
+                  text-[14px] font-bold text-white bg-emerald-500
+                  hover:bg-emerald-600
+                  shadow-[0_4px_12px_rgba(16,185,129,0.3)]
                   transition-all duration-200
                 "
               >
@@ -279,6 +259,14 @@ const Navbar = () => {
           </div>
         )}
       </header>
+
+      {/* keyframe animation for mobile menu sliding */}
+      <style>{`
+        @keyframes mobSlide {
+          from { opacity: 0; transform: translateY(-8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
     </>
   );
 };
