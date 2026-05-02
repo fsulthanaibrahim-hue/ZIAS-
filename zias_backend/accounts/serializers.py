@@ -97,7 +97,7 @@ class StudentSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(write_only=True, required=False)
     mentor_name = serializers.CharField(source='mentor.username', read_only=True)
     documents = serializers.SerializerMethodField()
-    course = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    course = serializers.CharField(required=False, allow_blank=True)
 
     class Meta:
         model = Student
@@ -113,7 +113,6 @@ class StudentSerializer(serializers.ModelSerializer):
         ret = super().to_representation(instance)
         ret.pop('username', None)
         ret.pop('email', None)
-        ret.pop('course', None)
         ret['username'] = instance.user.username
         ret['email'] = instance.user.email
         if instance.student_batch:

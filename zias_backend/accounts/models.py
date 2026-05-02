@@ -57,8 +57,8 @@ class Document(models.Model):
 
 class Student(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='student_profile')
-    course = models.CharField(max_length=100)
-    batch = models.CharField(max_length=50)
+    course = models.CharField(max_length=100, blank=True, null=True)
+    batch = models.CharField(max_length=100, blank=True, null=True)
     student_batch = models.ForeignKey(Batch, on_delete=models.SET_NULL, null=True, blank=True, related_name='students')
     mentor = models.ForeignKey('Mentor', on_delete=models.SET_NULL, null=True, blank=True, related_name='students')
     phone = models.CharField(max_length=15, blank=True, null=True)
