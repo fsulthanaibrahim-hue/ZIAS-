@@ -1,4 +1,4 @@
-// src/Admin/ContactMessages.jsx
+// src/Admin/ContactMessages.jsx – fetches all messages (up to 1000) using LimitOffsetPagination
 import { useEffect, useState, useRef } from "react";
 import API from "../api/api";
 
@@ -13,10 +13,24 @@ function ContactMessages() {
 
   const fetchMessages = async () => {
     try {
-      const res = await API.get("recent-messages/");
-      setMessages(res.data || []);
+      // Request a large limit to get all messages (adjust if you have more than 1000)
+      const res = await API.get("recent-messages/?limit=1000");
+      let data = res.data;
+      let messagesArray = [];
+      if (Array.isArray(data)) {
+        messagesArray = data;
+      } else if (data && Array.isArray(data.results)) {
+        messagesArray = data.results;
+      } else {
+        console.warn("Unexpected API response format:", data);
+      }
+      setMessages(messagesArray);
     } catch (err) {
       console.error(err);
+      if (err.response?.status === 401) {
+        localStorage.clear();
+        window.location.href = "/login";
+      }
       setMessages([]);
     } finally {
       setLoading(false);
@@ -76,23 +90,13 @@ function ContactMessages() {
   ];
   const getAvatar = (name) => avatarPalette[(name?.charCodeAt(0) || 0) % avatarPalette.length];
 
-  if (loading) {
-    return (
-      <div className="w-full min-h-[60vh] flex items-center justify-center bg-gray-50">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
-          <p className="text-gray-500 text-sm">Loading messages...</p>
-        </div>
-      </div>
-    );
-  }
-
-  const unreadCount = messages.filter(m => !m.is_read).length;
-  const filtered = messages.filter(m => filter === "all" ? true : filter === "unread" ? !m.is_read : m.is_read);
-  const totalFiltered = filtered.length;
+  const filteredMessages = messages.filter(m =>
+    filter === "all" ? true : filter === "unread" ? !m.is_read : m.is_read
+  );
+  const totalFiltered = filteredMessages.length;
   const totalPages = Math.max(1, Math.ceil(totalFiltered / itemsPerPage));
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedMessages = filtered.slice(startIndex, startIndex + itemsPerPage);
+  const paginatedMessages = filteredMessages.slice(startIndex, startIndex + itemsPerPage);
 
   const getPageNumbers = () => {
     const pages = [];
@@ -118,6 +122,19 @@ function ContactMessages() {
     }
     return pages;
   };
+
+  const unreadCount = messages.filter(m => !m.is_read).length;
+
+  if (loading) {
+    return (
+      <div className="w-full min-h-[60vh] flex items-center justify-center bg-gray-50">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
+          <p className="text-gray-500 text-sm">Loading messages...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full bg-gray-50 text-gray-800">
@@ -299,7 +316,7 @@ function ContactMessages() {
         {totalPages > 1 && (
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-8 pt-2 border-t border-gray-200">
             <div className="text-gray-500 text-xs text-center sm:text-left">
-              Showing {totalFiltered === 0 ? 0 : startIndex + 1} to {Math.min(startIndex + itemsPerPage, totalFiltered)} of {totalFiltered} messages
+              Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, totalFiltered)} of {totalFiltered} messages
             </div>
             <div className="flex items-center justify-center gap-1">
               <button

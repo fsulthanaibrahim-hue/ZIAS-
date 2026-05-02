@@ -1,8 +1,10 @@
 # accounts/consumers.py
 import json
+import re
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
-from .models import User, ChatRoom, ChatMessage
+from django.utils import timezone
+from .models import User, ChatRoom, ChatMessage, Notification
 
 class ChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
@@ -30,17 +32,31 @@ class ChatConsumer(AsyncWebsocketConsumer):
             if action == 'send_message':
                 if not room_id or not content:
                     return
-                msg = await self.save_message(room_id, content)
+                # ❌ DO NOT save here – the HTTP POST already saved it.
+                # Just broadcast the message to other users in the room.
                 await self.channel_layer.group_send(
                     f"room_{room_id}",
                     {
                         'type': 'chat_message',
-                        'message': msg.content,
-                        'sender_id': msg.sender.id,
-                        'sender_name': self.get_sender_name(msg.sender),
-                        'timestamp': msg.timestamp.isoformat(),
+                        'message': content,
+                        'sender_id': self.user.id,
+                        'sender_name': await self.get_sender_name(self.user),
+                        'timestamp': timezone.now().isoformat(),
                     }
                 )
+                # Optionally send notification to the recipient (using the bell)
+                other_user = await self.get_other_user(room_id, self.user.id)
+                if other_user:
+                    unread_count = await self.get_unread_count(other_user.id)
+                    await self.channel_layer.group_send(
+                        f"user_{other_user.id}",
+                        {
+                            'type': 'notification',
+                            'unread_count': unread_count,
+                            'message': f"New message from {self.user.username}: {content[:50]}",
+                            'link': f"/mentor/chat?room={room_id}",  # adjust as needed
+                        }
+                    )
             elif action == 'typing' and room_id is not None:
                 await self.channel_layer.group_send(
                     f"room_{room_id}",
@@ -81,11 +97,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'user_id': event['user_id'],
         }))
 
-    @database_sync_to_async
-    def save_message(self, room_id, content):
-        room = ChatRoom.objects.get(id=room_id)
-        return ChatMessage.objects.create(room=room, sender=self.user, content=content)
-
+    # ---------- Database helpers ----------
     @database_sync_to_async
     def mark_messages_read(self, room_id):
         ChatMessage.objects.filter(room_id=room_id).exclude(sender=self.user).update(is_read=True)
@@ -94,6 +106,46 @@ class ChatConsumer(AsyncWebsocketConsumer):
     def update_online_status(self, is_online):
         # optional: store online status (e.g., in Redis)
         pass
+
+    @database_sync_to_async
+    def get_sender_name(self, user):
+        # Returns a readable name (full_name if exists, else cleaned username)
+        if user.get_full_name():
+            return user.get_full_name()
+        # Try profile full_name if any (mentor/reviewer/student)
+        profile = None
+        if hasattr(user, 'mentor'):
+            profile = user.mentor
+        elif hasattr(user, 'reviewer'):
+            profile = user.reviewer
+        elif hasattr(user, 'student'):
+            profile = user.student
+        if profile and profile.full_name:
+            return profile.full_name
+        # Strip digits from username
+        cleaned = re.sub(r'\d+$', '', user.username)
+        return cleaned if cleaned else user.username
+
+    @database_sync_to_async
+    def get_other_user(self, room_id, current_user_id):
+        try:
+            room = ChatRoom.objects.get(id=room_id)
+            if room.mentor and room.mentor.user.id != current_user_id:
+                return room.mentor.user
+            if room.reviewer and room.reviewer.user.id != current_user_id:
+                return room.reviewer.user
+            if room.student and room.student.user.id != current_user_id:
+                return room.student.user
+        except ChatRoom.DoesNotExist:
+            pass
+        return None
+
+    @database_sync_to_async
+    def get_unread_count(self, user_id):
+        from django.contrib.auth import get_user_model
+        UserModel = get_user_model()
+        user_obj = UserModel.objects.get(id=user_id)
+        return Notification.objects.filter(user=user_obj, is_read=False).count()
 
 
 class NotificationConsumer(AsyncWebsocketConsumer):
@@ -107,11 +159,9 @@ class NotificationConsumer(AsyncWebsocketConsumer):
             await self.close()
 
     async def notification(self, event):
-        # Send to the client
         await self.send(text_data=json.dumps({
             'type': 'notification',
             'unread_count': event['unread_count'],
             'message': event.get('message'),
             'link': event.get('link'),
         }))
-        

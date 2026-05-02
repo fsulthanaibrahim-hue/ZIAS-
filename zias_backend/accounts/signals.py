@@ -8,21 +8,14 @@ User = get_user_model()
 
 # -------------------------------------------------------------------
 # Signal 1: Auto‑create StudentWeekReview entries when a Student is created
+# ⚠️ DISABLED – Student model has no 'course' field
 # -------------------------------------------------------------------
-@receiver(post_save, sender=Student)
-def create_student_week_reviews(sender, instance, created, **kwargs):
-    if created:
-        if instance.course:
-            try:
-                course_obj = Course.objects.get(name=instance.course)
-                modules = Module.objects.filter(course=course_obj)
-            except Course.DoesNotExist:
-                modules = Module.objects.all()
-        else:
-            modules = Module.objects.all()
-        
-        for module in modules:
-            StudentWeekReview.objects.get_or_create(student=instance, module=module)
+# @receiver(post_save, sender=Student)
+# def create_student_week_reviews(sender, instance, created, **kwargs):
+#     if created:
+#         if instance.course:   # <-- This field doesn't exist
+#             ... (omitted)
+#         ...
 
 
 # -------------------------------------------------------------------
@@ -78,19 +71,20 @@ def create_chat_rooms(sender, instance, created, **kwargs):
 
 # -------------------------------------------------------------------
 # Signal 4: Auto‑create CourseStatus when a Student is saved
+# ⚠️ DISABLED – Student model has no 'course' field, and CourseStatus expects 'course_name'
 # -------------------------------------------------------------------
-@receiver(post_save, sender=Student)
-def create_course_status(sender, instance, created, **kwargs):
-    if instance.course:
-        try:
-            course_obj = Course.objects.get(name__iexact=instance.course)
-        except Course.DoesNotExist:
-            course_obj = Course.objects.create(name=instance.course)
-        CourseStatus.objects.get_or_create(
-            student=instance,
-            course=course_obj,
-            defaults={'current_week': 1}
-        )
+# @receiver(post_save, sender=Student)
+# def create_course_status(sender, instance, created, **kwargs):
+#     if instance.course:   # <-- Field doesn't exist
+#         try:
+#             course_obj = Course.objects.get(name__iexact=instance.course)
+#         except Course.DoesNotExist:
+#             course_obj = Course.objects.create(name=instance.course)
+#         CourseStatus.objects.get_or_create(
+#             student=instance,
+#             course=course_obj,   # <-- CourseStatus has 'course_name', not 'course'
+#             defaults={'current_week': 1}
+#         )
 
 
 # -------------------------------------------------------------------

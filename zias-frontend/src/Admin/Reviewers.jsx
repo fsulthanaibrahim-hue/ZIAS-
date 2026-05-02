@@ -45,7 +45,7 @@ function ConfirmModal({ isOpen, onClose, onConfirm, reviewerName }) {
 
 function Reviewers() {
   const [reviewers, setReviewers] = useState([]);
-  const [coursesList, setCoursesList] = useState([]);     // for department dropdown
+  const [coursesList, setCoursesList] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -54,7 +54,7 @@ function Reviewers() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   const [formData, setFormData] = useState({
-    name: "",           // Full name (UI only)
+    name: "",
     email: "",
     department: "",
     qualification: "",
@@ -69,19 +69,32 @@ function Reviewers() {
 
   const initialFetchDone = useRef(false);
 
-  const fetchReviewers = () => {
-    API.get("reviewers/")
-      .then(res => setReviewers(res.data))
-      .catch(err => {
-        console.error(err);
-        showToast("Failed to load reviewers", "error");
-      });
+  // Helper: extract array from paginated response
+  const extractArray = (response) => {
+    const data = response.data.results || response.data;
+    return Array.isArray(data) ? data : [];
   };
 
-  const fetchCourses = () => {
-    API.get("courses/")
-      .then(res => setCoursesList(res.data))
-      .catch(() => showToast("Failed to load courses", "error"));
+  const fetchReviewers = async () => {
+    try {
+      const res = await API.get("reviewers/");
+      const reviewersArray = extractArray(res);
+      setReviewers(reviewersArray);
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to load reviewers", "error");
+    }
+  };
+
+  const fetchCourses = async () => {
+    try {
+      const res = await API.get("courses/");
+      const coursesArray = extractArray(res);
+      setCoursesList(coursesArray);
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to load courses", "error");
+    }
   };
 
   useEffect(() => {
@@ -111,7 +124,6 @@ function Reviewers() {
     }
   };
 
-  // Generate a username from full name (lowercase, spaces -> underscores)
   const generateUsername = (name, email) => {
     let base = name ? name.toLowerCase().trim().replace(/\s+/g, '_') : '';
     if (!base) base = email ? email.split('@')[0] : 'reviewer';
@@ -125,11 +137,10 @@ function Reviewers() {
     e.preventDefault();
     setSubmitting(true);
     const generatedUsername = generateUsername(formData.name, formData.email);
-    // Department is stored as the course name (string)
     const payload = {
       username: generatedUsername,
       email: formData.email,
-      department: formData.department,   // already the course name from dropdown
+      department: formData.department,
       qualification: formData.qualification || null,
       experience: formData.experience ? parseInt(formData.experience) : null,
       batch: null,
@@ -165,7 +176,7 @@ function Reviewers() {
   const handleEdit = (reviewer) => {
     setEditingId(reviewer.id);
     setFormData({
-      name: reviewer.username,   // Show the existing username as name
+      name: reviewer.username,
       email: reviewer.email,
       department: reviewer.department || "",
       qualification: reviewer.qualification || "",
@@ -264,7 +275,6 @@ function Reviewers() {
       <ConfirmModal isOpen={showConfirmModal} onClose={() => setShowConfirmModal(false)} onConfirm={confirmDelete} reviewerName={reviewerToDelete?.name} />
 
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-4 sm:py-8">
-
         {/* Top Bar */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
           <div className="flex items-center gap-4">
@@ -318,7 +328,7 @@ function Reviewers() {
           </div>
         </div>
 
-        {/* Add/Edit Modal – Department is a dropdown from courses */}
+        {/* Add/Edit Modal */}
         {showForm && (
           <div
             className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4"

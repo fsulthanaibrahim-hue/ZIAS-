@@ -531,7 +531,7 @@ function MentorStudents() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div><label className="block text-gray-600 text-xs font-medium mb-1">Full Name</label><input type="text" name="full_name" value={formData.full_name} onChange={handleChange} className={inputClass} /></div>
                   <div><label className="block text-gray-600 text-xs font-medium mb-1">Email *</label><input type="email" name="email" value={formData.email} onChange={handleChange} required className={inputClass} /></div>
-                  <div><label className="block text-gray-600 text-xs font-medium mb-1">Course *</label><select name="course" value={formData.course} onChange={handleChange} required className={inputClass}><option value="">Select a course</option>{coursesList.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select></div>
+                  <div><label className="block text-gray-600 text-xs font-medium mb-1">Course *</label><select name="course" value={formData.course} onChange={handleChange} required className={inputClass}><option value="">Select a course</option>{coursesList.results.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select></div>
                   <div>
                     <label className="block text-gray-600 text-xs font-medium mb-1">Batch</label>
                     <input

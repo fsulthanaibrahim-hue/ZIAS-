@@ -207,7 +207,7 @@ class CourseViewSet(viewsets.ModelViewSet):
 
 
 # ----------------------------
-# MODULE VIEWSET
+# MODULE VIEWSET – WITH LOCKING LOGIC
 # ----------------------------
 class ModuleViewSet(viewsets.ModelViewSet):
     queryset = Module.objects.all()
@@ -231,6 +231,8 @@ class ModuleViewSet(viewsets.ModelViewSet):
     def student_modules(self, request):
         user = request.user
         student_id = request.query_params.get('student_id')
+
+        # Determine the student
         if user.is_admin or user.is_mentor or user.is_reviewer:
             if student_id:
                 try:
@@ -257,43 +259,67 @@ class ModuleViewSet(viewsets.ModelViewSet):
             if created:
                 print(f"Created missing student profile for {user.username}")
 
+        # Get all modules the student has access to (common + course modules)
         common_modules = Module.objects.filter(is_common=True).order_by('order')
         if not student.course:
-            serializer = self.get_serializer(common_modules, many=True)
-            data = serializer.data
-            for item in data:
-                item['is_locked'] = False
-            return Response(data)
-
-        course_modules = Module.objects.filter(course__name=student.course, is_common=False).order_by('order')
-        accessible_course_modules = []
-        for mod in course_modules:
-            previous_modules = course_modules.filter(order__lt=mod.order)
-            if not previous_modules.exists():
-                accessible_course_modules.append(mod)
-            else:
-                all_prev_completed = True
-                for prev in previous_modules:
-                    try:
-                        student_module = StudentModule.objects.get(student=student, module=prev)
-                        if not student_module.is_completed:
-                            all_prev_completed = False
-                            break
-                    except StudentModule.DoesNotExist:
-                        all_prev_completed = False
-                        break
-                if all_prev_completed:
+            all_modules = common_modules
+        else:
+            course_modules = Module.objects.filter(course__name=student.course, is_common=False).order_by('order')
+            accessible_course_modules = []
+            # First, filter accessible course modules based on StudentModule completion
+            for mod in course_modules:
+                previous_modules = course_modules.filter(order__lt=mod.order)
+                if not previous_modules.exists():
                     accessible_course_modules.append(mod)
                 else:
-                    break
+                    all_prev_completed = True
+                    for prev in previous_modules:
+                        try:
+                            student_module = StudentModule.objects.get(student=student, module=prev)
+                            if not student_module.is_completed:
+                                all_prev_completed = False
+                                break
+                        except StudentModule.DoesNotExist:
+                            all_prev_completed = False
+                            break
+                    if all_prev_completed:
+                        accessible_course_modules.append(mod)
+                    else:
+                        break
+            all_modules = list(common_modules) + accessible_course_modules
+            all_modules.sort(key=lambda x: x.order)
 
-        all_modules = list(common_modules) + accessible_course_modules
-        all_modules.sort(key=lambda x: x.order)
-        serializer = self.get_serializer(all_modules, many=True)
-        data = serializer.data
-        for item in data:
-            item['is_locked'] = False
-        return Response(data)
+        # Get review statuses (from StudentWeekReview) for unlocking based on previous week's review
+        # For locking logic: a module is locked if the previous module's review status is NOT "completed"
+        # Get all completed reviews (score >= 70 or status = "completed")
+        reviews = StudentWeekReview.objects.filter(student=student)
+        completed_modules = set()
+        for r in reviews:
+            # You can use total_score or a dedicated status field. Using total_score >= 70 as "completed"
+            if r.total_score is not None and r.total_score >= 70:
+                completed_modules.add(r.module_id)
+
+        # Build response with is_locked flag
+        result = []
+        for i, module in enumerate(all_modules):
+            is_locked = False
+            if i > 0:
+                prev_module = all_modules[i-1]
+                # Lock this module unless previous module is in completed_modules
+                if prev_module.id not in completed_modules:
+                    is_locked = True
+            # For the first module, is_locked = False always
+            result.append({
+                'id': module.id,
+                'title': module.title,
+                'content': module.content,
+                'order': module.order,
+                'course_name': module.course.name if module.course else None,
+                'is_common': module.is_common,
+                'is_locked': is_locked,
+                'completion_percentage': 0,  # optional, can be computed later
+            })
+        return Response(result)
 
 
 # ----------------------------
@@ -364,7 +390,7 @@ class StudentModuleViewSet(viewsets.ModelViewSet):
 # ----------------------------
 class DayViewSet(viewsets.ModelViewSet):
     serializer_class = DaySerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]   
     def get_queryset(self):
         queryset = Day.objects.all()
         module_id = self.request.query_params.get('module')
@@ -694,6 +720,35 @@ class ReviewerDashboardView(APIView):
 
 
 # ----------------------------
+# STUDENT REVIEW STATUS VIEW
+# ----------------------------
+class StudentReviewStatusView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            student = Student.objects.get(user=request.user)
+        except Student.DoesNotExist:
+            return Response([])
+        reviews = StudentWeekReview.objects.filter(student=student).select_related('module')
+        data = []
+        for r in reviews:
+            if r.total_score is None:
+                status = "pending"
+            elif r.total_score >= 70:
+                status = "completed"
+            elif r.total_score >= 40:
+                status = "need_improvement"
+            else:
+                status = "critical"
+            data.append({
+                "module_id": r.module.id,
+                "status": status
+            })
+        return Response(data)
+
+
+# ----------------------------
 # WEEKLY TOPPERS VIEW
 # ----------------------------
 class WeeklyToppersView(APIView):
@@ -850,10 +905,11 @@ class ChatRoomList(generics.ListAPIView):
 class ChatMessageList(generics.ListAPIView):
     serializer_class = ChatMessageSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = LimitOffsetPagination
 
     def get_queryset(self):
         room_id = self.kwargs['room_id']
-        return ChatMessage.objects.filter(room_id=room_id).order_by('timestamp')
+        return ChatMessage.objects.filter(room_id=room_id).order_by('timestamp')  # oldest first
 
 
 class ChatMessageListCreateView(generics.ListCreateAPIView):
@@ -863,46 +919,13 @@ class ChatMessageListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         room_id = self.request.query_params.get('room')
         if room_id:
-            return ChatMessage.objects.filter(room_id=room_id).order_by('timestamp')
+            return ChatMessage.objects.filter(room_id=room_id).order_by('-timestamp')
         return ChatMessage.objects.none()
 
-
     def perform_create(self, serializer):
-        message = serializer.save(sender=self.request.user)
-        room = message.room
-
-        other_user = None
-        if room.student and room.student.user != self.request.user:
-            other_user = room.student.user
-        elif room.mentor and room.mentor.user != self.request.user:
-            other_user = room.mentor.user
-        elif room.reviewer and room.reviewer.user != self.request.user:
-            other_user = room.reviewer.user
-
-        if other_user:
-            # Build chat link (same as before)
-            if other_user.is_mentor:
-                link = f"/mentor/chat?room={room.id}"
-            elif other_user.is_reviewer:
-                link = f"/reviewer/chat?room={room.id}"
-            elif other_user.is_student:
-                link = f"/student/chat?room={room.id}"
-            else:
-                link = "/chat"
-
-            # Create notification
-            notification = Notification.objects.create(
-                user=other_user,
-                message=f"New message from {self.request.user.username}: {message.content[:50]}",
-                link=link,
-                is_read=False
-            )
-
-            # ✅ Emit socket event to the recipient with updated unread count
-            unread_count = Notification.objects.filter(user=other_user, is_read=False).count()
-            # Assuming you have a Socket.IO instance `sio` accessible
-            # from your_project.socketio import sio
-            # sio.emit('new_notification', {'unread_count': unread_count}, room=other_user.id)
+        serializer.save(sender=self.request.user)
+        # Notification creation is now handled by your WebSocket consumer (ChatConsumer) to avoid duplicates.
+        # If you still want bell notifications, you can add them here, but be careful not to double-notify.
 
 
 class ClearChatMessagesView(APIView):
@@ -1148,3 +1171,16 @@ class ReviewAssignmentViewSet(viewsets.ModelViewSet):
             return super().update(request, *args, **kwargs)
         else:
             return Response({"error": "Not allowed"}, status=403)
+
+
+
+class RecentMessagesAPIView(generics.ListAPIView):
+    serializer_class = ContactMessageSerializer
+    pagination_class = LimitOffsetPagination
+    # Optional: set default limit
+    pagination_class.default_limit = 10   
+    pagination_class.max_limit = 1000     
+
+    def get_queryset(self):
+        return ContactMessage.objects.all().order_by('-created_at')        
+

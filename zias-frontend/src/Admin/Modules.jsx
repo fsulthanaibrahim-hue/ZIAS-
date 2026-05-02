@@ -213,27 +213,38 @@ function Modules() {
     if (userStr) setUser(JSON.parse(userStr));
   }, []);
 
+  // ✅ FIX: handle paginated response for modules
   const fetchModules = () =>
-    API.get("modules/").then(res => setModules(res.data)).catch(() => showToast("Failed to load modules", "error")).finally(() => setLoading(false));
+    API.get("modules/")
+      .then(res => {
+        const modulesArray = res.data.results || res.data;
+        setModules(Array.isArray(modulesArray) ? modulesArray : []);
+      })
+      .catch(() => showToast("Failed to load modules", "error"))
+      .finally(() => setLoading(false));
 
   const fetchCourses = () =>
     API.get("courses/").then(res => setCourses(res.data)).catch(() => showToast("Failed to load courses", "error"));
 
+  // ✅ FIX: handle paginated response for days
   const fetchDays = async (moduleId) => {
     const numId = Number(moduleId);
     if (isNaN(numId)) return;
     try {
       const res = await API.get(`days/?module=${numId}`);
-      setDaysByModule(prev => ({ ...prev, [numId]: res.data }));
+      const daysArray = res.data.results || res.data;
+      setDaysByModule(prev => ({ ...prev, [numId]: daysArray }));
     } catch { showToast("Failed to load days", "error"); }
   };
 
+  // ✅ FIX: handle paginated response for tasks
   const fetchTasks = async (dayId) => {
     const numId = Number(dayId);
     if (isNaN(numId)) return;
     try {
       const res = await API.get(`tasks/?day=${numId}`);
-      setTasksByDay(prev => ({ ...prev, [numId]: res.data }));
+      const tasksArray = res.data.results || res.data;
+      setTasksByDay(prev => ({ ...prev, [numId]: tasksArray }));
     } catch { showToast("Failed to load tasks", "error"); }
   };
 
@@ -458,7 +469,7 @@ function Modules() {
             <div className="px-6 py-5 space-y-3.5">
               <select value={moduleForm.course} onChange={e => setModuleForm({ ...moduleForm, course: e.target.value })} required className={inputClass}>
                 <option value="">Select Course</option>
-                {courses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {courses.results.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
               <input type="text" placeholder="Module title" value={moduleForm.title} onChange={e => setModuleForm({ ...moduleForm, title: e.target.value })} required className={inputClass} />
               <select value={moduleForm.order} onChange={e => setModuleForm({ ...moduleForm, order: e.target.value })} className={inputClass}>

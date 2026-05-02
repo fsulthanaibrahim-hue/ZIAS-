@@ -1,4 +1,4 @@
-// src/Admin/Mentors.jsx
+// src/Admin/Mentors.jsx – fully working with batch dropdown
 import { useEffect, useState, useRef, useCallback } from "react";
 import API from "../api/api";
 
@@ -75,37 +75,65 @@ function Mentors() {
   const initialFetchDone = useRef(false);
   const batchesFetched = useRef(false);
 
-  // Safe document URL helper – returns absolute URL or '#'
-const getDocumentUrl = (url) => {
-  if (!url || typeof url !== 'string') {
-    console.error('Invalid document URL:', url);
-    return '#';
-  }
-  // If it's already an absolute URL, return it
-  if (url.startsWith('http')) return url;
-  // Otherwise prepend the backend base URL
-  return `http://127.0.0.1:8000${url}`;
-};
+  const getDocumentUrl = (url) => {
+    if (!url || typeof url !== 'string') {
+      console.error('Invalid document URL:', url);
+      return '#';
+    }
+    if (url.startsWith('http')) return url;
+    return `http://127.0.0.1:8000${url}`;
+  };
 
   const fetchMentors = useCallback(async () => {
     try {
       const res = await API.get("mentors/");
-      setMentors(res.data);
+      let mentorsArray = [];
+      if (Array.isArray(res.data)) {
+        mentorsArray = res.data;
+      } else if (res.data && typeof res.data === 'object') {
+        if (Array.isArray(res.data.results)) {
+          mentorsArray = res.data.results;
+        } else if (res.data.id) {
+          mentorsArray = [res.data];
+        } else {
+          console.warn("Unexpected API response format:", res.data);
+        }
+      }
+      setMentors(mentorsArray);
     } catch (err) {
       console.error(err);
       showToast("Failed to load mentors", "error");
+      setMentors([]);
     }
   }, [showToast]);
 
+  // ✅ CORRECTED fetchBatches – handles paginated responses
   const fetchBatches = useCallback(async () => {
     if (batchesFetched.current) return;
     batchesFetched.current = true;
     try {
       const res = await API.get("batches/");
-      setBatchesList(res.data);
+      let batchesArray = [];
+      if (Array.isArray(res.data)) {
+        batchesArray = res.data;
+      } else if (res.data && Array.isArray(res.data.results)) {
+        batchesArray = res.data.results;
+      } else {
+        console.warn("Unexpected batches response:", res.data);
+      }
+      console.log("Batches loaded:", batchesArray); // Debugging
+      setBatchesList(batchesArray);
     } catch (err) {
       console.error(err);
-      showToast("Failed to load batches", "error");
+      if (err.response?.status === 401) {
+        showToast("Session expired. Please log in again.", "error");
+        setTimeout(() => {
+          localStorage.clear();
+          window.location.href = "/login";
+        }, 1500);
+      } else {
+        showToast("Failed to load batches", "error");
+      }
     }
   }, [showToast]);
 
@@ -148,7 +176,7 @@ const getDocumentUrl = (url) => {
   const fetchMentorDocuments = useCallback(async (mentorId) => {
     try {
       const res = await API.get(`mentors/${mentorId}/documents/`);
-      return res.data;
+      return Array.isArray(res.data) ? res.data : [];
     } catch (err) {
       console.error(err);
       return [];
@@ -308,12 +336,14 @@ const getDocumentUrl = (url) => {
     setNewDocs([]);
   };
 
-  const filteredMentors = mentors.filter(m =>
-    (m.full_name || m.username)?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    m.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    m.phone?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    m.expertise?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredMentors = Array.isArray(mentors)
+    ? mentors.filter(m =>
+        (m.full_name || m.username)?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        m.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        m.phone?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        m.expertise?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : [];
 
   const totalFiltered = filteredMentors.length;
   const totalPages = Math.max(1, Math.ceil(totalFiltered / itemsPerPage));
@@ -390,7 +420,6 @@ const getDocumentUrl = (url) => {
       <ConfirmModal isOpen={showConfirmModal} onClose={() => setShowConfirmModal(false)} onConfirm={confirmDelete} mentorName={mentorToDelete?.name} />
 
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-4 sm:py-8">
-        {/* Top Bar (unchanged) */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 rounded-xl bg-green-100 border border-green-200 flex items-center justify-center shrink-0">
@@ -435,7 +464,6 @@ const getDocumentUrl = (url) => {
           </div>
         </div>
 
-        {/* Add/Edit Modal (unchanged except using getDocumentUrl) */}
         {showForm && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={() => setShowForm(false)}>
             <form
@@ -443,7 +471,6 @@ const getDocumentUrl = (url) => {
               className="modal-enter bg-white rounded-2xl w-full max-w-3xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Header, Basic Information, etc. */}
               <div className="sticky top-0 bg-white z-10 flex justify-between items-center px-4 sm:px-6 py-4 border-b border-gray-200">
                 <div className="flex items-center gap-3">
                   <div className="w-7 h-7 rounded-lg bg-green-100 border border-green-200 flex items-center justify-center">
@@ -462,7 +489,6 @@ const getDocumentUrl = (url) => {
               </div>
 
               <div className="px-4 sm:px-6 py-5 space-y-6">
-                {/* Basic Information (same as before) */}
                 <div>
                   <h4 className="text-xs font-semibold text-green-600 uppercase tracking-wider mb-3">Basic Information</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -470,11 +496,15 @@ const getDocumentUrl = (url) => {
                     <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Email *</label><input type="email" name="email" value={formData.email} onChange={handleChange} required className={inputClass} /></div>
                     <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Phone</label><input type="tel" name="phone" value={formData.phone} onChange={handleChange} className={`${inputClass} ${phoneError ? "border-red-500" : ""}`} placeholder="10-digit mobile" />{phoneError && <p className="text-red-500 text-xs mt-1">{phoneError}</p>}</div>
                     <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Expertise *</label><input type="text" name="expertise" value={formData.expertise} onChange={handleChange} required className={inputClass} /></div>
-                    <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Batch</label><select name="batch" value={formData.batch} onChange={handleChange} className={inputClass}><option value="">Select a batch</option>{batchesList.map(batch => <option key={batch.id} value={batch.id}>{batch.name}</option>)}</select></div>
+                    <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Batch</label>
+                      <select name="batch" value={formData.batch} onChange={handleChange} className={inputClass}>
+                        <option value="">Select a batch</option>
+                        {batchesList.map(batch => <option key={batch.id} value={batch.id}>{batch.name}</option>)}
+                      </select>
+                    </div>
                   </div>
                 </div>
 
-                {/* Document Section for edit mode */}
                 {editingId && (
                   <div className="border-t border-gray-200 pt-4">
                     <h4 className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-3">Documents</h4>
@@ -550,7 +580,6 @@ const getDocumentUrl = (url) => {
           </div>
         )}
 
-        {/* View Details Modal – only list, uses safe getDocumentUrl */}
         {viewingMentor && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={() => setViewingMentor(null)}>
             <div className="bg-white rounded-2xl w-full max-w-3xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -572,7 +601,6 @@ const getDocumentUrl = (url) => {
               </div>
 
               <div className="px-4 sm:px-6 py-5 space-y-6">
-                {/* Basic Information fields */}
                 <div>
                   <h4 className="text-xs font-semibold text-green-600 uppercase tracking-wider mb-3">Basic Information</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -584,7 +612,6 @@ const getDocumentUrl = (url) => {
                   </div>
                 </div>
 
-                {/* Documents section – clickable links */}
                 <div className="border-t border-gray-200 pt-4">
                   <h4 className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-3">Documents</h4>
                   {viewerDocuments.length === 0 ? (
@@ -618,7 +645,6 @@ const getDocumentUrl = (url) => {
           </div>
         )}
 
-        {/* Mentors Table (unchanged) */}
         <div className="overflow-hidden rounded-xl border border-gray-200 shadow-sm bg-white">
           <table className="mentor-table min-w-full">
             <thead className="bg-gray-50 border-b border-gray-200">

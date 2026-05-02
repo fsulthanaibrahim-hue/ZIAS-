@@ -1,29 +1,38 @@
+// src/api/api.js
 import axios from "axios";
 
 const API = axios.create({
   baseURL: "http://127.0.0.1:8000/api/",
 });
 
-// Queue to handle concurrent token refresh
+// Queue for requests that arrive while refreshing token
 let isRefreshing = false;
 let failedQueue = [];
 
 const processQueue = (error, token = null) => {
   failedQueue.forEach(prom => {
-    if (error) prom.reject(error);
-    else prom.resolve(token);
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
   });
   failedQueue = [];
 };
 
-API.interceptors.request.use(config => {
-  const token = localStorage.getItem("access_token");
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+// Request interceptor: attach access token to every request
+API.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem("access_token");
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
 
+// Response interceptor: handle 401 errors and refresh token
 API.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -34,56 +43,59 @@ API.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    // Prevent infinite loop
+    // Prevent infinite loops
     if (originalRequest._retry) {
       return Promise.reject(error);
     }
 
-    const refresh = localStorage.getItem("refresh_token");
-    if (!refresh) {
-      // No refresh token → logout
+    const refreshToken = localStorage.getItem("refresh_token");
+    if (!refreshToken) {
+      // No refresh token – force logout
       localStorage.clear();
       window.location.href = "/login";
       return Promise.reject(error);
     }
 
-    // If already refreshing, queue this request
+    // If we are already refreshing, queue this request
     if (isRefreshing) {
       return new Promise((resolve, reject) => {
         failedQueue.push({ resolve, reject });
       })
-        .then(token => {
+        .then((token) => {
           originalRequest.headers.Authorization = `Bearer ${token}`;
           return API(originalRequest);
         })
-        .catch(err => Promise.reject(err));
+        .catch((err) => Promise.reject(err));
     }
 
     originalRequest._retry = true;
     isRefreshing = true;
 
     try {
-      const res = await axios.post("http://127.0.0.1:8000/api/token/refresh/", {
-        refresh: refresh,
-      });
+      const response = await axios.post(
+        "http://127.0.0.1:8000/api/token/refresh/",
+        {
+          refresh: refreshToken,
+        }
+      );
 
-      const newAccessToken = res.data.access;
-      const newRefreshToken = res.data.refresh; // if rotation is enabled
+      const { access, refresh: newRefreshToken } = response.data;
+      localStorage.setItem("access_token", access);
+      if (newRefreshToken) {
+        localStorage.setItem("refresh_token", newRefreshToken);
+      }
 
-      localStorage.setItem("access_token", newAccessToken);
-      if (newRefreshToken) localStorage.setItem("refresh_token", newRefreshToken);
-
-      // Update default header
-      API.defaults.headers.common.Authorization = `Bearer ${newAccessToken}`;
+      // Update default header for future requests
+      API.defaults.headers.common.Authorization = `Bearer ${access}`;
 
       // Process queued requests
-      processQueue(null, newAccessToken);
+      processQueue(null, access);
 
       // Retry the original request
-      originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+      originalRequest.headers.Authorization = `Bearer ${access}`;
       return API(originalRequest);
     } catch (refreshError) {
-      // Refresh failed → logout
+      // Refresh failed – clear storage and redirect to login
       processQueue(refreshError, null);
       localStorage.clear();
       window.location.href = "/login";

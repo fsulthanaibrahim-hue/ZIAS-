@@ -1,5 +1,5 @@
-// src/Admin/Courses.jsx – card click navigates to modules of that course
-import { useEffect, useState, useRef } from "react";
+// src/Admin/Courses.jsx – with modal as separate component (no focus loss)
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../api/api";
 
@@ -49,17 +49,163 @@ function ConfirmModal({ isOpen, onClose, onConfirm, courseName }) {
   );
 }
 
+function extractCoursesArray(response) {
+  const data = response?.data ?? response;
+  if (Array.isArray(data)) return data;
+  if (data && Array.isArray(data.results)) return data.results;
+  return [];
+}
+
+// ========== SEPARATE MODAL COMPONENT ==========
+function CourseFormModal({ isOpen, onClose, editingCourse, onSave }) {
+  const [formData, setFormData] = useState({
+    name: "",
+    description: "",
+    duration: ""
+  });
+  const [durationError, setDurationError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (editingCourse) {
+      setFormData({
+        name: editingCourse.name || "",
+        description: editingCourse.description || "",
+        duration: editingCourse.duration ? editingCourse.duration.toString() : ""
+      });
+    } else {
+      setFormData({ name: "", description: "", duration: "" });
+    }
+    setDurationError("");
+  }, [editingCourse, isOpen]);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    if (name === "duration") {
+      const num = parseInt(value, 10);
+      if (value === "") {
+        setFormData(prev => ({ ...prev, duration: "" }));
+        setDurationError("");
+      } else if (isNaN(num) || num < 0) {
+        setDurationError("Duration must be a positive number");
+        setFormData(prev => ({ ...prev, duration: value }));
+      } else {
+        setDurationError("");
+        setFormData(prev => ({ ...prev, duration: num.toString() }));
+      }
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    let durationValue = null;
+    if (formData.duration && formData.duration !== "") {
+      const num = parseInt(formData.duration, 10);
+      if (isNaN(num) || num <= 0) {
+        setDurationError("Duration must be a positive number");
+        return;
+      }
+      durationValue = num;
+    }
+
+    const payload = {
+      name: formData.name,
+      description: formData.description,
+      duration: durationValue
+    };
+
+    setSubmitting(true);
+    try {
+      if (editingCourse) {
+        await API.patch(`courses/${editingCourse.id}/`, payload);
+      } else {
+        await API.post("courses/", payload);
+      }
+      onSave(); // refresh parent list
+      onClose();
+    } catch (err) {
+      let errorMsg = "Error saving course";
+      if (err.response?.data) {
+        errorMsg = Object.values(err.response.data).flat().join(", ");
+      }
+      console.error(errorMsg);
+      // you can add toast here if needed
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  const inputClass = "w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 text-sm";
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <form onSubmit={handleSubmit}>
+          <div className="flex justify-between items-center px-6 py-5 border-b border-gray-100">
+            <div>
+              <h3 className="text-base font-bold text-gray-900">{editingCourse ? "Edit Course" : "New Course"}</h3>
+              <p className="text-xs text-gray-400 mt-0.5">Fill in the course details</p>
+            </div>
+            <button type="button" onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-gray-100 text-gray-400 text-lg">×</button>
+          </div>
+          <div className="px-6 py-5 space-y-3.5">
+            <input
+              name="name"
+              type="text"
+              placeholder="Course name"
+              value={formData.name}
+              onChange={handleChange}
+              required
+              className={inputClass}
+            />
+            <input
+              name="duration"
+              type="number"
+              placeholder="Duration (weeks)"
+              value={formData.duration}
+              onChange={handleChange}
+              min="1"
+              step="1"
+              className={inputClass}
+            />
+            {durationError && <p className="text-red-500 text-xs mt-1">{durationError}</p>}
+            <textarea
+              name="description"
+              placeholder="Description (optional)"
+              value={formData.description}
+              onChange={handleChange}
+              rows="3"
+              className={`${inputClass} resize-none`}
+            />
+          </div>
+          <div className="flex gap-2 px-6 py-4 border-t border-gray-100">
+            <button type="submit" disabled={submitting} className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white py-2.5 rounded-xl font-medium text-sm transition-colors disabled:opacity-50">
+              {submitting ? (editingCourse ? "Saving..." : "Adding...") : (editingCourse ? "Save Changes" : "Add Course")}
+            </button>
+            <button type="button" onClick={onClose} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 py-2.5 rounded-xl font-medium text-sm transition-colors">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ========== MAIN COURSES COMPONENT ==========
 function Courses() {
   const navigate = useNavigate();
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [editingId, setEditingId] = useState(null);
+  const [editingCourse, setEditingCourse] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 9;
-  const [formData, setFormData] = useState({ name: "", description: "", duration: "" });
-  const [durationError, setDurationError] = useState("");
 
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [courseToDelete, setCourseToDelete] = useState(null);
@@ -68,24 +214,45 @@ function Courses() {
   const hideToast = () => setToast(null);
 
   const fetched = useRef(false);
+  const searchInputRef = useRef(null);
 
-  const fetchCourses = () =>
+  const fetchCourses = useCallback(() => {
     API.get("courses/")
-      .then(res => setCourses(res.data))
-      .catch(() => showToast("Failed to load courses", "error"))
+      .then(res => {
+        setCourses(extractCoursesArray(res));
+      })
+      .catch(err => {
+        console.error(err);
+        if (err.response?.status === 401) {
+          showToast("Session expired. Please log in again.", "error");
+          setTimeout(() => {
+            localStorage.clear();
+            window.location.href = "/login";
+          }, 1500);
+        } else {
+          showToast("Failed to load courses", "error");
+        }
+      })
       .finally(() => setLoading(false));
+  }, [showToast]);
 
   useEffect(() => {
     if (fetched.current) return;
     fetched.current = true;
     fetchCourses();
-  }, []);
+  }, [fetchCourses]);
 
-  const filteredCourses = courses.filter(c =>
-    c.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.duration?.toString().toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.description?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  const filteredCourses = Array.isArray(courses)
+    ? courses.filter(c =>
+        c.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        c.duration?.toString().toLowerCase().includes(searchTerm.toLowerCase()) ||
+        c.description?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : [];
 
   const totalFiltered = filteredCourses.length;
   const totalPages = Math.max(1, Math.ceil(totalFiltered / itemsPerPage));
@@ -114,10 +281,6 @@ function Courses() {
     return pages;
   };
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm]);
-
   const handleDeleteClick = (courseId, courseName) => {
     setCourseToDelete({ id: courseId, name: courseName });
     setShowConfirmModal(true);
@@ -138,72 +301,19 @@ function Courses() {
     }
   };
 
-  const handleDurationChange = (e) => {
-    const value = e.target.value;
-    if (value === "") {
-      setFormData({ ...formData, duration: "" });
-      setDurationError("");
-      return;
-    }
-    const num = parseInt(value, 10);
-    if (isNaN(num) || num < 0) {
-      setDurationError("Duration must be a positive number");
-      setFormData({ ...formData, duration: value });
-    } else {
-      setDurationError("");
-      setFormData({ ...formData, duration: num.toString() });
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    let durationValue = null;
-    if (formData.duration && formData.duration !== "") {
-      const num = parseInt(formData.duration, 10);
-      if (isNaN(num) || num <= 0) {
-        setDurationError("Duration must be a positive number");
-        return;
-      }
-      durationValue = num;
-    }
-
-    const payload = {
-      name: formData.name,
-      description: formData.description,
-      duration: durationValue
-    };
-
-    try {
-      if (editingId) {
-        await API.patch(`courses/${editingId}/`, payload);
-        showToast("Course updated successfully", "success");
-      } else {
-        await API.post("courses/", payload);
-        showToast("Course added successfully", "success");
-      }
-      setShowForm(false);
-      setEditingId(null);
-      setFormData({ name: "", description: "", duration: "" });
-      setDurationError("");
-      fetchCourses();
-    } catch (err) {
-      let errorMsg = "Error saving course";
-      if (err.response?.data) {
-        errorMsg = Object.values(err.response.data).flat().join(", ");
-      }
-      showToast(errorMsg, "error");
-    }
-  };
-
   const handleEdit = (course) => {
-    setEditingId(course.id);
-    setFormData({
-      name: course.name,
-      description: course.description || "",
-      duration: course.duration ? course.duration.toString() : ""
-    });
-    setDurationError("");
+    setEditingCourse(course);
     setShowForm(true);
+  };
+
+  const handleAddClick = () => {
+    setEditingCourse(null);
+    setShowForm(true);
+  };
+
+  const handleFormSave = () => {
+    fetchCourses();
+    showToast(editingCourse ? "Course updated successfully" : "Course added successfully", "success");
   };
 
   const handleCardClick = (courseId) => {
@@ -211,14 +321,6 @@ function Courses() {
   };
 
   const inputClass = "w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 text-sm";
-
-  const ModalWrapper = ({ onClose, children, maxW = "max-w-lg" }) => (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className={`bg-white rounded-3xl w-full ${maxW} shadow-2xl max-h-[90vh] overflow-y-auto`} onClick={e => e.stopPropagation()}>
-        {children}
-      </div>
-    </div>
-  );
 
   if (loading) {
     return (
@@ -246,55 +348,13 @@ function Courses() {
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
       <ConfirmModal isOpen={showConfirmModal} onClose={() => setShowConfirmModal(false)} onConfirm={confirmDelete} courseName={courseToDelete?.name} />
 
-      {/* Add/Edit Modal */}
-      {showForm && (
-        <ModalWrapper onClose={() => setShowForm(false)}>
-          <form onSubmit={handleSubmit}>
-            <div className="flex justify-between items-center px-6 py-5 border-b border-gray-100">
-              <div>
-                <h3 className="text-base font-bold text-gray-900">{editingId ? "Edit Course" : "New Course"}</h3>
-                <p className="text-xs text-gray-400 mt-0.5">Fill in the course details</p>
-              </div>
-              <button type="button" onClick={() => setShowForm(false)} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-gray-100 text-gray-400 text-lg">×</button>
-            </div>
-            <div className="px-6 py-5 space-y-3.5">
-              <input
-                type="text"
-                placeholder="Course name"
-                value={formData.name}
-                onChange={e => setFormData({ ...formData, name: e.target.value })}
-                required
-                className={inputClass}
-              />
-              <input
-                type="number"
-                placeholder="Duration (weeks)"
-                value={formData.duration}
-                onChange={handleDurationChange}
-                min="1"
-                step="1"
-                className={inputClass}
-              />
-              {durationError && <p className="text-red-500 text-xs mt-1">{durationError}</p>}
-              <textarea
-                placeholder="Description (optional)"
-                value={formData.description}
-                onChange={e => setFormData({ ...formData, description: e.target.value })}
-                rows="3"
-                className={`${inputClass} resize-none`}
-              />
-            </div>
-            <div className="flex gap-2 px-6 py-4 border-t border-gray-100">
-              <button type="submit" className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white py-2.5 rounded-xl font-medium text-sm transition-colors">
-                {editingId ? "Save Changes" : "Add Course"}
-              </button>
-              <button type="button" onClick={() => setShowForm(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 py-2.5 rounded-xl font-medium text-sm transition-colors">
-                Cancel
-              </button>
-            </div>
-          </form>
-        </ModalWrapper>
-      )}
+      {/* Separate modal component – no focus loss */}
+      <CourseFormModal
+        isOpen={showForm}
+        onClose={() => setShowForm(false)}
+        editingCourse={editingCourse}
+        onSave={handleFormSave}
+      />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
         {/* Header */}
@@ -309,10 +369,11 @@ function Courses() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
               </svg>
               <input
+                ref={searchInputRef}
                 type="text"
                 placeholder="Search courses…"
                 value={searchTerm}
-                onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+                onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full sm:w-64 bg-white border border-gray-200 rounded-xl pl-10 pr-9 py-2.5 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 text-sm shadow-sm"
               />
               {searchTerm && (
@@ -320,12 +381,7 @@ function Courses() {
               )}
             </div>
             <button
-              onClick={() => {
-                setEditingId(null);
-                setFormData({ name: "", description: "", duration: "" });
-                setDurationError("");
-                setShowForm(true);
-              }}
+              onClick={handleAddClick}
               className="flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold shadow-md shadow-emerald-500/30 transition-all hover:shadow-lg hover:shadow-emerald-500/40 active:scale-95"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" /></svg>
@@ -353,7 +409,6 @@ function Courses() {
                 className="course-card bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden card-hover flex flex-col cursor-pointer"
                 style={{ animationDelay: `${idx * 0.05}s` }}
               >
-                {/* Clickable area (except action buttons) */}
                 <div className="flex-1" onClick={() => handleCardClick(course.id)}>
                   <div className="p-5">
                     <div className="flex items-start justify-between gap-3 mb-3">

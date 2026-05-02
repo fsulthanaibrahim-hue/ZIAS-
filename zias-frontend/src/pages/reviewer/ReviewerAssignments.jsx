@@ -1,151 +1,141 @@
-// src/pages/reviewer/ReviewerAssignments.jsx
-import { useEffect, useState } from "react";
+import React, { useState, useEffect } from "react";
 import API from "../../api/api";
-import toast from "react-hot-toast";
 
 function ReviewerAssignments() {
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [respondingId, setRespondingId] = useState(null);
-  const [selectedTime, setSelectedTime] = useState("");
+  const [nextUrl, setNextUrl] = useState(null);
+  const [prevUrl, setPrevUrl] = useState(null);
+  const [totalCount, setTotalCount] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const limit = 10;
 
-  useEffect(() => {
-    fetchAssignments();
-  }, []);
-
-  const fetchAssignments = async () => {
+  const fetchAssignments = async (url = null) => {
+    setLoading(true);
     try {
-      const res = await API.get("/review-assignments/");
-      setAssignments(res.data);
+      const res = url ? await API.get(url) : await API.get("review-assignments/", { params: { limit, offset: 0 } });
+      const results = res.data.results || [];   // ✅ extract array
+      setAssignments(results);
+      setNextUrl(res.data.next);
+      setPrevUrl(res.data.previous);
+      setTotalCount(res.data.count);
+
+      // Determine current page from offset
+      let offset = 0;
+      if (res.data.previous) {
+        const match = res.data.previous.match(/offset=(\d+)/);
+        if (match) offset = parseInt(match[1]);
+      } else if (res.data.next) {
+        const match = res.data.next.match(/offset=(\d+)/);
+        if (match) offset = parseInt(match[1]) - limit;
+      }
+      setCurrentPage(Math.floor(offset / limit) + 1);
     } catch (err) {
-      console.error(err);
-      toast.error("Failed to load assignments");
+      console.error("Failed to fetch assignments", err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleResponse = async (id, action) => {
-    let comments = "";
-    if (selectedTime) {
-      comments = `Suggested time: ${selectedTime}`;
-    }
+  useEffect(() => {
+    fetchAssignments();
+  }, []);
+
+  const handleStatusUpdate = async (id, status) => {
     try {
-      await API.patch(`/review-assignments/${id}/`, {
-        status: action,
-        comments: comments,
-      });
-      toast.success(`Assignment ${action}`);
-      setRespondingId(null);
-      setSelectedTime("");
-      fetchAssignments();
+      await API.patch(`review-assignments/${id}/`, { status });
+      // Refresh the current page after update
+      const offset = (currentPage - 1) * limit;
+      await fetchAssignments(`review-assignments/?limit=${limit}&offset=${offset}`);
     } catch (err) {
       console.error(err);
-      toast.error("Failed to respond");
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">Loading...</div>
-      </div>
-    );
-  }
+  const goToPage = (url) => {
+    if (url) fetchAssignments(url);
+  };
+
+  if (loading) return <div className="p-6 text-center">Loading assignments...</div>;
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold text-gray-800 mb-6">Review Assignments</h1>
+      <h1 className="text-2xl font-bold mb-4">My Review Assignments</h1>
       {assignments.length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-500">
-          No assignments yet.
-        </div>
+        <p className="text-gray-500">No assignments found.</p>
       ) : (
-        <div className="space-y-4">
-          {assignments.map((ass) => (
-            <div key={ass.id} className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-              <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-3">
-                <div className="space-y-1">
-                  <p className="text-sm text-gray-500">Student</p>
-                  <p className="font-medium text-gray-800">{ass.student_name}</p>
-                  <p className="text-sm text-gray-500">Course</p>
-                  <p className="text-gray-700">{ass.course || "—"}</p>
-                  <p className="text-sm text-gray-500">Review Sheet</p>
-                  <a
-                    href={ass.review_sheet}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-green-600 hover:underline text-sm break-all"
-                  >
-                    {ass.review_sheet || "—"}
-                  </a>
-                  <p className="text-sm text-gray-500 mt-2">Assigned on</p>
-                  <p className="text-sm text-gray-600">{new Date(ass.review_assigned).toLocaleString()}</p>
-                  <p className="text-sm text-gray-500 mt-2">Status</p>
-                  <span
-                    className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
-                      ass.status === "pending"
-                        ? "bg-yellow-100 text-yellow-800"
-                        : ass.status === "accepted"
-                        ? "bg-green-100 text-green-800"
-                        : "bg-red-100 text-red-800"
-                    }`}
-                  >
-                    {ass.status.toUpperCase()}
-                  </span>
-                  {ass.comments && (
-                    <>
-                      <p className="text-sm text-gray-500 mt-2">Comments</p>
-                      <p className="text-sm text-gray-600">{ass.comments}</p>
-                    </>
+        <>
+          <div className="space-y-4">
+            {assignments.map((ass) => (
+              <div key={ass.id} className="bg-white rounded-lg border p-4 shadow-sm">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="font-semibold text-gray-800">Student: {ass.student_name || ass.student?.full_name || "—"}</p>
+                    <p className="text-sm text-gray-600">Course: {ass.course}</p>
+                    <p className="text-sm text-gray-600">Mentor: {ass.mentor_name || ass.mentor?.full_name || "—"}</p>
+                    {ass.review_sheet && (
+                      <p className="text-sm">
+                        Review Sheet:{" "}
+                        <a href={ass.review_sheet} target="_blank" rel="noopener noreferrer" className="text-green-600 hover:underline">
+                          Link
+                        </a>
+                      </p>
+                    )}
+                    <span
+                      className={`inline-block mt-2 px-2 py-0.5 text-xs rounded-full ${
+                        ass.status === "pending"
+                          ? "bg-yellow-100 text-yellow-800"
+                          : ass.status === "accepted"
+                          ? "bg-green-100 text-green-800"
+                          : "bg-red-100 text-red-800"
+                      }`}
+                    >
+                      {ass.status.toUpperCase()}
+                    </span>
+                  </div>
+                  {ass.status === "pending" && (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleStatusUpdate(ass.id, "accepted")}
+                        className="px-3 py-1 bg-green-600 text-white text-sm rounded-md hover:bg-green-700"
+                      >
+                        Accept
+                      </button>
+                      <button
+                        onClick={() => handleStatusUpdate(ass.id, "rejected")}
+                        className="px-3 py-1 bg-red-600 text-white text-sm rounded-md hover:bg-red-700"
+                      >
+                        Reject
+                      </button>
+                    </div>
                   )}
                 </div>
-
-                {ass.status === "pending" && (
-                  <div className="mt-2 md:mt-0">
-                    {respondingId === ass.id ? (
-                      <div className="space-y-3">
-                        <input
-                          type="datetime-local"
-                          value={selectedTime}
-                          onChange={(e) => setSelectedTime(e.target.value)}
-                          className="border border-gray-300 rounded-lg px-3 py-2 text-sm w-full"
-                        />
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => handleResponse(ass.id, "accepted")}
-                            className="px-4 py-1.5 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700"
-                          >
-                            Accept
-                          </button>
-                          <button
-                            onClick={() => handleResponse(ass.id, "rejected")}
-                            className="px-4 py-1.5 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700"
-                          >
-                            Reject
-                          </button>
-                          <button
-                            onClick={() => setRespondingId(null)}
-                            className="px-4 py-1.5 bg-gray-200 text-gray-700 rounded-lg text-sm hover:bg-gray-300"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => setRespondingId(ass.id)}
-                        className="text-blue-600 hover:text-blue-700 text-sm font-medium"
-                      >
-                        Respond
-                      </button>
-                    )}
-                  </div>
-                )}
               </div>
+            ))}
+          </div>
+          {/* Pagination */}
+          {(prevUrl || nextUrl) && (
+            <div className="flex justify-center items-center gap-2 mt-6">
+              <button
+                onClick={() => goToPage(prevUrl)}
+                disabled={!prevUrl}
+                className="px-3 py-1 border rounded disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <span className="text-sm">
+                Page {currentPage} of {Math.ceil(totalCount / limit)}
+              </span>
+              <button
+                onClick={() => goToPage(nextUrl)}
+                disabled={!nextUrl}
+                className="px-3 py-1 border rounded disabled:opacity-50"
+              >
+                Next
+              </button>
             </div>
-          ))}
-        </div>
+          )}
+        </>
       )}
     </div>
   );

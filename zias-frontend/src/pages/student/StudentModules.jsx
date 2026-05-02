@@ -1,65 +1,44 @@
 // src/pages/student/StudentModules.jsx
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import API from "../../api/api";
+import React, { useState, useEffect } from "react";
 import StudentSidebar from "../../components/StudentSidebar";
+import API from "../../api/api";
+import { Link } from "react-router-dom";
 
 function StudentModules() {
   const [modules, setModules] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    const fetchModules = async () => {
+    const fetchMyModules = async () => {
+      setLoading(true);
       try {
-        // Fetch modules using the student-modules endpoint (already filtered & unlocked)
-        const modulesRes = await API.get("modules/student-modules/");
-        const modulesData = modulesRes.data;
-
-        // Enrich modules with progress and review data
-        const enrichedModules = await Promise.all(
-          modulesData.map(async (mod) => {
-            try {
-              const daysRes = await API.get(`days/?module=${mod.id}`);
-              const days = daysRes.data;
-              const completedDays = days.filter(day => day.is_completed).length;
-              const progress = days.length > 0 ? (completedDays / days.length) * 100 : 0;
-
-              let review = null;
-              try {
-                const reviewRes = await API.get(`week-review/${mod.id}/`);
-                review = reviewRes.data;
-              } catch {
-                // No review available
-              }
-
-              // Force unlocked for all modules returned by student-modules endpoint
-              return { ...mod, is_locked: false, progress, review, totalDays: days.length };
-            } catch (err) {
-              console.error(`Error fetching details for module ${mod.id}`, err);
-              return { ...mod, is_locked: false, progress: 0, review: null, totalDays: 0 };
-            }
-          })
-        );
-
-        const sortedModules = enrichedModules.sort((a, b) => (a.order || a.id) - (b.order || b.id));
-        setModules(sortedModules);
+        // Get modules for the current student
+        const res = await API.get("/modules/student-modules/");
+        let data = res.data.results || res.data;
+        if (!Array.isArray(data)) data = [];
+        setModules(data);
       } catch (err) {
-        console.error("Failed to fetch modules:", err);
-        setError("Could not load modules. Please try again later.");
+        console.error(err);
+        setError("Could not load your modules.");
       } finally {
         setLoading(false);
       }
     };
-
-    fetchModules();
+    fetchMyModules();
   }, []);
+
+  const filteredModules = modules.filter(mod =>
+    mod.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    mod.content?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   if (loading) {
     return (
-      <div className="flex min-h-screen bg-gray-50">
+      <div className="flex h-screen">
         <StudentSidebar />
-        <div className="flex-1 flex items-center justify-center">
+        <div className="flex-1 flex items-center justify-center bg-gray-50">
           <div className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
         </div>
       </div>
@@ -68,96 +47,118 @@ function StudentModules() {
 
   if (error) {
     return (
-      <div className="flex min-h-screen bg-gray-50">
+      <div className="flex h-screen">
         <StudentSidebar />
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <p className="text-red-600 mb-4">{error}</p>
-            <button
-              onClick={() => window.location.reload()}
-              className="bg-green-600 text-white px-4 py-2 rounded"
-            >
-              Retry
-            </button>
-          </div>
+        <div className="flex-1 flex items-center justify-center bg-gray-50 text-red-500 p-6">
+          {error}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex h-screen">
       <StudentSidebar />
-      <main className="flex-1 p-8 overflow-y-auto">
-        <div className="max-w-6xl mx-auto">
+      <main className="flex-1 overflow-y-auto bg-gray-50 p-6">
+        <div className="max-w-7xl mx-auto">
           {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-2xl font-bold text-gray-800">All Modules</h1>
-            <p className="text-gray-500 mt-1">
-              Your learning weeks – track progress and access content
+          <div className="mb-6">
+            <h1 className="text-2xl font-bold text-gray-800">📘 My Modules</h1>
+            <p className="text-gray-500 text-sm mt-1">
+              Modules unlock as you complete weekly reviews.
             </p>
           </div>
 
-          {/* Modules grid */}
-          {modules.length === 0 ? (
+          {/* Search bar – same as mentor page */}
+          <div className="mb-6 relative max-w-md">
+            <input
+              type="text"
+              placeholder="Search modules by title or content..."
+              className="w-full border border-gray-300 rounded-lg py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            <svg className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+
+          {/* Modules grid – exactly like mentor module grid */}
+          {filteredModules.length === 0 ? (
             <div className="text-center py-12 bg-white rounded-xl border border-gray-200 shadow-sm">
-              <p className="text-gray-500">No modules assigned to you yet.</p>
+              <p className="text-gray-500">
+                {searchTerm ? "No modules match your search." : "No modules available for you."}
+              </p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {modules.map((mod) => {
-                const progress = mod.progress || 0;
-                const starRating = mod.review?.star_rating;
-                const totalScore = mod.review?.total_score;
-
+              {filteredModules.map((mod) => {
+                const isLocked = mod.is_locked === true;
                 return (
                   <div
                     key={mod.id}
-                    className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden transition-all hover:shadow-md hover:-translate-y-1"
+                    className={`group bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden ${
+                      isLocked ? "opacity-75" : ""
+                    }`}
                   >
-                    <Link to={`/student/week/${mod.id}`} className="block p-5">
-                      <div className="flex justify-between items-start mb-2">
-                        <h3 className="text-lg font-semibold text-gray-800 group-hover:text-green-600 transition">
-                          {mod.title}
-                        </h3>
-                        <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
-                          {progress === 100 ? "✅ Completed" : "In Progress"}
-                        </span>
+                    <div className="p-5">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-gray-800 text-lg line-clamp-1">
+                            {mod.title}
+                          </h3>
+                          {mod.course_name && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              {mod.is_common ? (
+                                <span className="inline-flex items-center gap-1">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                                  Foundation Module
+                                </span>
+                              ) : (
+                                <span>Course: {mod.course_name}</span>
+                              )}
+                            </p>
+                          )}
+                        </div>
+                        <div className="ml-3">
+                          {isLocked ? (
+                            <span className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                              </svg>
+                              Locked
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
+                              </svg>
+                              Unlocked
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      <p className="text-gray-500 text-sm mb-3 line-clamp-2">
+                      <p className="text-sm text-gray-600 mt-2 line-clamp-2">
                         {mod.content || "No description available."}
                       </p>
-
-                      {/* Progress bar */}
-                      <div className="mb-3">
-                        <div className="flex justify-between text-xs text-gray-500 mb-1">
-                          <span>Progress</span>
-                          <span>{Math.round(progress)}%</span>
-                        </div>
-                        <div className="w-full bg-gray-100 rounded-full h-1.5">
-                          <div
-                            className="bg-green-600 h-1.5 rounded-full transition-all duration-300"
-                            style={{ width: `${progress}%` }}
-                          />
-                        </div>
+                      <div className="mt-4 flex items-center justify-between">
+                        <Link
+                          to={`/student/module/${mod.id}`}
+                          className={`text-sm font-medium px-4 py-1.5 rounded-full transition ${
+                            !isLocked
+                              ? "bg-green-600 hover:bg-green-700 text-white shadow-sm"
+                              : "bg-gray-100 text-gray-400 cursor-not-allowed pointer-events-none"
+                          }`}
+                        >
+                          {!isLocked ? "View Module →" : "Locked"}
+                        </Link>
+                        {mod.completion_percentage !== undefined && !isLocked && (
+                          <span className="text-xs text-gray-400">
+                            Progress: {mod.completion_percentage}%
+                          </span>
+                        )}
                       </div>
-
-                      {/* Score & rating */}
-                      {totalScore !== undefined && totalScore !== null && (
-                        <div className="text-sm text-gray-600 mb-2">
-                          Score: <span className="text-emerald-600 font-semibold">{totalScore}</span>
-                        </div>
-                      )}
-                      {starRating && (
-                        <div className="text-sm text-yellow-500 mb-2">
-                          {"⭐".repeat(starRating)}
-                        </div>
-                      )}
-
-                      <div className="text-green-600 text-sm flex items-center gap-1 mt-2">
-                        View Details →
-                      </div>
-                    </Link>
+                    </div>
                   </div>
                 );
               })}

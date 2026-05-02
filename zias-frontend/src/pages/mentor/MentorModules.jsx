@@ -17,6 +17,12 @@ function MentorModules() {
   const [searchTerm, setSearchTerm] = useState("");
   const mountedRef = useRef(true);
 
+  // Helper: extract array from paginated response
+  const extractArray = (response) => {
+    const data = response.data.results || response.data;
+    return Array.isArray(data) ? data : [];
+  };
+
   useEffect(() => {
     mountedRef.current = true;
     const fetchInitialData = async () => {
@@ -67,7 +73,7 @@ function MentorModules() {
         return;
       }
       modulesPromises[selectedStudentId] = API.get(`modules/student-modules/?student_id=${selectedStudentId}`)
-        .then(res => res.data)
+        .then(res => extractArray(res))
         .catch(err => {
           console.error("Failed to fetch modules", err);
           throw err;
@@ -125,8 +131,22 @@ function MentorModules() {
             <div>
               <h1 className="text-2xl font-bold text-gray-800">Student Modules</h1>
               <p className="text-gray-500 text-sm mt-1">
-                View module access based on completion progress
+                View all modules for the selected student (no locks)
               </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <label className="text-sm text-gray-600">Student:</label>
+              <select
+                value={selectedStudentId}
+                onChange={(e) => handleStudentChange(e.target.value)}
+                className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              >
+                {students.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.full_name || s.username}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
         </div>
@@ -140,22 +160,12 @@ function MentorModules() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
-          <svg
-            className="absolute left-3 top-2.5 w-4 h-4 text-gray-400"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-            />
+          <svg className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
         </div>
 
-        {/* Modules grid */}
+        {/* Modules grid – no lock badges, always unlocked */}
         {filteredModules.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-xl border border-gray-200 shadow-sm">
             <p className="text-gray-500">
@@ -164,76 +174,51 @@ function MentorModules() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredModules.map((mod) => {
-              const isLocked = mod.is_locked || false;
-              return (
-                <div
-                  key={mod.id}
-                  className={`group bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden ${
-                    isLocked ? "opacity-75" : ""
-                  }`}
-                >
-                  <div className="p-5">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex-1">
-                        <h3 className="font-semibold text-gray-800 text-lg line-clamp-1">
-                          {mod.title}
-                        </h3>
-                        {mod.course_name && (
-                          <p className="text-xs text-gray-500 mt-1">
-                            {mod.is_common ? (
-                              <span className="inline-flex items-center gap-1">
-                                <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-                                Foundation Module
-                              </span>
-                            ) : (
-                              <span>Course: {mod.course_name}</span>
-                            )}
-                          </p>
-                        )}
-                      </div>
-                      <div className="ml-3">
-                        {isLocked ? (
-                          <span className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                            </svg>
-                            Locked
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
-                            </svg>
-                            Unlocked
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <p className="text-sm text-gray-600 mt-2 line-clamp-2">
-                      {mod.content || "No description available."}
-                    </p>
-                    <div className="mt-4 flex items-center justify-between">
-                      <Link
-                        to={`/student/module/${mod.id}`}
-                        className={`text-sm font-medium px-4 py-1.5 rounded-full transition ${
-                          !isLocked
-                            ? "bg-green-600 hover:bg-green-700 text-white shadow-sm"
-                            : "bg-gray-100 text-gray-400 cursor-not-allowed pointer-events-none"
-                        }`}
-                      >
-                        {!isLocked ? "View Module →" : "Locked"}
-                      </Link>
-                      {mod.completion_percentage !== undefined && !isLocked && (
-                        <span className="text-xs text-gray-400">
-                          Progress: {mod.completion_percentage}%
-                        </span>
+            {filteredModules.map((mod) => (
+              <div
+                key={mod.id}
+                className="group bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden"
+              >
+                <div className="p-5">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-gray-800 text-lg line-clamp-1">
+                        {mod.title}
+                      </h3>
+                      {mod.course_name && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          {mod.is_common ? (
+                            <span className="inline-flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                              Foundation Module
+                            </span>
+                          ) : (
+                            <span>Course: {mod.course_name}</span>
+                          )}
+                        </p>
                       )}
                     </div>
+                    {/* ❌ No lock badge – removed */}
+                  </div>
+                  <p className="text-sm text-gray-600 mt-2 line-clamp-2">
+                    {mod.content || "No description available."}
+                  </p>
+                  <div className="mt-4 flex items-center justify-between">
+                    <Link
+                      to={`/student/module/${mod.id}`}
+                      className="text-sm font-medium px-4 py-1.5 rounded-full bg-green-600 hover:bg-green-700 text-white shadow-sm transition"
+                    >
+                      View Module →
+                    </Link>
+                    {mod.completion_percentage !== undefined && (
+                      <span className="text-xs text-gray-400">
+                        Progress: {mod.completion_percentage}%
+                      </span>
+                    )}
                   </div>
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
         )}
       </div>

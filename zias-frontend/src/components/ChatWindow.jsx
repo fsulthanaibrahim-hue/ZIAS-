@@ -32,12 +32,12 @@ const ChatWindow = forwardRef(({ room }, ref) => {
   const [input, setInput] = useState('');
   const [otherTyping, setOtherTyping] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [respondingMessageId, setRespondingMessageId] = useState(null);
-  const [selectedTime, setSelectedTime] = useState('');
+  const [hasMore, setHasMore] = useState(false);
+  const [offset, setOffset] = useState(0);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const bottomRef = useRef(null);
-  const processedIds = useRef(new Set());
-
-  const isReviewer = user?.is_reviewer === true;
+  const topRef = useRef(null);
+  const limit = 20;
 
   useImperativeHandle(ref, () => ({
     clearMessages: () => setMessages([]),
@@ -47,27 +47,46 @@ const ChatWindow = forwardRef(({ room }, ref) => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const fetchMessages = async () => {
-    if (!room || !room.id) return;
-    setLoading(true);
+  // Fetch messages from backend – assumes API returns oldest first (ascending)
+  const fetchMessages = async (reset = false) => {
+    if (!room?.id) return;
+    if (reset) setLoading(true);
+    else setLoadingOlder(true);
     try {
-      const res = await api.get(`/chat-rooms/${room.id}/messages/`);
-      // ✅ Handle pagination: if res.data has a 'results' array, use that; otherwise assume array
-      let fetchedMessages = res.data.results || res.data;
-      if (!Array.isArray(fetchedMessages)) fetchedMessages = [];
-      setMessages(fetchedMessages);
-      setTimeout(scrollToBottom, 100);
+      const currentOffset = reset ? 0 : offset;
+      const res = await api.get(`/chat-rooms/${room.id}/messages/`, {
+        params: { limit, offset: currentOffset } // backend orders by timestamp asc
+      });
+      let fetched = res.data.results || [];
+      setHasMore(fetched.length === limit);
+      if (reset) {
+        setMessages(fetched);
+        setOffset(limit);
+        setTimeout(scrollToBottom, 100);
+      } else if (fetched.length) {
+        // Prepend older messages to the top
+        setMessages(prev => [...fetched, ...prev]);
+        setOffset(offset + limit);
+        // Adjust scroll position
+        const prevHeight = topRef.current?.scrollHeight;
+        setTimeout(() => {
+          const newHeight = topRef.current?.scrollHeight;
+          if (prevHeight && newHeight) {
+            topRef.current.scrollTop = newHeight - prevHeight;
+          }
+        }, 0);
+      }
     } catch (err) {
       console.error(err);
       toast.error("Could not load messages");
     } finally {
-      setLoading(false);
+      if (reset) setLoading(false);
+      else setLoadingOlder(false);
     }
   };
 
   useEffect(() => {
-    if (!room) return;
-    fetchMessages();
+    fetchMessages(true);
     const markRead = async () => {
       try {
         await api.post(`chat-messages/mark-read/${room.id}/`);
@@ -75,63 +94,73 @@ const ChatWindow = forwardRef(({ room }, ref) => {
       } catch (err) {}
     };
     markRead();
-  }, [room, socket]);
+  }, [room]);
 
-  useEffect(() => { scrollToBottom(); }, [messages]);
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
+  // Socket events
   useEffect(() => {
     if (!socket || !room) return;
     socket.emit('join_room', { room_id: room.id });
     const handleReceiveMessage = (msg) => {
-      if ((msg.room_id || msg.room) !== room.id) return;
-      if (processedIds.current.has(msg.id)) return;
-      processedIds.current.add(msg.id);
-      setMessages(prev => [...prev, msg]);
-      if (msg.sender_id !== user.id) {
+      const senderId = msg.sender_id !== undefined ? msg.sender_id : msg.sender?.id;
+      // Ignore messages that I sent – they are already added optimistically
+      if (String(senderId) === String(user?.id)) return;
+      setMessages(prev => {
+        if (prev.some(m => m.id === msg.id)) return prev;
+        return [...prev, msg];
+      });
+      setTimeout(scrollToBottom, 100);
+      if (senderId !== user?.id) {
         api.post(`chat-messages/mark-read/${room.id}/`).catch(() => {});
-        socket.emit('mark_read', { room_id: room.id });
       }
     };
-    const handleUserTyping = ({ user_id, is_typing }) => {
-      if (user_id !== user.id) setOtherTyping(is_typing);
-    };
-    const handleMessagesRead = ({ room_id, read_by }) => {
-      if (room_id === room.id && read_by !== user.id) {
-        setMessages(prev => prev.map(msg => msg.sender_id === user.id ? { ...msg, is_read: true } : msg));
-      }
+    const handleTyping = ({ user_id, is_typing }) => {
+      if (user_id !== user?.id) setOtherTyping(is_typing);
     };
     socket.on('receive_message', handleReceiveMessage);
-    socket.on('user_typing', handleUserTyping);
-    socket.on('messages_read', handleMessagesRead);
+    socket.on('typing', handleTyping);
     return () => {
       socket.off('receive_message', handleReceiveMessage);
-      socket.off('user_typing', handleUserTyping);
-      socket.off('messages_read', handleMessagesRead);
+      socket.off('typing', handleTyping);
     };
-  }, [socket, room, user.id]);
+  }, [socket, room, user]);
 
-  const sendMessage = () => {
-    if (!input.trim()) return;
+  // Send message – optimistic + HTTP POST
+  const sendMessage = async () => {
+    if (!input.trim() || !room?.id) return;
+    const text = input.trim();
     const tempId = Date.now();
     const optimistic = {
       id: tempId,
-      content: input,
+      content: text,
       sender_id: user.id,
-      sender_name: user.username,
+      sender_name: user.full_name || user.username,
       timestamp: new Date().toISOString(),
-      action: 'pending',
-      suggested_time: null,
-      responded_at: null,
       is_read: false,
     };
-    processedIds.current.add(tempId);
     setMessages(prev => [...prev, optimistic]);
-    socket.emit('send_message', { room_id: room.id, content: input });
     setInput('');
+    // Broadcast over WebSocket (so others in the room see it)
+    socket.emit('send_message', { room_id: room.id, content: text });
+    // Save to database via HTTP
+    try {
+      const res = await api.post('chat-messages/', { room: room.id, content: text });
+      // Replace optimistic with real server data
+      setMessages(prev => prev.map(m => m.id === tempId ? res.data : m));
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to send message");
+      setMessages(prev => prev.filter(m => m.id !== tempId));
+    }
+    setTimeout(scrollToBottom, 100);
   };
 
   const handleTyping = (e) => {
     setInput(e.target.value);
+    if (!socket || !room) return;
     socket.emit('typing', { room_id: room.id, is_typing: true });
     clearTimeout(window.typingTimeout);
     window.typingTimeout = setTimeout(() => {
@@ -139,93 +168,53 @@ const ChatWindow = forwardRef(({ room }, ref) => {
     }, 1000);
   };
 
-  const handleResponse = async (messageId, action) => {
-    let suggested_time = selectedTime ? new Date(selectedTime).toISOString() : null;
-    try {
-      await api.post(`chat-messages/${messageId}/respond/`, { action, suggested_time });
-      toast.success(`Response sent: ${action}`);
-      setRespondingMessageId(null);
-      setSelectedTime('');
-      fetchMessages();
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to send response");
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
     }
   };
 
-  const isCurrentUserMessage = (msg) => {
-    let senderId = msg.sender_id;
-    if (senderId === undefined) senderId = msg.sender;
-    if (senderId && typeof senderId === 'object') senderId = senderId.id;
-    return String(senderId) === String(user?.id);
-  };
-
-  const renderSenderName = (msg, isMine) => {
-    if (isMine) return "You";
-    return msg.sender_name || "Unknown";
-  };
-
-  // Group messages by day – ensure messages is array
-  const groupedMessages = Array.isArray(messages) ? messages.reduce((acc, msg) => {
+  // Group messages by day for better readability
+  const groupedMessages = messages.reduce((acc, msg) => {
     const day = formatDay(msg.timestamp);
     if (!acc.length || acc[acc.length-1].day !== day) acc.push({ day, msgs: [] });
     acc[acc.length-1].msgs.push(msg);
     return acc;
-  }, []) : [];
+  }, []);
+
+  if (loading && messages.length === 0) return <div className="flex-1 flex items-center justify-center">Loading...</div>;
 
   return (
-    <div className="flex flex-col h-full bg-gray-50">
-      <div className="flex-1 overflow-y-auto p-4 space-y-2">
-        {loading ? (
-          <div className="text-center text-gray-400 mt-8">Loading messages...</div>
-        ) : messages.length === 0 ? (
+    <div className="flex flex-col h-full bg-gray-50" ref={topRef}>
+      <div className="flex-1 overflow-y-auto p-4">
+        {hasMore && !loading && (
+          <div className="text-center my-2">
+            <button onClick={() => fetchMessages(false)} disabled={loadingOlder} className="text-sm text-blue-500 hover:underline">
+              {loadingOlder ? "Loading..." : "Load older messages"}
+            </button>
+          </div>
+        )}
+        {messages.length === 0 ? (
           <div className="text-center text-gray-400 mt-8">No messages yet. Say hello!</div>
         ) : (
           groupedMessages.map(({ day, msgs }) => (
             <div key={day}>
               <div className="text-center text-xs text-gray-400 my-3">{day}</div>
               {msgs.map((msg, idx) => {
-                const isMine = isCurrentUserMessage(msg);
-                const showResponse = !isMine && isReviewer && msg.action === 'pending' && room?.room_type === 'mentor_reviewer';
-                const prevMsg = idx > 0 ? msgs[idx-1] : null;
-                const sameSenderAsPrev = prevMsg && String(prevMsg.sender_id || prevMsg.sender) === String(msg.sender_id || msg.sender);
-                const displayName = renderSenderName(msg, isMine);
-
+                const senderId = msg.sender_id !== undefined ? msg.sender_id : msg.sender?.id;
+                const isOwn = String(senderId) === String(user?.id);
+                const showName = idx === 0 || (msgs[idx-1]?.sender_id !== senderId && msgs[idx-1]?.sender?.id !== senderId);
                 return (
-                  <div key={msg.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'} mb-3`}>
-                    <div className={`max-w-[70%] rounded-lg px-3 py-2 ${isMine ? 'bg-green-600 text-white' : 'bg-white text-gray-800 shadow-sm'}`}>
-                      {!sameSenderAsPrev && (
-                        <div className="text-xs font-semibold mb-1">{displayName}</div>
-                      )}
-                      <div className="text-sm break-words">{msg.content}</div>
-                      <div className={`text-xs text-right mt-1 flex items-center justify-end gap-1 ${isMine ? 'text-green-100' : 'text-gray-400'}`}>
-                        {formatTime(msg.timestamp)}
-                        {isMine && <span>{msg.is_read ? '✓✓' : '✓'}</span>}
-                      </div>
-
-                      {/* NO STATUS BADGE */}
-
-                      {showResponse && (
-                        <div className="mt-2 pt-2 border-t border-gray-200">
-                          {respondingMessageId === msg.id ? (
-                            <div className="space-y-2">
-                              <input
-                                type="datetime-local"
-                                value={selectedTime}
-                                onChange={e => setSelectedTime(e.target.value)}
-                                className="w-full px-2 py-1 text-xs border rounded"
-                              />
-                              <div className="flex gap-2">
-                                <button onClick={() => handleResponse(msg.id, 'accepted')} className="px-3 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600">Accept</button>
-                                <button onClick={() => handleResponse(msg.id, 'rejected')} className="px-3 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600">Reject</button>
-                                <button onClick={() => setRespondingMessageId(null)} className="px-3 py-1 text-xs bg-gray-300 rounded">Cancel</button>
-                              </div>
-                            </div>
-                          ) : (
-                            <button onClick={() => setRespondingMessageId(msg.id)} className="text-xs text-blue-500 hover:underline">Respond (Accept / Reject with time)</button>
-                          )}
+                  <div key={msg.id} className={`flex mb-3 ${isOwn ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[75%] rounded-lg px-3 py-2 ${isOwn ? 'bg-green-600 text-white' : 'bg-white shadow-sm border'}`}>
+                      {showName && !isOwn && (
+                        <div className="text-xs font-semibold text-gray-500 mb-1">
+                          {msg.sender_name || 'Unknown'}
                         </div>
                       )}
+                      <div className="text-sm break-words">{msg.content}</div>
+                      <div className="text-xs text-right mt-1 opacity-70">{formatTime(msg.timestamp)}</div>
                     </div>
                   </div>
                 );
@@ -236,16 +225,15 @@ const ChatWindow = forwardRef(({ room }, ref) => {
         {otherTyping && <div className="text-gray-500 text-sm italic ml-2">Typing...</div>}
         <div ref={bottomRef} />
       </div>
-
-      <div className="bg-white border-t p-3 flex gap-2 flex-shrink-0">
+      <div className="bg-white border-t p-3 flex gap-2">
         <input
           className="flex-1 border rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
           value={input}
           onChange={handleTyping}
-          onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+          onKeyPress={handleKeyPress}
           placeholder="Type a message..."
         />
-        <button onClick={sendMessage} className="bg-green-600 text-white rounded-full px-4 py-2 hover:bg-green-700 transition">Send</button>
+        <button onClick={sendMessage} className="bg-green-600 text-white rounded-full px-4 py-2 hover:bg-green-700">Send</button>
       </div>
     </div>
   );

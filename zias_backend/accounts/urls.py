@@ -13,7 +13,8 @@ from .views import (
     ChatMessageListCreateView, ClearChatMessagesView, MarkMessagesReadView,
     UploadStudentDocumentView, NotificationViewSet, StudentDocumentListView,
     StudentDocumentDeleteView, MentorDocumentListView, UploadMentorDocumentView,
-    MentorDocumentDeleteView, RespondToMessageView, ReviewAssignmentViewSet, UnreadNotificationCountView
+    MentorDocumentDeleteView, RespondToMessageView, ReviewAssignmentViewSet, 
+    UnreadNotificationCountView, StudentReviewStatusView
 )
 
 router = DefaultRouter()
@@ -67,4 +68,5 @@ urlpatterns = [
     path('api/upload-mentor-document/', UploadMentorDocumentView.as_view(), name='upload-mentor-doc'),
     path('api/mentors/<int:mentor_id>/documents/', MentorDocumentListView.as_view(), name='mentor-documents'),
     path('api/mentor-documents/<int:doc_id>/', MentorDocumentDeleteView.as_view(), name='delete-mentor-doc'),
+    path('api/student/review-status/', StudentReviewStatusView.as_view(), name='student-review-status'),
 ]

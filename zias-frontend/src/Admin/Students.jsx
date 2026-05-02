@@ -1,4 +1,4 @@
-// src/Admin/Students.jsx
+// src/Admin/Students.jsx – fully working with pagination, course/batch/mentor dropdowns
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import API from "../api/api";
@@ -39,6 +39,16 @@ function ConfirmModal({ isOpen, onClose, onConfirm, studentName }) {
   );
 }
 
+// ✅ Robust extraction function – works for plain arrays AND paginated { results: [...] }
+function extractArray(responseOrData) {
+  // responseOrData can be the whole Axios response or just the data object
+  const data = responseOrData?.data ?? responseOrData;
+  if (Array.isArray(data)) return data;
+  if (data && Array.isArray(data.results)) return data.results;
+  console.warn("Unexpected API response format:", data);
+  return [];
+}
+
 function Students() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -66,13 +76,11 @@ function Students() {
   const [submitting, setSubmitting] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [viewerDocuments, setViewerDocuments] = useState([]);
-  const [uploadingDocs, setUploadingDocs] = useState(false);
-  const [newDocs, setNewDocs] = useState([]);
   const [editDocuments, setEditDocuments] = useState([]);
   const [loadingEditDocs, setLoadingEditDocs] = useState(false);
 
   const [formData, setFormData] = useState({
-    full_name: "", email: "", course: "", batch: "", mentor: "", phone: "", date_of_birth: "", age: "", gender: "",
+    full_name: "", email: "", course_id: "", batch_id: "", mentor_id: "", phone: "", date_of_birth: "", age: "", gender: "",
     fathers_name: "", fathers_contact: "", mothers_name: "", mothers_contact: "",
     address: "", educational_qualification: "", college_school: "", parent_name: "", parent_phone: "", emergency_contact: "",
   });
@@ -93,6 +101,7 @@ function Students() {
     }
   }, [location.search]);
 
+  // ✅ fetchAllData uses extractArray correctly
   const fetchAllData = useCallback(async () => {
     if (hasLoaded.current) return;
     hasLoaded.current = true;
@@ -104,13 +113,21 @@ function Students() {
         API.get("batches/"),
         API.get("mentors/")
       ]);
-      setStudents(studentsRes.data);
-      setCoursesList(coursesRes.data);
-      setBatchesList(batchesRes.data);
-      setMentorsList(mentorsRes.data);
+      setStudents(extractArray(studentsRes));
+      setCoursesList(extractArray(coursesRes));
+      setBatchesList(extractArray(batchesRes));
+      setMentorsList(extractArray(mentorsRes));
+      
+      // Debug (remove in production)
+      console.log("Courses loaded:", extractArray(coursesRes));
     } catch (err) {
       console.error(err);
-      showToast("Failed to load data", "error");
+      if (err.response?.status === 401) {
+        showToast("Session expired. Please log in again.", "error");
+        setTimeout(() => { localStorage.clear(); window.location.href = "/login"; }, 1500);
+      } else {
+        showToast("Failed to load data", "error");
+      }
     } finally {
       setLoading(false);
     }
@@ -123,10 +140,15 @@ function Students() {
   const refreshStudents = useCallback(async () => {
     try {
       const res = await API.get("students/");
-      setStudents(res.data);
+      setStudents(extractArray(res));
     } catch (err) {
       console.error(err);
-      showToast("Failed to refresh student list", "error");
+      if (err.response?.status === 401) {
+        showToast("Session expired. Please log in again.", "error");
+        setTimeout(() => { localStorage.clear(); window.location.href = "/login"; }, 1500);
+      } else {
+        showToast("Failed to refresh student list", "error");
+      }
     }
   }, [showToast]);
 
@@ -150,6 +172,7 @@ function Students() {
     }
   };
 
+  // Auto-calculate age from DOB
   useEffect(() => {
     if (formData.date_of_birth) {
       const birthDate = new Date(formData.date_of_birth);
@@ -191,6 +214,13 @@ function Students() {
     return `${base}${suffix}`;
   };
 
+  // Safe document URL helper
+  const getDocumentUrl = (url) => {
+    if (!url || typeof url !== 'string') return '#';
+    if (url.startsWith('http')) return url;
+    return `http://127.0.0.1:8000${url}`;
+  };
+
   const uploadDocuments = async (studentId, files = selectedFiles) => {
     if (!files.length) return;
     for (const file of files) {
@@ -209,156 +239,14 @@ function Students() {
     setSelectedFiles([]);
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    const phoneFields = [
-      { field: 'phone', setError: setPhoneError, label: 'Student phone' },
-      { field: 'fathers_contact', setError: setFathersContactError, label: "Father's contact" },
-      { field: 'mothers_contact', setError: setMothersContactError, label: "Mother's contact" },
-      { field: 'parent_phone', setError: setParentPhoneError, label: 'Parent phone' },
-      { field: 'emergency_contact', setError: setEmergencyContactError, label: 'Emergency contact' },
-    ];
-    let hasError = false;
-    for (const { field, setError, label } of phoneFields) {
-      const val = formData[field];
-      if (val && !/^\d{10}$/.test(val)) {
-        setError('Phone number must be exactly 10 digits');
-        showToast(`${label} must be exactly 10 digits`, "error");
-        hasError = true;
-      } else {
-        setError('');
-      }
-    }
-    if (hasError) return;
-
-    const payload = {
-      full_name: formData.full_name ? formData.full_name.trim() : null,
-      email: formData.email,
-      course: formData.course,
-      batch: formData.batch,
-      mentor: formData.mentor ? parseInt(formData.mentor) : null,
-      phone: formData.phone || null,
-      date_of_birth: formData.date_of_birth || null,
-      age: formData.age ? parseInt(formData.age) : null,
-      gender: formData.gender || null,
-      fathers_name: formData.fathers_name || null,
-      fathers_contact: formData.fathers_contact || null,
-      mothers_name: formData.mothers_name || null,
-      mothers_contact: formData.mothers_contact || null,
-      address: formData.address || null,
-      educational_qualification: formData.educational_qualification || null,
-      college_school: formData.college_school || null,
-      parent_name: formData.parent_name || null,
-      parent_phone: formData.parent_phone || null,
-      emergency_contact: formData.emergency_contact || null,
-    };
-
-    setSubmitting(true);
-    let studentId = null;
-    try {
-      if (editingId) {
-        await API.patch(`students/${editingId}/`, payload);
-        showToast("Student updated successfully", "success");
-        studentId = editingId;
-        setShowForm(false);
-        setEditingId(null);
-        resetForm();
-        await refreshStudents();
-      } else {
-        const generatedUsername = generateUsername(formData.email, formData.full_name);
-        payload.username = generatedUsername;
-        const createRes = await API.post("students/", payload);
-        showToast(`Student added successfully! Username: ${generatedUsername}`, "success");
-        studentId = createRes.data.id;
-        setShowForm(false);
-        resetForm();
-        await refreshStudents();
-        setCurrentPage(1);
-      }
-      if (studentId && selectedFiles.length) {
-        await uploadDocuments(studentId);
-      }
-    } catch (error) {
-      console.error("API error:", error);
-      let errorMsg = "An unexpected error occurred.";
-      if (error.response) {
-        const data = error.response.data;
-        if (typeof data === 'object') {
-          const messages = [];
-          if (data.username) messages.push(`Username: ${data.username.join(', ')}`);
-          if (data.email) messages.push(`Email: ${data.email.join(', ')}`);
-          if (data.non_field_errors) messages.push(data.non_field_errors.join(', '));
-          if (data.detail) messages.push(data.detail);
-          if (messages.length) errorMsg = messages.join('; ');
-          else errorMsg = "Validation error. Please check the data.";
-        } else if (typeof data === 'string') {
-          errorMsg = data;
-        }
-      } else if (error.request) {
-        errorMsg = "No response from server. Please check your connection.";
-      } else {
-        errorMsg = error.message;
-      }
-      showToast(errorMsg, "error");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const resetForm = () => {
-    setFormData({
-      full_name: "", email: "", course: "", batch: "", mentor: "", phone: "", date_of_birth: "", age: "", gender: "",
-      fathers_name: "", fathers_contact: "", mothers_name: "", mothers_contact: "",
-      address: "", educational_qualification: "", college_school: "", parent_name: "", parent_phone: "", emergency_contact: "",
-    });
-    setPhoneError("");
-    setFathersContactError("");
-    setMothersContactError("");
-    setParentPhoneError("");
-    setEmergencyContactError("");
-    setSelectedFiles([]);
-    setEditDocuments([]);
-  };
-
   const fetchStudentDocuments = async (studentId) => {
     try {
       const res = await API.get(`students/${studentId}/documents/`);
-      return res.data;
+      return extractArray(res);
     } catch (err) {
       console.error(err);
       return [];
     }
-  };
-
-  const handleEdit = async (student) => {
-    setEditingId(student.id);
-    setFormData({
-      full_name: student.full_name || "",
-      email: student.email,
-      course: student.course,
-      batch: student.batch,
-      mentor: student.mentor ? student.mentor.toString() : "",
-      phone: student.phone || "",
-      date_of_birth: student.date_of_birth || "",
-      age: student.age || "",
-      gender: student.gender || "",
-      fathers_name: student.fathers_name || "",
-      fathers_contact: student.fathers_contact || "",
-      mothers_name: student.mothers_name || "",
-      mothers_contact: student.mothers_contact || "",
-      address: student.address || "",
-      educational_qualification: student.educational_qualification || "",
-      college_school: student.college_school || "",
-      parent_name: student.parent_name || "",
-      parent_phone: student.parent_phone || "",
-      emergency_contact: student.emergency_contact || "",
-    });
-    setLoadingEditDocs(true);
-    const docs = await fetchStudentDocuments(student.id);
-    setEditDocuments(docs);
-    setLoadingEditDocs(false);
-    setSelectedFiles([]);
-    setShowForm(true);
   };
 
   const deleteEditDocument = async (docId) => {
@@ -391,8 +279,25 @@ function Students() {
     setSelectedFiles([]);
   };
 
-  const handleEditSubmit = async (e) => {
+  const resetForm = () => {
+    setFormData({
+      full_name: "", email: "", course_id: "", batch_id: "", mentor_id: "", phone: "", date_of_birth: "", age: "", gender: "",
+      fathers_name: "", fathers_contact: "", mothers_name: "", mothers_contact: "",
+      address: "", educational_qualification: "", college_school: "", parent_name: "", parent_phone: "", emergency_contact: "",
+    });
+    setPhoneError("");
+    setFathersContactError("");
+    setMothersContactError("");
+    setParentPhoneError("");
+    setEmergencyContactError("");
+    setSelectedFiles([]);
+    setEditDocuments([]);
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Validate phone fields
     const phoneFields = [
       { field: 'phone', setError: setPhoneError, label: 'Student phone' },
       { field: 'fathers_contact', setError: setFathersContactError, label: "Father's contact" },
@@ -413,12 +318,19 @@ function Students() {
     }
     if (hasError) return;
 
+    // Convert IDs to names (backend expects course/batch names)
+    const courseObj = coursesList.find(c => c.id === parseInt(formData.course_id));
+    const batchObj = batchesList.find(b => b.id === parseInt(formData.batch_id));
+    const courseName = courseObj ? courseObj.name : null;
+    const batchName = batchObj ? batchObj.name : null;
+    const mentorId = formData.mentor_id ? parseInt(formData.mentor_id) : null;
+
     const payload = {
       full_name: formData.full_name ? formData.full_name.trim() : null,
       email: formData.email,
-      course: formData.course,
-      batch: formData.batch,
-      mentor: formData.mentor ? parseInt(formData.mentor) : null,
+      course: courseName,
+      batch: batchName,
+      mentor: mentorId,
       phone: formData.phone || null,
       date_of_birth: formData.date_of_birth || null,
       age: formData.age ? parseInt(formData.age) : null,
@@ -436,21 +348,39 @@ function Students() {
     };
 
     setSubmitting(true);
+    let studentId = null;
     try {
-      await API.patch(`students/${editingId}/`, payload);
-      showToast("Student updated successfully", "success");
-      if (selectedFiles.length) {
-        await uploadDocumentsForEdit(editingId, selectedFiles);
+      if (editingId) {
+        await API.patch(`students/${editingId}/`, payload);
+        showToast("Student updated successfully", "success");
+        studentId = editingId;
+        if (selectedFiles.length) {
+          await uploadDocumentsForEdit(studentId, selectedFiles);
+        }
+        setShowForm(false);
+        setEditingId(null);
+        resetForm();
+        await refreshStudents();
+      } else {
+        const generatedUsername = generateUsername(formData.email, formData.full_name);
+        payload.username = generatedUsername;
+        const createRes = await API.post("students/", payload);
+        showToast(`Student added successfully! Username: ${generatedUsername}`, "success");
+        studentId = createRes.data.id;
+        if (selectedFiles.length) {
+          await uploadDocuments(studentId);
+        }
+        setShowForm(false);
+        resetForm();
+        await refreshStudents();
+        setCurrentPage(1);
       }
-      setShowForm(false);
-      setEditingId(null);
-      resetForm();
-      await refreshStudents();
     } catch (error) {
       console.error("API error:", error);
       let errorMsg = "An unexpected error occurred.";
       if (error.response) {
         const data = error.response.data;
+        console.error("Full error response:", data);
         if (typeof data === 'object') {
           const messages = [];
           if (data.username) messages.push(`Username: ${data.username.join(', ')}`);
@@ -473,20 +403,54 @@ function Students() {
     }
   };
 
+  const handleEdit = async (student) => {
+    setEditingId(student.id);
+    // Find course and batch objects by name (backend returns names, not IDs)
+    const courseObj = coursesList.find(c => c.name === (student.course_name || student.course));
+    const batchObj = batchesList.find(b => b.name === (student.batch_name || student.batch));
+    setFormData({
+      full_name: student.full_name || "",
+      email: student.email,
+      course_id: courseObj ? courseObj.id.toString() : "",
+      batch_id: batchObj ? batchObj.id.toString() : "",
+      mentor_id: student.mentor ? student.mentor.toString() : "",
+      phone: student.phone || "",
+      date_of_birth: student.date_of_birth || "",
+      age: student.age?.toString() || "",
+      gender: student.gender || "",
+      fathers_name: student.fathers_name || "",
+      fathers_contact: student.fathers_contact || "",
+      mothers_name: student.mothers_name || "",
+      mothers_contact: student.mothers_contact || "",
+      address: student.address || "",
+      educational_qualification: student.educational_qualification || "",
+      college_school: student.college_school || "",
+      parent_name: student.parent_name || "",
+      parent_phone: student.parent_phone || "",
+      emergency_contact: student.emergency_contact || "",
+    });
+    setLoadingEditDocs(true);
+    const docs = await fetchStudentDocuments(student.id);
+    setEditDocuments(docs);
+    setLoadingEditDocs(false);
+    setSelectedFiles([]);
+    setShowForm(true);
+  };
+
   const openViewModal = async (student) => {
     setViewingStudent(student);
     const docs = await fetchStudentDocuments(student.id);
     setViewerDocuments(docs);
-    // No upload functionality inside view modal – removed later
   };
 
+  // Filter students
   const filteredStudents = students.filter(s => {
     const matchesSearch = (s.full_name || s.username)?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       s.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.course?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.batch?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (s.course_name || s.course)?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (s.batch_name || s.batch)?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       s.phone?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesBatch = !batchFilter || s.batch === batchFilter;
+    const matchesBatch = !batchFilter || (s.batch_name === batchFilter || s.batch === batchFilter);
     return matchesSearch && matchesBatch;
   });
 
@@ -497,25 +461,21 @@ function Students() {
 
   const getPageNumbers = () => {
     const pages = [];
-    const maxVisible = 5;
-    if (totalPages <= maxVisible) {
-      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    if (totalPages <= 5) for (let i = 1; i <= totalPages; i++) pages.push(i);
+    else if (currentPage <= 3) {
+      for (let i = 1; i <= 4; i++) pages.push(i);
+      pages.push("...");
+      pages.push(totalPages);
+    } else if (currentPage >= totalPages - 2) {
+      pages.push(1);
+      pages.push("...");
+      for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i);
     } else {
-      if (currentPage <= 3) {
-        for (let i = 1; i <= 4; i++) pages.push(i);
-        pages.push("...");
-        pages.push(totalPages);
-      } else if (currentPage >= totalPages - 2) {
-        pages.push(1);
-        pages.push("...");
-        for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i);
-      } else {
-        pages.push(1);
-        pages.push("...");
-        for (let i = currentPage - 1; i <= currentPage + 1; i++) pages.push(i);
-        pages.push("...");
-        pages.push(totalPages);
-      }
+      pages.push(1);
+      pages.push("...");
+      for (let i = currentPage - 1; i <= currentPage + 1; i++) pages.push(i);
+      pages.push("...");
+      pages.push(totalPages);
     }
     return pages;
   };
@@ -530,17 +490,8 @@ function Students() {
   };
 
   const inputClass = `w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/30 transition-all duration-200 text-sm`;
-  const readOnlyClass = `w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 text-gray-600 cursor-not-allowed text-sm`;
-
-  const getInitial = (name) => name ? name.charAt(0).toUpperCase() : "?";
-  const avatarColors = [
-    "from-blue-500 to-blue-700",
-    "from-violet-500 to-violet-700",
-    "from-emerald-500 to-emerald-700",
-    "from-amber-500 to-amber-700",
-    "from-rose-500 to-rose-700",
-    "from-cyan-500 to-cyan-700",
-  ];
+  const getInitial = (name) => (name ? name.charAt(0).toUpperCase() : "?");
+  const avatarColors = [ "from-blue-500 to-blue-700", "from-violet-500 to-violet-700", "from-emerald-500 to-emerald-700", "from-amber-500 to-amber-700", "from-rose-500 to-rose-700", "from-cyan-500 to-cyan-700" ];
   const getColor = (name) => avatarColors[(name?.charCodeAt(0) || 0) % avatarColors.length];
 
   if (loading) {
@@ -552,7 +503,7 @@ function Students() {
   }
 
   return (
-    <div className="min-h-screen w-full bg-gray-50 text-gray-800" style={{ fontFamily: "'Geist', 'SF Pro Display', system-ui, sans-serif" }}>
+    <div className="min-h-screen w-full bg-gray-50 text-gray-800">
       <style>{`
         .table-row-hover:hover { background: rgba(34,197,94,0.04); }
         .modal-enter { animation: modalIn 0.2s cubic-bezier(0.16,1,0.3,1); }
@@ -610,10 +561,7 @@ function Students() {
             </div>
 
             {batchFilter && (
-              <button
-                onClick={clearBatchFilter}
-                className="flex items-center justify-center gap-2 bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium transition-all"
-              >
+              <button onClick={clearBatchFilter} className="flex items-center justify-center gap-2 bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium transition-all">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                 Clear Batch: {batchFilter}
               </button>
@@ -633,15 +581,14 @@ function Students() {
           </div>
         </div>
 
-        {/* Add/Edit Modal (unchanged – includes document management) */}
+        {/* Add/Edit Modal */}
         {showForm && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={() => setShowForm(false)}>
             <form
-              onSubmit={editingId ? handleEditSubmit : handleSubmit}
+              onSubmit={handleSubmit}
               className="modal-enter bg-white rounded-2xl w-full max-w-3xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Header */}
               <div className="sticky top-0 bg-white z-10 flex justify-between items-center px-4 sm:px-6 py-4 border-b border-gray-200">
                 <div className="flex items-center gap-3">
                   <div className="w-7 h-7 rounded-lg bg-green-100 border border-green-200 flex items-center justify-center">
@@ -666,15 +613,23 @@ function Students() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Full Name</label><input type="text" name="full_name" value={formData.full_name} onChange={handleChange} className={inputClass} /></div>
                     <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Email *</label><input type="email" name="email" value={formData.email} onChange={handleChange} required className={inputClass} /></div>
-                    <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Course *</label><select name="course" value={formData.course} onChange={handleChange} required className={inputClass}><option value="">Select a course</option>{coursesList.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select></div>
-                    <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Batch *</label><select name="batch" value={formData.batch} onChange={handleChange} required className={inputClass}><option value="">Select a batch</option>{batchesList.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}</select></div>
+                    <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Course *</label>
+                      <select name="course_id" value={formData.course_id} onChange={handleChange} required className={inputClass}>
+                        <option value="">Select a course</option>
+                        {coursesList.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                    </div>
+                    <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Batch *</label>
+                      <select name="batch_id" value={formData.batch_id} onChange={handleChange} required className={inputClass}>
+                        <option value="">Select a batch</option>
+                        {batchesList.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                      </select>
+                    </div>
                     <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Mentor (optional)</label>
-                      <select name="mentor" value={formData.mentor} onChange={handleChange} className={inputClass}>
+                      <select name="mentor_id" value={formData.mentor_id} onChange={handleChange} className={inputClass}>
                         <option value="">Select a mentor</option>
                         {mentorsList.map(mentor => (
-                          <option key={mentor.id} value={mentor.id}>
-                            {mentor.full_name || mentor.username} ({mentor.expertise || "No expertise"})
-                          </option>
+                          <option key={mentor.id} value={mentor.id}>{mentor.full_name || mentor.username}</option>
                         ))}
                       </select>
                     </div>
@@ -714,7 +669,7 @@ function Students() {
                   </div>
                 </div>
 
-                {/* Document Section – contains existing docs (with delete) and upload */}
+                {/* Documents */}
                 <div className="border-t border-gray-200 pt-4">
                   <h4 className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-3">Documents</h4>
                   {editingId && (
@@ -728,18 +683,13 @@ function Students() {
                         <ul className="space-y-2">
                           {editDocuments.map(doc => (
                             <li key={doc.id} className="flex items-center justify-between gap-2 text-sm bg-gray-50 p-2 rounded-lg">
-                              <a href={doc.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-blue-600 hover:underline truncate">
+                              <a href={getDocumentUrl(doc.url)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-blue-600 hover:underline truncate">
                                 <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                                 </svg>
                                 <span className="truncate">{doc.file_name || "Document"}</span>
                               </a>
-                              <button
-                                type="button"
-                                onClick={() => deleteEditDocument(doc.id)}
-                                className="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-50 transition"
-                                title="Delete document"
-                              >
+                              <button type="button" onClick={() => deleteEditDocument(doc.id)} className="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-50 transition" title="Delete document">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                 </svg>
@@ -779,7 +729,7 @@ function Students() {
           </div>
         )}
 
-        {/* View Details Modal – NO UPLOAD, only list existing documents */}
+        {/* View Student Modal */}
         {viewingStudent && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={() => setViewingStudent(null)}>
             <div className="bg-white rounded-2xl w-full max-w-3xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -801,14 +751,14 @@ function Students() {
               </div>
 
               <div className="px-4 sm:px-6 py-5 space-y-6">
-                {/* Basic Information (unchanged) */}
+                {/* Basic Information */}
                 <div>
                   <h4 className="text-xs font-semibold text-green-600 uppercase tracking-wider mb-3">Basic Information</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div><label className="block text-gray-500 text-xs">Full Name</label><p className="text-gray-800 text-sm mt-1">{viewingStudent.full_name || "—"}</p></div>
                     <div><label className="block text-gray-500 text-xs">Email</label><p className="text-gray-800 text-sm mt-1">{viewingStudent.email}</p></div>
-                    <div><label className="block text-gray-500 text-xs">Course</label><p className="text-gray-800 text-sm mt-1">{viewingStudent.course}</p></div>
-                    <div><label className="block text-gray-500 text-xs">Batch</label><p className="text-gray-800 text-sm mt-1">{viewingStudent.batch}</p></div>
+                    <div><label className="block text-gray-500 text-xs">Course</label><p className="text-gray-800 text-sm mt-1">{viewingStudent.course_name || viewingStudent.course}</p></div>
+                    <div><label className="block text-gray-500 text-xs">Batch</label><p className="text-gray-800 text-sm mt-1">{viewingStudent.batch_name || viewingStudent.batch}</p></div>
                     <div><label className="block text-gray-500 text-xs">Mentor</label>
                       <p className="text-gray-800 text-sm mt-1">
                         {viewingStudent.mentor
@@ -825,7 +775,7 @@ function Students() {
                   </div>
                 </div>
 
-                {/* Parents, Address, Education (unchanged) */}
+                {/* Parents */}
                 <div className="border-t border-gray-200 pt-4">
                   <h4 className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-3">Parents</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -836,11 +786,13 @@ function Students() {
                   </div>
                 </div>
 
+                {/* Address */}
                 <div className="border-t border-gray-200 pt-4">
                   <h4 className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-3">Address</h4>
                   <p className="text-gray-800 text-sm">{viewingStudent.address || "—"}</p>
                 </div>
 
+                {/* Education */}
                 <div className="border-t border-gray-200 pt-4">
                   <h4 className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-3">Education</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -852,7 +804,7 @@ function Students() {
                   </div>
                 </div>
 
-                {/* Documents section – NO UPLOAD, only list (click to open) */}
+                {/* Documents */}
                 <div className="border-t border-gray-200 pt-4">
                   <h4 className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-3">Documents</h4>
                   {viewerDocuments.length === 0 ? (
@@ -861,12 +813,7 @@ function Students() {
                     <ul className="space-y-2">
                       {viewerDocuments.map(doc => (
                         <li key={doc.id} className="flex items-center gap-2 text-sm bg-gray-50 p-2 rounded-lg">
-                          <a
-                            href={doc.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-2 text-blue-600 hover:underline truncate"
-                          >
+                          <a href={getDocumentUrl(doc.url)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-blue-600 hover:underline truncate">
                             <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                             </svg>
@@ -886,7 +833,7 @@ function Students() {
           </div>
         )}
 
-        {/* Students Table (unchanged) */}
+        {/* Students Table */}
         <div className="overflow-hidden rounded-xl border border-gray-200 shadow-sm bg-white">
           <table className="student-table min-w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
@@ -910,8 +857,8 @@ function Students() {
                     </div>
                   </td>
                   <td data-label="Email" className="px-4 py-3 text-gray-500 text-sm break-all">{s.email}</td>
-                  <td data-label="Course" className="px-4 py-3"><span className="inline-flex items-center gap-1.5 bg-blue-100 text-blue-700 border border-blue-200 text-xs font-medium px-2 py-1 rounded-full">{s.course}</span></td>
-                  <td data-label="Batch" className="px-4 py-3"><span className="inline-flex items-center bg-gray-100 text-gray-700 border border-gray-200 text-xs font-mono px-2 py-1 rounded-full">{s.batch}</span></td>
+                  <td data-label="Course" className="px-4 py-3"><span className="inline-flex items-center gap-1.5 bg-blue-100 text-blue-700 border border-blue-200 text-xs font-medium px-2 py-1 rounded-full">{s.course_name || s.course}</span></td>
+                  <td data-label="Batch" className="px-4 py-3"><span className="inline-flex items-center bg-gray-100 text-gray-700 border border-gray-200 text-xs font-mono px-2 py-1 rounded-full">{s.batch_name || s.batch}</span></td>
                   <td data-label="Phone" className="px-4 py-3 text-gray-500 text-sm">{s.phone || "—"}</td>
                   <td data-label="DOB" className="px-4 py-3 text-gray-500 text-sm">{s.date_of_birth || "—"}</td>
                   <td data-label="Actions" className="px-4 py-3">

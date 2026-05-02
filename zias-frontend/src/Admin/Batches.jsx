@@ -1,6 +1,5 @@
-// src/Admin/Batches.jsx – table layout with click on batch name
+// src/Admin/Batches.jsx – fully working with token handling & pagination
 import { useEffect, useState, useRef } from "react";
-import { useNavigate } from "react-router-dom";
 import API from "../api/api";
 
 function Toast({ message, type, onClose }) {
@@ -26,7 +25,6 @@ function Toast({ message, type, onClose }) {
   );
 }
 
-// Modern delete confirmation modal (matches Courses/Modules style)
 function ConfirmModal({ isOpen, onClose, onConfirm, batchName }) {
   if (!isOpen) return null;
   return (
@@ -39,8 +37,7 @@ function ConfirmModal({ isOpen, onClose, onConfirm, batchName }) {
         </div>
         <h3 className="text-lg font-bold text-gray-900 mb-1">Delete Batch?</h3>
         <p className="text-gray-500 text-sm mb-6 leading-relaxed">
-          <span className="font-semibold text-gray-700">"{batchName}"</span> will be removed.<br />
-          Students assigned to it will lose batch association. This action cannot be undone.
+          <span className="font-semibold text-gray-700">"{batchName}"</span> will be permanently removed. This action cannot be undone.
         </p>
         <div className="flex gap-2">
           <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium text-sm transition-colors">Cancel</button>
@@ -52,7 +49,6 @@ function ConfirmModal({ isOpen, onClose, onConfirm, batchName }) {
 }
 
 function Batches() {
-  const navigate = useNavigate();
   const [batches, setBatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -64,7 +60,7 @@ function Batches() {
     name: "",
     start_date: "",
     end_date: "",
-    is_active: true,
+    is_active: true
   });
 
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -75,23 +71,76 @@ function Batches() {
 
   const fetched = useRef(false);
 
-  const fetchBatches = () => {
+  // Fetch batches with proper error handling (401 redirect)
+  const fetchBatches = () =>
     API.get("batches/")
       .then(res => {
-        setBatches(res.data);
-        setLoading(false);
+        let batchesArray = [];
+        if (Array.isArray(res.data)) {
+          batchesArray = res.data;
+        } else if (res.data && Array.isArray(res.data.results)) {
+          batchesArray = res.data.results;
+        } else {
+          console.warn("Unexpected API response format for batches:", res.data);
+        }
+        setBatches(batchesArray);
       })
-      .catch(() => {
-        showToast("Failed to load batches", "error");
-        setLoading(false);
-      });
-  };
+      .catch(err => {
+        if (err.response?.status === 401) {
+          showToast("Session expired. Please log in again.", "error");
+          setTimeout(() => {
+            localStorage.clear();
+            window.location.href = "/login";
+          }, 1500);
+        } else {
+          showToast("Failed to load batches", "error");
+        }
+      })
+      .finally(() => setLoading(false));
 
   useEffect(() => {
     if (fetched.current) return;
     fetched.current = true;
     fetchBatches();
   }, []);
+
+  // Safely filter batches (defensive check)
+  const filteredBatches = Array.isArray(batches)
+    ? batches.filter(b =>
+        b.name?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : [];
+
+  const totalFiltered = filteredBatches.length;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / itemsPerPage));
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedBatches = filteredBatches.slice(startIndex, startIndex + itemsPerPage);
+
+  const getPageNumbers = () => {
+    const pages = [];
+    if (totalPages <= 5) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else if (currentPage <= 3) {
+      for (let i = 1; i <= 4; i++) pages.push(i);
+      pages.push("...");
+      pages.push(totalPages);
+    } else if (currentPage >= totalPages - 2) {
+      pages.push(1);
+      pages.push("...");
+      for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      pages.push("...");
+      for (let i = currentPage - 1; i <= currentPage + 1; i++) pages.push(i);
+      pages.push("...");
+      pages.push(totalPages);
+    }
+    return pages;
+  };
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
 
   const handleDeleteClick = (batchId, batchName) => {
     setBatchToDelete({ id: batchId, name: batchName });
@@ -113,27 +162,20 @@ function Batches() {
     }
   };
 
-  const validateDates = () => {
-    if (formData.start_date && formData.end_date) {
-      const start = new Date(formData.start_date);
-      const end = new Date(formData.end_date);
-      if (end < start) {
-        showToast("End date cannot be earlier than start date", "error");
-        return false;
-      }
-    }
-    return true;
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!validateDates()) return;
+    const payload = {
+      name: formData.name,
+      start_date: formData.start_date || null,
+      end_date: formData.end_date || null,
+      is_active: formData.is_active
+    };
     try {
       if (editingId) {
-        await API.patch(`batches/${editingId}/`, formData);
+        await API.patch(`batches/${editingId}/`, payload);
         showToast("Batch updated successfully", "success");
       } else {
-        await API.post("batches/", formData);
+        await API.post("batches/", payload);
         showToast("Batch added successfully", "success");
       }
       setShowForm(false);
@@ -141,7 +183,11 @@ function Batches() {
       setFormData({ name: "", start_date: "", end_date: "", is_active: true });
       fetchBatches();
     } catch (err) {
-      showToast("Error saving batch", "error");
+      let errorMsg = "Error saving batch";
+      if (err.response?.data) {
+        errorMsg = Object.values(err.response.data).flat().join(", ");
+      }
+      showToast(errorMsg, "error");
     }
   };
 
@@ -149,54 +195,12 @@ function Batches() {
     setEditingId(batch.id);
     setFormData({
       name: batch.name,
-      start_date: batch.start_date || "",
-      end_date: batch.end_date || "",
-      is_active: batch.is_active,
+      start_date: batch.start_date?.split('T')[0] || "",
+      end_date: batch.end_date?.split('T')[0] || "",
+      is_active: batch.is_active
     });
     setShowForm(true);
   };
-
-  const handleBatchNameClick = (batchName) => {
-    navigate(`/admin/students?batch=${encodeURIComponent(batchName)}`);
-  };
-
-  const filteredBatches = batches.filter(b =>
-    b.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const totalFiltered = filteredBatches.length;
-  const totalPages = Math.max(1, Math.ceil(totalFiltered / itemsPerPage));
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedBatches = filteredBatches.slice(startIndex, startIndex + itemsPerPage);
-
-  const getPageNumbers = () => {
-    const pages = [];
-    const maxVisible = 5;
-    if (totalPages <= maxVisible) {
-      for (let i = 1; i <= totalPages; i++) pages.push(i);
-    } else {
-      if (currentPage <= 3) {
-        for (let i = 1; i <= 4; i++) pages.push(i);
-        pages.push("...");
-        pages.push(totalPages);
-      } else if (currentPage >= totalPages - 2) {
-        pages.push(1);
-        pages.push("...");
-        for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i);
-      } else {
-        pages.push(1);
-        pages.push("...");
-        for (let i = currentPage - 1; i <= currentPage + 1; i++) pages.push(i);
-        pages.push("...");
-        pages.push(totalPages);
-      }
-    }
-    return pages;
-  };
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm]);
 
   const inputClass = "w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 text-sm";
 
@@ -210,8 +214,11 @@ function Batches() {
 
   if (loading) {
     return (
-      <div className="w-full min-h-[60vh] flex items-center justify-center bg-gray-50">
-        <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+      <div className="w-full min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-gray-400 text-sm">Loading batches…</p>
+        </div>
       </div>
     );
   }
@@ -219,68 +226,107 @@ function Batches() {
   return (
     <div className="min-h-screen w-full bg-gray-50 text-gray-800" style={{ fontFamily: "'DM Sans', 'Geist', system-ui, sans-serif" }}>
       <style>{`
-        .table-row-hover:hover { background: rgba(34,197,94,0.04); }
-        .modal-enter { animation: modalIn 0.2s cubic-bezier(0.16,1,0.3,1); }
-        @keyframes modalIn { from { opacity:0; transform:scale(0.96) translateY(8px); } to { opacity:1; transform:scale(1) translateY(0); } }
-        .shine { position:relative; overflow:hidden; }
-        .shine::after { content:''; position:absolute; top:0; left:-100%; width:60%; height:100%; background:linear-gradient(90deg,transparent,rgba(255,255,255,0.3),transparent); animation: shine 3s infinite; }
-        @keyframes shine { to { left:150%; } }
-        @keyframes slide-in-from-top-2 { from { opacity:0; transform:translateY(-1rem); } to { opacity:1; transform:translateY(0); } }
-        .animate-in { animation: slide-in-from-top-2 0.2s ease-out; }
-        @media (max-width: 640px) {
-          .batches-table thead { display: none; }
-          .batches-table tbody tr { display: block; margin-bottom: 1rem; border: 1px solid #e5e7eb; border-radius: 0.75rem; background: white; }
-          .batches-table tbody td { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; border-bottom: 1px solid #e5e7eb; text-align: right; gap: 1rem; }
-          .batches-table tbody td:last-child { border-bottom: none; }
-          .batches-table tbody td::before { content: attr(data-label); font-weight: 600; color: #6b7280; text-align: left; flex: 1; }
-        }
+        @keyframes slideDown { from { opacity:0; transform:translateY(-12px); } to { opacity:1; transform:translateY(0); } }
+        .card-hover { transition: all 0.2s ease; }
+        .card-hover:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(0,0,0,0.10); }
       `}</style>
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
       <ConfirmModal isOpen={showConfirmModal} onClose={() => setShowConfirmModal(false)} onConfirm={confirmDelete} batchName={batchToDelete?.name} />
 
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-4 sm:py-8">
+      {/* Add/Edit Modal */}
+      {showForm && (
+        <ModalWrapper onClose={() => setShowForm(false)}>
+          <form onSubmit={handleSubmit}>
+            <div className="flex justify-between items-center px-6 py-5 border-b border-gray-100">
+              <div>
+                <h3 className="text-base font-bold text-gray-900">{editingId ? "Edit Batch" : "New Batch"}</h3>
+                <p className="text-xs text-gray-400 mt-0.5">Fill in the batch details</p>
+              </div>
+              <button type="button" onClick={() => setShowForm(false)} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-gray-100 text-gray-400 text-lg">×</button>
+            </div>
+            <div className="px-6 py-5 space-y-3.5">
+              <input
+                type="text"
+                placeholder="Batch name (e.g., Batch 2025)"
+                value={formData.name}
+                onChange={e => setFormData({ ...formData, name: e.target.value })}
+                required
+                className={inputClass}
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-gray-500 text-xs mb-1">Start Date</label>
+                  <input
+                    type="date"
+                    value={formData.start_date}
+                    onChange={e => setFormData({ ...formData, start_date: e.target.value })}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-500 text-xs mb-1">End Date</label>
+                  <input
+                    type="date"
+                    value={formData.end_date}
+                    onChange={e => setFormData({ ...formData, end_date: e.target.value })}
+                    className={inputClass}
+                  />
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="is_active"
+                  checked={formData.is_active}
+                  onChange={e => setFormData({ ...formData, is_active: e.target.checked })}
+                  className="w-4 h-4 text-emerald-500 rounded"
+                />
+                <label htmlFor="is_active" className="text-sm text-gray-600">Active batch</label>
+              </div>
+            </div>
+            <div className="flex gap-2 px-6 py-4 border-t border-gray-100">
+              <button type="submit" className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white py-2.5 rounded-xl font-medium text-sm transition-colors">
+                {editingId ? "Save Changes" : "Add Batch"}
+              </button>
+              <button type="button" onClick={() => setShowForm(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 py-2.5 rounded-xl font-medium text-sm transition-colors">
+                Cancel
+              </button>
+            </div>
+          </form>
+        </ModalWrapper>
+      )}
 
-        {/* Top Bar */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-green-100 border border-green-200 flex items-center justify-center shrink-0">
-              <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            </div>
-            <div>
-              <h1 className="text-xl font-semibold text-gray-800 tracking-tight">Batches</h1>
-              <p className="text-gray-500 text-xs mt-0.5">{batches.length} total · {filteredBatches.length} shown</p>
-            </div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Batches</h1>
+            <p className="text-gray-400 text-sm mt-0.5">{batches.length} total · {filteredBatches.length} shown</p>
           </div>
-
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            <div className="relative w-full sm:w-64">
-              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative">
+              <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
               </svg>
               <input
                 type="text"
-                placeholder="Search batches..."
+                placeholder="Search batches…"
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-white border border-gray-300 rounded-lg pl-9 pr-4 py-2 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-green-500 transition-all text-sm"
+                onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+                className="w-full sm:w-64 bg-white border border-gray-200 rounded-xl pl-10 pr-9 py-2.5 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 text-sm shadow-sm"
               />
               {searchTerm && (
-                <button onClick={() => setSearchTerm("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition">
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
+                <button onClick={() => setSearchTerm("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm">✕</button>
               )}
             </div>
-
             <button
               onClick={() => {
                 setEditingId(null);
                 setFormData({ name: "", start_date: "", end_date: "", is_active: true });
                 setShowForm(true);
               }}
-              className="shine flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 shadow-md w-full sm:w-auto"
+              className="flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold shadow-md shadow-emerald-500/30 transition-all hover:shadow-lg hover:shadow-emerald-500/40 active:scale-95"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" /></svg>
               Add Batch
@@ -288,133 +334,93 @@ function Batches() {
           </div>
         </div>
 
-        {/* Add/Edit Modal */}
-        {showForm && (
-          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={() => setShowForm(false)}>
-            <form onSubmit={handleSubmit} className="modal-enter bg-white rounded-3xl w-full max-w-md border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-              <div className="sticky top-0 bg-white z-10 flex justify-between items-center px-4 sm:px-6 py-4 border-b border-gray-200">
-                <div className="flex items-center gap-3">
-                  <div className="w-7 h-7 rounded-lg bg-green-100 border border-green-200 flex items-center justify-center">
-                    <svg className="w-3.5 h-3.5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={editingId ? "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" : "M12 4v16m8-8H4"} />
-                    </svg>
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-800">{editingId ? "Edit Batch" : "New Batch"}</h3>
-                    <p className="text-gray-500 text-xs">{editingId ? "Update batch details" : "Add a new batch"}</p>
-                  </div>
+        {/* Batches Table */}
+        {paginatedBatches.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-24 gap-4 bg-white rounded-2xl border border-gray-200">
+            <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center">
+              <svg className="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+              </svg>
+            </div>
+            <p className="text-gray-400 font-medium">No batches found</p>
+            {searchTerm && <button onClick={() => setSearchTerm("")} className="text-emerald-500 text-sm hover:underline">Clear search</button>}
+          </div>
+        ) : (
+          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-100">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Batch Name</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Start Date</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">End Date</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {paginatedBatches.map((batch) => (
+                    <tr key={batch.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{batch.name}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {batch.start_date ? new Date(batch.start_date).toLocaleDateString() : "—"}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {batch.end_date ? new Date(batch.end_date).toLocaleDateString() : "—"}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${batch.is_active ? "bg-emerald-100 text-emerald-800" : "bg-gray-100 text-gray-600"}`}>
+                          {batch.is_active ? "Active" : "Inactive"}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <button onClick={() => handleEdit(batch)} className="text-emerald-600 hover:text-emerald-900 mr-3">Edit</button>
+                        <button onClick={() => handleDeleteClick(batch.id, batch.name)} className="text-red-600 hover:text-red-900">Delete</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex justify-between items-center px-6 py-3 border-t border-gray-100 bg-gray-50/50">
+                <p className="text-sm text-gray-500">
+                  Showing {startIndex + 1}–{Math.min(startIndex + itemsPerPage, totalFiltered)} of {totalFiltered}
+                </p>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
+                    disabled={currentPage === 1}
+                    className="px-3 py-1 rounded-lg text-sm disabled:text-gray-300 text-gray-600 hover:bg-gray-200 disabled:cursor-not-allowed"
+                  >
+                    ← Previous
+                  </button>
+                  {getPageNumbers().map((p, i) =>
+                    p === "..." ? (
+                      <span key={i} className="px-2 py-1 text-gray-400">…</span>
+                    ) : (
+                      <button
+                        key={p}
+                        onClick={() => setCurrentPage(p)}
+                        className={`px-3 py-1 rounded-lg text-sm font-medium ${currentPage === p ? "bg-emerald-500 text-white" : "text-gray-600 hover:bg-gray-200"}`}
+                      >
+                        {p}
+                      </button>
+                    )
+                  )}
+                  <button
+                    onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-1 rounded-lg text-sm disabled:text-gray-300 text-gray-600 hover:bg-gray-200 disabled:cursor-not-allowed"
+                  >
+                    Next →
+                  </button>
                 </div>
-                <button type="button" onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600 transition p-1.5 rounded-lg hover:bg-gray-100">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
               </div>
-
-              <div className="px-4 sm:px-6 py-5 space-y-4">
-                <div>
-                  <label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Batch Name</label>
-                  <input type="text" name="name" placeholder="e.g., Batch 2024" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required className={inputClass} />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Start Date</label>
-                    <input type="date" name="start_date" value={formData.start_date} onChange={(e) => setFormData({ ...formData, start_date: e.target.value })} className={inputClass} />
-                  </div>
-                  <div>
-                    <label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">End Date</label>
-                    <input type="date" name="end_date" value={formData.end_date} onChange={(e) => setFormData({ ...formData, end_date: e.target.value })} className={inputClass} />
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 flex-wrap">
-                  <input type="checkbox" id="is_active" checked={formData.is_active} onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })} className="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500" />
-                  <label htmlFor="is_active" className="text-sm text-gray-700">Active Batch</label>
-                </div>
-              </div>
-
-              <div className="flex gap-2 px-4 sm:px-6 py-4 border-t border-gray-200">
-                <button type="submit" className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg transition-all text-sm font-medium shadow-md">
-                  {editingId ? "Save Changes" : "Add Batch"}
-                </button>
-                <button type="button" onClick={() => setShowForm(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded-lg transition-all text-sm font-medium">
-                  Cancel
-                </button>
-              </div>
-            </form>
+            )}
           </div>
         )}
-
-        {/* Batches Table */}
-        <div className="overflow-hidden rounded-xl border border-gray-200 shadow-sm bg-white">
-          <table className="batches-table min-w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="text-left px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Name</th>
-                <th className="text-left px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Start Date</th>
-                <th className="text-left px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">End Date</th>
-                <th className="text-left px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Status</th>
-                <th className="text-left px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-100">
-              {paginatedBatches.length > 0 ? (
-                paginatedBatches.map((batch) => (
-                  <tr key={batch.id} className="table-row-hover transition-colors duration-150 group">
-                    <td data-label="Name" className="px-4 py-3">
-                      <button
-                        onClick={() => handleBatchNameClick(batch.name)}
-                        className="text-gray-800 text-sm font-medium hover:text-emerald-600 transition-colors cursor-pointer text-left"
-                      >
-                        {batch.name}
-                      </button>
-                    </td>
-                    <td data-label="Start Date" className="px-4 py-3 text-gray-500 text-sm">{batch.start_date ? new Date(batch.start_date).toLocaleDateString() : "—"}</td>
-                    <td data-label="End Date" className="px-4 py-3 text-gray-500 text-sm">{batch.end_date ? new Date(batch.end_date).toLocaleDateString() : "—"}</td>
-                    <td data-label="Status" className="px-4 py-3">
-                      <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${batch.is_active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>
-                        {batch.is_active ? "Active" : "Inactive"}
-                      </span>
-                    </td>
-                    <td data-label="Actions" className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => handleEdit(batch)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-gray-500 hover:text-green-600 hover:bg-green-50 border border-transparent hover:border-green-200 transition-all text-xs font-medium" title="Edit">
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                          <span className="hidden sm:inline">Edit</span>
-                        </button>
-                        <button onClick={() => handleDeleteClick(batch.id, batch.name)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-all text-xs font-medium" title="Delete">
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                          <span className="hidden sm:inline">Delete</span>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan="5" className="text-center py-12 sm:py-20 text-gray-500">
-                    {searchTerm ? "No batches match your search" : "No batches found. Click 'Add Batch' to create one."}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-
-          {/* Pagination */}
-          {totalFiltered > 0 && (
-            <div className="bg-gray-50 border-t border-gray-200 px-4 py-3 flex flex-col sm:flex-row justify-between gap-3 items-center">
-              <div className="text-gray-500 text-xs">
-                Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, totalFiltered)} of {totalFiltered} batches
-              </div>
-              <div className="flex gap-1 flex-wrap justify-center">
-                <button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1} className="px-2.5 py-1.5 rounded-lg text-sm disabled:text-gray-300 text-gray-500 hover:bg-gray-100 disabled:hover:bg-transparent">←</button>
-                {getPageNumbers().map((page, idx) =>
-                  page === "..." ? <span key={idx} className="px-2 py-1.5 text-gray-400">...</span> : (
-                    <button key={page} onClick={() => setCurrentPage(page)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${currentPage === page ? "bg-green-600 text-white shadow-sm" : "text-gray-600 hover:bg-gray-100"}`}>{page}</button>
-                  )
-                )}
-                <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages} className="px-2.5 py-1.5 rounded-lg text-sm disabled:text-gray-300 text-gray-500 hover:bg-gray-100 disabled:hover:bg-transparent">→</button>
-              </div>
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );

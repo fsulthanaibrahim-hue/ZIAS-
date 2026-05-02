@@ -14,13 +14,12 @@ function MentorNotifications() {
     setLoading(true);
     try {
       const res = url ? await API.get(url) : await API.get("notifications/", { params: { limit, offset: 0 } });
-      const results = res.data.results || [];   // ✅ Extract array
+      const results = res.data.results || [];
       setNotifications(results);
       setNextUrl(res.data.next);
       setPrevUrl(res.data.previous);
       setTotalCount(res.data.count);
 
-      // Determine current page from offset
       let offset = 0;
       if (res.data.previous) {
         const match = res.data.previous.match(/offset=(\d+)/);
@@ -44,9 +43,10 @@ function MentorNotifications() {
   const markAsRead = async (id) => {
     try {
       await API.patch(`notifications/${id}/`, { is_read: true });
-      setNotifications(prev =>
-        prev.map(n => (n.id === id ? { ...n, is_read: true } : n))
-      );
+      // Remove this notification from the list instantly
+      setNotifications(prev => prev.filter(n => n.id !== id));
+      // Notify bell to refresh unread count
+      window.dispatchEvent(new Event('notification-read'));
     } catch (err) {
       console.error(err);
     }
@@ -55,9 +55,11 @@ function MentorNotifications() {
   const markAllAsRead = async () => {
     try {
       await API.post("notifications/mark_all_read/");
-      // Re-fetch current page to update UI
-      const offset = (currentPage - 1) * limit;
-      await fetchNotifications(`notifications/?limit=${limit}&offset=${offset}`);
+      // ✅ Instantly clear the notifications list
+      setNotifications([]);
+      setTotalCount(0);
+      // Notify bell to update unread count
+      window.dispatchEvent(new Event('notification-read'));
     } catch (err) {
       console.error(err);
     }
@@ -106,7 +108,7 @@ function MentorNotifications() {
             ))}
           </div>
 
-          {/* Pagination */}
+          {/* Pagination – only show if there are notifications and more pages exist */}
           {(prevUrl || nextUrl) && (
             <div className="flex justify-center items-center gap-2 mt-6">
               <button

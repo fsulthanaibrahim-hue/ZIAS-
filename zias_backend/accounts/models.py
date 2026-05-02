@@ -410,7 +410,8 @@ class MentorDocument(models.Model):
 
 class ReviewAssignment(models.Model):
     STATUS_CHOICES = (
-        ('pending', 'Pending'),
+        ('assigned', 'Assigned'),
+        ('pending approval', 'Pending Approval'),
         ('accepted', 'Accepted'),
         ('rejected', 'Rejected'),
     )
@@ -424,6 +425,7 @@ class ReviewAssignment(models.Model):
     comments = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    # review date = (reviewsheet also datetimefield)
 
     class Meta:
         ordering = ['-created_at']

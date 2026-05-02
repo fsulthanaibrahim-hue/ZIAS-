@@ -20,7 +20,6 @@ function ReviewerNotifications() {
       setPrevUrl(res.data.previous);
       setTotalCount(res.data.count);
 
-      // Determine current page from offset
       let offset = 0;
       if (res.data.previous) {
         const match = res.data.previous.match(/offset=(\d+)/);
@@ -44,9 +43,8 @@ function ReviewerNotifications() {
   const markAsRead = async (id) => {
     try {
       await API.patch(`notifications/${id}/`, { is_read: true });
-      setNotifications(prev =>
-        prev.map(n => (n.id === id ? { ...n, is_read: true } : n))
-      );
+      setNotifications(prev => prev.filter(n => n.id !== id));
+      window.dispatchEvent(new Event('notification-read'));
     } catch (err) {
       console.error(err);
     }
@@ -55,9 +53,9 @@ function ReviewerNotifications() {
   const markAllAsRead = async () => {
     try {
       await API.post("notifications/mark_all_read/");
-      // Re-fetch the current page to reflect updated read status
-      const offset = (currentPage - 1) * limit;
-      await fetchNotifications(`notifications/?limit=${limit}&offset=${offset}`);
+      setNotifications([]);
+      setTotalCount(0);
+      window.dispatchEvent(new Event('notification-read'));
     } catch (err) {
       console.error(err);
     }
@@ -106,7 +104,6 @@ function ReviewerNotifications() {
             ))}
           </div>
 
-          {/* Pagination controls */}
           {(prevUrl || nextUrl) && (
             <div className="flex justify-center items-center gap-2 mt-6">
               <button
