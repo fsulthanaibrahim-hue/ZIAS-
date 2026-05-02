@@ -13,7 +13,7 @@ from .views import (
     ChatMessageListCreateView, ClearChatMessagesView, MarkMessagesReadView,
     UploadStudentDocumentView, NotificationViewSet, StudentDocumentListView,
     StudentDocumentDeleteView, MentorDocumentListView, UploadMentorDocumentView,
-    MentorDocumentDeleteView, RespondToMessageView, ReviewAssignmentViewSet
+    MentorDocumentDeleteView, RespondToMessageView, ReviewAssignmentViewSet, UnreadNotificationCountView
 )
 
 router = DefaultRouter()
@@ -31,10 +31,11 @@ router.register('review-folders', ReviewFolderViewSet, basename='review-folder')
 router.register('notifications', NotificationViewSet, basename='notification')
 router.register('review-assignments', ReviewAssignmentViewSet, basename='review-assignment')
 
-
 urlpatterns = [
+    # 👇 SPECIFIC PATHS MUST COME BEFORE THE ROUTER 👇
+    path('api/notifications/unread-count/', UnreadNotificationCountView.as_view(), name='unread-count'),
     path('api/students/list/', StudentListView.as_view(), name='student-list'),
-    path('api/', include(router.urls)),
+    path('api/', include(router.urls)),   # Router handles all other /api/... endpoints
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/users/me/', CurrentUserView.as_view(), name='current_user'),
@@ -57,7 +58,7 @@ urlpatterns = [
     path('api/chat-messages/', ChatMessageListCreateView.as_view(), name='chat-messages'),
     path('api/chat-messages/clear/', ClearChatMessagesView.as_view(), name='clear-chat-messages'),
     path('api/chat-messages/mark-read/<int:room_id>/', MarkMessagesReadView.as_view(), name='mark-read'),
-    path('api/chat-messages/<int:message_id>/respond/', RespondToMessageView.as_view(), name='respond_to_message'),   # ✅ FIXED
+    path('api/chat-messages/<int:message_id>/respond/', RespondToMessageView.as_view(), name='respond_to_message'),
     # Student document endpoints
     path('api/upload-student-document/', UploadStudentDocumentView.as_view(), name='upload-student-doc'),
     path('api/students/<int:student_id>/documents/', StudentDocumentListView.as_view(), name='student-documents'),

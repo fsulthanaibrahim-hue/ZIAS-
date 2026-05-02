@@ -26,9 +26,10 @@ const ChatList = ({ onSelectRoom, selectedRoomId, searchTerm = '' }) => {
     isFetched.current = true;
     api.get('/chat-rooms/')
       .then(res => {
-        // Ensure unique rooms by other_user_name
+        // Handle paginated response: if res.data.results exists, use it; otherwise assume res.data is array
+        const roomsData = res.data.results || res.data;
         const seen = new Set();
-        const unique = res.data.filter(r => {
+        const unique = roomsData.filter(r => {
           const name = getOtherUserName(r);
           if (seen.has(name)) return false;
           seen.add(name);

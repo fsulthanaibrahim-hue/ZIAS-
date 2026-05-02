@@ -1,27 +1,33 @@
-// src/components/NotificationBell.jsx
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../api/api";
 
 function NotificationBell({ role = "mentor" }) {
   const [unreadCount, setUnreadCount] = useState(0);
   const navigate = useNavigate();
-  const intervalRef = useRef(null);
 
   const fetchUnreadCount = async () => {
+    const token = localStorage.getItem("access_token");
+    if (!token) return;
     try {
-      const res = await API.get("notifications/");
-      const unread = res.data.filter(n => !n.is_read).length;
-      setUnreadCount(unread);
+      const res = await API.get("notifications/unread-count/");
+      setUnreadCount(res.data.unread_count || 0);
     } catch (err) {
-      console.error("Failed to fetch notifications", err);
+      if (err.response?.status !== 404) {
+        console.error("Failed to fetch unread count", err);
+      }
     }
   };
 
   useEffect(() => {
     fetchUnreadCount();
-    intervalRef.current = setInterval(fetchUnreadCount, 30000);
-    return () => clearInterval(intervalRef.current);
+    const interval = setInterval(fetchUnreadCount, 30000); // fallback polling
+    const handleNotificationRead = () => fetchUnreadCount(); // ✅ event handler
+    window.addEventListener('notification-read', handleNotificationRead);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('notification-read', handleNotificationRead);
+    };
   }, []);
 
   const handleClick = () => {

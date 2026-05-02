@@ -279,6 +279,11 @@ class MentorSerializer(serializers.ModelSerializer):
 # ----------------------------
 # REVIEWER SERIALIZER
 # ----------------------------
+def generate_random_password(length=12):
+    alphabet = string.ascii_letters + string.digits
+    return ''.join(secrets.choice(alphabet) for _ in range(length))
+
+
 class ReviewerSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username')
     email = serializers.EmailField(source='user.email')
@@ -289,13 +294,18 @@ class ReviewerSerializer(serializers.ModelSerializer):
                   'available_from', 'available_to', 'available_days', 'full_name']
 
     def create(self, validated_data):
-        user_data = validated_data.pop('user')
-        username = user_data['username']
-        email = user_data['email']
+        # Extract username and email from validated_data (flat keys)
+        username = validated_data.pop('username')   # note: source='user.username' gives key 'username'
+        email = validated_data.pop('email')
         random_password = generate_random_password()
 
-        try:
-            user = User.objects.get(username=username)
+        # Get or create user
+        user, created = User.objects.get_or_create(
+            username=username,
+            defaults={'email': email, 'is_reviewer': True, 'password_changed_at': timezone.now()}
+        )
+        if not created:
+            # Update existing user if needed
             if user.email != email:
                 user.email = email
             if not user.is_reviewer:
@@ -303,13 +313,17 @@ class ReviewerSerializer(serializers.ModelSerializer):
             if not user.password_changed_at:
                 user.password_changed_at = timezone.now()
             user.save()
-        except User.DoesNotExist:
-            user = User.objects.create_user(username=username, email=email, password=random_password)
-            user.is_reviewer = True
-            user.password_changed_at = timezone.now()
-            user.save()
 
-            expiry_days = settings.PASSWORD_EXPIRY_DAYS
+        # Prevent duplicate reviewer profile
+        if Reviewer.objects.filter(user=user).exists():
+            raise serializers.ValidationError({"username": "This user already has a reviewer profile."})
+
+        # Create reviewer
+        reviewer = Reviewer.objects.create(user=user, **validated_data)
+
+        # Send welcome email only for newly created users
+        if created:
+            expiry_days = getattr(settings, 'PASSWORD_EXPIRY_DAYS', 90)
             domain = getattr(settings, 'SITE_DOMAIN', 'localhost:5173')
             context = {
                 'username': username,
@@ -326,12 +340,10 @@ class ReviewerSerializer(serializers.ModelSerializer):
             except Exception as e:
                 print(f"Email sending failed for reviewer: {e}")
 
-        if Reviewer.objects.filter(user=user).exists():
-            raise serializers.ValidationError({"username": "This user already has a reviewer profile."})
-
-        return Reviewer.objects.create(user=user, **validated_data)
+        return reviewer
 
     def update(self, instance, validated_data):
+        # Update reviewer fields
         instance.department = validated_data.get('department', instance.department)
         instance.qualification = validated_data.get('qualification', instance.qualification)
         instance.experience = validated_data.get('experience', instance.experience)
@@ -339,16 +351,18 @@ class ReviewerSerializer(serializers.ModelSerializer):
         instance.full_name = validated_data.get('full_name', instance.full_name)
         instance.save()
 
-        user_data = validated_data.pop('user', None)
-        if user_data:
-            new_username = user_data.get('username', instance.user.username)
-            new_email = user_data.get('email', instance.user.email)
-            if new_username.lower() != instance.user.username.lower() or new_email.lower() != instance.user.email.lower():
-                instance.user.username = new_username
-                instance.user.email = new_email
-                instance.user.save()
-        return instance
+        # Update user fields if username or email changed
+        username = validated_data.get('username')
+        email = validated_data.get('email')
+        if username and username != instance.user.username:
+            instance.user.username = username
+        if email and email != instance.user.email:
+            instance.user.email = email
+        if username or email:
+            instance.user.save()
 
+        return instance
+    
 
 # ----------------------------
 # STUDENT MODULE SERIALIZER
@@ -437,7 +451,7 @@ class ChatRoomSerializer(serializers.ModelSerializer):
     def get_other_user_name(self, obj):
         request = self.context.get('request')
         user = request.user if request else None
-        
+
         # Determine the other participant
         other = None
         if obj.reviewer and obj.reviewer.user != user:
@@ -446,25 +460,43 @@ class ChatRoomSerializer(serializers.ModelSerializer):
             other = obj.mentor
         elif obj.student and obj.student.user != user:
             other = obj.student
-        
+
         if other:
-            # ✅ Return full_name if available, else username (without extra numbers)
+            # 1. Try `full_name` from the profile (Mentor/Reviewer/Student)
             full_name = getattr(other, 'full_name', None)
             if full_name and full_name.strip():
                 return full_name
-            return other.user.username   # fallback: username (e.g., "mentor123")
+
+            # 2. Try the user's `get_full_name()`
+            user_obj = other.user
+            if user_obj.get_full_name():
+                return user_obj.get_full_name()
+
+            # 3. Fallback: remove trailing digits from username (hamdha7116 -> hamdha)
+            username = user_obj.username
+            import re
+            cleaned = re.sub(r'\d+$', '', username)
+            if cleaned:
+                return cleaned
+            return username
+
         return "Unknown"
 
     def get_last_message(self, obj):
         last = obj.messages.order_by('-timestamp').first()
         if last:
-            return {"content": last.content, "timestamp": last.timestamp}
+            return {
+                "content": last.content,
+                "timestamp": last.timestamp,
+                "sender_id": last.sender.id if last.sender else None
+            }
         return None
 
     class Meta:
         model = ChatRoom
         fields = '__all__'
-    
+
+
 
 class CourseStatusSerializer(serializers.ModelSerializer):
     student_name = serializers.CharField(source='student.user.username', read_only=True)

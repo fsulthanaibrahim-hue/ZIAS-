@@ -1,20 +1,37 @@
-// src/pages/reviewer/ReviewerNotifications.jsx
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import React, { useState, useEffect } from "react";
 import API from "../../api/api";
-import toast from "react-hot-toast";
 
-export default function ReviewerNotifications() {
+function ReviewerNotifications() {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [nextUrl, setNextUrl] = useState(null);
+  const [prevUrl, setPrevUrl] = useState(null);
+  const [totalCount, setTotalCount] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const limit = 10;
 
-  const fetchNotifications = async () => {
+  const fetchNotifications = async (url = null) => {
+    setLoading(true);
     try {
-      const res = await API.get("/notifications/");
-      setNotifications(res.data);
+      const res = url ? await API.get(url) : await API.get("notifications/", { params: { limit, offset: 0 } });
+      const results = res.data.results || [];
+      setNotifications(results);
+      setNextUrl(res.data.next);
+      setPrevUrl(res.data.previous);
+      setTotalCount(res.data.count);
+
+      // Determine current page from offset
+      let offset = 0;
+      if (res.data.previous) {
+        const match = res.data.previous.match(/offset=(\d+)/);
+        if (match) offset = parseInt(match[1]);
+      } else if (res.data.next) {
+        const match = res.data.next.match(/offset=(\d+)/);
+        if (match) offset = parseInt(match[1]) - limit;
+      }
+      setCurrentPage(Math.floor(offset / limit) + 1);
     } catch (err) {
-      console.error(err);
-      toast.error("Failed to load notifications");
+      console.error("Failed to fetch notifications", err);
     } finally {
       setLoading(false);
     }
@@ -26,132 +43,95 @@ export default function ReviewerNotifications() {
 
   const markAsRead = async (id) => {
     try {
-      await API.patch(`/notifications/${id}/`, { is_read: true });
+      await API.patch(`notifications/${id}/`, { is_read: true });
       setNotifications(prev =>
         prev.map(n => (n.id === id ? { ...n, is_read: true } : n))
       );
     } catch (err) {
       console.error(err);
-      toast.error("Failed to mark as read");
     }
   };
 
-  const markAllRead = async () => {
+  const markAllAsRead = async () => {
     try {
-      await API.post("/notifications/mark_all_read/");
-      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
-      toast.success("All notifications marked as read");
+      await API.post("notifications/mark_all_read/");
+      // Re-fetch the current page to reflect updated read status
+      const offset = (currentPage - 1) * limit;
+      await fetchNotifications(`notifications/?limit=${limit}&offset=${offset}`);
     } catch (err) {
       console.error(err);
-      toast.error("Failed to mark all as read");
     }
   };
 
-  const formatRelativeTime = (dateString) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now - date;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 1) return "Just now";
-    if (diffMins < 60) return `${diffMins} minute${diffMins === 1 ? "" : "s"} ago`;
-    if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`;
-    if (diffDays < 7) return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
-    return date.toLocaleDateString();
+  const goToPage = (url) => {
+    if (url) fetchNotifications(url);
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-2 border-green-600 border-t-transparent" />
-      </div>
-    );
-  }
+  if (loading) return <div className="p-6">Loading...</div>;
 
   return (
-    <div className="max-w-4xl mx-auto p-4 sm:p-6">
-      <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">Notifications</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Stay updated with the latest activity
-          </p>
-        </div>
-        {notifications.some(n => !n.is_read) && (
+    <div className="p-6 max-w-3xl mx-auto">
+      <div className="flex justify-between items-center mb-4">
+        <h1 className="text-2xl font-bold">Notifications</h1>
+        {notifications.length > 0 && (
           <button
-            onClick={markAllRead}
-            className="px-4 py-2 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition flex items-center gap-2"
+            onClick={markAllAsRead}
+            className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-            </svg>
             Mark all as read
           </button>
         )}
       </div>
 
       {notifications.length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-12 text-center">
-          <div className="text-5xl mb-3">🔔</div>
-          <h3 className="text-lg font-medium text-gray-800">No notifications</h3>
-          <p className="text-gray-500 text-sm mt-1">
-            You're all caught up! New notifications will appear here.
-          </p>
-        </div>
+        <p className="text-gray-500">No notifications</p>
       ) : (
-        <div className="space-y-3">
-          {notifications.map((notif) => (
-            <div
-              key={notif.id}
-              className={`bg-white rounded-xl border shadow-sm transition hover:shadow-md ${
-                notif.is_read
-                  ? "border-gray-200"
-                  : "border-l-4 border-l-green-500 border-gray-200"
-              }`}
-            >
-              <div className="p-4 flex flex-col sm:flex-row sm:items-start gap-3">
-                <div className="flex-shrink-0">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                    notif.is_read
-                      ? "bg-gray-100 text-gray-500"
-                      : "bg-green-100 text-green-600"
-                  }`}>
-                    {notif.is_read ? "📄" : "🔔"}
-                  </div>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                    <p className={`text-sm ${notif.is_read ? "text-gray-600" : "text-gray-800 font-medium"}`}>
-                      {notif.message}
-                    </p>
-                    <div className="flex items-center gap-3 text-xs text-gray-400">
-                      <span>{formatRelativeTime(notif.created_at)}</span>
-                      {!notif.is_read && (
-                        <button
-                          onClick={() => markAsRead(notif.id)}
-                          className="text-green-600 hover:text-green-700 font-medium"
-                        >
-                          Mark read
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  {notif.link && (
-                    <Link
-                      to={notif.link}
-                      className="inline-block mt-2 text-xs text-green-600 hover:underline"
-                    >
-                      View details →
-                    </Link>
-                  )}
-                </div>
+        <>
+          <div className="space-y-3">
+            {notifications.map(notif => (
+              <div
+                key={notif.id}
+                onClick={() => markAsRead(notif.id)}
+                className={`p-4 rounded-lg border cursor-pointer transition ${
+                  notif.is_read
+                    ? "bg-white border-gray-200"
+                    : "bg-blue-50 border-blue-200 font-semibold"
+                }`}
+              >
+                <p>{notif.message}</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {new Date(notif.created_at).toLocaleString()}
+                </p>
               </div>
+            ))}
+          </div>
+
+          {/* Pagination controls */}
+          {(prevUrl || nextUrl) && (
+            <div className="flex justify-center items-center gap-2 mt-6">
+              <button
+                onClick={() => goToPage(prevUrl)}
+                disabled={!prevUrl}
+                className="px-3 py-1 border rounded disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <span className="text-sm">
+                Page {currentPage} of {Math.ceil(totalCount / limit)}
+              </span>
+              <button
+                onClick={() => goToPage(nextUrl)}
+                disabled={!nextUrl}
+                className="px-3 py-1 border rounded disabled:opacity-50"
+              >
+                Next
+              </button>
             </div>
-          ))}
-        </div>
+          )}
+        </>
       )}
     </div>
   );
 }
+
+export default ReviewerNotifications;

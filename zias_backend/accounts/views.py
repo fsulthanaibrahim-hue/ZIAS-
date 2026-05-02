@@ -1,13 +1,13 @@
 from rest_framework import viewsets, status, generics, permissions
 from .models import Notification
 from rest_framework.generics import RetrieveAPIView
+from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework import generics, permissions
 from rest_framework.filters import BaseFilterBackend
-from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
+from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.exceptions import ValidationError   
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
@@ -76,7 +76,6 @@ class StudentViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         queryset = Student.objects.filter(user__is_active=True)
-
         if user.is_admin:
             mentor_id = self.request.query_params.get('mentor')
             if mentor_id:
@@ -96,7 +95,6 @@ class StudentViewSet(viewsets.ModelViewSet):
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
         user = request.user
-        
         if user.is_mentor:
             data = []
             for student in queryset.select_related('user'):
@@ -193,7 +191,6 @@ class ReviewerViewSet(viewsets.ModelViewSet):
         reviewer = self.get_object()
         if request.user != reviewer.user and not request.user.is_admin:
             return Response({"detail": "Not allowed"}, status=403)
-
         serializer = self.get_serializer(reviewer, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
@@ -234,7 +231,6 @@ class ModuleViewSet(viewsets.ModelViewSet):
     def student_modules(self, request):
         user = request.user
         student_id = request.query_params.get('student_id')
-
         if user.is_admin or user.is_mentor or user.is_reviewer:
             if student_id:
                 try:
@@ -262,7 +258,6 @@ class ModuleViewSet(viewsets.ModelViewSet):
                 print(f"Created missing student profile for {user.username}")
 
         common_modules = Module.objects.filter(is_common=True).order_by('order')
-
         if not student.course:
             serializer = self.get_serializer(common_modules, many=True)
             data = serializer.data
@@ -271,7 +266,6 @@ class ModuleViewSet(viewsets.ModelViewSet):
             return Response(data)
 
         course_modules = Module.objects.filter(course__name=student.course, is_common=False).order_by('order')
-
         accessible_course_modules = []
         for mod in course_modules:
             previous_modules = course_modules.filter(order__lt=mod.order)
@@ -318,17 +312,14 @@ class CompleteModuleView(APIView):
         )
         if created:
             print(f"Created missing student profile for {user.username} during module completion")
-
         try:
             module = Module.objects.get(id=module_id)
         except Module.DoesNotExist:
             return Response({"detail": "Module not found."}, status=404)
-
         student_module, created = StudentModule.objects.get_or_create(student=student, module=module)
         student_module.is_completed = True
         student_module.completed_at = timezone.now()
         student_module.save()
-
         if module.course and hasattr(module, 'order'):
             course_status, _ = CourseStatus.objects.get_or_create(
                 student=student,
@@ -343,7 +334,6 @@ class CompleteModuleView(APIView):
                 else:
                     course_status.ended_at = timezone.now()
                     course_status.save(update_fields=['ended_at'])
-
         return Response({"detail": f"Module '{module.title}' marked as completed."}, status=200)
 
 
@@ -411,7 +401,6 @@ class CurrentUserView(APIView):
             'full_name': user.get_full_name() or user.username,
         }
         return Response(user_data)
-
     def patch(self, request):
         return Response({"detail": "PATCH not implemented"}, status=405)
 
@@ -426,16 +415,16 @@ class ChangePasswordView(APIView):
         old_password = request.data.get('old_password')
         new_password = request.data.get('new_password')
         if not old_password or not new_password:
-            return Response({"detail": "Both old and new passwords are required."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "Both old and new passwords are required."}, status=400)
         if not user.check_password(old_password):
-            return Response({"detail": "Current password is incorrect."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "Current password is incorrect."}, status=400)
         if len(new_password) < 6:
-            return Response({"detail": "New password must be at least 6 characters."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "New password must be at least 6 characters."}, status=400)
         user.set_password(new_password)
         user.password_changed_at = timezone.now()
         user.save()
         OutstandingToken.objects.filter(user=user).delete()
-        return Response({"detail": "Password changed successfully."}, status=status.HTTP_200_OK)
+        return Response({"detail": "Password changed successfully."}, status=200)
 
 
 # ----------------------------
@@ -446,20 +435,20 @@ class SendBulkEmailView(APIView):
     def post(self, request):
         user = request.user
         if not user.is_admin:
-            return Response({"detail": "Admin access required."}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"detail": "Admin access required."}, status=403)
         subject = request.data.get('subject')
         message = request.data.get('message')
         if not subject or not message:
-            return Response({"detail": "Subject and message are required."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "Subject and message are required."}, status=400)
         users = User.objects.filter(is_active=True)
         recipient_list = [u.email for u in users if u.email]
         if not recipient_list:
-            return Response({"detail": "No recipients found."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "No recipients found."}, status=400)
         try:
             send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, recipient_list, fail_silently=False)
-            return Response({"detail": f"Email sent to {len(recipient_list)} users."}, status=status.HTTP_200_OK)
+            return Response({"detail": f"Email sent to {len(recipient_list)} users."}, status=200)
         except Exception as e:
-            return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"detail": str(e)}, status=500)
 
 
 # ----------------------------
@@ -469,11 +458,11 @@ class RequestPasswordResetView(APIView):
     def post(self, request):
         email = request.data.get('email')
         if not email:
-            return Response({"detail": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "Email is required."}, status=400)
         try:
             user = User.objects.get(email=email)
         except User.DoesNotExist:
-            return Response({"detail": "If an account with that email exists, a reset link has been sent."}, status=status.HTTP_200_OK)
+            return Response({"detail": "If an account with that email exists, a reset link has been sent."}, status=200)
         PasswordResetToken.objects.filter(user=user).delete()
         token = get_random_string(64)
         expires_at = timezone.now() + timedelta(hours=24)
@@ -482,24 +471,24 @@ class RequestPasswordResetView(APIView):
         subject = "Password Reset Request"
         message = f"Click the link to reset your password: {reset_link}"
         send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [email], fail_silently=False)
-        return Response({"detail": "Reset link sent to email."}, status=status.HTTP_200_OK)
+        return Response({"detail": "Reset link sent to email."}, status=200)
 
 class ConfirmPasswordResetView(APIView):
     def post(self, request, token):
         try:
             reset = PasswordResetToken.objects.get(token=token)
         except PasswordResetToken.DoesNotExist:
-            return Response({"detail": "Invalid or expired token."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "Invalid or expired token."}, status=400)
         if reset.is_expired():
-            return Response({"detail": "Token expired."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "Token expired."}, status=400)
         new_password = request.data.get('new_password')
         if not new_password or len(new_password) < 6:
-            return Response({"detail": "Password must be at least 6 characters."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "Password must be at least 6 characters."}, status=400)
         user = reset.user
         user.set_password(new_password)
         user.save()
         reset.delete()
-        return Response({"detail": "Password reset successful."}, status=status.HTTP_200_OK)
+        return Response({"detail": "Password reset successful."}, status=200)
 
 
 # ----------------------------
@@ -515,14 +504,14 @@ class ContactMessageView(APIView):
             subject = f"New Contact Message: {serializer.data['subject']}"
             message = f"Name: {serializer.data['name']}\nEmail: {serializer.data['email']}\nPhone: {serializer.data['phone']}\nSubject: {serializer.data['subject']}\nMessage: {serializer.data['message']}"
             send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [admin_email], fail_silently=False)
-            return Response({"detail": "Message sent successfully."}, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "Message sent successfully."}, status=201)
+        return Response(serializer.errors, status=400)
 
 class UnreadMessagesCountView(APIView):
     permission_classes = [IsAuthenticated]
     def get(self, request):
         if not request.user.is_admin:
-            return Response({"detail": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"detail": "Unauthorized"}, status=403)
         count = ContactMessage.objects.filter(is_read=False).count()
         return Response({"unread_count": count})
 
@@ -530,7 +519,7 @@ class RecentMessagesView(APIView):
     permission_classes = [IsAuthenticated]
     def get(self, request):
         if not request.user.is_admin:
-            return Response({"detail": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"detail": "Unauthorized"}, status=403)
         messages = ContactMessage.objects.order_by('-created_at')[:10]
         data = [{
             'id': m.id,
@@ -550,14 +539,14 @@ class ContactMessageDetailView(RetrieveAPIView):
     permission_classes = [IsAuthenticated]
     def patch(self, request, pk):
         if not request.user.is_admin:
-            return Response({"detail": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"detail": "Unauthorized"}, status=403)
         try:
             msg = ContactMessage.objects.get(pk=pk)
             msg.is_read = True
             msg.save()
             return Response({"detail": "Marked as read"})
         except ContactMessage.DoesNotExist:
-            return Response({"detail": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"detail": "Not found"}, status=404)
 
 
 # ----------------------------
@@ -571,24 +560,19 @@ class CustomLoginView(APIView):
             email = request.data.get('email')
             password = request.data.get('password')
             username = request.data.get('username')
-
             if email:
                 try:
                     user_obj = User.objects.get(email=email)
                     username = user_obj.username
                 except User.DoesNotExist:
-                    return Response({'error': 'Invalid email or password'}, status=status.HTTP_401_UNAUTHORIZED)
-
+                    return Response({'error': 'Invalid email or password'}, status=401)
             if not username:
-                return Response({'error': 'Email or username required'}, status=status.HTTP_400_BAD_REQUEST)
-
+                return Response({'error': 'Email or username required'}, status=400)
             user = authenticate(username=username, password=password)
             if not user or not user.is_active:
-                return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
-
+                return Response({'error': 'Invalid credentials'}, status=401)
             refresh = RefreshToken.for_user(user)
             access = refresh.access_token
-
             user_data = {
                 'id': user.id,
                 'username': user.username,
@@ -599,18 +583,16 @@ class CustomLoginView(APIView):
                 'is_student': getattr(user, 'is_student', False),
                 'full_name': user.get_full_name() or user.username,
             }
-
             return Response({
                 'refresh': str(refresh),
                 'access': str(access),
                 'user': user_data,
             })
-
         except User.DoesNotExist:
-            return Response({'error': 'User not found'}, status=status.HTTP_401_UNAUTHORIZED)
+            return Response({'error': 'User not found'}, status=401)
         except Exception as e:
             print(f"Login error: {repr(e)}")
-            return Response({'error': 'An internal error occurred. Please try again.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({'error': 'An internal error occurred. Please try again.'}, status=500)
 
 
 # ----------------------------
@@ -622,12 +604,12 @@ class LogoutView(APIView):
         try:
             refresh_token = request.data.get('refresh')
             if not refresh_token:
-                return Response({'error': 'Refresh token required'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'error': 'Refresh token required'}, status=400)
             token = RefreshToken(refresh_token)
             token.blacklist()
-            return Response({'message': 'Logged out successfully'}, status=status.HTTP_200_OK)
+            return Response({'message': 'Logged out successfully'}, status=200)
         except TokenError:
-            return Response({'error': 'Invalid token'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'Invalid token'}, status=400)
 
 
 # ----------------------------
@@ -639,7 +621,7 @@ class UpdateDashboardAccessView(APIView):
         user = request.user
         user.last_dashboard_access = timezone.now()
         user.save(update_fields=['last_dashboard_access'])
-        return Response({"detail": "Dashboard access updated."}, status=status.HTTP_200_OK)
+        return Response({"detail": "Dashboard access updated."}, status=200)
 
 
 # ----------------------------
@@ -650,7 +632,6 @@ class StudentListView(APIView):
 
     def get(self, request):
         user = self.request.user
-
         if user.is_reviewer:
             try:
                 reviewer = Reviewer.objects.get(user=user)
@@ -664,7 +645,6 @@ class StudentListView(APIView):
             students = Student.objects.select_related('user', 'student_batch').all()
         else:
             return Response({"detail": "Not authorized"}, status=403)
-
         data = [{
             "id": s.id,
             "name": s.full_name or s.user.username,
@@ -685,7 +665,6 @@ class StudentListView(APIView):
             "educational_qualification": s.educational_qualification,
             "college_school": s.college_school,
         } for s in students]
-
         return Response(data)
 
 
@@ -700,13 +679,10 @@ class ReviewerDashboardView(APIView):
             reviewer = Reviewer.objects.get(user=request.user)
         except Reviewer.DoesNotExist:
             return Response({"error": "You are not a reviewer"}, status=403)
-
         students = Student.objects.filter(course=reviewer.course)
         student_serializer = StudentSerializer(students, many=True)
-
         review_folders = ReviewFolder.objects.filter(student__in=students).order_by('-created_at')[:20]
         folder_serializer = ReviewFolderSerializer(review_folders, many=True)
-
         data = {
             "reviewer_name": reviewer.user.username,
             "batch_name": reviewer.batch.name if reviewer.batch else None,
@@ -792,11 +768,12 @@ class WeekUpdateViewSet(viewsets.ModelViewSet):
 
 
 # ----------------------------
-# REVIEW FOLDER VIEWSET
+# REVIEW FOLDER VIEWSET (SINGLE, WITH NOTIFICATIONS)
 # ----------------------------
 class ReviewFolderViewSet(viewsets.ModelViewSet):
     serializer_class = ReviewFolderSerializer
     permission_classes = [IsAuthenticated]
+    pagination_class = None   # Disable pagination for this view
 
     def get_queryset(self):
         return ReviewFolder.objects.all()
@@ -809,15 +786,45 @@ class ReviewFolderViewSet(viewsets.ModelViewSet):
         return super().get_permissions()
 
     def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user, updated_by=self.request.user)
+        instance = serializer.save(created_by=self.request.user, updated_by=self.request.user)
+        self._notify_reviewer(instance)
 
     def perform_update(self, serializer):
-        serializer.save(updated_by=self.request.user)
+        old = self.get_object()
+        instance = serializer.save(updated_by=self.request.user)
+        if old.industry_expert != instance.industry_expert and instance.industry_expert:
+            self._notify_reviewer(instance)
+
+    def _notify_reviewer(self, review_folder):
+        expert_name = review_folder.industry_expert
+        if not expert_name:
+            return
+        reviewer = None
+        try:
+            first_word = expert_name.split()[0].lower()
+            user = User.objects.filter(username__icontains=first_word, is_reviewer=True).first()
+            if user:
+                reviewer = Reviewer.objects.filter(user=user).first()
+        except Exception as e:
+            print(f"Error finding reviewer: {e}")
+        if not reviewer:
+            print(f"Reviewer not found for {expert_name}")
+            return
+        student = review_folder.student
+        student_name = getattr(student, 'full_name', None) or student.user.get_full_name() or student.user.username
+        folder_name = review_folder.week_folder or "Review folder"
+        message = f"📌 You have been assigned as industry expert for {student_name} in folder '{folder_name}'."
+        Notification.objects.create(
+            user=reviewer.user,
+            message=message,
+            link="/reviewer/review-folders",
+            is_read=False
+        )
 
 
-# ========================
-# CHAT VIEWS – FIXED (NO CRASH)
-# ========================
+# ----------------------------
+# CHAT VIEWS
+# ----------------------------
 class ChatRoomList(generics.ListAPIView):
     serializer_class = ChatRoomSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -834,9 +841,6 @@ class ChatRoomList(generics.ListAPIView):
             elif user.is_student:
                 student = Student.objects.get(user=user)
                 return ChatRoom.objects.filter(student=student)
-        except ObjectDoesNotExist:
-            # No profile – return empty
-            return ChatRoom.objects.none()
         except Exception as e:
             print(f"ChatRoomList error: {e}")
             return ChatRoom.objects.none()
@@ -862,6 +866,7 @@ class ChatMessageListCreateView(generics.ListCreateAPIView):
             return ChatMessage.objects.filter(room_id=room_id).order_by('timestamp')
         return ChatMessage.objects.none()
 
+
     def perform_create(self, serializer):
         message = serializer.save(sender=self.request.user)
         room = message.room
@@ -875,6 +880,7 @@ class ChatMessageListCreateView(generics.ListCreateAPIView):
             other_user = room.reviewer.user
 
         if other_user:
+            # Build chat link (same as before)
             if other_user.is_mentor:
                 link = f"/mentor/chat?room={room.id}"
             elif other_user.is_reviewer:
@@ -884,12 +890,19 @@ class ChatMessageListCreateView(generics.ListCreateAPIView):
             else:
                 link = "/chat"
 
-            Notification.objects.create(
+            # Create notification
+            notification = Notification.objects.create(
                 user=other_user,
                 message=f"New message from {self.request.user.username}: {message.content[:50]}",
                 link=link,
                 is_read=False
             )
+
+            # ✅ Emit socket event to the recipient with updated unread count
+            unread_count = Notification.objects.filter(user=other_user, is_read=False).count()
+            # Assuming you have a Socket.IO instance `sio` accessible
+            # from your_project.socketio import sio
+            # sio.emit('new_notification', {'unread_count': unread_count}, room=other_user.id)
 
 
 class ClearChatMessagesView(APIView):
@@ -903,11 +916,9 @@ class ClearChatMessagesView(APIView):
             room = ChatRoom.objects.get(id=room_id)
         except ChatRoom.DoesNotExist:
             return Response({"error": "Room not found"}, status=404)
-
         user = request.user
         if not (room.mentor and room.mentor.user == user) and not (room.reviewer and room.reviewer.user == user) and not (room.student and room.student.user == user):
             return Response({"error": "Not authorized"}, status=403)
-
         room.messages.all().delete()
         return Response({"detail": "All messages cleared"})
 
@@ -922,9 +933,9 @@ class MarkMessagesReadView(APIView):
                 is_read=True,
                 read_at=timezone.now()
             )
-            return Response({"marked_read": updated}, status=status.HTTP_200_OK)
+            return Response({"marked_read": updated}, status=200)
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error": str(e)}, status=500)
 
 
 class RespondToMessageView(APIView):
@@ -935,7 +946,6 @@ class RespondToMessageView(APIView):
             message = ChatMessage.objects.get(id=message_id)
         except ChatMessage.DoesNotExist:
             return Response({"error": "Message not found"}, status=404)
-
         room = message.room
         user = request.user
         if room.reviewer and room.reviewer.user == user:
@@ -943,7 +953,6 @@ class RespondToMessageView(APIView):
             suggested_time = request.data.get('suggested_time')
             if action not in ['accepted', 'rejected']:
                 return Response({"error": "Invalid action"}, status=400)
-
             message.action = action
             if suggested_time:
                 message.suggested_time = suggested_time
@@ -977,11 +986,16 @@ class StudentCourseStatusView(generics.RetrieveUpdateAPIView):
 
 
 # ----------------------------
-# NOTIFICATION VIEWSET
+# NOTIFICATION VIEWSET (with pagination)
 # ----------------------------
+class NotificationPagination(LimitOffsetPagination):
+    default_limit = 20
+    max_limit = 100
+
 class NotificationViewSet(viewsets.ModelViewSet):
     serializer_class = NotificationSerializer
     permission_classes = [IsAuthenticated]
+    pagination_class = NotificationPagination
 
     def get_queryset(self):
         return Notification.objects.filter(user=self.request.user).order_by('-created_at')
@@ -990,6 +1004,17 @@ class NotificationViewSet(viewsets.ModelViewSet):
     def mark_all_read(self, request):
         self.get_queryset().update(is_read=True)
         return Response({'status': 'all marked read'})
+
+
+# ----------------------------
+# UNREAD NOTIFICATION COUNT
+# ----------------------------
+class UnreadNotificationCountView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        count = Notification.objects.filter(user=request.user, is_read=False).count()
+        return Response({'unread_count': count})
 
 
 # ----------------------------
@@ -1009,7 +1034,6 @@ class StudentDocumentListView(APIView):
 class UploadStudentDocumentView(APIView):
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
-
     def post(self, request):
         file = request.FILES.get('file')
         student_id = request.data.get('student')
@@ -1051,7 +1075,6 @@ class MentorDocumentListView(APIView):
 class UploadMentorDocumentView(APIView):
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
-
     def post(self, request):
         file = request.FILES.get('file')
         mentor_id = request.data.get('mentor')
@@ -1124,4 +1147,4 @@ class ReviewAssignmentViewSet(viewsets.ModelViewSet):
         elif request.user.is_mentor or request.user.is_admin:
             return super().update(request, *args, **kwargs)
         else:
-            return Response({"error": "Not allowed"}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"error": "Not allowed"}, status=403)

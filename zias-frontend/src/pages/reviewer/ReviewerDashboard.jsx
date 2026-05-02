@@ -1,4 +1,3 @@
-// src/pages/reviewer/ReviewerDashboard.jsx
 import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import API from "../../api/api";
@@ -25,21 +24,22 @@ function ReviewerDashboard() {
         if (!isMounted) return;
         setReviewer(reviewerRes.data);
 
-        // Review folders (for stats + recent list)
+        // Review folders (for stats + recent list) – handle pagination
         const foldersRes = await API.get("/review-folders/", { signal: abortController.signal });
         if (!isMounted) return;
-        const allFolders = foldersRes.data;
+        const allFolders = foldersRes.data.results || foldersRes.data;   // ✅ pagination fix
         setStats({
           pendingReviews: allFolders.filter(f => !f.is_done).length,
           completedReviews: allFolders.filter(f => f.is_done).length,
         });
-        const sorted = allFolders.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        const sorted = [...allFolders].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
         setRecentFolders(sorted.slice(0, 5));
 
-        // Fetch assignments (upcoming reviews) for this reviewer
+        // Fetch assignments (upcoming reviews) – handle pagination
         const assignmentsRes = await API.get("/review-assignments/", { signal: abortController.signal });
         if (!isMounted) return;
-        setAssignments(assignmentsRes.data);
+        const assignmentsData = assignmentsRes.data.results || assignmentsRes.data;
+        setAssignments(assignmentsData);
       } catch (err) {
         if (err.name === "AbortError" || err.code === "ERR_CANCELED") return;
         console.error(err);
@@ -59,9 +59,10 @@ function ReviewerDashboard() {
   const handleAssignmentResponse = async (assignmentId, action) => {
     try {
       await API.patch(`/review-assignments/${assignmentId}/`, { status: action });
-      // Refresh the assignments list
+      // Refresh assignments list (handle pagination)
       const res = await API.get("/review-assignments/");
-      setAssignments(res.data);
+      const assignmentsData = res.data.results || res.data;
+      setAssignments(assignmentsData);
     } catch (err) {
       console.error(err);
     }

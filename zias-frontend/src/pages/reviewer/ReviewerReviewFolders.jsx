@@ -36,7 +36,8 @@ function ReviewerReviewFolders() {
     setError(null);
     try {
       const res = await API.get("/review-folders/");
-      setAllFolders(res.data);
+      const folders = res.data.results || res.data;
+      setAllFolders(Array.isArray(folders) ? folders : []);
     } catch (err) {
       setError("Failed to load review folders.");
       console.error(err);
@@ -123,7 +124,7 @@ function ReviewerReviewFolders() {
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="bg-white divide-y divide-gray-200">
                   {folderList.length === 0 ? (
                     <tr>
                       <td colSpan="5" className="px-4 py-8 text-center text-gray-400">
@@ -196,7 +197,7 @@ function ReviewerReviewFolders() {
                       <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="bg-white divide-y divide-gray-200">
                     {filteredEntries.length === 0 ? (
                       <tr>
                         <td colSpan="8" className="px-4 py-8 text-center text-gray-400">

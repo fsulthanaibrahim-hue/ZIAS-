@@ -47,16 +47,22 @@ const ChatWindow = forwardRef(({ room }, ref) => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const fetchMessages = () => {
+  const fetchMessages = async () => {
     if (!room || !room.id) return;
     setLoading(true);
-    api.get(`/chat-rooms/${room.id}/messages/`)
-      .then(res => {
-        setMessages(res.data);
-        setTimeout(scrollToBottom, 100);
-      })
-      .catch(err => console.error(err))
-      .finally(() => setLoading(false));
+    try {
+      const res = await api.get(`/chat-rooms/${room.id}/messages/`);
+      // ✅ Handle pagination: if res.data has a 'results' array, use that; otherwise assume array
+      let fetchedMessages = res.data.results || res.data;
+      if (!Array.isArray(fetchedMessages)) fetchedMessages = [];
+      setMessages(fetchedMessages);
+      setTimeout(scrollToBottom, 100);
+    } catch (err) {
+      console.error(err);
+      toast.error("Could not load messages");
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -159,13 +165,13 @@ const ChatWindow = forwardRef(({ room }, ref) => {
     return msg.sender_name || "Unknown";
   };
 
-  // Group messages by day
-  const groupedMessages = messages.reduce((acc, msg) => {
+  // Group messages by day – ensure messages is array
+  const groupedMessages = Array.isArray(messages) ? messages.reduce((acc, msg) => {
     const day = formatDay(msg.timestamp);
     if (!acc.length || acc[acc.length-1].day !== day) acc.push({ day, msgs: [] });
     acc[acc.length-1].msgs.push(msg);
     return acc;
-  }, []);
+  }, []) : [];
 
   return (
     <div className="flex flex-col h-full bg-gray-50">
@@ -197,7 +203,7 @@ const ChatWindow = forwardRef(({ room }, ref) => {
                         {isMine && <span>{msg.is_read ? '✓✓' : '✓'}</span>}
                       </div>
 
-                      {/* ✅ NO STATUS BADGE – completely removed */}
+                      {/* NO STATUS BADGE */}
 
                       {showResponse && (
                         <div className="mt-2 pt-2 border-t border-gray-200">
