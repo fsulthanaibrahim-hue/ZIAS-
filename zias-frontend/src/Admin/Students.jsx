@@ -1,7 +1,8 @@
-// src/Admin/Students.jsx – fully working with pagination, course/batch/mentor dropdowns
+// src/Admin/Students.jsx – fully working with progress button
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import API from "../api/api";
+import ProgressModal from "../components/ProgressModal"; // <-- import
 
 function Toast({ message, type, onClose }) {
   useEffect(() => {
@@ -39,9 +40,7 @@ function ConfirmModal({ isOpen, onClose, onConfirm, studentName }) {
   );
 }
 
-// ✅ Robust extraction function – works for plain arrays AND paginated { results: [...] }
 function extractArray(responseOrData) {
-  // responseOrData can be the whole Axios response or just the data object
   const data = responseOrData?.data ?? responseOrData;
   if (Array.isArray(data)) return data;
   if (data && Array.isArray(data.results)) return data.results;
@@ -79,6 +78,10 @@ function Students() {
   const [editDocuments, setEditDocuments] = useState([]);
   const [loadingEditDocs, setLoadingEditDocs] = useState(false);
 
+  // Progress modal state
+  const [progressStudent, setProgressStudent] = useState(null);
+  const [showProgressModal, setShowProgressModal] = useState(false);
+
   const [formData, setFormData] = useState({
     full_name: "", email: "", course_id: "", batch_id: "", mentor_id: "", phone: "", date_of_birth: "", age: "", gender: "",
     fathers_name: "", fathers_contact: "", mothers_name: "", mothers_contact: "",
@@ -87,7 +90,6 @@ function Students() {
 
   const showToast = useCallback((message, type = "success") => setToast({ message, type }), []);
   const hideToast = useCallback(() => setToast(null), []);
-
   const hasLoaded = useRef(false);
 
   useEffect(() => {
@@ -101,7 +103,6 @@ function Students() {
     }
   }, [location.search]);
 
-  // ✅ fetchAllData uses extractArray correctly
   const fetchAllData = useCallback(async () => {
     if (hasLoaded.current) return;
     hasLoaded.current = true;
@@ -117,8 +118,6 @@ function Students() {
       setCoursesList(extractArray(coursesRes));
       setBatchesList(extractArray(batchesRes));
       setMentorsList(extractArray(mentorsRes));
-      
-      // Debug (remove in production)
       console.log("Courses loaded:", extractArray(coursesRes));
     } catch (err) {
       console.error(err);
@@ -214,7 +213,6 @@ function Students() {
     return `${base}${suffix}`;
   };
 
-  // Safe document URL helper
   const getDocumentUrl = (url) => {
     if (!url || typeof url !== 'string') return '#';
     if (url.startsWith('http')) return url;
@@ -297,7 +295,6 @@ function Students() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Validate phone fields
     const phoneFields = [
       { field: 'phone', setError: setPhoneError, label: 'Student phone' },
       { field: 'fathers_contact', setError: setFathersContactError, label: "Father's contact" },
@@ -318,7 +315,6 @@ function Students() {
     }
     if (hasError) return;
 
-    // Convert IDs to names (backend expects course/batch names)
     const courseObj = coursesList.find(c => c.id === parseInt(formData.course_id));
     const batchObj = batchesList.find(b => b.id === parseInt(formData.batch_id));
     const courseName = courseObj ? courseObj.name : null;
@@ -405,7 +401,6 @@ function Students() {
 
   const handleEdit = async (student) => {
     setEditingId(student.id);
-    // Find course and batch objects by name (backend returns names, not IDs)
     const courseObj = coursesList.find(c => c.name === (student.course_name || student.course));
     const batchObj = batchesList.find(b => b.name === (student.batch_name || student.batch));
     setFormData({
@@ -441,6 +436,11 @@ function Students() {
     setViewingStudent(student);
     const docs = await fetchStudentDocuments(student.id);
     setViewerDocuments(docs);
+  };
+
+  const openProgressModal = (student) => {
+    setProgressStudent(student);
+    setShowProgressModal(true);
   };
 
   // Filter students
@@ -526,6 +526,12 @@ function Students() {
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
       <ConfirmModal isOpen={showConfirmModal} onClose={() => setShowConfirmModal(false)} onConfirm={confirmDelete} studentName={studentToDelete?.name} />
 
+      <ProgressModal
+        isOpen={showProgressModal}
+        onClose={() => setShowProgressModal(false)}
+        student={progressStudent}
+      />
+
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-4 sm:py-8">
         {/* Top Bar */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
@@ -581,7 +587,7 @@ function Students() {
           </div>
         </div>
 
-        {/* Add/Edit Modal */}
+        {/* Add/Edit Modal (unchanged) */}
         {showForm && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={() => setShowForm(false)}>
             <form
@@ -589,6 +595,7 @@ function Students() {
               className="modal-enter bg-white rounded-2xl w-full max-w-3xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
+              {/* ... (same form as before, no changes) ... */}
               <div className="sticky top-0 bg-white z-10 flex justify-between items-center px-4 sm:px-6 py-4 border-b border-gray-200">
                 <div className="flex items-center gap-3">
                   <div className="w-7 h-7 rounded-lg bg-green-100 border border-green-200 flex items-center justify-center">
@@ -729,10 +736,11 @@ function Students() {
           </div>
         )}
 
-        {/* View Student Modal */}
+        {/* View Student Modal (unchanged) */}
         {viewingStudent && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={() => setViewingStudent(null)}>
             <div className="bg-white rounded-2xl w-full max-w-3xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+              {/* ... (same as before, no changes) ... */}
               <div className="sticky top-0 bg-white z-10 flex justify-between items-center px-4 sm:px-6 py-4 border-b border-gray-200">
                 <div className="flex items-center gap-3">
                   <div className="w-7 h-7 rounded-lg bg-green-100 border border-green-200 flex items-center justify-center">
@@ -776,36 +784,36 @@ function Students() {
                 </div>
 
                 {/* Parents */}
-                <div className="border-t border-gray-200 pt-4">
+                <div className="border-t pt-4">
                   <h4 className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-3">Parents</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div><label className="block text-gray-500 text-xs">Father's Name</label><p className="text-gray-800 text-sm mt-1">{viewingStudent.fathers_name || "—"}</p></div>
-                    <div><label className="block text-gray-500 text-xs">Father's Contact</label><p className="text-gray-800 text-sm mt-1">{viewingStudent.fathers_contact || "—"}</p></div>
-                    <div><label className="block text-gray-500 text-xs">Mother's Name</label><p className="text-gray-800 text-sm mt-1">{viewingStudent.mothers_name || "—"}</p></div>
-                    <div><label className="block text-gray-500 text-xs">Mother's Contact</label><p className="text-gray-800 text-sm mt-1">{viewingStudent.mothers_contact || "—"}</p></div>
+                    <div><label className="block text-gray-500 text-xs">Father's Name</label><p>{viewingStudent.fathers_name || "—"}</p></div>
+                    <div><label className="block text-gray-500 text-xs">Father's Contact</label><p>{viewingStudent.fathers_contact || "—"}</p></div>
+                    <div><label className="block text-gray-500 text-xs">Mother's Name</label><p>{viewingStudent.mothers_name || "—"}</p></div>
+                    <div><label className="block text-gray-500 text-xs">Mother's Contact</label><p>{viewingStudent.mothers_contact || "—"}</p></div>
                   </div>
                 </div>
 
                 {/* Address */}
-                <div className="border-t border-gray-200 pt-4">
+                <div className="border-t pt-4">
                   <h4 className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-3">Address</h4>
                   <p className="text-gray-800 text-sm">{viewingStudent.address || "—"}</p>
                 </div>
 
                 {/* Education */}
-                <div className="border-t border-gray-200 pt-4">
+                <div className="border-t pt-4">
                   <h4 className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-3">Education</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div><label className="block text-gray-500 text-xs">Educational Qualification</label><p className="text-gray-800 text-sm mt-1">{viewingStudent.educational_qualification || "—"}</p></div>
-                    <div><label className="block text-gray-500 text-xs">College/School</label><p className="text-gray-800 text-sm mt-1">{viewingStudent.college_school || "—"}</p></div>
-                    <div><label className="block text-gray-500 text-xs">Parent Name</label><p className="text-gray-800 text-sm mt-1">{viewingStudent.parent_name || "—"}</p></div>
-                    <div><label className="block text-gray-500 text-xs">Parent Phone</label><p className="text-gray-800 text-sm mt-1">{viewingStudent.parent_phone || "—"}</p></div>
-                    <div><label className="block text-gray-500 text-xs">Emergency Contact</label><p className="text-gray-800 text-sm mt-1">{viewingStudent.emergency_contact || "—"}</p></div>
+                    <div><label className="block text-gray-500 text-xs">Educational Qualification</label><p>{viewingStudent.educational_qualification || "—"}</p></div>
+                    <div><label className="block text-gray-500 text-xs">College/School</label><p>{viewingStudent.college_school || "—"}</p></div>
+                    <div><label className="block text-gray-500 text-xs">Parent Name</label><p>{viewingStudent.parent_name || "—"}</p></div>
+                    <div><label className="block text-gray-500 text-xs">Parent Phone</label><p>{viewingStudent.parent_phone || "—"}</p></div>
+                    <div><label className="block text-gray-500 text-xs">Emergency Contact</label><p>{viewingStudent.emergency_contact || "—"}</p></div>
                   </div>
                 </div>
 
                 {/* Documents */}
-                <div className="border-t border-gray-200 pt-4">
+                <div className="border-t pt-4">
                   <h4 className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-3">Documents</h4>
                   {viewerDocuments.length === 0 ? (
                     <p className="text-gray-400 text-sm">No documents uploaded.</p>
@@ -826,7 +834,7 @@ function Students() {
                 </div>
               </div>
 
-              <div className="sticky bottom-0 bg-white px-4 sm:px-6 py-4 border-t border-gray-200 flex justify-end">
+              <div className="sticky bottom-0 bg-white px-6 py-4 border-t flex justify-end">
                 <button onClick={() => setViewingStudent(null)} className="bg-gray-100 hover:bg-gray-200 border border-gray-200 text-gray-700 hover:text-gray-800 px-5 py-2 rounded-lg transition-all text-sm font-medium">Close</button>
               </div>
             </div>
@@ -870,6 +878,13 @@ function Students() {
                       <button onClick={() => handleDeleteClick(s.id, s.full_name || s.username)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-all text-xs font-medium">
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                         <span className="hidden sm:inline">Delete</span>
+                      </button>
+                      <button
+                        onClick={() => openProgressModal(s)}
+                        className="px-2 py-1 rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50 text-xs font-medium transition-all"
+                        title="View Progress"
+                      >
+                        Progress
                       </button>
                     </div>
                   </td>

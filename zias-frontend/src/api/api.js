@@ -21,16 +21,14 @@ const processQueue = (error, token = null) => {
 };
 
 // Request interceptor: attach access token to every request
-API.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem("access_token");
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
+API.interceptors.request.use(config => {
+  const token = localStorage.getItem("access_token");
+  console.log("Token being sent:", token ? token.slice(0, 20)+"..." : "NO TOKEN");
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
 
 // Response interceptor: handle 401 errors and refresh token
 API.interceptors.response.use(

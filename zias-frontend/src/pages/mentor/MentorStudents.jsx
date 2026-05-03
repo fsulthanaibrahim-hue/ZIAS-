@@ -1,12 +1,13 @@
-// src/pages/mentor/MentorStudents.jsx – optimized (no duplicate me/ calls)
+// src/pages/mentor/MentorStudents.jsx – with progress button
 import { useEffect, useState, useRef } from "react";
 import { Link } from "react-router-dom";
 import API from "../../api/api";
 import toast from "react-hot-toast";
 import { useAuth } from "../../context/AuthContext";
+import ProgressModal from "../../components/ProgressModal"; // <-- import
 
 function MentorStudents() {
-  const { user: authUser } = useAuth(); // get user from context (contains mentor_id, batch, name)
+  const { user: authUser } = useAuth();
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -24,6 +25,10 @@ function MentorStudents() {
   const [studentToDelete, setStudentToDelete] = useState(null);
   const [viewingStudent, setViewingStudent] = useState(null);
   const [viewerDocuments, setViewerDocuments] = useState([]);
+
+  // Progress modal state
+  const [progressStudent, setProgressStudent] = useState(null);
+  const [showProgressModal, setShowProgressModal] = useState(false);
 
   const [formData, setFormData] = useState({
     full_name: "",
@@ -51,7 +56,7 @@ function MentorStudents() {
   const [parentPhoneError, setParentPhoneError] = useState("");
   const [emergencyContactError, setEmergencyContactError] = useState("");
 
-  const mentorFetched = useRef(false); // prevent duplicate mentor fetch
+  const mentorFetched = useRef(false);
 
   const getBatchName = (batchId) => {
     if (!batchId) return "—";
@@ -75,15 +80,12 @@ function MentorStudents() {
     mentorFetched.current = true;
 
     const fetchMentor = async () => {
-      // If authUser already has mentor details, use them directly
       if (authUser?.mentor_id) {
         setMentorId(authUser.mentor_id);
         setMentorBatch(authUser.batch || authUser.batch_name || "");
         setMentorName(authUser.full_name || authUser.username || "Mentor");
         return;
       }
-
-      // Fallback: call mentors/me/ (only once)
       try {
         const res = await API.get("mentors/me/");
         setMentorId(res.data.id);
@@ -94,7 +96,6 @@ function MentorStudents() {
         setError("Failed to load mentor info");
       }
     };
-
     fetchMentor();
   }, [authUser]);
 
@@ -109,7 +110,6 @@ function MentorStudents() {
           API.get("courses/"),
           API.get("batches/"),
         ]);
-        // handle paginated responses
         setStudents(studentsRes.data.results || studentsRes.data);
         setCoursesList(coursesRes.data.results || coursesRes.data);
         setBatchesList(batchesRes.data.results || batchesRes.data);
@@ -385,6 +385,11 @@ function MentorStudents() {
     );
   });
 
+  const openProgressModal = (student) => {
+    setProgressStudent(student);
+    setShowProgressModal(true);
+  };
+
   const inputClass =
     "w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/30 text-sm";
   const readOnlyClass =
@@ -411,6 +416,13 @@ function MentorStudents() {
 
   return (
     <main className="flex-1 p-8 overflow-y-auto bg-gray-50">
+      <ProgressModal
+        isOpen={showProgressModal}
+        onClose={() => setShowProgressModal(false)}
+        studentId={progressStudent?.id}
+        studentName={progressStudent?.full_name || progressStudent?.username}
+      />
+
       <div className="max-w-6xl mx-auto">
         <div className="flex justify-between items-center mb-6">
           <div>
@@ -502,6 +514,12 @@ function MentorStudents() {
                   >
                     Delete
                   </button>
+                  <button
+                    onClick={() => openProgressModal(student)}
+                    className="text-xs bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-full transition"
+                  >
+                    Progress
+                  </button>
                 </div>
               </div>
             ))}
@@ -509,7 +527,7 @@ function MentorStudents() {
         )}
       </div>
 
-      {/* Add/Edit Modal */}
+      {/* Add/Edit Modal (unchanged) */}
       {showModal && (
         <div
           className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
@@ -639,7 +657,7 @@ function MentorStudents() {
         </div>
       )}
 
-      {/* View Details Modal */}
+      {/* View Details Modal (unchanged) */}
       {viewingStudent && (
         <div
           className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
@@ -748,7 +766,7 @@ function MentorStudents() {
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
+      {/* Delete Confirmation Modal (unchanged) */}
       {showDeleteConfirm && studentToDelete && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6">

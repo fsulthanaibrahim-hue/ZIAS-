@@ -14,6 +14,7 @@ from .models import (
     ChatRoom, ChatMessage, CourseStatus, Notification, StudentDocument, MentorDocument, ReviewAssignment
 )
 
+
 def generate_random_password(length=10):
     alphabet = string.ascii_letters + string.digits
     return ''.join(secrets.choice(alphabet) for _ in range(length))
@@ -297,8 +298,8 @@ class MentorSerializer(serializers.ModelSerializer):
 # REVIEWER SERIALIZER
 # ----------------------------
 class ReviewerSerializer(serializers.ModelSerializer):
-    username = serializers.CharField(source='user.username')
-    email = serializers.EmailField(source='user.email')
+    username = serializers.CharField(source='user.username', required=True)
+    email = serializers.EmailField(source='user.email', required=True)
 
     class Meta:
         model = Reviewer
@@ -306,10 +307,15 @@ class ReviewerSerializer(serializers.ModelSerializer):
                   'available_from', 'available_to', 'available_days', 'full_name']
 
     def create(self, validated_data):
-        username = validated_data.pop('username')
-        email = validated_data.pop('email')
+        # Extract user data
+        user_data = validated_data.pop('user', {})
+        username = validated_data.pop('username', user_data.get('username'))
+        email = validated_data.pop('email', user_data.get('email'))
+        
+        if not username or not email:
+            raise serializers.ValidationError({"detail": "Both username and email are required."})
+        
         random_password = generate_random_password()
-
         user, created = User.objects.get_or_create(
             username=username,
             defaults={'email': email, 'is_reviewer': True, 'password_changed_at': timezone.now()}
@@ -324,7 +330,7 @@ class ReviewerSerializer(serializers.ModelSerializer):
             user.save()
 
         if Reviewer.objects.filter(user=user).exists():
-            raise serializers.ValidationError({"username": "This user already has a reviewer profile."})
+            raise serializers.ValidationError({"username": "A reviewer profile already exists for this user."})
 
         reviewer = Reviewer.objects.create(user=user, **validated_data)
 
@@ -349,6 +355,20 @@ class ReviewerSerializer(serializers.ModelSerializer):
         return reviewer
 
     def update(self, instance, validated_data):
+        # Handle user fields (username and email) separately
+        user_data = validated_data.pop('user', {})
+        username = validated_data.pop('username', user_data.get('username'))
+        email = validated_data.pop('email', user_data.get('email'))
+
+        # Update user if provided
+        if username and username != instance.user.username:
+            instance.user.username = username
+        if email and email != instance.user.email:
+            instance.user.email = email
+        if username or email:
+            instance.user.save()
+
+        # Update reviewer fields
         instance.department = validated_data.get('department', instance.department)
         instance.qualification = validated_data.get('qualification', instance.qualification)
         instance.experience = validated_data.get('experience', instance.experience)
@@ -356,14 +376,6 @@ class ReviewerSerializer(serializers.ModelSerializer):
         instance.full_name = validated_data.get('full_name', instance.full_name)
         instance.save()
 
-        username = validated_data.get('username')
-        email = validated_data.get('email')
-        if username and username != instance.user.username:
-            instance.user.username = username
-        if email and email != instance.user.email:
-            instance.user.email = email
-        if username or email:
-            instance.user.save()
         return instance
     
 

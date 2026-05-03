@@ -1,4 +1,4 @@
-// src/App.jsx
+// src/App.jsx – with safe user parsing
 import { useEffect } from "react";
 import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import AdminLogin from "./Admin/Login";
@@ -75,7 +75,12 @@ function PrivateRoute({ children }) {
 function AdminRoute({ children }) {
   const token = localStorage.getItem("access_token");
   const userStr = localStorage.getItem("user");
-  const user = userStr ? JSON.parse(userStr) : null;
+  let user = null;
+  try {
+    user = userStr ? JSON.parse(userStr) : null;
+  } catch (e) {
+    user = null;
+  }
   return token && user?.is_admin ? children : <Navigate to="/admin/login" replace />;
 }
 
@@ -86,7 +91,12 @@ function App() {
   useEffect(() => {
     const token = localStorage.getItem("access_token");
     const userStr = localStorage.getItem("user");
-    const user = userStr ? JSON.parse(userStr) : null;
+    let user = null;
+    try {
+      user = userStr ? JSON.parse(userStr) : null;
+    } catch (e) {
+      user = null;
+    }
 
     if (location.pathname === "/login" || location.pathname === "/admin/login") {
       return;

@@ -130,6 +130,41 @@ class StudentViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(student)
         return Response(serializer.data)
 
+    # ✅ CORRECTED PROGRESS METHOD
+    @action(detail=True, methods=['get'], url_path='progress')
+    def progress(self, request, pk=None):
+        import traceback
+        try:
+            student = self.get_object()
+            student_modules = StudentModule.objects.filter(student=student).select_related('module')
+            completed_weeks = []
+            for sm in student_modules:
+                if sm.is_completed and sm.module and sm.module.order is not None:
+                    completed_weeks.append(int(sm.module.order))
+            current_week = max(completed_weeks) if completed_weeks else 0
+            next_week = current_week + 1
+            total_weeks = 52
+            if student.course:
+                course_obj = Course.objects.get(name=student.course)
+                if course_obj.duration:
+                    total_weeks = int(course_obj.duration)
+            progress_percent = round((current_week / total_weeks) * 100, 1) if total_weeks else 0
+            return Response({
+                'student_id': student.id,
+                'full_name': student.full_name or student.user.username,
+                'course': student.course or '',
+                'batch': student.batch or '',
+                'completed_weeks': sorted(completed_weeks),
+                'current_week': current_week,
+                'next_week': next_week if next_week <= total_weeks else None,
+                'total_weeks': total_weeks,
+                'progress_percent': progress_percent,
+            })
+        except Exception as e:
+           import traceback
+           traceback.print_exc()  # this prints to your Django terminal
+           return Response({"error": str(e)}, status=500)
+
     def destroy(self, request, *args, **kwargs):
         student = self.get_object()
         user = student.user
@@ -138,6 +173,50 @@ class StudentViewSet(viewsets.ModelViewSet):
         student.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
     
+
+    # ========== STUDENT PROGRESS ENDPOINT (FIXED) ==========
+    @action(detail=True, methods=['get'], url_path='progress')
+    def progress(self, request, pk=None):
+        """
+        Returns progress information for a single student:
+        - enrolled course
+        - completed weeks (list of week numbers)
+        - current week (highest completed)
+        - next week
+        - total weeks from the course's duration
+        - percentage of completion
+        """
+        student = self.get_object()
+        student_modules = StudentModule.objects.filter(student=student).select_related('module')
+        completed_weeks = []
+        for sm in student_modules:
+            if sm.is_completed and sm.module.order:
+                completed_weeks.append(sm.module.order)
+        current_week = max(completed_weeks) if completed_weeks else 0
+        next_week = current_week + 1
+        total_weeks = 0
+        # Get course duration – handle missing course gracefully
+        if student.course:
+            try:
+                course_obj = Course.objects.get(name=student.course)
+                total_weeks = course_obj.duration or 0
+            except Course.DoesNotExist:
+                total_weeks = 52    # default if course not found
+        else:
+            total_weeks = 52        # default if student has no course
+        progress_percent = round((current_week / total_weeks) * 100, 1) if total_weeks else 0
+        return Response({
+            'student_id': student.id,
+            'full_name': student.full_name or student.user.username,
+            'course': student.course or '',
+            'batch': student.batch or '',
+            'completed_weeks': sorted(completed_weeks),
+            'current_week': current_week,
+            'next_week': next_week if next_week <= total_weeks else None,
+            'total_weeks': total_weeks,
+            'progress_percent': progress_percent,
+        })
+
 
 # ----------------------------
 # MENTOR VIEWSET
@@ -231,7 +310,6 @@ class ModuleViewSet(viewsets.ModelViewSet):
     def student_modules(self, request):
         user = request.user
         student_id = request.query_params.get('student_id')
-
         # Determine the student
         if user.is_admin or user.is_mentor or user.is_reviewer:
             if student_id:
@@ -266,7 +344,6 @@ class ModuleViewSet(viewsets.ModelViewSet):
         else:
             course_modules = Module.objects.filter(course__name=student.course, is_common=False).order_by('order')
             accessible_course_modules = []
-            # First, filter accessible course modules based on StudentModule completion
             for mod in course_modules:
                 previous_modules = course_modules.filter(order__lt=mod.order)
                 if not previous_modules.exists():
@@ -290,12 +367,9 @@ class ModuleViewSet(viewsets.ModelViewSet):
             all_modules.sort(key=lambda x: x.order)
 
         # Get review statuses (from StudentWeekReview) for unlocking based on previous week's review
-        # For locking logic: a module is locked if the previous module's review status is NOT "completed"
-        # Get all completed reviews (score >= 70 or status = "completed")
         reviews = StudentWeekReview.objects.filter(student=student)
         completed_modules = set()
         for r in reviews:
-            # You can use total_score or a dedicated status field. Using total_score >= 70 as "completed"
             if r.total_score is not None and r.total_score >= 70:
                 completed_modules.add(r.module_id)
 
@@ -305,10 +379,8 @@ class ModuleViewSet(viewsets.ModelViewSet):
             is_locked = False
             if i > 0:
                 prev_module = all_modules[i-1]
-                # Lock this module unless previous module is in completed_modules
                 if prev_module.id not in completed_modules:
                     is_locked = True
-            # For the first module, is_locked = False always
             result.append({
                 'id': module.id,
                 'title': module.title,
@@ -317,7 +389,7 @@ class ModuleViewSet(viewsets.ModelViewSet):
                 'course_name': module.course.name if module.course else None,
                 'is_common': module.is_common,
                 'is_locked': is_locked,
-                'completion_percentage': 0,  # optional, can be computed later
+                'completion_percentage': 0,
             })
         return Response(result)
 
@@ -582,44 +654,87 @@ class CustomLoginView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        try:
-            email = request.data.get('email')
-            password = request.data.get('password')
-            username = request.data.get('username')
-            if email:
-                try:
-                    user_obj = User.objects.get(email=email)
-                    username = user_obj.username
-                except User.DoesNotExist:
-                    return Response({'error': 'Invalid email or password'}, status=401)
-            if not username:
-                return Response({'error': 'Email or username required'}, status=400)
-            user = authenticate(username=username, password=password)
-            if not user or not user.is_active:
-                return Response({'error': 'Invalid credentials'}, status=401)
-            refresh = RefreshToken.for_user(user)
-            access = refresh.access_token
-            user_data = {
-                'id': user.id,
-                'username': user.username,
-                'email': user.email,
-                'is_admin': getattr(user, 'is_admin', False),
-                'is_mentor': getattr(user, 'is_mentor', False),
-                'is_reviewer': getattr(user, 'is_reviewer', False),
-                'is_student': getattr(user, 'is_student', False),
-                'full_name': user.get_full_name() or user.username,
-            }
-            return Response({
-                'refresh': str(refresh),
-                'access': str(access),
-                'user': user_data,
-            })
-        except User.DoesNotExist:
-            return Response({'error': 'User not found'}, status=401)
-        except Exception as e:
-            print(f"Login error: {repr(e)}")
-            return Response({'error': 'An internal error occurred. Please try again.'}, status=500)
+        email = request.data.get('email')
+        password = request.data.get('password')
+        username = request.data.get('username')
 
+        # If neither email nor username provided, return error
+        if not email and not username:
+            return Response({'error': 'Email or username required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # If email is provided, try to find the user by email
+        if email:
+            try:
+                user_obj = User.objects.get(email=email)
+                username = user_obj.username
+            except User.DoesNotExist:
+                return Response({'error': 'Invalid email or password'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # Now authenticate with username and password
+        if not username:
+            return Response({'error': 'Username not found'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = authenticate(username=username, password=password)
+        if not user or not user.is_active:
+            return Response({'error': 'Invalid credentials or account disabled'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # Generate tokens
+        refresh = RefreshToken.for_user(user)
+        access = refresh.access_token
+
+        # Prepare user data
+        user_data = {
+            'id': user.id,
+            'username': user.username,
+            'email': user.email,
+            'is_admin': getattr(user, 'is_admin', False),
+            'is_mentor': getattr(user, 'is_mentor', False),
+            'is_reviewer': getattr(user, 'is_reviewer', False),
+            'is_student': getattr(user, 'is_student', False),
+            'full_name': user.get_full_name() or user.username,
+        }
+
+        # If the user is a mentor, attach mentor_id, batch, expertise
+        if user.is_mentor:
+            try:
+                mentor = Mentor.objects.get(user=user)
+                user_data['mentor_id'] = mentor.id
+                user_data['batch'] = mentor.batch
+                user_data['expertise'] = mentor.expertise
+                user_data['full_name'] = mentor.full_name or user_data['full_name']
+            except Mentor.DoesNotExist:
+                pass
+
+        # If the user is a student, attach student_id, course, batch
+        if user.is_student:
+            try:
+                student = Student.objects.get(user=user)
+                user_data['student_id'] = student.id
+                user_data['course'] = student.course
+                user_data['batch'] = student.batch
+                user_data['full_name'] = student.full_name or user_data['full_name']
+            except Student.DoesNotExist:
+                pass
+
+        # If the user is a reviewer, attach reviewer_id, department
+        if user.is_reviewer:
+            try:
+                reviewer = Reviewer.objects.get(user=user)
+                user_data['reviewer_id'] = reviewer.id
+                user_data['batch'] = reviewer.batch
+                user_data['department'] = reviewer.department
+                user_data['full_name'] = reviewer.full_name or user_data['full_name']
+            except Reviewer.DoesNotExist:
+                pass
+
+        # If the user is admin, nothing extra needed
+
+        return Response({
+            'refresh': str(refresh),
+            'access': str(access),
+            'user': user_data,
+        })
+    
 
 # ----------------------------
 # LOGOUT VIEW
@@ -828,7 +943,7 @@ class WeekUpdateViewSet(viewsets.ModelViewSet):
 class ReviewFolderViewSet(viewsets.ModelViewSet):
     serializer_class = ReviewFolderSerializer
     permission_classes = [IsAuthenticated]
-    pagination_class = None   # Disable pagination for this view
+    pagination_class = None
 
     def get_queryset(self):
         return ReviewFolder.objects.all()
@@ -909,7 +1024,7 @@ class ChatMessageList(generics.ListAPIView):
 
     def get_queryset(self):
         room_id = self.kwargs['room_id']
-        return ChatMessage.objects.filter(room_id=room_id).order_by('timestamp')  # oldest first
+        return ChatMessage.objects.filter(room_id=room_id).order_by('timestamp')
 
 
 class ChatMessageListCreateView(generics.ListCreateAPIView):
@@ -924,8 +1039,6 @@ class ChatMessageListCreateView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         serializer.save(sender=self.request.user)
-        # Notification creation is now handled by your WebSocket consumer (ChatConsumer) to avoid duplicates.
-        # If you still want bell notifications, you can add them here, but be careful not to double-notify.
 
 
 class ClearChatMessagesView(APIView):
@@ -1173,14 +1286,14 @@ class ReviewAssignmentViewSet(viewsets.ModelViewSet):
             return Response({"error": "Not allowed"}, status=403)
 
 
-
+# ----------------------------
+# RECENT MESSAGES API (with LimitOffsetPagination)
+# ----------------------------
 class RecentMessagesAPIView(generics.ListAPIView):
     serializer_class = ContactMessageSerializer
     pagination_class = LimitOffsetPagination
-    # Optional: set default limit
     pagination_class.default_limit = 10   
     pagination_class.max_limit = 1000     
 
     def get_queryset(self):
-        return ContactMessage.objects.all().order_by('-created_at')        
-
+        return ContactMessage.objects.all().order_by('-created_at')

@@ -1,10 +1,10 @@
 // src/pages/UserLogin.jsx
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import axios from "axios";
+import API from "../api/api";   // use your configured axios instance
 
 function UserLogin() {
-  const [email, setEmail] = useState("");   // changed from username
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -17,9 +17,8 @@ function UserLogin() {
     setLoading(true);
 
     try {
-      // Use your custom login endpoint (which we will modify to accept email)
-      const response = await axios.post("http://127.0.0.1:8000/api/login/", {
-        email: email,      // send email
+      const response = await API.post("/login/", {
+        email: email,
         password: password,
       });
       const { access, refresh, user } = response.data;
@@ -41,14 +40,19 @@ function UserLogin() {
         navigate("/");
       }
     } catch (err) {
-      setError("Invalid email or password");
       console.error(err);
+      if (err.response?.status === 401) {
+        setError("Invalid email or password");
+      } else if (err.response?.status === 400) {
+        setError(err.response.data?.error || "Missing email or password");
+      } else {
+        setError("Unable to connect to the server. Please try again later.");
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  // (eye icons remain unchanged)
   const EyeOpen = () => (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
       <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />

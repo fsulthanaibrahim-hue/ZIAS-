@@ -1,4 +1,4 @@
-// src/Admin/Reviewers.jsx
+// src/Admin/Reviewers.jsx – with full_name support (no random numbers in username)
 import { useEffect, useState, useRef } from "react";
 import API from "../api/api";
 
@@ -124,13 +124,13 @@ function Reviewers() {
     }
   };
 
+  // ✅ UPDATED: generate username without random suffix
   const generateUsername = (name, email) => {
     let base = name ? name.toLowerCase().trim().replace(/\s+/g, '_') : '';
     if (!base) base = email ? email.split('@')[0] : 'reviewer';
     base = base.replace(/[^a-z0-9_]/g, '');
     if (!base) base = 'reviewer';
-    const suffix = Math.floor(Math.random() * 10000);
-    return `${base}${suffix}`;
+    return base; // no suffix
   };
 
   const handleSubmit = async (e) => {
@@ -140,6 +140,7 @@ function Reviewers() {
     const payload = {
       username: generatedUsername,
       email: formData.email,
+      full_name: formData.name,
       department: formData.department,
       qualification: formData.qualification || null,
       experience: formData.experience ? parseInt(formData.experience) : null,
@@ -176,7 +177,7 @@ function Reviewers() {
   const handleEdit = (reviewer) => {
     setEditingId(reviewer.id);
     setFormData({
-      name: reviewer.username,
+      name: reviewer.full_name || reviewer.username,
       email: reviewer.email,
       department: reviewer.department || "",
       qualification: reviewer.qualification || "",
@@ -189,8 +190,9 @@ function Reviewers() {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
+  // Filter by full_name, username, or email
   const filteredReviewers = reviewers.filter(r =>
-    r.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (r.full_name || r.username)?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     r.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     r.department?.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -417,47 +419,50 @@ function Reviewers() {
             </thead>
             <tbody className="bg-white divide-y divide-gray-100">
               {paginatedReviewers.length > 0 ? (
-                paginatedReviewers.map((r) => (
-                  <tr key={r.id} className="table-row-hover transition-colors duration-150 group">
-                    <td data-label="Reviewer" className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${getColor(r.username)} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
-                          {getInitials(r.username)}
+                paginatedReviewers.map((r) => {
+                  const displayName = r.full_name || r.username;
+                  return (
+                    <tr key={r.id} className="table-row-hover transition-colors duration-150 group">
+                      <td data-label="Reviewer" className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${getColor(displayName)} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
+                            {getInitials(displayName)}
+                          </div>
+                          <button
+                            onClick={() => setViewingReviewer(r)}
+                            className="text-gray-800 text-sm font-medium hover:text-green-600 transition-colors cursor-pointer"
+                          >
+                            {displayName}
+                          </button>
                         </div>
-                        <button
-                          onClick={() => setViewingReviewer(r)}
-                          className="text-gray-800 text-sm font-medium hover:text-green-600 transition-colors cursor-pointer"
-                        >
-                          {r.username}
-                        </button>
-                      </div>
-                    </td>
-                    <td data-label="Email" className="px-4 py-3 text-gray-500 text-sm break-all">
-                      {r.email}
-                    </td>
-                    <td data-label="Department" className="px-4 py-3">
-                      <span className="inline-flex items-center gap-1.5 bg-purple-100 text-purple-700 border border-purple-200 text-xs font-medium px-2 py-1 rounded-full">
-                        {r.department}
-                      </span>
-                    </td>
-                    <td data-label="Actions" className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => handleEdit(r)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-gray-500 hover:text-green-600 hover:bg-green-50 border border-transparent hover:border-green-200 transition-all text-xs font-medium">
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                          <span className="hidden sm:inline">Edit</span>
-                        </button>
-                        <button onClick={() => handleDeleteClick(r.id, r.username)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-all text-xs font-medium">
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                          <span className="hidden sm:inline">Delete</span>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                      </td>
+                      <td data-label="Email" className="px-4 py-3 text-gray-500 text-sm break-all">
+                        {r.email}
+                      </td>
+                      <td data-label="Department" className="px-4 py-3">
+                        <span className="inline-flex items-center gap-1.5 bg-purple-100 text-purple-700 border border-purple-200 text-xs font-medium px-2 py-1 rounded-full">
+                          {r.department}
+                        </span>
+                      </td>
+                      <td data-label="Actions" className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => handleEdit(r)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-gray-500 hover:text-green-600 hover:bg-green-50 border border-transparent hover:border-green-200 transition-all text-xs font-medium">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                            <span className="hidden sm:inline">Edit</span>
+                          </button>
+                          <button onClick={() => handleDeleteClick(r.id, displayName)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-all text-xs font-medium">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                            <span className="hidden sm:inline">Delete</span>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               ) : (
                 <tr>
                   <td colSpan="4" className="text-center py-12 sm:py-20">
@@ -524,7 +529,7 @@ function Reviewers() {
             </div>
             <div className="px-4 sm:px-6 py-5">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Username</label><input type="text" value={viewingReviewer.username || ""} readOnly className={readOnlyClass} /></div>
+                <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Full Name</label><input type="text" value={viewingReviewer.full_name || viewingReviewer.username || ""} readOnly className={readOnlyClass} /></div>
                 <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Email</label><input type="text" value={viewingReviewer.email || ""} readOnly className={readOnlyClass} /></div>
                 <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Department (Course)</label><input type="text" value={viewingReviewer.department || "—"} readOnly className={readOnlyClass} /></div>
                 <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Qualification</label><input type="text" value={viewingReviewer.qualification || "—"} readOnly className={readOnlyClass} /></div>
