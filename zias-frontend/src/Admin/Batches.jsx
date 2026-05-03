@@ -1,5 +1,6 @@
-// src/Admin/Batches.jsx – fully working with token handling & pagination
+// src/Admin/Batches.jsx – with small edit/delete icons (like Courses.jsx)
 import { useEffect, useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import API from "../api/api";
 
 function Toast({ message, type, onClose }) {
@@ -49,6 +50,7 @@ function ConfirmModal({ isOpen, onClose, onConfirm, batchName }) {
 }
 
 function Batches() {
+  const navigate = useNavigate();
   const [batches, setBatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -71,7 +73,6 @@ function Batches() {
 
   const fetched = useRef(false);
 
-  // Fetch batches with proper error handling (401 redirect)
   const fetchBatches = () =>
     API.get("batches/")
       .then(res => {
@@ -104,7 +105,6 @@ function Batches() {
     fetchBatches();
   }, []);
 
-  // Safely filter batches (defensive check)
   const filteredBatches = Array.isArray(batches)
     ? batches.filter(b =>
         b.name?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -141,6 +141,11 @@ function Batches() {
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm]);
+
+  const handleBatchNameClick = (batchName, e) => {
+    e?.stopPropagation();
+    navigate(`/admin/students?batch=${encodeURIComponent(batchName)}`);
+  };
 
   const handleDeleteClick = (batchId, batchName) => {
     setBatchToDelete({ id: batchId, name: batchName });
@@ -355,13 +360,21 @@ function Batches() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Start Date</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">End Date</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {paginatedBatches.map((batch) => (
                     <tr key={batch.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{batch.name}</td>
+                      {/* Batch Name – clickable to filter students */}
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <button
+                          onClick={(e) => handleBatchNameClick(batch.name, e)}
+                          className="text-sm font-medium text-emerald-600 hover:text-emerald-800 hover:underline cursor-pointer"
+                        >
+                          {batch.name}
+                        </button>
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {batch.start_date ? new Date(batch.start_date).toLocaleDateString() : "—"}
                       </td>
@@ -373,9 +386,29 @@ function Batches() {
                           {batch.is_active ? "Active" : "Inactive"}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <button onClick={() => handleEdit(batch)} className="text-emerald-600 hover:text-emerald-900 mr-3">Edit</button>
-                        <button onClick={() => handleDeleteClick(batch.id, batch.name)} className="text-red-600 hover:text-red-900">Delete</button>
+                      <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                        <div className="flex items-center justify-center gap-2">
+                          {/* Edit Icon (small, like in Courses) */}
+                          <button
+                            onClick={() => handleEdit(batch)}
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+                            title="Edit Batch"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                          {/* Delete Icon (small) */}
+                          <button
+                            onClick={() => handleDeleteClick(batch.id, batch.name)}
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                            title="Delete Batch"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}

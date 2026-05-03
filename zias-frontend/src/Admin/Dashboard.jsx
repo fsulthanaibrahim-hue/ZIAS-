@@ -1,7 +1,8 @@
-// src/Admin/Dashboard.jsx
+// src/Admin/Dashboard.jsx – uses AuthContext for user data
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../api/api";
+import { useAuth } from "../context/AuthContext"; // adjust path as needed
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell,
 } from "recharts";
@@ -69,21 +70,16 @@ const StatusDot = ({ ok }) => (
 );
 
 function Dashboard() {
+  const navigate = useNavigate();
+  const { user } = useAuth(); // ✅ get user from context – no extra API call
   const [stats, setStats] = useState({ students: 0, mentors: 0, reviewers: 0, courses: 0, batches: 0 });
-  const [adminName, setAdminName] = useState("Admin");
   const [lastUpdated, setLastUpdated] = useState(null);
   const [notification, setNotification] = useState(null);
   const [apiOk, setApiOk] = useState(true);
   const [activity, setActivity] = useState([]);
-  const navigate = useNavigate();
-
   const fetched = useRef(false);
 
-  useEffect(() => {
-    API.get("users/me/")
-      .then(r => setAdminName(r.data.first_name || r.data.username || "Admin"))
-      .catch(() => {});
-  }, []);
+  const adminName = user?.first_name || user?.username || "Admin";
 
   useEffect(() => {
     if (fetched.current) return;

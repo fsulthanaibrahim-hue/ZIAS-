@@ -1,4 +1,4 @@
-// src/Admin/StudentReviewEdit.jsx
+// src/Admin/StudentReviewEdit.jsx – DEBUG VERSION (shows API response in console)
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import API from "../api/api";
@@ -48,7 +48,6 @@ function StudentReviewEdit() {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  // Helper to generate english_review text from score
   const generateEnglishReview = (score) => {
     const num = parseFloat(score);
     if (isNaN(num)) return "";
@@ -60,7 +59,6 @@ function StudentReviewEdit() {
     return "";
   };
 
-  // Auto‑update english_review when english_score changes
   useEffect(() => {
     let updated = false;
     const newEdits = { ...editedReviews };
@@ -77,50 +75,62 @@ function StudentReviewEdit() {
     if (updated) {
       setEditedReviews(newEdits);
     }
-  }, [editedReviews]); // runs after any change; only updates if score changed
+  }, [editedReviews]);
 
-  // Fetch reviewers and mentors
+  // --- DEBUG: fetch reviewers and mentors with full console output ---
   useEffect(() => {
     const fetchReviewers = async () => {
       try {
-        let reviewerNames = [];
-        try {
-          const res = await API.get("/reviewers/");
-          reviewerNames = res.data.map((rev) => {
-            let name = rev.name || rev.user?.username || rev.username;
-            if (!name) return "";
-            name = name.charAt(0).toUpperCase() + name.slice(1);
-            return `${name} Sir`;
-          });
-        } catch (err) {
-          const usersRes = await API.get("/users/?is_reviewer=true");
-          reviewerNames = usersRes.data.map((user) => {
-            let name = user.full_name || user.username;
-            if (!name) return "";
-            name = name.charAt(0).toUpperCase() + name.slice(1);
-            return `${name} Sir`;
-          });
+        const res = await API.get("reviewers/");
+        console.log("🔍 REVIEWERS API RESPONSE (full):", JSON.stringify(res.data, null, 2));
+        let reviewers = Array.isArray(res.data) ? res.data : (res.data?.results || []);
+        console.log("🔍 REVIEWERS ARRAY:", reviewers);
+        if (reviewers.length === 0) {
+          console.warn("⚠️ No reviewers found in API response");
+        } else {
+          console.log("✅ First reviewer object:", reviewers[0]);
         }
-        const uniqueNames = [...new Set(reviewerNames.filter((n) => n && n !== " Sir"))];
-        setReviewersList(uniqueNames);
+        // Try to extract names – adjust field names based on actual response
+        const names = reviewers.map(rev => {
+          // Try common fields
+          let name = rev.full_name || rev.name || rev.user?.full_name || rev.user?.username || rev.username;
+          if (!name) name = `Reviewer #${rev.id}`;
+          if (name && name !== `Reviewer #${rev.id}`) {
+            name = name.charAt(0).toUpperCase() + name.slice(1);
+          }
+          return `${name} Sir`;
+        });
+        setReviewersList([...new Set(names)]);
+        console.log("✅ Extracted reviewer names:", [...new Set(names)]);
       } catch (err) {
+        console.error("Failed to fetch reviewers", err);
         setReviewersList([]);
       }
     };
 
     const fetchMentors = async () => {
       try {
-        const res = await API.get("/mentors/");
-        const names = res.data
-          .map((mentor) => {
-            let name = mentor.full_name || mentor.username;
-            if (!name) return "";
+        const res = await API.get("mentors/");
+        console.log("🔍 MENTORS API RESPONSE (full):", JSON.stringify(res.data, null, 2));
+        let mentors = Array.isArray(res.data) ? res.data : (res.data?.results || []);
+        console.log("🔍 MENTORS ARRAY:", mentors);
+        if (mentors.length === 0) {
+          console.warn("⚠️ No mentors found in API response");
+        } else {
+          console.log("✅ First mentor object:", mentors[0]);
+        }
+        const names = mentors.map(ment => {
+          let name = ment.full_name || ment.name || ment.user?.full_name || ment.user?.username || ment.username;
+          if (!name) name = `Mentor #${ment.id}`;
+          if (name && name !== `Mentor #${ment.id}`) {
             name = name.charAt(0).toUpperCase() + name.slice(1);
-            return name;
-          })
-          .filter(Boolean);
-        setMentorsList(names);
+          }
+          return name;
+        });
+        setMentorsList([...new Set(names)]);
+        console.log("✅ Extracted mentor names:", [...new Set(names)]);
       } catch (err) {
+        console.error("Failed to fetch mentors", err);
         setMentorsList([]);
       }
     };
@@ -346,7 +356,6 @@ function StudentReviewEdit() {
           changes[field] = edited[field];
         }
       }
-      // Also include english_review if it was auto‑generated and differs from original
       if (edited.english_review !== original.english_review) {
         changes.english_review = edited.english_review;
       }
