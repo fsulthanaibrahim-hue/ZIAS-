@@ -1,13 +1,26 @@
-// src/Admin/Dashboard.jsx – uses AuthContext for user data
+// src/Admin/Dashboard.jsx – handles paginated API responses
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../api/api";
-import { useAuth } from "../context/AuthContext"; // adjust path as needed
+import { useAuth } from "../context/AuthContext";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell,
 } from "recharts";
 
-// ── Stat Card (5 boxes) – light theme ──
+// Helper to extract array from paginated response
+const extractArray = (response) => {
+  const data = response.data.results || response.data;
+  return Array.isArray(data) ? data : [];
+};
+
+// Helper to get total count (if paginated) or array length
+const getCount = (response) => {
+  if (response.data && typeof response.data.count === 'number') return response.data.count;
+  const arr = extractArray(response);
+  return arr.length;
+};
+
+// Stat Card (same as before)
 const StatCard = ({ label, value, icon, color }) => {
   const colors = {
     blue:   { bg: "bg-blue-50",    border: "border-blue-200",    text: "text-blue-700",    icon: "bg-blue-100 text-blue-600" },
@@ -30,7 +43,6 @@ const StatCard = ({ label, value, icon, color }) => {
   );
 };
 
-// ── Quick Action Button – light theme ──
 const ActionBtn = ({ label, icon, onClick, color = "blue" }) => {
   const colors = {
     blue:   "bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-700",
@@ -51,7 +63,6 @@ const ActionBtn = ({ label, icon, onClick, color = "blue" }) => {
   );
 };
 
-// ── Custom Tooltip – light theme ──
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
     return (
@@ -64,50 +75,49 @@ const CustomTooltip = ({ active, payload, label }) => {
   return null;
 };
 
-// ── Status Dot – light theme ──
 const StatusDot = ({ ok }) => (
   <span className={`inline-block w-2 h-2 rounded-full ${ok ? "bg-green-600" : "bg-red-600"}`} />
 );
 
 function Dashboard() {
   const navigate = useNavigate();
-  const { user } = useAuth(); // ✅ get user from context – no extra API call
+  const { user } = useAuth();
   const [stats, setStats] = useState({ students: 0, mentors: 0, reviewers: 0, courses: 0, batches: 0 });
   const [lastUpdated, setLastUpdated] = useState(null);
   const [notification, setNotification] = useState(null);
   const [apiOk, setApiOk] = useState(true);
-  const [activity, setActivity] = useState([]);
+  const [activity] = useState([]);
   const fetched = useRef(false);
 
   const adminName = user?.first_name || user?.username || "Admin";
 
+  const fetchData = async () => {
+    try {
+      const [studentsRes, mentorsRes, reviewersRes, coursesRes, batchesRes] = await Promise.all([
+        API.get("students/"),
+        API.get("mentors/"),
+        API.get("reviewers/"),
+        API.get("courses/"),
+        API.get("batches/"),
+      ]);
+      setStats({
+        students: getCount(studentsRes),
+        mentors: getCount(mentorsRes),
+        reviewers: getCount(reviewersRes),
+        courses: getCount(coursesRes),
+        batches: getCount(batchesRes),
+      });
+      setApiOk(true);
+      setLastUpdated(new Date());
+    } catch (err) {
+      console.error(err);
+      setApiOk(false);
+    }
+  };
+
   useEffect(() => {
     if (fetched.current) return;
     fetched.current = true;
-
-    const fetchData = async () => {
-      try {
-        const [studentsRes, mentorsRes, reviewersRes, coursesRes, batchesRes] = await Promise.all([
-          API.get("students/"),
-          API.get("mentors/"),
-          API.get("reviewers/"),
-          API.get("courses/"),
-          API.get("batches/"),
-        ]);
-        setStats({
-          students: studentsRes.data.length,
-          mentors: mentorsRes.data.length,
-          reviewers: reviewersRes.data.length,
-          courses: coursesRes.data.length,
-          batches: batchesRes.data.length,
-        });
-        setApiOk(true);
-        setLastUpdated(new Date());
-      } catch (err) {
-        console.error(err);
-        setApiOk(false);
-      }
-    };
     fetchData();
   }, []);
 
@@ -121,11 +131,11 @@ function Dashboard() {
         API.get("batches/"),
       ]);
       setStats({
-        students: studentsRes.data.length,
-        mentors: mentorsRes.data.length,
-        reviewers: reviewersRes.data.length,
-        courses: coursesRes.data.length,
-        batches: batchesRes.data.length,
+        students: getCount(studentsRes),
+        mentors: getCount(mentorsRes),
+        reviewers: getCount(reviewersRes),
+        courses: getCount(coursesRes),
+        batches: getCount(batchesRes),
       });
       setApiOk(true);
       setLastUpdated(new Date());
@@ -190,7 +200,6 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* 5 Stat Cards */}
       <div className="flex flex-wrap gap-3 sm:gap-4 mb-6 sm:mb-8">
         <StatCard label="Students"   value={stats.students}  icon="🎓" color="blue"   />
         <StatCard label="Mentors"    value={stats.mentors}   icon="👨‍🏫" color="green"  />
@@ -199,7 +208,6 @@ function Dashboard() {
         <StatCard label="Batches"    value={stats.batches}   icon="🎓" color="rose"   />
       </div>
 
-      {/* Quick Actions */}
       <div className="mb-6 sm:mb-8">
         <p className="text-gray-500 text-xs uppercase tracking-widest mb-3 font-semibold">Quick Actions</p>
         <div className="flex flex-wrap gap-2 sm:gap-3">
@@ -212,7 +220,6 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* Chart + Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 shadow-sm">
           <p className="text-gray-500 text-xs uppercase tracking-widest mb-4 font-semibold">Overview</p>
