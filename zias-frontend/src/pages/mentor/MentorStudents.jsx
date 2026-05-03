@@ -1,10 +1,12 @@
-// src/pages/mentor/MentorStudents.jsx
-import { useEffect, useState } from "react";
+// src/pages/mentor/MentorStudents.jsx – optimized (no duplicate me/ calls)
+import { useEffect, useState, useRef } from "react";
 import { Link } from "react-router-dom";
 import API from "../../api/api";
 import toast from "react-hot-toast";
+import { useAuth } from "../../context/AuthContext";
 
 function MentorStudents() {
+  const { user: authUser } = useAuth(); // get user from context (contains mentor_id, batch, name)
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -49,6 +51,8 @@ function MentorStudents() {
   const [parentPhoneError, setParentPhoneError] = useState("");
   const [emergencyContactError, setEmergencyContactError] = useState("");
 
+  const mentorFetched = useRef(false); // prevent duplicate mentor fetch
+
   const getBatchName = (batchId) => {
     if (!batchId) return "—";
     if (typeof batchId === "string" && batchId.match(/^[A-Za-z0-9]+$/)) return batchId;
@@ -65,8 +69,21 @@ function MentorStudents() {
     return mentorName;
   };
 
+  // Fetch mentor info – only once, prefer from authUser
   useEffect(() => {
+    if (mentorFetched.current) return;
+    mentorFetched.current = true;
+
     const fetchMentor = async () => {
+      // If authUser already has mentor details, use them directly
+      if (authUser?.mentor_id) {
+        setMentorId(authUser.mentor_id);
+        setMentorBatch(authUser.batch || authUser.batch_name || "");
+        setMentorName(authUser.full_name || authUser.username || "Mentor");
+        return;
+      }
+
+      // Fallback: call mentors/me/ (only once)
       try {
         const res = await API.get("mentors/me/");
         setMentorId(res.data.id);
@@ -77,9 +94,11 @@ function MentorStudents() {
         setError("Failed to load mentor info");
       }
     };
-    fetchMentor();
-  }, []);
 
+    fetchMentor();
+  }, [authUser]);
+
+  // Fetch students, courses, batches after mentorId is available
   useEffect(() => {
     if (!mentorId) return;
     const fetchAll = async () => {
@@ -90,9 +109,10 @@ function MentorStudents() {
           API.get("courses/"),
           API.get("batches/"),
         ]);
-        setStudents(studentsRes.data);
-        setCoursesList(coursesRes.data);
-        setBatchesList(batchesRes.data);
+        // handle paginated responses
+        setStudents(studentsRes.data.results || studentsRes.data);
+        setCoursesList(coursesRes.data.results || coursesRes.data);
+        setBatchesList(batchesRes.data.results || batchesRes.data);
       } catch (err) {
         console.error(err);
         setError("Failed to load data");
@@ -107,7 +127,7 @@ function MentorStudents() {
     if (!mentorId) return;
     try {
       const res = await API.get("students/", { params: { mentor: mentorId } });
-      setStudents(res.data);
+      setStudents(res.data.results || res.data);
     } catch (err) {
       toast.error("Failed to refresh list");
     }
@@ -118,7 +138,7 @@ function MentorStudents() {
       const fullStudentRes = await API.get(`students/${student.id}/`);
       const fullStudent = fullStudentRes.data;
       const docsRes = await API.get(`students/${student.id}/documents/`);
-      setViewerDocuments(docsRes.data);
+      setViewerDocuments(docsRes.data.results || docsRes.data);
       setViewingStudent(fullStudent);
     } catch (err) {
       console.error(err);
@@ -489,7 +509,7 @@ function MentorStudents() {
         )}
       </div>
 
-      {/* Add/Edit Modal (same form – used for both) */}
+      {/* Add/Edit Modal */}
       {showModal && (
         <div
           className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
@@ -531,7 +551,7 @@ function MentorStudents() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div><label className="block text-gray-600 text-xs font-medium mb-1">Full Name</label><input type="text" name="full_name" value={formData.full_name} onChange={handleChange} className={inputClass} /></div>
                   <div><label className="block text-gray-600 text-xs font-medium mb-1">Email *</label><input type="email" name="email" value={formData.email} onChange={handleChange} required className={inputClass} /></div>
-                  <div><label className="block text-gray-600 text-xs font-medium mb-1">Course *</label><select name="course" value={formData.course} onChange={handleChange} required className={inputClass}><option value="">Select a course</option>{coursesList.results.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select></div>
+                  <div><label className="block text-gray-600 text-xs font-medium mb-1">Course *</label><select name="course" value={formData.course} onChange={handleChange} required className={inputClass}><option value="">Select a course</option>{coursesList.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select></div>
                   <div>
                     <label className="block text-gray-600 text-xs font-medium mb-1">Batch</label>
                     <input
@@ -619,7 +639,7 @@ function MentorStudents() {
         </div>
       )}
 
-      {/* View Details Modal (unchanged) */}
+      {/* View Details Modal */}
       {viewingStudent && (
         <div
           className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
