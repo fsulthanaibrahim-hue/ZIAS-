@@ -1,4 +1,4 @@
-// src/pages/reviewer/ReviewerProfile.jsx
+// src/pages/reviewer/ReviewerProfile.jsx – displays full name, hides username
 import { useEffect, useState, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import API from "../../api/api";
@@ -11,15 +11,15 @@ const avatarColors = [
   ["#dcedc8", "#33691e"],
 ];
 
-function getInitials(username = "") {
-  const parts = username.trim().split(/[\s._-]+/);
+function getInitials(fullName = "") {
+  const parts = fullName.trim().split(/[\s._-]+/);
   return parts.length >= 2
     ? (parts[0][0] + parts[1][0]).toUpperCase()
-    : username.slice(0, 2).toUpperCase() || "?";
+    : fullName.slice(0, 2).toUpperCase() || "?";
 }
 
-function getAvatarColor(username = "") {
-  const idx = username.charCodeAt(0) % avatarColors.length || 0;
+function getAvatarColor(fullName = "") {
+  const idx = fullName.charCodeAt(0) % avatarColors.length || 0;
   return avatarColors[idx];
 }
 
@@ -33,7 +33,7 @@ function ReadOnly({ label, value }) {
 }
 
 function ReviewerProfile() {
-  const [user, setUser] = useState(null);
+  const [reviewer, setReviewer] = useState(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState({ text: "", type: "" });
   const navigate = useNavigate();
@@ -45,12 +45,12 @@ function ReviewerProfile() {
 
     const fetchProfile = async () => {
       try {
-        const res = await API.get("users/me/");
-        setUser(res.data);
+        const res = await API.get("reviewers/me/");
+        setReviewer(res.data);
       } catch (err) {
         setMessage({
           text: err.response?.status === 404
-            ? "User profile not found. Please contact admin."
+            ? "Reviewer profile not found. Please contact admin."
             : "Failed to load profile.",
           type: "error",
         });
@@ -76,11 +76,7 @@ function ReviewerProfile() {
     );
   }
 
-  const username = user?.username || "";
-  const email = user?.email || "";
-  const role = user?.is_admin ? "Admin" : user?.is_mentor ? "Mentor" : user?.is_reviewer ? "Reviewer" : "Student";
-
-  if (!user) {
+  if (!reviewer) {
     return (
       <div style={s.fullPage}>
         <div style={{ ...s.toast, ...s.toastError }}>{message.text}</div>
@@ -88,7 +84,14 @@ function ReviewerProfile() {
     );
   }
 
-  const [bgColor, accentColor] = getAvatarColor(username);
+  const fullName = reviewer.full_name || reviewer.username || "Reviewer";
+  const email = reviewer.email || "";
+  const role = "Reviewer";
+  const department = reviewer.department || "—";
+  const qualification = reviewer.qualification || "—";
+  const experience = reviewer.experience ? `${reviewer.experience} years` : "—";
+
+  const [bgColor, accentColor] = getAvatarColor(fullName);
 
   return (
     <div style={s.page}>
@@ -103,19 +106,22 @@ function ReviewerProfile() {
           <div style={s.dotPattern} />
           <div style={{ ...s.avatar, border: `2.5px solid ${accentColor}`, boxShadow: `0 0 24px ${accentColor}30` }}>
             <span style={{ color: accentColor, fontSize: 26, fontWeight: 700, letterSpacing: 1 }}>
-              {getInitials(username)}
+              {getInitials(fullName)}
             </span>
           </div>
           <div style={s.bannerMeta}>
-            <h2 style={s.bannerName}>{username}</h2>
+            <h2 style={s.bannerName}>{fullName}</h2>
             <span style={{ ...s.badge, borderColor: accentColor, color: accentColor }}>{role}</span>
           </div>
         </div>
 
         <div style={s.body}>
           <div style={s.roGrid}>
-            <ReadOnly label="Username" value={username} />
+            <ReadOnly label="Full Name" value={fullName} />
             <ReadOnly label="Email" value={email} />
+            <ReadOnly label="Department" value={department} />
+            <ReadOnly label="Qualification" value={qualification} />
+            <ReadOnly label="Experience" value={experience} />
           </div>
 
           <div style={s.divider} />
@@ -131,10 +137,7 @@ function ReviewerProfile() {
             <Link to="/change-password" style={s.btnSecondary}>
               Change Password
             </Link>
-            <Link
-              to={user?.is_admin ? "/admin/dashboard" : user?.is_reviewer ? "/reviewer/dashboard" : user?.is_mentor ? "/mentor/dashboard" : "/student/dashboard"}
-              style={s.btnDashboard}
-            >
+            <Link to="/reviewer/dashboard" style={s.btnDashboard}>
               Back to Dashboard
             </Link>
             <button onClick={handleLogout} style={s.btnLogout}>
