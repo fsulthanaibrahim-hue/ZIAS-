@@ -1,5 +1,6 @@
-// src/Admin/Modules.jsx – custom confirm modals for days and tasks
+// src/Admin/Modules.jsx – dynamic week dropdown + course filter from URL
 import React, { useEffect, useState, useRef } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import API from "../api/api";
 
 function Toast({ message, type, onClose }) {
@@ -25,7 +26,6 @@ function Toast({ message, type, onClose }) {
   );
 }
 
-// Custom delete confirmation modal (reusable)
 function ConfirmDeleteModal({ isOpen, onClose, onConfirm, title, message }) {
   if (!isOpen) return null;
   return (
@@ -47,7 +47,6 @@ function ConfirmDeleteModal({ isOpen, onClose, onConfirm, title, message }) {
   );
 }
 
-// Module delete modal (specific for modules, but we can reuse the same)
 function ConfirmModuleDeleteModal({ isOpen, onClose, onConfirm, moduleTitle }) {
   if (!isOpen) return null;
   return (
@@ -93,7 +92,7 @@ const ModalWrapper = ({ onClose, children, maxW = "max-w-lg" }) => (
   </div>
 );
 
-// Day Modal (no parent re‑renders)
+// Day Modal
 function DayModal({ isOpen, onClose, initialDay, onSave }) {
   const [title, setTitle] = useState(initialDay?.title || "");
   const [content, setContent] = useState(initialDay?.content || "");
@@ -131,7 +130,7 @@ function DayModal({ isOpen, onClose, initialDay, onSave }) {
   );
 }
 
-// Task Modal (separate state)
+// Task Modal
 function TaskModal({ isOpen, onClose, initialTask, onSave }) {
   const [title, setTitle] = useState(initialTask?.title || "");
   const [order, setOrder] = useState(initialTask?.order || 0);
@@ -172,6 +171,10 @@ function TaskModal({ isOpen, onClose, initialTask, onSave }) {
 }
 
 function Modules() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const courseIdFromUrl = searchParams.get("course_id");
+
   const [modules, setModules] = useState([]);
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -205,15 +208,34 @@ function Modules() {
   const hideToast = () => setToast(null);
   const fetched = useRef(false);
 
-  const maxWeeks = 52;
-  const weekOptions = Array.from({ length: maxWeeks }, (_, i) => i + 1);
+  // Dynamic week options based on selected course's duration
+  const [weekOptions, setWeekOptions] = useState([]);
+  const maxWeeksDefault = 52;
+
+  const getCourseDuration = (courseId) => {
+    const course = courses.find(c => c.id == courseId);
+    return course?.duration ? parseInt(course.duration) : maxWeeksDefault;
+  };
+
+  // When course selection changes, update weekOptions
+  useEffect(() => {
+    if (moduleForm.course) {
+      const duration = getCourseDuration(moduleForm.course);
+      const options = Array.from({ length: duration }, (_, i) => i + 1);
+      setWeekOptions(options);
+      if (moduleForm.order && parseInt(moduleForm.order) > duration) {
+        setModuleForm(prev => ({ ...prev, order: "" }));
+      }
+    } else {
+      setWeekOptions(Array.from({ length: maxWeeksDefault }, (_, i) => i + 1));
+    }
+  }, [moduleForm.course, courses]);
 
   useEffect(() => {
     const userStr = localStorage.getItem("user");
     if (userStr) setUser(JSON.parse(userStr));
   }, []);
 
-  // ✅ FIX: handle paginated response for modules
   const fetchModules = () =>
     API.get("modules/")
       .then(res => {
@@ -224,9 +246,13 @@ function Modules() {
       .finally(() => setLoading(false));
 
   const fetchCourses = () =>
-    API.get("courses/").then(res => setCourses(res.data)).catch(() => showToast("Failed to load courses", "error"));
+    API.get("courses/")
+      .then(res => {
+        const coursesArray = res.data.results || res.data;
+        setCourses(Array.isArray(coursesArray) ? coursesArray : []);
+      })
+      .catch(() => showToast("Failed to load courses", "error"));
 
-  // ✅ FIX: handle paginated response for days
   const fetchDays = async (moduleId) => {
     const numId = Number(moduleId);
     if (isNaN(numId)) return;
@@ -237,7 +263,6 @@ function Modules() {
     } catch { showToast("Failed to load days", "error"); }
   };
 
-  // ✅ FIX: handle paginated response for tasks
   const fetchTasks = async (dayId) => {
     const numId = Number(dayId);
     if (isNaN(numId)) return;
@@ -269,12 +294,27 @@ function Modules() {
     }
   }, [expandedDayId]);
 
-  const resetModuleForm = () => setModuleForm({ course: "", title: "", content: "", is_common: true, order: "" });
+  const resetModuleForm = () => {
+    setModuleForm({ course: "", title: "", content: "", is_common: true, order: "" });
+  };
 
-  const openAddModuleModal = () => { setEditingModule(null); resetModuleForm(); setShowModuleModal(true); };
+  const openAddModuleModal = () => {
+    setEditingModule(null);
+    resetModuleForm();
+    setShowModuleModal(true);
+  };
   const openEditModuleModal = (mod) => {
     setEditingModule(mod);
-    setModuleForm({ course: mod.course, title: mod.title, content: mod.content || "", is_common: mod.is_common ?? true, order: mod.order ? mod.order.toString() : "" });
+    const courseId = mod.course;
+    const duration = getCourseDuration(courseId);
+    setWeekOptions(Array.from({ length: duration }, (_, i) => i + 1));
+    setModuleForm({
+      course: mod.course,
+      title: mod.title,
+      content: mod.content || "",
+      is_common: mod.is_common ?? true,
+      order: mod.order ? mod.order.toString() : ""
+    });
     setShowModuleModal(true);
   };
 
@@ -296,12 +336,28 @@ function Modules() {
 
   const handleModuleSubmit = async (e) => {
     e.preventDefault();
-    const payload = { course: moduleForm.course, title: moduleForm.title, content: moduleForm.content, is_common: moduleForm.is_common, order: moduleForm.order ? parseInt(moduleForm.order) : null };
+    const payload = {
+      course: moduleForm.course,
+      title: moduleForm.title,
+      content: moduleForm.content,
+      is_common: moduleForm.is_common,
+      order: moduleForm.order ? parseInt(moduleForm.order) : null
+    };
     try {
-      if (editingModule) { await API.patch(`modules/${editingModule.id}/`, payload); showToast("Module updated"); }
-      else { await API.post("modules/", payload); showToast("Module added"); }
-      setShowModuleModal(false); setEditingModule(null); resetModuleForm();
-      setExpandedModuleId(null); setExpandedDayId(null); setDaysByModule({}); setTasksByDay({});
+      if (editingModule) {
+        await API.patch(`modules/${editingModule.id}/`, payload);
+        showToast("Module updated");
+      } else {
+        await API.post("modules/", payload);
+        showToast("Module added");
+      }
+      setShowModuleModal(false);
+      setEditingModule(null);
+      resetModuleForm();
+      setExpandedModuleId(null);
+      setExpandedDayId(null);
+      setDaysByModule({});
+      setTasksByDay({});
       fetchModules();
     } catch { showToast("Error saving module", "error"); }
   };
@@ -389,10 +445,14 @@ function Modules() {
     finally { setShowTaskConfirmModal(false); setTaskToDelete(null); }
   };
 
-  const filteredModules = modules.filter(mod =>
-    mod.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (mod.course_name || mod.course?.name || "").toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Filter modules: by search term AND by course_id from URL
+  let filteredModules = modules.filter(mod => {
+    const matchSearch = mod.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (mod.course_name || mod.course?.name || "").toLowerCase().includes(searchTerm.toLowerCase());
+    const matchCourse = courseIdFromUrl ? (mod.course == courseIdFromUrl) : true;
+    return matchSearch && matchCourse;
+  });
+
   const totalFiltered = filteredModules.length;
   const totalPages = Math.max(1, Math.ceil(totalFiltered / itemsPerPage));
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -421,6 +481,11 @@ function Modules() {
     );
   }
 
+  // Get course name for display if filtered
+  const filteredCourseName = courseIdFromUrl
+    ? courses.find(c => c.id == courseIdFromUrl)?.name
+    : null;
+
   return (
     <div className="min-h-screen w-full bg-gray-50 text-gray-800" style={{ fontFamily: "'DM Sans', 'Geist', system-ui, sans-serif" }}>
       <style>{`
@@ -436,7 +501,6 @@ function Modules() {
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
       
-      {/* Confirm Delete Modals */}
       <ConfirmModuleDeleteModal
         isOpen={showModuleConfirmModal}
         onClose={() => setShowModuleConfirmModal(false)}
@@ -469,7 +533,7 @@ function Modules() {
             <div className="px-6 py-5 space-y-3.5">
               <select value={moduleForm.course} onChange={e => setModuleForm({ ...moduleForm, course: e.target.value })} required className={inputClass}>
                 <option value="">Select Course</option>
-                {courses.results.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {courses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
               <input type="text" placeholder="Module title" value={moduleForm.title} onChange={e => setModuleForm({ ...moduleForm, title: e.target.value })} required className={inputClass} />
               <select value={moduleForm.order} onChange={e => setModuleForm({ ...moduleForm, order: e.target.value })} className={inputClass}>
@@ -494,13 +558,30 @@ function Modules() {
       <TaskModal isOpen={taskModal.isOpen} onClose={() => setTaskModal({ isOpen: false, initialTask: null, dayId: null })} initialTask={taskModal.initialTask} onSave={handleTaskSave} />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
-        {/* Header */}
+        {/* Header with back button if filtered */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-          <div><h1 className="text-2xl font-bold tracking-tight">Modules</h1><p className="text-gray-400 text-sm mt-0.5">{modules.length} total · {filteredModules.length} shown</p></div>
+          <div>
+            <div className="flex items-center gap-3">
+              {courseIdFromUrl && (
+                <button
+                  onClick={() => navigate("/admin/courses")}
+                  className="flex items-center gap-1 text-sm text-emerald-600 hover:text-emerald-700 transition"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                  Back to Courses
+                </button>
+              )}
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight mt-2">Modules</h1>
+            {courseIdFromUrl && filteredCourseName && (
+              <p className="text-gray-500 text-sm mt-1">Showing modules for <span className="font-medium">{filteredCourseName}</span></p>
+            )}
+            <p className="text-gray-400 text-sm mt-0.5">{filteredModules.length} total · {filteredModules.length} shown</p>
+          </div>
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative">
               <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" /></svg>
-              <input type="text" placeholder="Search modules or courses…" value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }} className="w-full sm:w-64 bg-white border border-gray-200 rounded-xl pl-10 pr-9 py-2.5 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 text-sm shadow-sm" />
+              <input type="text" placeholder="Search modules…" value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }} className="w-full sm:w-64 bg-white border border-gray-200 rounded-xl pl-10 pr-9 py-2.5 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 text-sm shadow-sm" />
               {searchTerm && <button onClick={() => setSearchTerm("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm">✕</button>}
             </div>
             <button onClick={openAddModuleModal} className="flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold shadow-md shadow-emerald-500/30 transition-all active:scale-95">+ Add Module</button>
@@ -558,7 +639,7 @@ function Modules() {
   );
 }
 
-// ModuleCard – all identifiers are numbers
+// ModuleCard (unchanged from original)
 function ModuleCard({
   mod, idx, isAdmin,
   expandedModuleId, setExpandedModuleId,
@@ -660,7 +741,6 @@ function ModuleCard({
   );
 }
 
-// DayItem – uses numeric day IDs
 function DayItem({ day, isAdmin, expandedDayId, setExpandedDayId, tasksByDay, openEditDayModal, handleDeleteDayClick, toggleDayCompletion, openAddTaskModal, openEditTaskModal, handleDeleteTaskClick }) {
   const dayIdNum = Number(day.id);
   const isExpanded = expandedDayId === dayIdNum;

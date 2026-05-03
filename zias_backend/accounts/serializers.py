@@ -89,14 +89,32 @@ class ModuleSerializer(serializers.ModelSerializer):
         fields = ['id', 'course', 'course_name', 'title', 'order', 'content', 'is_common', 'is_locked', 'unlock_date']
 
 
+
+# ----------------------------- 
+# STUDENT DOCUMENT SERIALIZER 
+# -----------------------------
+class StudentDocumentSerializer(serializers.ModelSerializer):
+    url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StudentDocument
+        fields = ['id', 'file', 'file_name', 'uploaded_at', 'url']
+
+    def get_url(self, obj):
+        request = self.context.get('request')
+        if request:
+            return request.build_absolute_uri(obj.file.url)
+        return obj.file.url
+    
+
 # ----------------------------
-# STUDENT SERIALIZER – FULLY WORKING (UPDATE INCLUDES COURSE & BATCH)
+# STUDENT SERIALIZER – FULLY WORKING 
 # ----------------------------
 class StudentSerializer(serializers.ModelSerializer):
     username = serializers.CharField(write_only=True, required=False)
     email = serializers.EmailField(write_only=True, required=False)
     mentor_name = serializers.CharField(source='mentor.username', read_only=True)
-    documents = serializers.SerializerMethodField()
+    documents = StudentDocumentSerializer(many=True, read_only=True)
     course = serializers.CharField(required=False, allow_blank=True)
 
     class Meta:
@@ -192,7 +210,7 @@ class StudentSerializer(serializers.ModelSerializer):
         instance.parent_phone = validated_data.get('parent_phone', instance.parent_phone)
         instance.emergency_contact = validated_data.get('emergency_contact', instance.emergency_contact)
         instance.mentor = validated_data.get('mentor', instance.mentor)
-        instance.save()   # <-- this saves everything, including course & batch
+        instance.save()
 
         username = validated_data.get('username')
         email = validated_data.get('email')
@@ -203,9 +221,6 @@ class StudentSerializer(serializers.ModelSerializer):
                 instance.user.email = email
             instance.user.save()
         return instance
-
-    def get_documents(self, obj):
-        return [{'id': doc.id, 'url': doc.file.url, 'description': doc.description} for doc in obj.documents.all()]    
 
 
 # ----------------------------
