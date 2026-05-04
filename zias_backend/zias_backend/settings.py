@@ -44,6 +44,8 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
     'accounts',
+    'django_celery_beat',
+    'django_celery_results',
 ]
 
 MIDDLEWARE = [
@@ -206,4 +208,21 @@ PASSWORD_EXPIRY_DAYS = 3
 
 
 
+# Celery settings
+CELERY_BROKER_URL = 'redis://172.19.64.246:6379/0'
+CELERY_RESULT_BACKEND = 'redis://172.19.64.246:6379/0'
+
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'Asia/Kolkata'
+
+from celery.schedules import crontab
+
+CELERY_BEAT_SCHEDULE = {
+    'review-folder-reminder-monday-9am': {
+        'task': 'accounts.tasks.send_review_folder_reminders',
+        'schedule': crontab(day_of_week=1, hour=9, minute=0),
+    },
+}
 

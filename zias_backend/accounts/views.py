@@ -658,10 +658,6 @@ class CustomLoginView(APIView):
         password = request.data.get('password')
         username = request.data.get('username')
 
-        # If neither email nor username provided, return error
-        if not email and not username:
-            return Response({'error': 'Email or username required'}, status=status.HTTP_400_BAD_REQUEST)
-
         # If email is provided, try to find the user by email
         if email:
             try:
@@ -670,19 +666,16 @@ class CustomLoginView(APIView):
             except User.DoesNotExist:
                 return Response({'error': 'Invalid email or password'}, status=status.HTTP_401_UNAUTHORIZED)
 
-        # Now authenticate with username and password
         if not username:
-            return Response({'error': 'Username not found'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'Email or username required'}, status=status.HTTP_400_BAD_REQUEST)
 
         user = authenticate(username=username, password=password)
         if not user or not user.is_active:
             return Response({'error': 'Invalid credentials or account disabled'}, status=status.HTTP_401_UNAUTHORIZED)
 
-        # Generate tokens
         refresh = RefreshToken.for_user(user)
         access = refresh.access_token
 
-        # Prepare user data
         user_data = {
             'id': user.id,
             'username': user.username,
@@ -694,7 +687,7 @@ class CustomLoginView(APIView):
             'full_name': user.get_full_name() or user.username,
         }
 
-        # If the user is a mentor, attach mentor_id, batch, expertise
+        # Add role-specific extra fields
         if user.is_mentor:
             try:
                 mentor = Mentor.objects.get(user=user)
@@ -704,30 +697,22 @@ class CustomLoginView(APIView):
                 user_data['full_name'] = mentor.full_name or user_data['full_name']
             except Mentor.DoesNotExist:
                 pass
-
-        # If the user is a student, attach student_id, course, batch
-        if user.is_student:
-            try:
-                student = Student.objects.get(user=user)
-                user_data['student_id'] = student.id
-                user_data['course'] = student.course
-                user_data['batch'] = student.batch
-                user_data['full_name'] = student.full_name or user_data['full_name']
-            except Student.DoesNotExist:
-                pass
-
-        # If the user is a reviewer, attach reviewer_id, department
-        if user.is_reviewer:
+        elif user.is_reviewer:
             try:
                 reviewer = Reviewer.objects.get(user=user)
                 user_data['reviewer_id'] = reviewer.id
-                user_data['batch'] = reviewer.batch
                 user_data['department'] = reviewer.department
                 user_data['full_name'] = reviewer.full_name or user_data['full_name']
             except Reviewer.DoesNotExist:
                 pass
-
-        # If the user is admin, nothing extra needed
+        elif user.is_student:
+            try:
+                student = Student.objects.get(user=user)
+                user_data['student_id'] = student.id
+                user_data['batch'] = student.batch
+                user_data['full_name'] = student.full_name or user_data['full_name']
+            except Student.DoesNotExist:
+                pass
 
         return Response({
             'refresh': str(refresh),
