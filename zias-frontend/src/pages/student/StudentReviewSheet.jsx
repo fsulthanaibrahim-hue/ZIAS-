@@ -1,4 +1,4 @@
-// src/pages/student/StudentReviewSheet.jsx
+// src/pages/student/StudentReviewSheet.jsx – read‑only view with all new fields
 import React, { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import API from "../../api/api";
@@ -13,6 +13,38 @@ const cleanTitle = (title) => {
   if (!title) return "";
   const pattern = /^week\s+\d+\s*[–:\-]\s*/i;
   return title.replace(pattern, "").trim();
+};
+
+// Helper to compute total score (0‑35) and star rating from three 0‑5 marks
+const computeTotalAndStars = (extra, english, video) => {
+  const extraNum = Number(extra) || 0;
+  const englishNum = Number(english) || 0;
+  const videoNum = Number(video) || 0;
+  const sum = Math.min(5, Math.max(0, extraNum)) +
+              Math.min(5, Math.max(0, englishNum)) +
+              Math.min(5, Math.max(0, videoNum));
+  const total = Math.round((sum * 35) / 15);
+  const finalTotal = Math.min(35, Math.max(0, total));
+  let stars = 1;
+  if (finalTotal >= 29) stars = 5;
+  else if (finalTotal >= 22) stars = 4;
+  else if (finalTotal >= 15) stars = 3;
+  else if (finalTotal >= 8) stars = 2;
+  else stars = 1;
+  return { total: finalTotal, stars };
+};
+
+// Star rating display (stars)
+const StarDisplay = ({ value }) => {
+  const fullStars = value;
+  const emptyStars = 5 - fullStars;
+  return (
+    <div className="flex gap-1">
+      {[...Array(fullStars)].map((_, i) => <span key={i} className="text-yellow-500 text-lg">★</span>)}
+      {[...Array(emptyStars)].map((_, i) => <span key={i} className="text-gray-300 text-lg">★</span>)}
+      <span className="ml-2 text-xs text-gray-500">({value}/5)</span>
+    </div>
+  );
 };
 
 function StudentReviewSheet() {
@@ -43,8 +75,7 @@ function StudentReviewSheet() {
     fetchUser();
   }, []);
 
-  // For mentors: always use the student_id from URL (if any)
-  // For admin/reviewer: fetch student list only if no student_id in URL
+  // For mentors/admins/reviewers: use student from URL or dropdown
   useEffect(() => {
     const isReviewer = userRole === "admin" || userRole === "mentor" || userRole === "reviewer";
     if (!isReviewer) return;
@@ -54,7 +85,6 @@ function StudentReviewSheet() {
       return;
     }
 
-    // Only admins/reviewers (without specific student) need the dropdown
     if (userRole === "admin" || userRole === "reviewer") {
       const fetchStudents = async () => {
         try {
@@ -69,6 +99,7 @@ function StudentReviewSheet() {
     }
   }, [userRole, studentIdFromUrl]);
 
+  // Fetch weeks and reviews
   useEffect(() => {
     const isReviewer = userRole === "admin" || userRole === "mentor" || userRole === "reviewer";
     if (isReviewer && !selectedStudentId) return;
@@ -110,20 +141,36 @@ function StudentReviewSheet() {
   const isAdminOrReviewer = userRole === "admin" || userRole === "reviewer";
   const showDropdown = isAdminOrReviewer && !studentIdFromUrl && students.length > 0;
 
+  // Define the rows in the order they should appear (matching admin edit page)
   const rows = [
     { label: "Status", field: "task_status" },
     { label: "Project Updates", field: "feedback" },
+    { label: "Review Score (0-20)", field: "review_score" },
     { label: "Reviewer Name", field: "reviewer_name" },
-    { label: "Advisor Name", field: "advisor_name" },
-    { label: "Score [20]", field: "total_score" },
+    { label: "Mentor Name", field: "advisor_name" },
     { label: "Extra Workouts Review", field: "extra_workouts" },
+    { label: "Extra Workouts Mark (0-5)", field: "extra_workouts_mark" },
     { label: "Review Date", field: "review_date" },
+    { label: "Progress Video Link", field: "progress_video" },
+    { label: "Progress Video Mark (0-5)", field: "progress_video_mark" },
+    { label: "English Score (0-5)", field: "english_score" },
     { label: "English Review", field: "english_review" },
   ];
 
   const renderCell = (weekId, row) => {
     const value = reviews[weekId]?.[row.field] ?? "";
+    if (row.field === "progress_video" && value) {
+      return <a href={value} target="_blank" rel="noopener noreferrer" className="text-green-600 underline break-all">Link</a>;
+    }
     return <div className="whitespace-pre-wrap break-words px-2 py-1">{value || "—"}</div>;
+  };
+
+  // For total and star rating, compute on the fly for each week
+  const getWeekComputed = (weekId) => {
+    const extra = reviews[weekId]?.extra_workouts_mark;
+    const english = reviews[weekId]?.english_score;
+    const video = reviews[weekId]?.progress_video_mark;
+    return computeTotalAndStars(extra, english, video);
   };
 
   let dashboardLink = "/student/dashboard";
@@ -209,10 +256,32 @@ function StudentReviewSheet() {
                   <tr key={row.field} className="hover:bg-gray-50/40">
                     <td className="sticky left-0 bg-white px-4 py-3 text-gray-600 text-sm font-medium border-r border-gray-200">{row.label}</td>
                     {weeks.map(week => (
-                      <td key={week.id} className="px-3 py-2 border-l border-gray-200 align-top">{renderCell(week.id, row)}</td>
+                      <td key={week.id} className="px-3 py-2 border-l border-gray-200 align-top">
+                        {renderCell(week.id, row)}
+                      </td>
                     ))}
                   </tr>
                 ))}
+                {/* Total Score row (computed) */}
+                <tr className="hover:bg-gray-50/40">
+                  <td className="sticky left-0 bg-white px-4 py-3 text-gray-600 text-sm font-medium border-r border-gray-200">Total Score (out of 35)</td>
+                  {weeks.map(week => {
+                    const { total } = getWeekComputed(week.id);
+                    return <td key={week.id} className="px-3 py-2 border-l border-gray-200 align-top">
+                      <div className="px-2 py-1">{total}</div>
+                    </td>;
+                  })}
+                </tr>
+                {/* Star Rating row (computed) */}
+                <tr className="hover:bg-gray-50/40">
+                  <td className="sticky left-0 bg-white px-4 py-3 text-gray-600 text-sm font-medium border-r border-gray-200">Star Rating</td>
+                  {weeks.map(week => {
+                    const { stars } = getWeekComputed(week.id);
+                    return <td key={week.id} className="px-3 py-2 border-l border-gray-200 align-top">
+                      <div className="px-2 py-1"><StarDisplay value={stars} /></div>
+                     </td>;
+                  })}
+                </tr>
               </tbody>
             </table>
           </div>

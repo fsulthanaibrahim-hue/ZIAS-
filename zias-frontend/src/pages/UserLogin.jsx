@@ -1,7 +1,7 @@
 // src/pages/UserLogin.jsx
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import API from "../api/api";   // use your configured axios instance
+import API from "../api/api";
 
 function UserLogin() {
   const [email, setEmail] = useState("");
@@ -27,7 +27,6 @@ function UserLogin() {
       localStorage.setItem("refresh_token", refresh);
       localStorage.setItem("user", JSON.stringify(user));
 
-      // Role‑based redirection
       if (user.is_admin) {
         navigate("/admin/dashboard");
       } else if (user.is_student) {
@@ -40,14 +39,20 @@ function UserLogin() {
         navigate("/");
       }
     } catch (err) {
-      console.error(err);
-      if (err.response?.status === 401) {
-        setError("Invalid email or password");
-      } else if (err.response?.status === 400) {
-        setError(err.response.data?.error || "Missing email or password");
-      } else {
-        setError("Unable to connect to the server. Please try again later.");
+      console.error("Login error:", err);
+      let errorMsg = "Unable to connect to the server. Please try again later.";
+      if (err.response) {
+        const { status, data } = err.response;
+        if (status === 401) errorMsg = "Invalid email or password";
+        else if (status === 400) errorMsg = data?.error || data?.message || "Missing email or password";
+        else if (status === 500) {
+          const serverMsg = data?.error || data?.message || data?.detail || JSON.stringify(data);
+          errorMsg = serverMsg ? `Server error: ${serverMsg}` : "Server error (500). Check backend logs.";
+        }
+      } else if (err.request) {
+        errorMsg = "No response from server. Is backend running?";
       }
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }

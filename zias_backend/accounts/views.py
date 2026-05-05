@@ -658,7 +658,6 @@ class CustomLoginView(APIView):
         password = request.data.get('password')
         username = request.data.get('username')
 
-        # If email is provided, try to find the user by email
         if email:
             try:
                 user_obj = User.objects.get(email=email)
@@ -687,16 +686,16 @@ class CustomLoginView(APIView):
             'full_name': user.get_full_name() or user.username,
         }
 
-        # Add role-specific extra fields
         if user.is_mentor:
             try:
                 mentor = Mentor.objects.get(user=user)
                 user_data['mentor_id'] = mentor.id
-                user_data['batch'] = mentor.batch
+                user_data['batch'] = mentor.batch.id if mentor.batch and hasattr(mentor.batch, 'id') else None
                 user_data['expertise'] = mentor.expertise
                 user_data['full_name'] = mentor.full_name or user_data['full_name']
             except Mentor.DoesNotExist:
                 pass
+
         elif user.is_reviewer:
             try:
                 reviewer = Reviewer.objects.get(user=user)
@@ -705,12 +704,13 @@ class CustomLoginView(APIView):
                 user_data['full_name'] = reviewer.full_name or user_data['full_name']
             except Reviewer.DoesNotExist:
                 pass
+
         elif user.is_student:
             try:
                 student = Student.objects.get(user=user)
                 user_data['student_id'] = student.id
-                user_data['batch'] = student.batch
-                user_data['full_name'] = student.full_name or user_data['full_name']
+                user_data['batch'] = student.batch.id if student.batch and hasattr(student.batch, 'id') else None
+                user_data['full_name'] = str(student.full_name) if student.full_name else user_data['full_name']
             except Student.DoesNotExist:
                 pass
 

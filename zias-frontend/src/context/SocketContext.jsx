@@ -1,28 +1,28 @@
-// src/context/SocketContext.jsx
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import io from 'socket.io-client';
-import { useAuth } from './AuthContext';
+// // src/context/SocketContext.jsx
+// import React, { createContext, useContext, useEffect, useState } from 'react';
+// import io from 'socket.io-client';
+// import { useAuth } from './AuthContext';
 
-const SocketContext = createContext();
-export const useSocket = () => useContext(SocketContext);
+// const SocketContext = createContext();
+// export const useSocket = () => useContext(SocketContext);
 
-export const SocketProvider = ({ children }) => {
-  const { user, token } = useAuth();
-  const [socket, setSocket] = useState(null);
+// export const SocketProvider = ({ children }) => {
+//   const { user, token } = useAuth();
+//   const [socket, setSocket] = useState(null);
 
-  useEffect(() => {
-    if (!user || !token) return;
-    const newSocket = io('http://localhost:4000', {   // ✅ changed to 4000
-      query: { token },
-      transports: ['websocket'],
-    });
-    setSocket(newSocket);
-    return () => newSocket.close();
-  }, [user, token]);
+//   useEffect(() => {
+//     if (!user || !token) return;
+//     const newSocket = io('http://localhost:4000', {   // ✅ changed to 4000
+//       query: { token },
+//       transports: ['websocket'],
+//     });
+//     setSocket(newSocket);
+//     return () => newSocket.close();
+//   }, [user, token]);
 
-  return (
-    <SocketContext.Provider value={socket}>
-      {children}
-    </SocketContext.Provider>
-  );
-};
+//   return (
+//     <SocketContext.Provider value={socket}>
+//       {children}
+//     </SocketContext.Provider>
+//   );
+// };

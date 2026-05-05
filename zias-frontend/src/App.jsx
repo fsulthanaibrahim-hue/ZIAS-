@@ -1,4 +1,4 @@
-// src/App.jsx – with safe user parsing
+// src/App.jsx – with safe user parsing and admin ReviewFolders route
 import { useEffect } from "react";
 import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import AdminLogin from "./Admin/Login";
@@ -14,13 +14,13 @@ import ModuleView from "./pages/student/ModuleView";
 import ChangePassword from "./pages/ChangePassword";
 import DashboardLock from "./pages/student/DashboardLock";
 import StudentReviewFolders from "./pages/student/StudentReviewFolders";
-import StudentChat from "./pages/student/StudentChat";
+// import StudentChat from "./pages/student/StudentChat";
 import StudentModules from "./pages/student/StudentModules";
 
 // Reviewer pages
 import ReviewerDashboard from "./pages/reviewer/ReviewerDashboard";
 import ReviewerProfile from "./pages/reviewer/ReviewerProfile";
-import ReviewerChat from "./pages/reviewer/ReviewerChat";
+// import ReviewerChat from "./pages/reviewer/ReviewerChat";
 import ReviewerReviewFolders from "./pages/reviewer/ReviewerReviewFolders";
 import ReviewerReviewSheet from "./pages/reviewer/ReviewerReviewSheet";
 import ReviewerReviewSheetRange from "./pages/reviewer/ReviewerReviewSheetRange";
@@ -34,10 +34,10 @@ import MentorStudents from "./pages/mentor/MentorStudents";
 import MentorModules from "./pages/mentor/MentorModules";
 import MentorReviewEdit from "./pages/mentor/MentorReviewEdit";
 import MentorReviewSheetRange from "./pages/mentor/MentorReviewSheetRange";
-import MentorChat from "./pages/mentor/MentorChat";
+// import MentorChat from "./pages/mentor/MentorChat";
 import MentorNotifications from "./pages/mentor/MentorNotifications";
 import ReviewTracker from "./pages/mentor/ReviewTracker";
-import ReviewFolder from "./pages/mentor/ReviewFolder";
+import MentorReviewFolders from "./pages/mentor/MentorReviewFolders"; // ✅ New component (full edit)
 
 // Admin pages
 import Sidebar from "./components/Sidebar";
@@ -54,6 +54,7 @@ import StudentReviewEdit from "./Admin/StudentReviewEdit";
 import AdminProfile from "./Admin/AdminProfile";
 import NotificationsPage from "./Admin/NotificationsPage";
 import ContactMessageDetail from "./Admin/ContactMessageDetail";
+import ReviewFoldersAdmin from "./Admin/ReviewFoldersAdmin";
 
 // Common pages
 import Navbar from "./components/Navbar";
@@ -147,7 +148,7 @@ function App() {
       <Route path="/student/dashboard-lock" element={<PrivateRoute><DashboardLock /></PrivateRoute>} />
       <Route path="/student/modules" element={<PrivateRoute><StudentModules /></PrivateRoute>} />
       <Route path="/student/review-folders" element={<PrivateRoute><StudentReviewFolders /></PrivateRoute>} />
-      <Route path="/student/chat" element={<PrivateRoute><StudentChat /></PrivateRoute>} />
+      {/* <Route path="/student/chat" element={<PrivateRoute><StudentChat /></PrivateRoute>} /> */}
 
       {/* Generic change password route */}
       <Route path="/change-password" element={<PrivateRoute><ChangePassword /></PrivateRoute>} />
@@ -177,14 +178,7 @@ function App() {
           </div>
         </PrivateRoute>
       } />
-      <Route path="/reviewer/chat" element={
-        <PrivateRoute>
-          <div style={{ display: "flex" }}>
-            <ReviewerSidebar />
-            <ReviewerChat />
-          </div>
-        </PrivateRoute>
-      } />
+      {/* <Route path="/reviewer/chat" element={<PrivateRoute><ReviewerSidebar /><ReviewerChat /></PrivateRoute>} /> */}
       <Route path="/reviewer/profile" element={
         <PrivateRoute>
           <div style={{ display: "flex" }}>
@@ -279,18 +273,11 @@ function App() {
         <PrivateRoute>
           <div style={{ display: "flex" }}>
             <MentorSidebar />
-            <ReviewFolder />
+            <MentorReviewFolders />
           </div>
         </PrivateRoute>
       } />
-      <Route path="/mentor/chat" element={
-        <PrivateRoute>
-          <div style={{ display: "flex" }}>
-            <MentorSidebar />
-            <MentorChat />
-          </div>
-        </PrivateRoute>
-      } />
+      {/* <Route path="/mentor/chat" element={<PrivateRoute><MentorSidebar /><MentorChat /></PrivateRoute>} /> */}
       <Route path="/mentor/notifications" element={
         <PrivateRoute>
           <div style={{ display: "flex" }}>
@@ -314,6 +301,7 @@ function App() {
       <Route path="/admin/profile" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><AdminProfile /></div></AdminRoute>} />
       <Route path="/admin/notifications" element={<AdminRoute><div style={{display: "flex"}}><Sidebar /><NotificationsPage /></div></AdminRoute>} />
       <Route path="/admin/contact-messages/:id" element={<AdminRoute><div style={{display: "flex"}}><Sidebar /><ContactMessageDetail /></div></AdminRoute>} />
+      <Route path="/admin/review-folders" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><ReviewFoldersAdmin /></div></AdminRoute>} />
 
       {/* 404 page */}
       <Route path="*" element={

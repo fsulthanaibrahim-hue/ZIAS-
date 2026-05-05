@@ -1,5 +1,5 @@
-// src/Admin/StudentReviewEdit.jsx – DEBUG VERSION (shows API response in console)
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+// src/Admin/StudentReviewEdit.jsx – total & star calculated directly from marks
+import { useEffect, useState, useRef, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import API from "../api/api";
 
@@ -15,6 +15,22 @@ const cleanTitle = (title) => {
   if (!title) return "";
   const pattern = /^week\s+\d+\s*[–:\-]\s*/i;
   return title.replace(pattern, "").trim();
+};
+
+// Helper to calculate total score (0‑35) and star rating from three 0‑5 marks
+const calculateTotalAndStars = (extra, english, video) => {
+  const sum = Math.min(5, Math.max(0, extra || 0)) +
+             Math.min(5, Math.max(0, english || 0)) +
+             Math.min(5, Math.max(0, video || 0));
+  const total = Math.round((sum * 35) / 15);
+  const finalTotal = Math.min(35, Math.max(0, total));
+  let stars = 1;
+  if (finalTotal >= 29) stars = 5;
+  else if (finalTotal >= 22) stars = 4;
+  else if (finalTotal >= 15) stars = 3;
+  else if (finalTotal >= 8) stars = 2;
+  else stars = 1;
+  return { total: finalTotal, stars };
 };
 
 function StudentReviewEdit() {
@@ -33,7 +49,7 @@ function StudentReviewEdit() {
   const [error, setError] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
   const dataFetched = useRef(false);
-  
+
   const [reviewersList, setReviewersList] = useState([]);
   const [mentorsList, setMentorsList] = useState([]);
 
@@ -51,14 +67,15 @@ function StudentReviewEdit() {
   const generateEnglishReview = (score) => {
     const num = parseFloat(score);
     if (isNaN(num)) return "";
-    if (num >= 18) return "Excellent - Outstanding performance";
-    if (num >= 15) return "Good - Above average";
-    if (num >= 12) return "Satisfactory - Average";
-    if (num >= 8) return "Needs improvement - Below average";
-    if (num >= 0) return "Poor - Requires significant effort";
-    return "";
+    const scaled = num * 4; // 0‑5 → 0‑20
+    if (scaled >= 18) return "Excellent - Outstanding performance";
+    if (scaled >= 15) return "Good - Above average";
+    if (scaled >= 12) return "Satisfactory - Average";
+    if (scaled >= 8) return "Needs improvement - Below average";
+    return "Poor - Requires significant effort";
   };
 
+  // Auto English review (display only)
   useEffect(() => {
     let updated = false;
     const newEdits = { ...editedReviews };
@@ -72,135 +89,77 @@ function StudentReviewEdit() {
         }
       }
     }
-    if (updated) {
-      setEditedReviews(newEdits);
-    }
+    if (updated) setEditedReviews(newEdits);
   }, [editedReviews]);
 
-  // --- DEBUG: fetch reviewers and mentors with full console output ---
+  const StarDisplay = ({ value }) => {
+    const fullStars = value;
+    const emptyStars = 5 - fullStars;
+    return (
+      <div className="flex gap-1">
+        {[...Array(fullStars)].map((_, i) => <span key={i} className="text-yellow-500 text-lg">★</span>)}
+        {[...Array(emptyStars)].map((_, i) => <span key={i} className="text-gray-300 text-lg">★</span>)}
+        <span className="ml-2 text-xs text-gray-500">({value}/5)</span>
+      </div>
+    );
+  };
+
+  // Fetch reviewers and mentors
   useEffect(() => {
     const fetchReviewers = async () => {
       try {
         const res = await API.get("reviewers/");
-        console.log("🔍 REVIEWERS API RESPONSE (full):", JSON.stringify(res.data, null, 2));
         let reviewers = Array.isArray(res.data) ? res.data : (res.data?.results || []);
-        console.log("🔍 REVIEWERS ARRAY:", reviewers);
-        if (reviewers.length === 0) {
-          console.warn("⚠️ No reviewers found in API response");
-        } else {
-          console.log("✅ First reviewer object:", reviewers[0]);
-        }
-        // Try to extract names – adjust field names based on actual response
         const names = reviewers.map(rev => {
-          // Try common fields
           let name = rev.full_name || rev.name || rev.user?.full_name || rev.user?.username || rev.username;
           if (!name) name = `Reviewer #${rev.id}`;
-          if (name && name !== `Reviewer #${rev.id}`) {
-            name = name.charAt(0).toUpperCase() + name.slice(1);
-          }
+          if (name && name !== `Reviewer #${rev.id}`) name = name.charAt(0).toUpperCase() + name.slice(1);
           return `${name} Sir`;
         });
-        setReviewersList([...new Set(names)]);
-        console.log("✅ Extracted reviewer names:", [...new Set(names)]);
-      } catch (err) {
-        console.error("Failed to fetch reviewers", err);
-        setReviewersList([]);
-      }
+        setReviewersList(names.length ? [...new Set(names)] : ["No reviewers available"]);
+      } catch (err) { setReviewersList(["No reviewers available"]); }
     };
-
     const fetchMentors = async () => {
       try {
         const res = await API.get("mentors/");
-        console.log("🔍 MENTORS API RESPONSE (full):", JSON.stringify(res.data, null, 2));
         let mentors = Array.isArray(res.data) ? res.data : (res.data?.results || []);
-        console.log("🔍 MENTORS ARRAY:", mentors);
-        if (mentors.length === 0) {
-          console.warn("⚠️ No mentors found in API response");
-        } else {
-          console.log("✅ First mentor object:", mentors[0]);
-        }
         const names = mentors.map(ment => {
           let name = ment.full_name || ment.name || ment.user?.full_name || ment.user?.username || ment.username;
           if (!name) name = `Mentor #${ment.id}`;
-          if (name && name !== `Mentor #${ment.id}`) {
-            name = name.charAt(0).toUpperCase() + name.slice(1);
-          }
+          if (name && name !== `Mentor #${ment.id}`) name = name.charAt(0).toUpperCase() + name.slice(1);
           return name;
         });
-        setMentorsList([...new Set(names)]);
-        console.log("✅ Extracted mentor names:", [...new Set(names)]);
-      } catch (err) {
-        console.error("Failed to fetch mentors", err);
-        setMentorsList([]);
-      }
+        setMentorsList(names.length ? [...new Set(names)] : ["No mentors available"]);
+      } catch (err) { setMentorsList(["No mentors available"]); }
     };
-
     fetchReviewers();
     fetchMentors();
   }, []);
 
   const rows = useMemo(
     () => [
-      {
-        label: "Status",
-        field: "task_status",
-        type: "select",
-        options: ["Task Completed", "Task Need Improvement", "Task Critical", "Task Not Completed"],
-      },
+      { label: "Status", field: "task_status", type: "select", options: ["Task Completed", "Task Need Improvement", "Task Critical", "Task Not Completed"] },
       { label: "Project Updates", field: "feedback", type: "textarea", rows: 2 },
-      {
-        label: "Reviewer Name",
-        field: "reviewer_name",
-        type: "select",
-        options: reviewersList.length ? reviewersList : ["No reviewers available"],
-      },
-      {
-        label: "Mentor Name",
-        field: "advisor_name",
-        type: "select",
-        options: mentorsList.length ? mentorsList : ["No mentors available"],
-      },
-      {
-        label: "Score [20]",
-        field: "total_score",
-        type: "number",
-        placeholder: "0-20",
-        min: 0,
-        max: 20,
-        step: 1,
-      },
-      {
-        label: "Extra Workouts Review",
-        field: "extra_workouts",
-        type: "select",
-        options: ["Completed", "Need Improvement", "Not Completed"],
-      },
+      { label: "Review Score (0-20)", field: "review_score", type: "number", min: 0, max: 20, step: 1 },
+      { label: "Reviewer Name", field: "reviewer_name", type: "select", options: reviewersList },
+      { label: "Mentor Name", field: "advisor_name", type: "select", options: mentorsList },
+      { label: "Extra Workouts Review", field: "extra_workouts", type: "select", options: ["Completed", "Need Improvement", "Not Completed"] },
+      { label: "Extra Workouts Mark (0-5)", field: "extra_workouts_mark", type: "number", min: 0, max: 5, step: 1 },
       { label: "Review Date", field: "review_date", type: "date" },
-      {
-        label: "English Score [20]",
-        field: "english_score",
-        type: "number",
-        placeholder: "0-20",
-        min: 0,
-        max: 20,
-        step: 1,
-      },
+      { label: "Progress Video Link", field: "progress_video", type: "url" },
+      { label: "Progress Video Mark (0-5)", field: "progress_video_mark", type: "number", min: 0, max: 5, step: 1 },
+      { label: "English Score (0-5)", field: "english_score", type: "number", min: 0, max: 5, step: 1 },
+      // Total and star are NOT stored in state – they are computed on the fly
     ],
     [reviewersList, mentorsList]
   );
 
+  // Fetch student and modules
   useEffect(() => {
-    if (!studentId) {
-      navigate("/admin/review-sheets");
-      return;
-    }
+    if (!studentId) { navigate("/admin/review-sheets"); return; }
     const fetchStudent = async () => {
-      try {
-        const res = await API.get(`students/${studentId}/`);
-        setStudent(res.data);
-      } catch (err) {
-        setError("Failed to load student");
-      }
+      try { const res = await API.get(`students/${studentId}/`); setStudent(res.data); }
+      catch { setError("Failed to load student"); }
     };
     fetchStudent();
   }, [studentId, navigate]);
@@ -212,13 +171,11 @@ function StudentReviewEdit() {
       dataFetched.current = true;
       const fetchData = async () => {
         setLoading(true);
-        setError(null);
         try {
           const modulesRes = await API.get(`modules/student-modules/?student_id=${studentId}`);
           let weeksData = modulesRes.data;
           weeksData.sort((a, b) => extractWeekNumber(a) - extractWeekNumber(b));
           setAllWeeks(weeksData);
-
           const reviewsData = {};
           const editsData = {};
           for (const week of weeksData) {
@@ -226,79 +183,56 @@ function StudentReviewEdit() {
               const reviewRes = await API.get(`week-review/${week.id}/?student_id=${studentId}`);
               reviewsData[week.id] = reviewRes.data;
               editsData[week.id] = { ...reviewRes.data };
-            } catch {
-              reviewsData[week.id] = {};
-              editsData[week.id] = {};
-            }
+            } catch { reviewsData[week.id] = {}; editsData[week.id] = {}; }
           }
           setOriginalReviews(reviewsData);
           setEditedReviews(editsData);
-        } catch (err) {
-          setError("Failed to load review data.");
-        } finally {
-          setLoading(false);
-        }
+        } catch (err) { setError("Failed to load review data."); }
+        finally { setLoading(false); }
       };
       fetchData();
     }
   }, [studentId]);
 
   useEffect(() => {
-    if (allWeeks.length === 0) return;
-    const filtered = allWeeks.filter((week) => {
+    if (!allWeeks.length) return;
+    const filtered = allWeeks.filter(week => {
       const weekNum = extractWeekNumber(week);
       return weekNum >= rangeMin && weekNum <= rangeMax;
     });
     setFilteredWeeks(filtered);
   }, [allWeeks, rangeMin, rangeMax]);
 
-  const handleRangeClick = (range) => {
-    setSearchParams({ student_id: studentId, range });
-  };
-
+  const handleRangeClick = (range) => { setSearchParams({ student_id: studentId, range }); };
+  
   const handleFieldChange = (weekId, field, value) => {
-    setEditedReviews((prev) => ({
+    let processedValue = value;
+    if (typeof value === "string" && (field.includes("mark") || field.includes("score"))) {
+      processedValue = value === "" ? "" : Number(value);
+    }
+    setEditedReviews(prev => ({
       ...prev,
-      [weekId]: { ...prev[weekId], [field]: value },
+      [weekId]: { ...prev[weekId], [field]: processedValue },
     }));
   };
 
   const renderCell = (weekId, row) => {
     let value = editedReviews[weekId]?.[row.field] ?? "";
-    if (row.type === "number" && (value === null || value === undefined || value === "")) {
-      value = "";
-    }
-    if (row.type === "number" && typeof value === "number") {
-      value = value.toString();
-    }
+    if (row.type === "number" && (value === null || value === undefined || value === "")) value = "";
+    if (row.type === "number" && typeof value === "number") value = value.toString();
     const onChange = (val) => handleFieldChange(weekId, row.field, val);
+    const inputClass = "w-full bg-white border border-gray-300 rounded px-2 py-1 text-sm text-gray-800 focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none";
 
     if (row.type === "select") {
       return (
-        <select
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-full bg-white border border-gray-300 rounded px-2 py-1 text-sm text-gray-800 focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none"
-        >
+        <select value={value} onChange={e => onChange(e.target.value)} className={inputClass}>
           <option value="">—</option>
-          {row.options.map((opt) => (
-            <option key={opt} value={opt}>
-              {opt}
-            </option>
-          ))}
+          {row.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
         </select>
       );
     }
     if (row.type === "textarea") {
-      return (
-        <textarea
-          rows={row.rows || 2}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-full bg-white border border-gray-300 rounded px-2 py-1 text-sm text-gray-800 focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none resize-vertical"
-          placeholder={row.placeholder || ""}
-        />
-      );
+      return <textarea rows={row.rows || 2} value={value} onChange={e => onChange(e.target.value)} className={`${inputClass} resize-vertical`} />;
     }
     if (row.type === "number") {
       return (
@@ -309,42 +243,36 @@ function StudentReviewEdit() {
             max={row.max}
             step={row.step}
             value={value}
-            onChange={(e) => onChange(e.target.value)}
-            className="w-full bg-white border border-gray-300 rounded px-2 py-1 text-sm text-gray-800 focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none"
-            placeholder={row.placeholder || ""}
+            onChange={e => {
+              const newVal = e.target.value === "" ? "" : parseFloat(e.target.value);
+              if (newVal !== "" && (newVal < row.min || newVal > row.max)) return;
+              onChange(newVal === "" ? "" : newVal);
+            }}
+            className={inputClass}
           />
           {row.field === "english_score" && editedReviews[weekId]?.english_review && (
-            <div className="mt-1 text-xs text-gray-500">
-              📝 {editedReviews[weekId].english_review}
-            </div>
+            <div className="mt-1 text-xs text-gray-500">📝 {editedReviews[weekId].english_review}</div>
           )}
         </div>
       );
     }
     if (row.type === "date") {
-      return (
-        <input
-          type="date"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-full bg-white border border-gray-300 rounded px-2 py-1 text-sm text-gray-800 focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none"
-        />
-      );
+      return <input type="date" value={value} onChange={e => onChange(e.target.value)} className={inputClass} />;
     }
-    return (
-      <input
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full bg-white border border-gray-300 rounded px-2 py-1 text-sm text-gray-800 focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none"
-        placeholder={row.placeholder || ""}
-      />
-    );
+    if (row.type === "url") {
+      return <input type="url" value={value} onChange={e => onChange(e.target.value)} className={inputClass} placeholder="https://" />;
+    }
+    return <input type="text" value={value} onChange={e => onChange(e.target.value)} className={inputClass} />;
   };
 
   const handleSaveAll = async () => {
     setSaving(true);
     const promises = [];
+    const allowedFields = [
+      "task_status", "feedback", "reviewer_name", "advisor_name",
+      "extra_workouts", "review_date", "english_score",
+      "review_score", "extra_workouts_mark", "progress_video", "progress_video_mark"
+    ];
     for (const week of filteredWeeks) {
       const weekId = week.id;
       const original = originalReviews[weekId] || {};
@@ -352,210 +280,179 @@ function StudentReviewEdit() {
       const changes = {};
       for (const row of rows) {
         const field = row.field;
-        if (original[field] !== edited[field]) {
-          changes[field] = edited[field];
+        if (!allowedFields.includes(field)) continue;
+        let originalValue = original[field];
+        let editedValue = edited[field];
+        if (row.type === "number") {
+          if (editedValue === "" || editedValue === undefined || editedValue === null) editedValue = null;
+          else editedValue = Number(editedValue);
+          if (originalValue === "" || originalValue === undefined || originalValue === null) originalValue = null;
+          else originalValue = Number(originalValue);
+        }
+        if (row.type === "url" && editedValue === null) editedValue = "";
+        if (originalValue !== editedValue) {
+          changes[field] = editedValue;
         }
       }
       if (edited.english_review !== original.english_review) {
         changes.english_review = edited.english_review;
       }
-      if (Object.keys(changes).length > 0) {
+      if (Object.keys(changes).length) {
         promises.push(
           API.patch(`week-review/${weekId}/?student_id=${studentId}`, changes)
+            .catch(err => {
+              console.error(`Error updating week ${weekId}:`, err.response?.data);
+              throw err;
+            })
         );
       }
     }
-    if (promises.length === 0) {
-      showToast("No changes to save", "info");
-      setSaving(false);
-      return;
-    }
+    if (!promises.length) { showToast("No changes to save", "info"); setSaving(false); return; }
     try {
       await Promise.all(promises);
       showToast("All changes saved successfully", "success");
+      // Refresh local state
       const newOriginal = {};
       for (const week of filteredWeeks) {
         const weekId = week.id;
-        newOriginal[weekId] = { ...editedReviews[weekId] };
+        try {
+          const reviewRes = await API.get(`week-review/${weekId}/?student_id=${studentId}`);
+          newOriginal[weekId] = reviewRes.data;
+          setEditedReviews(prev => ({ ...prev, [weekId]: { ...reviewRes.data } }));
+        } catch { newOriginal[weekId] = { ...editedReviews[weekId] }; }
       }
-      setOriginalReviews((prev) => ({ ...prev, ...newOriginal }));
+      setOriginalReviews(prev => ({ ...prev, ...newOriginal }));
     } catch (err) {
       console.error(err);
-      showToast("Failed to save some changes", "error");
+      const errorData = err.response?.data;
+      let errorMsg = "Failed to save changes.";
+      if (errorData && typeof errorData === "object") {
+        const firstKey = Object.keys(errorData)[0];
+        if (firstKey) errorMsg = `${firstKey}: ${errorData[firstKey]}`;
+      } else if (typeof errorData === "string") errorMsg = errorData;
+      showToast(errorMsg, "error");
     } finally {
       setSaving(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="fixed inset-0 bg-gray-50 flex items-center justify-center z-50">
-        <div className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
-  if (error)
-    return (
-      <div className="min-h-screen bg-gray-50 text-red-600 flex items-center justify-center p-8 text-center">
-        {error}
-      </div>
-    );
-  if (!student)
-    return (
-      <div className="min-h-screen bg-gray-50 text-center p-8">Student not found</div>
-    );
+  if (loading) return <div className="fixed inset-0 bg-gray-50 flex items-center justify-center"><div className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin" /></div>;
+  if (error) return <div className="min-h-screen bg-gray-50 text-red-600 flex items-center justify-center">{error}</div>;
+  if (!student) return <div className="min-h-screen bg-gray-50 text-center p-8">Student not found</div>;
+
+  // Helper for mobile card display of total & star
+  const getWeekTotalAndStars = (weekId) => {
+    const extra = editedReviews[weekId]?.extra_workouts_mark || 0;
+    const english = editedReviews[weekId]?.english_score || 0;
+    const video = editedReviews[weekId]?.progress_video_mark || 0;
+    return calculateTotalAndStars(extra, english, video);
+  };
 
   return (
     <div className="min-h-screen w-full bg-gray-50 text-gray-800 font-sans">
-      {toastMessage && (
-        <div className="fixed top-5 right-5 z-50 bg-emerald-500 text-white px-4 py-2 rounded-lg shadow-lg text-sm">
-          {toastMessage.msg}
-        </div>
-      )}
+      {toastMessage && <div className="fixed top-5 right-5 z-50 bg-emerald-500 text-white px-4 py-2 rounded-lg shadow-lg text-sm">{toastMessage.msg}</div>}
       <div className="max-w-full mx-auto px-4 sm:px-6 py-4 sm:py-8">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
             <h1 className="text-xl font-semibold text-gray-800">Edit Review Sheet</h1>
-            <p className="text-gray-500 text-sm mt-1">
-              {student?.full_name || student?.username} • {student?.course} • {student?.batch}
-            </p>
-            <p className="text-gray-400 text-xs mt-1">
-              Showing weeks {rangeMin} – {rangeMax}
-            </p>
+            <p className="text-gray-500 text-sm">{student?.full_name || student?.username} • {student?.course} • {student?.batch}</p>
+            <p className="text-gray-400 text-xs">Showing weeks {rangeMin} – {rangeMax}</p>
           </div>
           <div className="flex gap-2">
-            <button
-              onClick={() => navigate("/admin/review-sheets")}
-              className="bg-gray-200 hover:bg-gray-300 text-gray-700 hover:text-gray-900 px-4 py-2 rounded-lg text-sm font-medium transition"
-            >
-              ← Back
-            </button>
-            <button
-              onClick={handleSaveAll}
-              disabled={saving}
-              className="bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50"
-            >
-              {saving ? "Saving..." : "Save All Changes"}
-            </button>
+            <button onClick={() => navigate("/admin/review-sheets")} className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium">← Back</button>
+            <button onClick={handleSaveAll} disabled={saving} className="bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-lg text-sm font-medium disabled:opacity-50">{saving ? "Saving..." : "Save All Changes"}</button>
           </div>
         </div>
 
         {/* Desktop Table */}
         <div className="hidden md:block overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
           <table className="min-w-full border-collapse">
-            <thead className="bg-gray-50 border-b border-gray-200">
+            <thead className="bg-gray-50 border-b">
               <tr>
-                <th className="sticky left-0 bg-gray-50 z-10 px-4 py-3 text-left text-gray-500 text-xs font-semibold uppercase w-48">
-                  FIELD / WEEK
-                </th>
-                {filteredWeeks.map((week) => (
-                  <th
-                    key={week.id}
-                    className="px-3 py-3 text-left text-gray-800 text-sm font-medium min-w-[200px] border-l border-gray-200"
-                  >
+                <th className="sticky left-0 bg-gray-50 z-10 px-4 py-3 text-left text-gray-500 text-xs font-semibold uppercase w-48">FIELD / WEEK</th>
+                {filteredWeeks.map(week => (
+                  <th key={week.id} className="px-3 py-3 text-left text-gray-800 text-sm font-medium min-w-[200px] border-l border-gray-200">
                     {cleanTitle(week.title)}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-100">
-              {rows.map((row) => (
+              {rows.map(row => (
                 <tr key={row.field} className="hover:bg-gray-50/40">
                   <td className="sticky left-0 bg-white px-4 py-3 text-gray-600 text-sm font-medium border-r border-gray-200">
                     {row.label}
                   </td>
-                  {filteredWeeks.map((week) => (
-                    <td key={week.id} className="px-3 py-2 border-l border-gray-200 align-top">
-                      {renderCell(week.id, row)}
-                    </td>
-                  ))}
+                  {filteredWeeks.map(week => {
+                    // For total and star, we compute on the fly
+                    if (row.field === "extra_workouts_mark" || row.field === "english_score" || row.field === "progress_video_mark") {
+                      return <td key={week.id} className="px-3 py-2 border-l border-gray-200 align-top">{renderCell(week.id, row)}</td>;
+                    } else {
+                      return <td key={week.id} className="px-3 py-2 border-l border-gray-200 align-top">{renderCell(week.id, row)}</td>;
+                    }
+                  })}
                 </tr>
               ))}
+              {/* Extra row for Total Score and Star Rating */}
+              <tr key="total_row" className="hover:bg-gray-50/40">
+                <td className="sticky left-0 bg-white px-4 py-3 text-gray-600 text-sm font-medium border-r border-gray-200">Total Score (out of 35)</td>
+                {filteredWeeks.map(week => {
+                  const { total } = getWeekTotalAndStars(week.id);
+                  return <td key={week.id} className="px-3 py-2 border-l border-gray-200 align-top">
+                    <input type="number" value={total} readOnly className="w-full bg-gray-100 border border-gray-300 rounded px-2 py-1 text-sm cursor-default" />
+                  </td>;
+                })}
+              </tr>
+              <tr key="star_row" className="hover:bg-gray-50/40">
+                <td className="sticky left-0 bg-white px-4 py-3 text-gray-600 text-sm font-medium border-r border-gray-200">Star Rating</td>
+                {filteredWeeks.map(week => {
+                  const { stars } = getWeekTotalAndStars(week.id);
+                  return <td key={week.id} className="px-3 py-2 border-l border-gray-200 align-top"><StarDisplay value={stars} /></td>;
+                })}
+              </tr>
             </tbody>
           </table>
         </div>
 
         {/* Mobile Cards */}
         <div className="md:hidden space-y-6">
-          {filteredWeeks.map((week) => (
-            <div
-              key={week.id}
-              className="bg-white rounded-xl border border-gray-200 shadow-sm p-4"
-            >
-              <h2 className="text-lg font-semibold text-gray-800 mb-3 border-b border-gray-200 pb-2">
-                {cleanTitle(week.title)}
-              </h2>
-              <div className="space-y-3">
-                {rows.map((row) => (
-                  <div key={row.field} className="flex flex-col gap-1">
-                    <label className="text-gray-500 text-xs font-medium uppercase tracking-wide">
-                      {row.label}
-                    </label>
-                    <div>{renderCell(week.id, row)}</div>
+          {filteredWeeks.map(week => {
+            const { total, stars } = getWeekTotalAndStars(week.id);
+            return (
+              <div key={week.id} className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+                <h2 className="text-lg font-semibold text-gray-800 mb-3 border-b pb-2">{cleanTitle(week.title)}</h2>
+                <div className="space-y-3">
+                  {rows.map(row => (
+                    <div key={row.field} className="flex flex-col gap-1">
+                      <label className="text-gray-500 text-xs font-medium uppercase">{row.label}</label>
+                      <div>{renderCell(week.id, row)}</div>
+                    </div>
+                  ))}
+                  <div className="flex flex-col gap-1">
+                    <label className="text-gray-500 text-xs font-medium uppercase">Total Score (out of 35)</label>
+                    <div><input type="number" value={total} readOnly className="w-full bg-gray-100 border border-gray-300 rounded px-2 py-1 text-sm cursor-default" /></div>
                   </div>
-                ))}
+                  <div className="flex flex-col gap-1">
+                    <label className="text-gray-500 text-xs font-medium uppercase">Star Rating</label>
+                    <div><StarDisplay value={stars} /></div>
+                  </div>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
-        {/* Personal Details – clickable ranges */}
         <div className="mt-6 bg-white rounded-xl border border-gray-200 shadow-sm p-4">
           <h3 className="text-sm font-semibold text-gray-800 mb-2">Personal Details</h3>
           <div className="flex flex-wrap gap-4 text-xs text-gray-500">
-            <span
-              onClick={() => handleRangeClick("0-12")}
-              className={`cursor-pointer hover:text-green-600 transition-colors ${
-                rangeParam === "0-12" ? "text-green-600 font-semibold" : ""
-              }`}
-            >
-              Week 0 - 12
-            </span>
-            <span
-              onClick={() => handleRangeClick("13-16")}
-              className={`cursor-pointer hover:text-green-600 transition-colors ${
-                rangeParam === "13-16" ? "text-green-600 font-semibold" : ""
-              }`}
-            >
-              Week 13 - 16
-            </span>
-            <span
-              onClick={() => handleRangeClick("17-24")}
-              className={`cursor-pointer hover:text-green-600 transition-colors ${
-                rangeParam === "17-24" ? "text-green-600 font-semibold" : ""
-              }`}
-            >
-              Week 17 - 24
-            </span>
-            <span
-              onClick={() => handleRangeClick("25-32")}
-              className={`cursor-pointer hover:text-green-600 transition-colors ${
-                rangeParam === "25-32" ? "text-green-600 font-semibold" : ""
-              }`}
-            >
-              Week 25 - 32
-            </span>
-            <span
-              onClick={() => handleRangeClick("33-40")}
-              className={`cursor-pointer hover:text-green-600 transition-colors ${
-                rangeParam === "33-40" ? "text-green-600 font-semibold" : ""
-              }`}
-            >
-              Week 33 - 40
-            </span>
-            <span
-              onClick={() => handleRangeClick("41-44")}
-              className={`cursor-pointer hover:text-green-600 transition-colors ${
-                rangeParam === "41-44" ? "text-green-600 font-semibold" : ""
-              }`}
-            >
-              Week 41 - 44
-            </span>
+            {["0-12","13-16","17-24","25-32","33-40","41-44"].map(range => (
+              <span key={range} onClick={() => handleRangeClick(range)} className={`cursor-pointer hover:text-green-600 ${rangeParam === range ? "text-green-600 font-semibold" : ""}`}>
+                Week {range.replace("-"," - ")}
+              </span>
+            ))}
           </div>
         </div>
-        <div className="mt-4 text-right text-gray-400 text-xs">
-          💡 Edit any cell, then click "Save All Changes" to apply.
-        </div>
+        <div className="mt-4 text-right text-gray-400 text-xs">💡 Marks are 0‑5; total score & star rating update instantly.</div>
       </div>
     </div>
   );

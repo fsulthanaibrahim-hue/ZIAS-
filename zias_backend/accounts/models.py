@@ -220,6 +220,8 @@ class Notification(models.Model):
 class StudentWeekReview(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='week_reviews')
     module = models.ForeignKey(Module, on_delete=models.CASCADE, related_name='student_reviews')
+    
+    # Existing fields
     reviewer_name = models.CharField(max_length=100, blank=True)
     advisor_name = models.CharField(max_length=100, blank=True)
     review_date = models.DateField(null=True, blank=True)
@@ -236,9 +238,18 @@ class StudentWeekReview(models.Model):
         ('Not Completed', 'Not Completed'),
     ])
     english_review = models.TextField(blank=True)
-    english_score = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Score out of 20")
+    english_score = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Score out of 5")  # changed from 20 to 5
+    
+    # New fields (added)
+    review_score = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Review score out of 20")
+    extra_workouts_mark = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Extra workouts mark out of 5")
+    progress_video = models.URLField(max_length=500, blank=True, null=True, help_text="Progress video link")
+    progress_video_mark = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Progress video mark out of 5")
+    
+    # Auto‑calculated fields (kept for reference, but you may not need to store them)
     star_rating = models.PositiveSmallIntegerField(null=True, blank=True, choices=[(i, i) for i in range(1, 6)])
-    total_score = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Total score out of 20")
+    total_score = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Total score out of 35")  # changed to 35
+    
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -247,26 +258,55 @@ class StudentWeekReview(models.Model):
     def generate_english_review(self):
         if self.english_score is None:
             return ""
-        s = self.english_score
-        if s >= 18:
+        # Scale 0‑5 to 0‑20 for wording
+        score = self.english_score * 4
+        if score >= 18:
             return "Excellent English skills. Very fluent and accurate."
-        if s >= 15:
+        if score >= 15:
             return "Good English skills. Minor errors, but well communicated."
-        if s >= 12:
+        if score >= 12:
             return "Average English. Needs improvement in grammar and vocabulary."
-        if s >= 8:
+        if score >= 8:
             return "Below average English. Significant errors, requires practice."
         return "Poor English. Strongly needs basic English training."
 
     def save(self, *args, **kwargs):
+        # Auto‑generate english_review from english_score (0‑5 scaled)
         if self.english_score is not None:
             self.english_review = self.generate_english_review()
+        
+        # Optionally auto‑calculate total_score and star_rating from the three marks
+        extra = self.extra_workouts_mark or 0
+        english = self.english_score or 0
+        video = self.progress_video_mark or 0
+        # Ensure each is 0‑5
+        extra = max(0, min(5, extra))
+        english = max(0, min(5, english))
+        video = max(0, min(5, video))
+        sum_marks = extra + english + video  # max 15
+        # Scale to 35: (sum / 15) * 35 = sum * (35/15) = sum * 2.3333
+        total = round((sum_marks * 35) / 15)
+        self.total_score = max(0, min(35, total))
+        
+        # Star rating based on new total out of 35
+        t = self.total_score
+        if t >= 29:
+            self.star_rating = 5
+        elif t >= 22:
+            self.star_rating = 4
+        elif t >= 15:
+            self.star_rating = 3
+        elif t >= 8:
+            self.star_rating = 2
+        else:
+            self.star_rating = 1
+        
         super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.student.user.username} - {self.module.title}"
-
-
+    
+    
 class WeekUpdate(models.Model):
     week_review = models.ForeignKey(StudentWeekReview, on_delete=models.CASCADE, related_name='updates')
     update_date = models.DateField(auto_now_add=True)
@@ -292,6 +332,8 @@ class ReviewFolder(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     is_done = models.BooleanField(default=False)
+    reviewer_name = models.CharField(max_length=100, blank=True)
+    next_review_date = models.DateField(null=True, blank=True)
     course = models.CharField(max_length=100, blank=True, null=True)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='created_review_folders')
     updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='updated_review_folders')

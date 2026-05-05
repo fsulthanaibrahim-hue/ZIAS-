@@ -1,4 +1,4 @@
-// src/components/Sidebar.jsx
+// src/components/Sidebar.jsx – added Review Folders navigation
 import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import NotificationBell from "./NotificationBell";
@@ -46,6 +46,10 @@ function getIcon(label) {
       return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}><path d="M2 2h12v12H2V2zm1 1v10h10V3H3zm2 2h6v1H5V5zm0 2h6v1H5V7zm0 2h6v1H5V9z" /></svg>;
     case "Batches":
       return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}><path d="M2 2h12v1H2V2zm0 2h12v1H2V4zm0 2h12v1H2V6zm0 2h12v1H2V8zm0 2h12v1H2v-1zm0 2h12v1H2v-1zM2 0h12v1H2V0z" /></svg>;
+    case "Review Folders":
+      return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}>
+        <path d="M2 2h12v12H2V2zm1 1v10h10V3H3zm2 2h6v1H5V5zm0 2h6v1H5V7zm0 2h6v1H5V9zm0 2h4v1H5v-1z" />
+      </svg>;
     case "Profile":
       return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}><path d="M8 8a3 3 0 100-6 3 3 0 000 6zm-2 1a5 5 0 00-5 5h14a5 5 0 00-5-5H6z" /></svg>;
     default:
@@ -80,6 +84,7 @@ function Sidebar() {
     { path: "/admin/courses", label: "Courses" },
     { path: "/admin/modules", label: "Modules" },
     { path: "/admin/batches", label: "Batches" },
+    { path: "/admin/review-folders", label: "Review Folders" },   // ✅ new item
     { path: "/admin/messages", label: "Messages" },
     { path: "/admin/review-sheets", label: "Review Sheets" },
     { path: "/admin/profile", label: "Profile" },
