@@ -290,16 +290,16 @@ class StudentWeekReview(models.Model):
         
         # Star rating based on new total out of 35
         t = self.total_score
-        if t >= 29:
+        if t >= 30:
             self.star_rating = 5
-        elif t >= 22:
+        elif t >= 24:
             self.star_rating = 4
-        elif t >= 15:
+        elif t >= 17:
             self.star_rating = 3
-        elif t >= 8:
+        elif t >= 14:
             self.star_rating = 2
         else:
-            self.star_rating = 1
+            self.star_rating = 1 
         
         super().save(*args, **kwargs)
 

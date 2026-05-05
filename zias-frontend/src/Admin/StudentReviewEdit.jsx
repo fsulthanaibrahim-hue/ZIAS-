@@ -1,4 +1,4 @@
-// src/Admin/StudentReviewEdit.jsx – total & star calculated directly from marks
+// src/Admin/StudentReviewEdit.jsx – total includes review_score (0-20) + three 0-5 marks
 import { useEffect, useState, useRef, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import API from "../api/api";
@@ -17,12 +17,14 @@ const cleanTitle = (title) => {
   return title.replace(pattern, "").trim();
 };
 
-// Helper to calculate total score (0‑35) and star rating from three 0‑5 marks
-const calculateTotalAndStars = (extra, english, video) => {
-  const sum = Math.min(5, Math.max(0, extra || 0)) +
-             Math.min(5, Math.max(0, english || 0)) +
-             Math.min(5, Math.max(0, video || 0));
-  const total = Math.round((sum * 35) / 15);
+// Helper to calculate total score (0‑35) and star rating from:
+// review_score (0-20) + extra_mark (0-5) + english_score (0-5) + video_mark (0-5)
+const calculateTotalAndStars = (reviewScore, extra, english, video) => {
+  const safeReview = Math.min(20, Math.max(0, reviewScore || 0));
+  const safeExtra = Math.min(5, Math.max(0, extra || 0));
+  const safeEnglish = Math.min(5, Math.max(0, english || 0));
+  const safeVideo = Math.min(5, Math.max(0, video || 0));
+  const total = safeReview + safeExtra + safeEnglish + safeVideo; // max 20+5+5+5=35
   const finalTotal = Math.min(35, Math.max(0, total));
   let stars = 1;
   if (finalTotal >= 29) stars = 5;
@@ -67,7 +69,7 @@ function StudentReviewEdit() {
   const generateEnglishReview = (score) => {
     const num = parseFloat(score);
     if (isNaN(num)) return "";
-    const scaled = num * 4; // 0‑5 → 0‑20
+    const scaled = num * 4;
     if (scaled >= 18) return "Excellent - Outstanding performance";
     if (scaled >= 15) return "Good - Above average";
     if (scaled >= 12) return "Satisfactory - Average";
@@ -75,7 +77,7 @@ function StudentReviewEdit() {
     return "Poor - Requires significant effort";
   };
 
-  // Auto English review (display only)
+  // Auto English review
   useEffect(() => {
     let updated = false;
     const newEdits = { ...editedReviews };
@@ -149,7 +151,6 @@ function StudentReviewEdit() {
       { label: "Progress Video Link", field: "progress_video", type: "url" },
       { label: "Progress Video Mark (0-5)", field: "progress_video_mark", type: "number", min: 0, max: 5, step: 1 },
       { label: "English Score (0-5)", field: "english_score", type: "number", min: 0, max: 5, step: 1 },
-      // Total and star are NOT stored in state – they are computed on the fly
     ],
     [reviewersList, mentorsList]
   );
@@ -311,7 +312,6 @@ function StudentReviewEdit() {
     try {
       await Promise.all(promises);
       showToast("All changes saved successfully", "success");
-      // Refresh local state
       const newOriginal = {};
       for (const week of filteredWeeks) {
         const weekId = week.id;
@@ -340,12 +340,13 @@ function StudentReviewEdit() {
   if (error) return <div className="min-h-screen bg-gray-50 text-red-600 flex items-center justify-center">{error}</div>;
   if (!student) return <div className="min-h-screen bg-gray-50 text-center p-8">Student not found</div>;
 
-  // Helper for mobile card display of total & star
+  // Helper for total & star (includes review_score)
   const getWeekTotalAndStars = (weekId) => {
+    const review = editedReviews[weekId]?.review_score || 0;
     const extra = editedReviews[weekId]?.extra_workouts_mark || 0;
     const english = editedReviews[weekId]?.english_score || 0;
     const video = editedReviews[weekId]?.progress_video_mark || 0;
-    return calculateTotalAndStars(extra, english, video);
+    return calculateTotalAndStars(review, extra, english, video);
   };
 
   return (
@@ -383,17 +384,14 @@ function StudentReviewEdit() {
                   <td className="sticky left-0 bg-white px-4 py-3 text-gray-600 text-sm font-medium border-r border-gray-200">
                     {row.label}
                   </td>
-                  {filteredWeeks.map(week => {
-                    // For total and star, we compute on the fly
-                    if (row.field === "extra_workouts_mark" || row.field === "english_score" || row.field === "progress_video_mark") {
-                      return <td key={week.id} className="px-3 py-2 border-l border-gray-200 align-top">{renderCell(week.id, row)}</td>;
-                    } else {
-                      return <td key={week.id} className="px-3 py-2 border-l border-gray-200 align-top">{renderCell(week.id, row)}</td>;
-                    }
-                  })}
+                  {filteredWeeks.map(week => (
+                    <td key={week.id} className="px-3 py-2 border-l border-gray-200 align-top">
+                      {renderCell(week.id, row)}
+                    </td>
+                  ))}
                 </tr>
               ))}
-              {/* Extra row for Total Score and Star Rating */}
+              {/* Total Score row */}
               <tr key="total_row" className="hover:bg-gray-50/40">
                 <td className="sticky left-0 bg-white px-4 py-3 text-gray-600 text-sm font-medium border-r border-gray-200">Total Score (out of 35)</td>
                 {filteredWeeks.map(week => {
@@ -403,6 +401,7 @@ function StudentReviewEdit() {
                   </td>;
                 })}
               </tr>
+              {/* Star Rating row */}
               <tr key="star_row" className="hover:bg-gray-50/40">
                 <td className="sticky left-0 bg-white px-4 py-3 text-gray-600 text-sm font-medium border-r border-gray-200">Star Rating</td>
                 {filteredWeeks.map(week => {
@@ -452,7 +451,7 @@ function StudentReviewEdit() {
             ))}
           </div>
         </div>
-        <div className="mt-4 text-right text-gray-400 text-xs">💡 Marks are 0‑5; total score & star rating update instantly.</div>
+        <div className="mt-4 text-right text-gray-400 text-xs">💡 Total = Review Score (0-20) + three marks (0-5 each) → max 35; star rating updates instantly.</div>
       </div>
     </div>
   );

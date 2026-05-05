@@ -1,3 +1,4 @@
+// src/pages/mentor/MentorReviewFolders.jsx – folder browser, full edit (mentor only)
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../../api/api";
@@ -17,8 +18,7 @@ function MentorReviewFolders() {
   const [selectedWeek, setSelectedWeek] = useState("");
 
   useEffect(() => {
-    if (!user) return;
-    if (!user.is_mentor) {
+    if (user && !user.is_mentor) {
       navigate("/");
       return;
     }
@@ -28,7 +28,7 @@ function MentorReviewFolders() {
   const fetchMentorFolders = async () => {
     setLoading(true);
     try {
-      // 1. Get all students under this mentor
+      // Get all students under this mentor
       const studentsRes = await API.get(`/students/?mentor_id=${user.id}`);
       const studentIds = studentsRes.data.results?.map(s => s.id) || [];
       if (studentIds.length === 0) {
@@ -36,19 +36,18 @@ function MentorReviewFolders() {
         setLoading(false);
         return;
       }
-      // 2. Fetch all review folders for those students
       const query = studentIds.map(id => `student_id=${id}`).join('&');
       const foldersRes = await API.get(`/review-folders/?${query}`);
       setAllFolders(foldersRes.data);
     } catch (err) {
       console.error(err);
-      setError("Failed to load review folders.");
+      setError("Failed to load folders.");
     } finally {
       setLoading(false);
     }
   };
 
-  // Build folder list (same as admin)
+  // Group folders by week_folder
   const foldersMap = allFolders
     .filter(f => f.week_folder)
     .reduce((acc, f) => {
@@ -151,14 +150,13 @@ function MentorReviewFolders() {
 
   const inputClass = "border border-gray-300 rounded px-2 py-1 text-sm w-full";
 
-  if (!user) return <div className="p-8 text-center">Loading user...</div>;
-  if (loading) return <div className="p-8 text-center">Loading folders...</div>;
+  if (loading) return <div className="p-8 text-center">Loading...</div>;
   if (error) return <div className="p-8 text-center text-red-500">{error}</div>;
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen w-full">
       <h1 className="text-2xl font-bold text-gray-800 mb-2">My Students' Review Folders</h1>
-      <p className="text-gray-500 text-sm mb-6">Click a folder to view/edit entries (same as admin).</p>
+      <p className="text-gray-500 text-sm mb-6">Click a folder to view/edit entries.</p>
 
       {!selectedFolder ? (
         // Folder grid view
@@ -189,6 +187,7 @@ function MentorReviewFolders() {
                 </tr>
               ) : (
                 folderList.map((folder) => (
+                  // Click on the whole row – no navigation to home
                   <tr key={folder.name} className="hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedFolder(folder.name)}>
                     <td className="px-4 py-3 text-sm text-blue-600 hover:underline">📁 {folder.name}</td>
                     <td className="px-4 py-3 text-sm text-gray-700">Folder</td>
@@ -202,7 +201,7 @@ function MentorReviewFolders() {
           </table>
         </div>
       ) : (
-        // Entries table view
+        // Entries table view (full editable)
         <div>
           <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
             <button
@@ -314,16 +313,23 @@ function MentorReviewFolders() {
                         )}
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <button
-                          onClick={() => toggleDone(entry.id, !entry.is_done)}
-                          className={`px-3 py-1 rounded-full text-xs font-medium transition cursor-pointer ${
-                            entry.is_done
-                              ? "bg-green-100 text-green-800 hover:bg-green-200"
-                              : "bg-yellow-100 text-yellow-800 hover:bg-yellow-200"
-                          }`}
-                        >
-                          {entry.is_done ? "Completed" : "Pending"}
-                        </button>
+                        {editingId === entry.id ? (
+                          <label className="flex items-center justify-center gap-1 cursor-pointer">
+                            <input type="checkbox" name="is_done" checked={editData.is_done} onChange={handleChange} />
+                            <span className="text-xs">{editData.is_done ? "Completed" : "Pending"}</span>
+                          </label>
+                        ) : (
+                          <button
+                            onClick={() => toggleDone(entry.id, !entry.is_done)}
+                            className={`px-2 py-1 rounded-full text-xs font-medium transition cursor-pointer ${
+                              entry.is_done
+                                ? "bg-green-100 text-green-800 hover:bg-green-200"
+                                : "bg-yellow-100 text-yellow-800 hover:bg-yellow-200"
+                            }`}
+                          >
+                            {entry.is_done ? "Completed" : "Pending"}
+                          </button>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-center">
                         {editingId === entry.id ? (

@@ -1,8 +1,10 @@
-// src/App.jsx – with safe user parsing and admin ReviewFolders route
+// src/App.jsx – with safe user parsing, admin ReviewFolders route, and Toaster for notifications
 import { useEffect } from "react";
 import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
+import { Toaster } from "react-hot-toast";
 import AdminLogin from "./Admin/Login";
 import UserLogin from "./pages/UserLogin";
+
 // Student pages
 import StudentDashboard from "./pages/student/StudentDashboard";
 import StudentProfile from "./pages/student/StudentProfile";
@@ -37,7 +39,7 @@ import MentorReviewSheetRange from "./pages/mentor/MentorReviewSheetRange";
 // import MentorChat from "./pages/mentor/MentorChat";
 import MentorNotifications from "./pages/mentor/MentorNotifications";
 import ReviewTracker from "./pages/mentor/ReviewTracker";
-import MentorReviewFolders from "./pages/mentor/MentorReviewFolders"; // ✅ New component (full edit)
+import MentorReviewFolders from "./pages/mentor/MentorReviewFolders";
 
 // Admin pages
 import Sidebar from "./components/Sidebar";
@@ -64,6 +66,7 @@ import About from "./pages/About";
 import Contact from "./pages/Contact";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
+
 // Sidebars
 import MentorSidebar from "./components/MentorSidebar";
 import ReviewerSidebar from "./components/ReviewerSidebar";
@@ -116,200 +119,202 @@ function App() {
   }, [location.pathname, navigate]);
 
   return (
-    <Routes>
-      {/* Public routes */}
-      <Route path="/" element={<><Navbar /><Home /></>} />
-      <Route path="/courses" element={<><Navbar /><Courses /></>} />
-      <Route path="/about" element={<><Navbar /><About /></>} />
-      <Route path="/contact" element={<><Navbar /><Contact /></>} />
-      <Route path="/login" element={<UserLogin />} />
-      <Route path="/admin/login" element={<AdminLogin />} />
-      <Route path="/forgot-password" element={<ForgotPassword />} />
-      <Route path="/reset-password/:token" element={<ResetPassword />} />
+    <>
+      <Toaster position="top-right" />
+      <Routes>
+        {/* Public routes */}
+        <Route path="/" element={<><Navbar /><Home /></>} />
+        <Route path="/courses" element={<><Navbar /><Courses /></>} />
+        <Route path="/about" element={<><Navbar /><About /></>} />
+        <Route path="/contact" element={<><Navbar /><Contact /></>} />
+        <Route path="/login" element={<UserLogin />} />
+        <Route path="/admin/login" element={<AdminLogin />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password/:token" element={<ResetPassword />} />
 
-      {/* Redirect old /user/* paths to new /student/* */}
-      <Route path="/user/dashboard" element={<Navigate to="/student/dashboard" replace />} />
-      <Route path="/user/profile" element={<Navigate to="/student/profile" replace />} />
-      <Route path="/user/review-sheet" element={<Navigate to="/student/review-sheet" replace />} />
-      <Route path="/user/change-password" element={<Navigate to="/change-password" replace />} />
+        {/* Redirect old /user/* paths to new /student/* */}
+        <Route path="/user/dashboard" element={<Navigate to="/student/dashboard" replace />} />
+        <Route path="/user/profile" element={<Navigate to="/student/profile" replace />} />
+        <Route path="/user/review-sheet" element={<Navigate to="/student/review-sheet" replace />} />
+        <Route path="/user/change-password" element={<Navigate to="/change-password" replace />} />
 
-      {/* Redirect /student/detailed-review to review sheet */}
-      <Route path="/student/detailed-review" element={<Navigate to="/student/review-sheet" replace />} />
+        {/* Redirect /student/detailed-review to review sheet */}
+        <Route path="/student/detailed-review" element={<Navigate to="/student/review-sheet" replace />} />
 
-      {/* Student routes */}
-      <Route path="/student/dashboard" element={<PrivateRoute><StudentDashboard /></PrivateRoute>} />
-      <Route path="/student/profile" element={<PrivateRoute><StudentProfile /></PrivateRoute>} />
-      <Route path="/student/review-sheet" element={<PrivateRoute><StudentReviewSheet /></PrivateRoute>} />
-      <Route path="/student/review-sheet/range/:start/:end" element={<PrivateRoute><StudentReviewSheetRange /></PrivateRoute>} />
-      <Route path="/student/week/:weekId" element={<PrivateRoute><StudentWeekView /></PrivateRoute>} />
-      <Route path="/student/course/:courseId" element={<PrivateRoute><CourseDetail /></PrivateRoute>} />
-      <Route path="/student/module/:moduleId" element={<PrivateRoute><ModuleView /></PrivateRoute>} />
-      <Route path="/student/change-password" element={<PrivateRoute><ChangePassword /></PrivateRoute>} />
-      <Route path="/student/dashboard-lock" element={<PrivateRoute><DashboardLock /></PrivateRoute>} />
-      <Route path="/student/modules" element={<PrivateRoute><StudentModules /></PrivateRoute>} />
-      <Route path="/student/review-folders" element={<PrivateRoute><StudentReviewFolders /></PrivateRoute>} />
-      {/* <Route path="/student/chat" element={<PrivateRoute><StudentChat /></PrivateRoute>} /> */}
+        {/* Student routes */}
+        <Route path="/student/dashboard" element={<PrivateRoute><StudentDashboard /></PrivateRoute>} />
+        <Route path="/student/profile" element={<PrivateRoute><StudentProfile /></PrivateRoute>} />
+        <Route path="/student/review-sheet" element={<PrivateRoute><StudentReviewSheet /></PrivateRoute>} />
+        <Route path="/student/review-sheet/range/:start/:end" element={<PrivateRoute><StudentReviewSheetRange /></PrivateRoute>} />
+        <Route path="/student/week/:weekId" element={<PrivateRoute><StudentWeekView /></PrivateRoute>} />
+        <Route path="/student/course/:courseId" element={<PrivateRoute><CourseDetail /></PrivateRoute>} />
+        <Route path="/student/module/:moduleId" element={<PrivateRoute><ModuleView /></PrivateRoute>} />
+        <Route path="/student/change-password" element={<PrivateRoute><ChangePassword /></PrivateRoute>} />
+        <Route path="/student/dashboard-lock" element={<PrivateRoute><DashboardLock /></PrivateRoute>} />
+        <Route path="/student/modules" element={<PrivateRoute><StudentModules /></PrivateRoute>} />
+        <Route path="/student/review-folders" element={<PrivateRoute><StudentReviewFolders /></PrivateRoute>} />
+        {/* <Route path="/student/chat" element={<PrivateRoute><StudentChat /></PrivateRoute>} /> */}
 
-      {/* Generic change password route */}
-      <Route path="/change-password" element={<PrivateRoute><ChangePassword /></PrivateRoute>} />
+        {/* Generic change password route */}
+        <Route path="/change-password" element={<PrivateRoute><ChangePassword /></PrivateRoute>} />
 
-      {/* Reviewer routes with sidebar */}
-      <Route path="/reviewer/dashboard" element={
-        <PrivateRoute>
-          <div style={{ display: "flex" }}>
-            <ReviewerSidebar />
-            <ReviewerDashboard />
-          </div>
-        </PrivateRoute>
-      } />
-      <Route path="/reviewer/notifications" element={
-        <PrivateRoute>
-          <div style={{ display: "flex" }}>
-            <ReviewerSidebar />
-            <ReviewerNotifications />
-          </div>
-        </PrivateRoute>
-      } />
-      <Route path="/reviewer/review-folders" element={
-        <PrivateRoute>
-          <div style={{ display: "flex" }}>
-            <ReviewerSidebar />
-            <ReviewerReviewFolders />
-          </div>
-        </PrivateRoute>
-      } />
-      {/* <Route path="/reviewer/chat" element={<PrivateRoute><ReviewerSidebar /><ReviewerChat /></PrivateRoute>} /> */}
-      <Route path="/reviewer/profile" element={
-        <PrivateRoute>
-          <div style={{ display: "flex" }}>
-            <ReviewerSidebar />
-            <ReviewerProfile />
-          </div>
-        </PrivateRoute>
-      } />
-      <Route path="/reviewer/review-sheet" element={
-        <PrivateRoute>
-          <div style={{ display: "flex" }}>
-            <ReviewerSidebar />
-            <ReviewerReviewSheet />
-          </div>
-        </PrivateRoute>
-      } />
-      <Route path="/reviewer/review-sheet/range/:start/:end" element={
-        <PrivateRoute>
-          <div style={{ display: "flex" }}>
-            <ReviewerSidebar />
-            <ReviewerReviewSheetRange />
-          </div>
-        </PrivateRoute>
-      } />
-      <Route path="/reviewer/assignments" element={
-        <PrivateRoute>
-          <div style={{ display: "flex" }}>
-            <ReviewerSidebar />
-            <ReviewerAssignments />
-          </div>
-        </PrivateRoute>
-      } />
+        {/* Reviewer routes with sidebar */}
+        <Route path="/reviewer/dashboard" element={
+          <PrivateRoute>
+            <div style={{ display: "flex" }}>
+              <ReviewerSidebar />
+              <ReviewerDashboard />
+            </div>
+          </PrivateRoute>
+        } />
+        <Route path="/reviewer/notifications" element={
+          <PrivateRoute>
+            <div style={{ display: "flex" }}>
+              <ReviewerSidebar />
+              <ReviewerNotifications />
+            </div>
+          </PrivateRoute>
+        } />
+        <Route path="/reviewer/review-folders" element={
+          <PrivateRoute>
+            <div style={{ display: "flex" }}>
+              <ReviewerSidebar />
+              <ReviewerReviewFolders />
+            </div>
+          </PrivateRoute>
+        } />
+        <Route path="/reviewer/profile" element={
+          <PrivateRoute>
+            <div style={{ display: "flex" }}>
+              <ReviewerSidebar />
+              <ReviewerProfile />
+            </div>
+          </PrivateRoute>
+        } />
+        <Route path="/reviewer/review-sheet" element={
+          <PrivateRoute>
+            <div style={{ display: "flex" }}>
+              <ReviewerSidebar />
+              <ReviewerReviewSheet />
+            </div>
+          </PrivateRoute>
+        } />
+        <Route path="/reviewer/review-sheet/range/:start/:end" element={
+          <PrivateRoute>
+            <div style={{ display: "flex" }}>
+              <ReviewerSidebar />
+              <ReviewerReviewSheetRange />
+            </div>
+          </PrivateRoute>
+        } />
+        <Route path="/reviewer/assignments" element={
+          <PrivateRoute>
+            <div style={{ display: "flex" }}>
+              <ReviewerSidebar />
+              <ReviewerAssignments />
+            </div>
+          </PrivateRoute>
+        } />
 
-      {/* Mentor routes with sidebar */}
-      <Route path="/mentor/dashboard" element={
-        <PrivateRoute>
-          <div style={{ display: "flex" }}>
-            <MentorSidebar />
-            <MentorDashboard />
-          </div>
-        </PrivateRoute>
-      } />
-      <Route path="/mentor/students" element={
-        <PrivateRoute>
-          <div style={{ display: "flex" }}>
-            <MentorSidebar />
-            <MentorStudents />
-          </div>
-        </PrivateRoute>
-      } />
-      <Route path="/mentor/modules" element={
-        <PrivateRoute>
-          <div style={{ display: "flex" }}>
-            <MentorSidebar />
-            <MentorModules />
-          </div>
-        </PrivateRoute>
-      } />
-      <Route path="/mentor/profile" element={
-        <PrivateRoute>
-          <div style={{ display: "flex" }}>
-            <MentorSidebar />
-            <MentorProfile />
-          </div>
-        </PrivateRoute>
-      } />
-      <Route path="/mentor/review-sheet" element={
-        <PrivateRoute>
-          <div style={{ display: "flex" }}>
-            <MentorSidebar />
-            <MentorReviewEdit />
-          </div>
-        </PrivateRoute>
-      } />
-      <Route path="/mentor/review-sheet/range/:start/:end" element={
-        <PrivateRoute>
-          <div style={{ display: "flex" }}>
-            <MentorSidebar />
-            <MentorReviewSheetRange />
-          </div>
-        </PrivateRoute>
-      } />
-      <Route path="/mentor/review-tracker" element={
-        <PrivateRoute>
-          <div style={{ display: "flex" }}>
-            <MentorSidebar />
-            <ReviewTracker />
-          </div>
-        </PrivateRoute>
-      } />
-      <Route path="/mentor/review-folders" element={
-        <PrivateRoute>
-          <div style={{ display: "flex" }}>
-            <MentorSidebar />
-            <MentorReviewFolders />
-          </div>
-        </PrivateRoute>
-      } />
-      {/* <Route path="/mentor/chat" element={<PrivateRoute><MentorSidebar /><MentorChat /></PrivateRoute>} /> */}
-      <Route path="/mentor/notifications" element={
-        <PrivateRoute>
-          <div style={{ display: "flex" }}>
-            <MentorSidebar />
-            <MentorNotifications />
-          </div>
-        </PrivateRoute>
-      } />
+        {/* Mentor routes with sidebar */}
+        <Route path="/mentor/dashboard" element={
+          <PrivateRoute>
+            <div style={{ display: "flex" }}>
+              <MentorSidebar />
+              <MentorDashboard />
+            </div>
+          </PrivateRoute>
+        } />
+        <Route path="/mentor/students" element={
+          <PrivateRoute>
+            <div style={{ display: "flex" }}>
+              <MentorSidebar />
+              <MentorStudents />
+            </div>
+          </PrivateRoute>
+        } />
+        <Route path="/mentor/modules" element={
+          <PrivateRoute>
+            <div style={{ display: "flex" }}>
+              <MentorSidebar />
+              <MentorModules />
+            </div>
+          </PrivateRoute>
+        } />
+        <Route path="/mentor/profile" element={
+          <PrivateRoute>
+            <div style={{ display: "flex" }}>
+              <MentorSidebar />
+              <MentorProfile />
+            </div>
+          </PrivateRoute>
+        } />
+        <Route path="/mentor/review-sheet" element={
+          <PrivateRoute>
+            <div style={{ display: "flex" }}>
+              <MentorSidebar />
+              <MentorReviewEdit />
+            </div>
+          </PrivateRoute>
+        } />
+        <Route path="/mentor/review-sheet/range/:start/:end" element={
+          <PrivateRoute>
+            <div style={{ display: "flex" }}>
+              <MentorSidebar />
+              <MentorReviewSheetRange />
+            </div>
+          </PrivateRoute>
+        } />
+        <Route path="/mentor/review-tracker" element={
+          <PrivateRoute>
+            <div style={{ display: "flex" }}>
+              <MentorSidebar />
+              <ReviewTracker />
+            </div>
+          </PrivateRoute>
+        } />
+        <Route path="/mentor/review-folders" element={
+          <PrivateRoute>
+            <div style={{ display: "flex" }}>
+              <MentorSidebar />
+              <MentorReviewFolders />
+            </div>
+          </PrivateRoute>
+        } />
+        {/* <Route path="/mentor/chat" element={<PrivateRoute><MentorSidebar /><MentorChat /></PrivateRoute>} /> */}
+        <Route path="/mentor/notifications" element={
+          <PrivateRoute>
+            <div style={{ display: "flex" }}>
+              <MentorSidebar />
+              <MentorNotifications />
+            </div>
+          </PrivateRoute>
+        } />
 
-      {/* Admin routes */}
-      <Route path="/admin/dashboard" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Dashboard /></div></AdminRoute>} />
-      <Route path="/admin/students" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Students /></div></AdminRoute>} />
-      <Route path="/admin/mentors" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Mentors /></div></AdminRoute>} />
-      <Route path="/admin/reviewers" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Reviewers /></div></AdminRoute>} />
-      <Route path="/admin/courses" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><CoursesAdmin /></div></AdminRoute>} />
-      <Route path="/admin/modules" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><ModulesAdmin /></div></AdminRoute>} />
-      <Route path="/admin/messages" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><ContactMessages /></div></AdminRoute>} />
-      <Route path="/admin/batches" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Batches /></div></AdminRoute>} />
-      <Route path="/admin/review-sheets" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><ReviewSheets /></div></AdminRoute>} />
-      <Route path="/admin/student-review-edit" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><StudentReviewEdit /></div></AdminRoute>} />
-      <Route path="/admin/profile" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><AdminProfile /></div></AdminRoute>} />
-      <Route path="/admin/notifications" element={<AdminRoute><div style={{display: "flex"}}><Sidebar /><NotificationsPage /></div></AdminRoute>} />
-      <Route path="/admin/contact-messages/:id" element={<AdminRoute><div style={{display: "flex"}}><Sidebar /><ContactMessageDetail /></div></AdminRoute>} />
-      <Route path="/admin/review-folders" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><ReviewFoldersAdmin /></div></AdminRoute>} />
+        {/* Admin routes */}
+        <Route path="/admin/dashboard" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Dashboard /></div></AdminRoute>} />
+        <Route path="/admin/students" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Students /></div></AdminRoute>} />
+        <Route path="/admin/mentors" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Mentors /></div></AdminRoute>} />
+        <Route path="/admin/reviewers" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Reviewers /></div></AdminRoute>} />
+        <Route path="/admin/courses" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><CoursesAdmin /></div></AdminRoute>} />
+        <Route path="/admin/modules" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><ModulesAdmin /></div></AdminRoute>} />
+        <Route path="/admin/messages" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><ContactMessages /></div></AdminRoute>} />
+        <Route path="/admin/batches" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Batches /></div></AdminRoute>} />
+        <Route path="/admin/review-sheets" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><ReviewSheets /></div></AdminRoute>} />
+        <Route path="/admin/student-review-edit" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><StudentReviewEdit /></div></AdminRoute>} />
+        <Route path="/admin/profile" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><AdminProfile /></div></AdminRoute>} />
+        <Route path="/admin/notifications" element={<AdminRoute><div style={{display: "flex"}}><Sidebar /><NotificationsPage /></div></AdminRoute>} />
+        <Route path="/admin/contact-messages/:id" element={<AdminRoute><div style={{display: "flex"}}><Sidebar /><ContactMessageDetail /></div></AdminRoute>} />
+        <Route path="/admin/review-folders" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><ReviewFoldersAdmin /></div></AdminRoute>} />
 
-      {/* 404 page */}
-      <Route path="*" element={
-        <div className="min-h-screen bg-[#0d1117] flex items-center justify-center">
-          <h1 className="text-white text-2xl">404 - Page Not Found</h1>
-        </div>
-      } />
-    </Routes>
+        {/* 404 page */}
+        <Route path="*" element={
+          <div className="min-h-screen bg-[#0d1117] flex items-center justify-center">
+            <h1 className="text-white text-2xl">404 - Page Not Found</h1>
+          </div>
+        } />
+      </Routes>
+    </>
   );
 }
 

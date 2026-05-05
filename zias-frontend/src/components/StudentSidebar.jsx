@@ -1,4 +1,4 @@
-// src/components/StudentSidebar.jsx
+// src/components/StudentSidebar.jsx – removed Chat option
 import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import NotificationBell from "./NotificationBell";
@@ -32,8 +32,6 @@ function getIcon(label) {
       return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}><path d="M3 2h10v12H3V2zm1 1v10h8V3H4zm2 2h4v1H6V5zm0 2h4v1H6V7zm0 2h2v1H6V9z" /></svg>;
     case "Modules":
       return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}><path d="M2 2h12v12H2V2zm1 1v10h10V3H3zm2 2h6v1H5V5zm0 2h6v1H5V7zm0 2h6v1H5V9z" /></svg>;
-    case "Chat":
-      return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}><path d="M14.5 2h-13A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h13a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 14.5 2zM1.5 3h13a.5.5 0 0 1 .5.5v.5L8 7.939 1 4v-.5a.5.5 0 0 1 .5-.5zm13 10h-13a.5.5 0 0 1-.5-.5V5.5l6.5 4.5 6.5-4.5v7a.5.5 0 0 1-.5.5z" /></svg>;
     case "Profile":
       return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}><path d="M8 8a3 3 0 100-6 3 3 0 000 6zm-2 1a5 5 0 00-5 5h14a5 5 0 00-5-5H6z" /></svg>;
     default:
@@ -71,12 +69,12 @@ function StudentSidebar() {
     return pathname.startsWith(linkPath);
   };
 
+  // Chat option removed
   const navItems = [
     { path: "/student/dashboard", label: "Dashboard" },
     { path: "/student/review-folders", label: "Review Folders" },
     { path: "/student/review-sheet", label: "Review Sheet" },
-    { path: "/student/modules", label: "Modules" },          // ✅ Added Modules
-    { path: "/student/chat", label: "Chat" },
+    { path: "/student/modules", label: "Modules" },
     { path: "/student/profile", label: "Profile" },
   ];
 
