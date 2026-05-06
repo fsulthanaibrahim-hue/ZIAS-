@@ -1,6 +1,7 @@
 // src/pages/student/ModuleView.jsx
 import React, { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
+import { toast } from "react-hot-toast";
 import StudentSidebar from "../../components/StudentSidebar";
 import API from "../../api/api";
 
@@ -56,19 +57,31 @@ function ModuleView() {
     }
   }, [expandedDayId, tasksByDay]);
 
-  // Toggle day completion (PATCH to backend)
-  const toggleDayCompletion = async (dayId, currentStatus) => {
+  // Helper to get day number (used in toast)
+  const getDayNumber = (day, idx) => {
+    return day.order || idx + 1;
+  };
+
+  // Toggle day completion with simplified toast messages
+  const toggleDayCompletion = async (dayId, currentStatus, dayNumber) => {
+    const newStatus = !currentStatus;
     try {
-      await API.patch(`/days/${dayId}/`, { is_completed: !currentStatus });
+      await API.patch(`/days/${dayId}/`, { is_completed: newStatus });
       // Update local state
       setDays(prevDays =>
         prevDays.map(day =>
-          day.id === dayId ? { ...day, is_completed: !currentStatus } : day
+          day.id === dayId ? { ...day, is_completed: newStatus } : day
         )
       );
+      // Show simple toast message
+      if (newStatus) {
+        toast.success(`Day ${dayNumber} completed`);
+      } else {
+        toast.success(`Day ${dayNumber} marked as incomplete`);
+      }
     } catch (err) {
       console.error("Failed to update day completion", err);
-      alert("Could not update completion status. Please try again.");
+      toast.error("Could not update completion status. Please try again.");
     }
   };
 
@@ -133,18 +146,18 @@ function ModuleView() {
             <div className="space-y-4">
               {days.map((day, idx) => {
                 const isExpanded = expandedDayId === day.id;
-                const dayNumber = day.order || idx + 1;
+                const dayNumber = getDayNumber(day, idx);
                 const displayTitle = cleanTitle(day.title) || "Untitled Day";
                 const tasks = tasksByDay[day.id] || [];
 
                 return (
                   <div key={day.id} className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
                     <div className="flex items-center p-4 gap-3">
-                      {/* Day completion checkbox */}
+                      {/* Day completion checkbox with simplified toast */}
                       <input
                         type="checkbox"
                         checked={day.is_completed || false}
-                        onChange={() => toggleDayCompletion(day.id, day.is_completed)}
+                        onChange={() => toggleDayCompletion(day.id, day.is_completed, dayNumber)}
                         className="w-4 h-4 rounded border-gray-300 cursor-pointer accent-green-600 shrink-0"
                       />
                       {/* Day title – click to expand/collapse */}
@@ -153,7 +166,7 @@ function ModuleView() {
                         onClick={() => setExpandedDayId(isExpanded ? null : day.id)}
                       >
                         <h2 className="text-lg font-semibold text-gray-800">
-                          {displayTitle}
+                           {displayTitle}
                         </h2>
                       </div>
                       {/* Expand/collapse icon */}
@@ -170,7 +183,7 @@ function ModuleView() {
                       </svg>
                     </div>
 
-                    {/* Expanded section – show tasks like admin panel */}
+                    {/* Expanded section – tasks */}
                     {isExpanded && (
                       <div className="border-t border-gray-100 bg-gray-50 p-4">
                         {day.content && (
