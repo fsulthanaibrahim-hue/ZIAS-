@@ -11,12 +11,15 @@ function ModuleView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [expandedDayId, setExpandedDayId] = useState(null);
+  const [tasksByDay, setTasksByDay] = useState({});
 
+  // Helper to extract array from DRF response
   const extractArray = (response) => {
     const data = response.data.results || response.data;
     return Array.isArray(data) ? data : [];
   };
 
+  // Fetch module and days
   useEffect(() => {
     const fetchModuleDetails = async () => {
       try {
@@ -24,9 +27,8 @@ function ModuleView() {
         setModuleData(moduleRes.data);
 
         const daysRes = await API.get(`/days/?module=${moduleId}`);
-        console.log("Raw days response:", daysRes.data); // 👈 check this
-        const daysArray = extractArray(daysRes);
-        console.log("Days extracted:", daysArray);
+        let daysArray = extractArray(daysRes);
+        daysArray.sort((a, b) => (a.order || 0) - (b.order || 0));
         setDays(daysArray);
       } catch (err) {
         console.error(err);
@@ -38,23 +40,42 @@ function ModuleView() {
     fetchModuleDetails();
   }, [moduleId]);
 
-  const fetchTasksForDay = async (dayId) => {
-    if (expandedDayId === dayId) {
-      setExpandedDayId(null);
-      return;
+  // Fetch tasks when a day is expanded
+  useEffect(() => {
+    if (expandedDayId && !tasksByDay[expandedDayId]) {
+      const fetchTasks = async () => {
+        try {
+          const tasksRes = await API.get(`/tasks/?day=${expandedDayId}`);
+          let tasks = extractArray(tasksRes);
+          setTasksByDay(prev => ({ ...prev, [expandedDayId]: tasks }));
+        } catch (err) {
+          console.error(`Failed to load tasks for day ${expandedDayId}`, err);
+        }
+      };
+      fetchTasks();
     }
+  }, [expandedDayId, tasksByDay]);
+
+  // Toggle day completion (PATCH to backend)
+  const toggleDayCompletion = async (dayId, currentStatus) => {
     try {
-      const tasksRes = await API.get(`/tasks/?day=${dayId}`);
-      let tasks = extractArray(tasksRes);
+      await API.patch(`/days/${dayId}/`, { is_completed: !currentStatus });
+      // Update local state
       setDays(prevDays =>
         prevDays.map(day =>
-          day.id === dayId ? { ...day, tasks } : day
+          day.id === dayId ? { ...day, is_completed: !currentStatus } : day
         )
       );
-      setExpandedDayId(dayId);
     } catch (err) {
-      console.error(`Failed to load tasks for day ${dayId}`, err);
+      console.error("Failed to update day completion", err);
+      alert("Could not update completion status. Please try again.");
     }
+  };
+
+  // Clean title helper (remove leading "Day X: " if present)
+  const cleanTitle = (title) => {
+    if (!title) return "";
+    return title.replace(/^Day\s+\d+[\s:–-]+/i, "").trim();
   };
 
   if (loading) {
@@ -62,7 +83,7 @@ function ModuleView() {
       <div className="flex h-screen">
         <StudentSidebar />
         <div className="flex-1 flex items-center justify-center bg-gray-50">
-          <div className="text-gray-500">Loading module...</div>
+          <div className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
         </div>
       </div>
     );
@@ -100,7 +121,7 @@ function ModuleView() {
               ← Back to modules
             </Link>
             <h1 className="text-2xl font-bold text-gray-800">{moduleData.title}</h1>
-            {moduleData.description && <p className="text-gray-600 mt-2">{moduleData.description}</p>}
+            {moduleData.content && <p className="text-gray-600 mt-2">{moduleData.content}</p>}
           </div>
 
           {days.length === 0 ? (
@@ -110,47 +131,78 @@ function ModuleView() {
             </div>
           ) : (
             <div className="space-y-4">
-              {days.map((day) => {
+              {days.map((day, idx) => {
                 const isExpanded = expandedDayId === day.id;
-                const tasks = day.tasks || [];
+                const dayNumber = day.order || idx + 1;
+                const displayTitle = cleanTitle(day.title) || "Untitled Day";
+                const tasks = tasksByDay[day.id] || [];
+
                 return (
                   <div key={day.id} className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-                    <div
-                      className="p-4 cursor-pointer hover:bg-gray-50 transition flex justify-between items-center"
-                      onClick={() => fetchTasksForDay(day.id)}
-                    >
-                      <div>
+                    <div className="flex items-center p-4 gap-3">
+                      {/* Day completion checkbox */}
+                      <input
+                        type="checkbox"
+                        checked={day.is_completed || false}
+                        onChange={() => toggleDayCompletion(day.id, day.is_completed)}
+                        className="w-4 h-4 rounded border-gray-300 cursor-pointer accent-green-600 shrink-0"
+                      />
+                      {/* Day title – click to expand/collapse */}
+                      <div
+                        className="flex-1 cursor-pointer hover:text-green-700 transition-colors"
+                        onClick={() => setExpandedDayId(isExpanded ? null : day.id)}
+                      >
                         <h2 className="text-lg font-semibold text-gray-800">
-                          Day {day.day_number || day.order || day.id}: {day.title || "Untitled Day"}
+                          {displayTitle}
                         </h2>
-                        {day.description && <p className="text-sm text-gray-500 mt-1">{day.description}</p>}
                       </div>
+                      {/* Expand/collapse icon */}
                       <svg
-                        className={`w-5 h-5 text-gray-400 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                        className={`w-5 h-5 text-gray-400 transition-transform duration-200 shrink-0 cursor-pointer ${
+                          isExpanded ? "rotate-180" : ""
+                        }`}
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
+                        onClick={() => setExpandedDayId(isExpanded ? null : day.id)}
                       >
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                       </svg>
                     </div>
+
+                    {/* Expanded section – show tasks like admin panel */}
                     {isExpanded && (
-                      <div className="border-t border-gray-100 p-4">
-                        {tasks.length === 0 ? (
-                          <p className="text-gray-400 text-sm">No tasks for this day.</p>
-                        ) : (
-                          <ul className="space-y-2">
-                            {tasks.map((task) => (
-                              <li key={task.id} className="flex items-start gap-3">
-                                <div className="w-1.5 h-1.5 rounded-full bg-green-500 mt-2" />
-                                <div>
-                                  <p className="text-gray-800 font-medium">{task.title}</p>
-                                  {task.description && <p className="text-sm text-gray-500 mt-0.5">{task.description}</p>}
-                                </div>
-                              </li>
-                            ))}
-                          </ul>
+                      <div className="border-t border-gray-100 bg-gray-50 p-4">
+                        {day.content && (
+                          <div className="mb-3 pb-2 border-b border-gray-200">
+                            <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">
+                              Day Content
+                            </p>
+                            <p className="text-gray-700 text-sm whitespace-pre-wrap">{day.content}</p>
+                          </div>
                         )}
+                        <div>
+                          <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">
+                            Tasks / Topics
+                          </p>
+                          {tasks.length === 0 ? (
+                            <p className="text-gray-400 text-sm py-2 text-center">No tasks for this day.</p>
+                          ) : (
+                            <div className="space-y-2">
+                              {tasks.map((task) => (
+                                <div
+                                  key={task.id}
+                                  className="bg-white rounded-lg border border-gray-200 p-3 hover:shadow-sm transition-shadow"
+                                >
+                                  <p className="text-gray-800 font-medium text-sm">{task.title}</p>
+                                  {task.description && (
+                                    <p className="text-gray-500 text-xs mt-1">{task.description}</p>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>

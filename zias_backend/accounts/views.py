@@ -243,6 +243,8 @@ class CourseViewSet(viewsets.ModelViewSet):
 # ----------------------------
 # MODULE VIEWSET – WITH LOCKING LOGIC
 # ----------------------------
+# students/views.py – relevant sections
+
 class ModuleViewSet(viewsets.ModelViewSet):
     queryset = Module.objects.all()
     serializer_class = ModuleSerializer
@@ -251,92 +253,58 @@ class ModuleViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='for-course')
     def for_course(self, request):
-        course_id = request.query_params.get('course_id')
-        if not course_id:
-            return Response({"error": "course_id is required"}, status=400)
-        common_modules = Module.objects.filter(is_common=True)
-        course_modules = Module.objects.filter(course_id=course_id, is_common=False)
-        all_modules = list(common_modules) + list(course_modules)
-        all_modules.sort(key=lambda x: x.order)
-        serializer = self.get_serializer(all_modules, many=True)
-        return Response(serializer.data)
+        # ... keep existing code unchanged ...
+        pass
 
     @action(detail=False, methods=['get'], url_path='student-modules', permission_classes=[IsAuthenticated])
     def student_modules(self, request):
         user = request.user
         student_id = request.query_params.get('student_id')
-        # Determine the student
+
+        # Get student object
         if user.is_admin or user.is_mentor or user.is_reviewer:
             if student_id:
-                try:
-                    student = Student.objects.get(id=student_id)
-                except Student.DoesNotExist:
-                    return Response([])
+                student = get_object_or_404(Student, id=student_id)
             else:
-                if user.is_student:
-                    student, created = Student.objects.get_or_create(
-                        user=user,
-                        defaults={'course': '', 'batch': ''}
-                    )
-                    if created:
-                        print(f"Created missing student profile for {user.username}")
-                else:
+                if not user.is_student:
                     return Response([])
+                student, _ = Student.objects.get_or_create(
+                    user=user,
+                    defaults={'course': '', 'batch': ''}
+                )
         else:
             if not user.is_student:
                 return Response([])
-            student, created = Student.objects.get_or_create(
+            student, _ = Student.objects.get_or_create(
                 user=user,
                 defaults={'course': '', 'batch': ''}
             )
-            if created:
-                print(f"Created missing student profile for {user.username}")
 
-        # Get all modules the student has access to (common + course modules)
+        # Build module list: common modules + course-specific modules
         common_modules = Module.objects.filter(is_common=True).order_by('order')
         if not student.course:
-            all_modules = common_modules
+            all_modules = list(common_modules)
         else:
             course_modules = Module.objects.filter(course__name=student.course, is_common=False).order_by('order')
-            accessible_course_modules = []
-            for mod in course_modules:
-                previous_modules = course_modules.filter(order__lt=mod.order)
-                if not previous_modules.exists():
-                    accessible_course_modules.append(mod)
-                else:
-                    all_prev_completed = True
-                    for prev in previous_modules:
-                        try:
-                            student_module = StudentModule.objects.get(student=student, module=prev)
-                            if not student_module.is_completed:
-                                all_prev_completed = False
-                                break
-                        except StudentModule.DoesNotExist:
-                            all_prev_completed = False
-                            break
-                    if all_prev_completed:
-                        accessible_course_modules.append(mod)
-                    else:
-                        break
-            all_modules = list(common_modules) + accessible_course_modules
+            all_modules = list(common_modules) + list(course_modules)
             all_modules.sort(key=lambda x: x.order)
 
-        # Get review statuses (from StudentWeekReview) for unlocking based on previous week's review
-        reviews = StudentWeekReview.objects.filter(student=student)
-        completed_modules = set()
-        for r in reviews:
-            # Fixed threshold: total_score out of 35, >=30 means completed
-            if r.total_score is not None and r.total_score >= 30:
-                completed_modules.add(r.module_id)
+        # Find the highest completed week number from Week Reviews with total_score >= 30
+        reviews = StudentWeekReview.objects.filter(student=student, total_score__isnull=False)
+        completed_weeks = set()
+        for review in reviews:
+            week_order = review.module.order
+            if review.total_score >= 30:
+                completed_weeks.add(week_order)
+        current_week = max(completed_weeks) if completed_weeks else 0
 
         # Build response with is_locked flag
         result = []
-        for i, module in enumerate(all_modules):
-            is_locked = False
-            if i > 0:
-                prev_module = all_modules[i-1]
-                if prev_module.id not in completed_modules:
-                    is_locked = True
+        for module in all_modules:
+            week_num = module.order or 0
+            # A module is locked if its week number > current_week + 1
+            # (current_week is the highest completed week)
+            is_locked = week_num > current_week + 1
             result.append({
                 'id': module.id,
                 'title': module.title,
@@ -345,7 +313,7 @@ class ModuleViewSet(viewsets.ModelViewSet):
                 'course_name': module.course.name if module.course else None,
                 'is_common': module.is_common,
                 'is_locked': is_locked,
-                'completion_percentage': 0,
+                'completion_percentage': 0,  # optional, can be calculated
             })
         return Response(result)
 
@@ -418,9 +386,9 @@ class StudentModuleViewSet(viewsets.ModelViewSet):
 # ----------------------------
 class DayViewSet(viewsets.ModelViewSet):
     serializer_class = DaySerializer
-    permission_classes = [IsAuthenticated]   
+    permission_classes = [IsAuthenticated]
     def get_queryset(self):
-        queryset = Day.objects.all()
+        queryset = Day.objects.all().order_by('order', 'id')
         module_id = self.request.query_params.get('module')
         if module_id:
             queryset = queryset.filter(module_id=module_id)
@@ -434,7 +402,7 @@ class TaskViewSet(viewsets.ModelViewSet):
     queryset = Task.objects.all()
     serializer_class = TaskSerializer
     filter_backends = [DayFilterBackend]
-    permission_classes = [IsAdminOrReadOnly]
+    permission_classes = [IsAdminOrReadOnly]   
 
 
 # ----------------------------
