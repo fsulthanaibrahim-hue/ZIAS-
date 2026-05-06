@@ -11,7 +11,8 @@ from rest_framework import serializers
 from .models import (
     User, Student, Mentor, Reviewer, Course, Module, Day, Task, Batch,
     StudentModule, ContactMessage, StudentWeekReview, WeekUpdate, ReviewFolder,
-    ChatRoom, ChatMessage, CourseStatus, Notification, StudentDocument, MentorDocument, ReviewAssignment
+    ChatRoom, ChatMessage, CourseStatus, Notification, StudentDocument, MentorDocument, 
+    ReviewAssignment, WeeklySubmission
 )
 
 
@@ -567,3 +568,14 @@ class ReviewAssignmentSerializer(serializers.ModelSerializer):
             'comments', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class WeeklySubmissionSerializer(serializers.ModelSerializer):
+    submission_type_display = serializers.CharField(source='get_submission_type_display', read_only=True)
+    week_title = serializers.CharField(source='week.title', read_only=True)
+
+    class Meta:
+        model = WeeklySubmission
+        fields = '__all__'
+        read_only_fields = ['student', 'submitted_at', 'reviewed_at']
+

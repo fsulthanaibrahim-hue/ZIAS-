@@ -1,4 +1,3 @@
-// src/App.jsx – with safe user parsing, admin ReviewFolders route, and Toaster for notifications
 import { useEffect } from "react";
 import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
@@ -16,13 +15,11 @@ import ModuleView from "./pages/student/ModuleView";
 import ChangePassword from "./pages/ChangePassword";
 import DashboardLock from "./pages/student/DashboardLock";
 import StudentReviewFolders from "./pages/student/StudentReviewFolders";
-// import StudentChat from "./pages/student/StudentChat";
 import StudentModules from "./pages/student/StudentModules";
 
 // Reviewer pages
 import ReviewerDashboard from "./pages/reviewer/ReviewerDashboard";
 import ReviewerProfile from "./pages/reviewer/ReviewerProfile";
-// import ReviewerChat from "./pages/reviewer/ReviewerChat";
 import ReviewerReviewFolders from "./pages/reviewer/ReviewerReviewFolders";
 import ReviewerReviewSheet from "./pages/reviewer/ReviewerReviewSheet";
 import ReviewerReviewSheetRange from "./pages/reviewer/ReviewerReviewSheetRange";
@@ -36,7 +33,6 @@ import MentorStudents from "./pages/mentor/MentorStudents";
 import MentorModules from "./pages/mentor/MentorModules";
 import MentorReviewEdit from "./pages/mentor/MentorReviewEdit";
 import MentorReviewSheetRange from "./pages/mentor/MentorReviewSheetRange";
-// import MentorChat from "./pages/mentor/MentorChat";
 import MentorNotifications from "./pages/mentor/MentorNotifications";
 import ReviewTracker from "./pages/mentor/ReviewTracker";
 import MentorReviewFolders from "./pages/mentor/MentorReviewFolders";
@@ -153,7 +149,6 @@ function App() {
         <Route path="/student/dashboard-lock" element={<PrivateRoute><DashboardLock /></PrivateRoute>} />
         <Route path="/student/modules" element={<PrivateRoute><StudentModules /></PrivateRoute>} />
         <Route path="/student/review-folders" element={<PrivateRoute><StudentReviewFolders /></PrivateRoute>} />
-        {/* <Route path="/student/chat" element={<PrivateRoute><StudentChat /></PrivateRoute>} /> */}
 
         {/* Generic change password route */}
         <Route path="/change-password" element={<PrivateRoute><ChangePassword /></PrivateRoute>} />
@@ -281,7 +276,6 @@ function App() {
             </div>
           </PrivateRoute>
         } />
-        {/* <Route path="/mentor/chat" element={<PrivateRoute><MentorSidebar /><MentorChat /></PrivateRoute>} /> */}
         <Route path="/mentor/notifications" element={
           <PrivateRoute>
             <div style={{ display: "flex" }}>

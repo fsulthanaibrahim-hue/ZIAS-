@@ -474,4 +474,34 @@ class ReviewAssignment(models.Model):
 
     def __str__(self):
         return f"{self.reviewer.user.username} – {self.student.user.username} ({self.status})"
+
+
+class WeeklySubmission(models.Model):
+    SUBMISSION_TYPES = [
+        ('github', 'GitHub Repository'),
+        ('typing', 'Typing Club Progress'),
+        ('tech_seminar', 'Tech Seminar Video'),
+        ('progress_video', 'Weekly Progress Video'),
+    ]
+
+    student = models.ForeignKey('Student', on_delete=models.CASCADE, related_name='submissions')
+    week = models.ForeignKey('Module', on_delete=models.CASCADE, related_name='submissions')
+    submission_type = models.CharField(max_length=20, choices=SUBMISSION_TYPES)
+    link = models.URLField(max_length=500, blank=True, null=True)
+    notes = models.TextField(blank=True)
+    submitted_at = models.DateTimeField(auto_now_add=True)
+
+    # Mentor review fields
+    reviewed = models.BooleanField(default=False)
+    marks = models.PositiveSmallIntegerField(null=True, blank=True, help_text="0-5")
+    mentor_feedback = models.TextField(blank=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        unique_together = ['student', 'week', 'submission_type']
+        ordering = ['-submitted_at']
+
+    def __str__(self):
+        return f"{self.student.user.username} - Week {self.week.id} - {self.get_submission_type_display()}"
+    
     

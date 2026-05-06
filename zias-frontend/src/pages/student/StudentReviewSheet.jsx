@@ -1,4 +1,4 @@
-// src/pages/student/StudentReviewSheet.jsx – read‑only view with all new fields
+// src/pages/student/StudentReviewSheet.js – auto star rating (0‑5 possible)
 import React, { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import API from "../../api/api";
@@ -15,7 +15,7 @@ const cleanTitle = (title) => {
   return title.replace(pattern, "").trim();
 };
 
-// Helper to compute total score (0‑35) and star rating from three 0‑5 marks
+// Compute total (0‑35) and star rating (0‑5)
 const computeTotalAndStars = (extra, english, video) => {
   const extraNum = Number(extra) || 0;
   const englishNum = Number(english) || 0;
@@ -25,27 +25,40 @@ const computeTotalAndStars = (extra, english, video) => {
               Math.min(5, Math.max(0, videoNum));
   const total = Math.round((sum * 35) / 15);
   const finalTotal = Math.min(35, Math.max(0, total));
-  let stars = 1;
+
+  let stars = 0;
   if (finalTotal >= 29) stars = 5;
   else if (finalTotal >= 22) stars = 4;
   else if (finalTotal >= 15) stars = 3;
   else if (finalTotal >= 8) stars = 2;
-  else stars = 1;
+  else if (finalTotal >= 1) stars = 1;
+  // else stars stays 0
+
   return { total: finalTotal, stars };
 };
 
-// Star rating display (stars)
+// Read‑only star display (0/5 possible)
 const StarDisplay = ({ value }) => {
   const fullStars = value;
   const emptyStars = 5 - fullStars;
   return (
-    <div className="flex gap-1">
-      {[...Array(fullStars)].map((_, i) => <span key={i} className="text-yellow-500 text-lg">★</span>)}
-      {[...Array(emptyStars)].map((_, i) => <span key={i} className="text-gray-300 text-lg">★</span>)}
+    <div className="flex gap-1 items-center">
+      {[...Array(fullStars)].map((_, i) => (
+        <span key={i} className="text-yellow-500 text-lg">★</span>
+      ))}
+      {[...Array(emptyStars)].map((_, i) => (
+        <span key={i + fullStars} className="text-gray-300 text-lg">★</span>
+      ))}
       <span className="ml-2 text-xs text-gray-500">({value}/5)</span>
     </div>
   );
 };
+
+const EditIcon = () => (
+  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+  </svg>
+);
 
 function StudentReviewSheet() {
   const [searchParams] = useSearchParams();
@@ -58,6 +71,9 @@ function StudentReviewSheet() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [userRole, setUserRole] = useState(null);
+  const [editingVideoWeek, setEditingVideoWeek] = useState(null);
+  const [tempVideoUrl, setTempVideoUrl] = useState("");
+  const [savingVideo, setSavingVideo] = useState(false);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -75,31 +91,25 @@ function StudentReviewSheet() {
     fetchUser();
   }, []);
 
-  // For mentors/admins/reviewers: use student from URL or dropdown
   useEffect(() => {
     const isReviewer = userRole === "admin" || userRole === "mentor" || userRole === "reviewer";
     if (!isReviewer) return;
-
     if (studentIdFromUrl) {
       setSelectedStudentId(parseInt(studentIdFromUrl));
       return;
     }
-
     if (userRole === "admin" || userRole === "reviewer") {
       const fetchStudents = async () => {
         try {
           const res = await API.get("students/list/");
           setStudents(res.data);
           if (res.data.length) setSelectedStudentId(res.data[0].id);
-        } catch (err) {
-          console.error(err);
-        }
+        } catch (err) { console.error(err); }
       };
       fetchStudents();
     }
   }, [userRole, studentIdFromUrl]);
 
-  // Fetch weeks and reviews
   useEffect(() => {
     const isReviewer = userRole === "admin" || userRole === "mentor" || userRole === "reviewer";
     if (isReviewer && !selectedStudentId) return;
@@ -137,11 +147,9 @@ function StudentReviewSheet() {
   }, [selectedStudentId, userRole]);
 
   const isStudent = userRole === "student";
-  const isMentor = userRole === "mentor";
   const isAdminOrReviewer = userRole === "admin" || userRole === "reviewer";
   const showDropdown = isAdminOrReviewer && !studentIdFromUrl && students.length > 0;
 
-  // Define the rows in the order they should appear (matching admin edit page)
   const rows = [
     { label: "Status", field: "task_status" },
     { label: "Project Updates", field: "feedback" },
@@ -157,15 +165,86 @@ function StudentReviewSheet() {
     { label: "English Review", field: "english_review" },
   ];
 
+  const saveVideoLink = async (weekId, url) => {
+    setSavingVideo(true);
+    try {
+      let patchUrl = `week-review/${weekId}/`;
+      if (isAdminOrReviewer && selectedStudentId) patchUrl += `?student_id=${selectedStudentId}`;
+      await API.patch(patchUrl, { progress_video: url });
+      setReviews(prev => ({
+        ...prev,
+        [weekId]: { ...prev[weekId], progress_video: url }
+      }));
+      setEditingVideoWeek(null);
+      setTempVideoUrl("");
+    } catch (err) {
+      console.error("Failed to update video link", err);
+      alert("Failed to update video link. Please try again.");
+    } finally {
+      setSavingVideo(false);
+    }
+  };
+
   const renderCell = (weekId, row) => {
     const value = reviews[weekId]?.[row.field] ?? "";
+
+    if (isStudent && row.field === "progress_video") {
+      if (editingVideoWeek === weekId) {
+        return (
+          <div className="px-2 py-1">
+            <input
+              type="url"
+              value={tempVideoUrl}
+              onChange={(e) => setTempVideoUrl(e.target.value)}
+              className="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none"
+              placeholder="https://..."
+              autoFocus
+            />
+            <div className="flex gap-2 mt-1">
+              <button
+                onClick={() => saveVideoLink(weekId, tempVideoUrl)}
+                disabled={savingVideo}
+                className="text-xs bg-green-500 text-white px-2 py-0.5 rounded hover:bg-green-600"
+              >
+                {savingVideo ? "Saving..." : "Save"}
+              </button>
+              <button
+                onClick={() => setEditingVideoWeek(null)}
+                className="text-xs bg-gray-300 text-gray-700 px-2 py-0.5 rounded hover:bg-gray-400"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        );
+      }
+      return (
+        <div className="px-2 py-1 flex items-center justify-between gap-2">
+          {value ? (
+            <a href={value} target="_blank" rel="noopener noreferrer" className="text-green-600 underline truncate">Link</a>
+          ) : (
+            <span className="text-gray-400">—</span>
+          )}
+          <button
+            onClick={() => {
+              setEditingVideoWeek(weekId);
+              setTempVideoUrl(value);
+            }}
+            className="text-gray-500 hover:text-green-600 transition-colors p-1 rounded-full hover:bg-gray-100"
+            title="Edit video link"
+          >
+            <EditIcon />
+          </button>
+        </div>
+      );
+    }
+
     if (row.field === "progress_video" && value) {
       return <a href={value} target="_blank" rel="noopener noreferrer" className="text-green-600 underline break-all">Link</a>;
     }
     return <div className="whitespace-pre-wrap break-words px-2 py-1">{value || "—"}</div>;
   };
 
-  // For total and star rating, compute on the fly for each week
   const getWeekComputed = (weekId) => {
     const extra = reviews[weekId]?.extra_workouts_mark;
     const english = reviews[weekId]?.english_score;
@@ -205,131 +284,131 @@ function StudentReviewSheet() {
     return <div className="flex items-center justify-center min-h-screen bg-gray-50 p-8 text-center text-red-600">{error}</div>;
   }
 
-  // Common content: table and back button
-  const content = (
-    <main className={`${isStudent ? "flex-1" : ""} p-4 sm:p-6 overflow-x-auto`}>
-      <div className="max-w-full mx-auto">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-          <div>
-            <h1 className="text-xl font-semibold text-gray-800 tracking-tight">Student Review Sheet</h1>
-            {selectedStudentId && (students.find(s => s.id === selectedStudentId)?.name || "Student") && (
-              <p className="text-gray-500 text-sm mt-1">
-                {students.find(s => s.id === selectedStudentId)?.name || "Student"}
-              </p>
-            )}
-          </div>
-          <div className="flex gap-3 items-center flex-wrap">
-            {showDropdown && (
-              <select
-                value={selectedStudentId || ""}
-                onChange={(e) => setSelectedStudentId(parseInt(e.target.value))}
-                className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-800 focus:outline-none focus:border-green-500"
-              >
-                {students.map(s => <option key={s.id} value={s.id}>{s.name} ({s.username})</option>)}
-              </select>
-            )}
-            <Link to={dashboardLink} className="bg-gray-200 hover:bg-gray-300 text-gray-700 hover:text-gray-900 px-4 py-2 rounded-lg text-sm font-medium transition">
-              ← Dashboard
-            </Link>
-          </div>
-        </div>
-
-        {weeks.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-xl border border-gray-200 shadow-sm">
-            <p className="text-gray-500">No weeks available for this student.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-sm bg-white">
-            <table className="min-w-full border-collapse">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="sticky left-0 bg-gray-50 z-10 px-4 py-3 text-left text-gray-500 text-xs font-semibold uppercase w-48">FIELD / WEEK</th>
-                  {weeks.map(week => (
-                    <th key={week.id} className="px-3 py-3 text-left text-gray-800 text-sm font-medium min-w-[200px] border-l border-gray-200">
-                      {cleanTitle(week.title)}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-100">
-                {rows.map(row => (
-                  <tr key={row.field} className="hover:bg-gray-50/40">
-                    <td className="sticky left-0 bg-white px-4 py-3 text-gray-600 text-sm font-medium border-r border-gray-200">{row.label}</td>
-                    {weeks.map(week => (
-                      <td key={week.id} className="px-3 py-2 border-l border-gray-200 align-top">
-                        {renderCell(week.id, row)}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-                {/* Total Score row (computed) */}
-                <tr className="hover:bg-gray-50/40">
-                  <td className="sticky left-0 bg-white px-4 py-3 text-gray-600 text-sm font-medium border-r border-gray-200">Total Score (out of 35)</td>
-                  {weeks.map(week => {
-                    const { total } = getWeekComputed(week.id);
-                    return <td key={week.id} className="px-3 py-2 border-l border-gray-200 align-top">
-                      <div className="px-2 py-1">{total}</div>
-                    </td>;
-                  })}
-                </tr>
-                {/* Star Rating row (computed) */}
-                <tr className="hover:bg-gray-50/40">
-                  <td className="sticky left-0 bg-white px-4 py-3 text-gray-600 text-sm font-medium border-r border-gray-200">Star Rating</td>
-                  {weeks.map(week => {
-                    const { stars } = getWeekComputed(week.id);
-                    return <td key={week.id} className="px-3 py-2 border-l border-gray-200 align-top">
-                      <div className="px-2 py-1"><StarDisplay value={stars} /></div>
-                     </td>;
-                  })}
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* ONLY for students – personal details, range links, tip */}
-        {isStudent && (
-          <>
-            <div className="mt-6 bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-              <h3 className="text-sm font-semibold text-gray-800 mb-2">Personal Details</h3>
-              <div className="flex flex-wrap gap-4 text-xs">
-                {[
-                  { label: "Week 0 - 12", start: 1, end: 12 },
-                  { label: "Week 13 - 16", start: 13, end: 16 },
-                  { label: "Week 17 - 24", start: 17, end: 24 },
-                  { label: "Week 25 - 32", start: 25, end: 32 },
-                  { label: "Week 33 - 40", start: 33, end: 40 },
-                  { label: "Week 41 - 44", start: 41, end: 44 },
-                ].map((range) => (
-                  <Link
-                    key={range.label}
-                    to={`/student/review-sheet/range/${range.start}/${range.end}`}
-                    className="text-gray-500 hover:text-green-600 transition"
-                  >
-                    {range.label}
-                  </Link>
-                ))}
-              </div>
-            </div>
-            <div className="mt-4 text-right text-gray-400 text-xs">
-              💡 Your weekly progress report.
-              {weeks.length < 44 && (
-                <div className="mt-1 text-amber-600">⚠️ Only {weeks.length} weeks available. Please create weeks 1‑44 in the admin panel.</div>
-              )}
-            </div>
-          </>
-        )}
-      </div>
-    </main>
-  );
-
-  return isStudent ? (
+  return (
     <div className="flex min-h-screen bg-gray-50">
       <StudentSidebar />
-      {content}
+      <main className="flex-1 p-4 sm:p-6 overflow-x-auto">
+        <div className="max-w-full mx-auto">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+            <div>
+              <h1 className="text-xl font-semibold text-gray-800 tracking-tight">Student Review Sheet</h1>
+              {selectedStudentId && (students.find(s => s.id === selectedStudentId)?.name || "Student") && (
+                <p className="text-gray-500 text-sm mt-1">
+                  {students.find(s => s.id === selectedStudentId)?.name || "Student"}
+                </p>
+              )}
+            </div>
+            <div className="flex gap-3 items-center flex-wrap">
+              {showDropdown && (
+                <select
+                  value={selectedStudentId || ""}
+                  onChange={(e) => setSelectedStudentId(parseInt(e.target.value))}
+                  className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-800 focus:outline-none focus:border-green-500"
+                >
+                  {students.map(s => <option key={s.id} value={s.id}>{s.name} ({s.username})</option>)}
+                </select>
+              )}
+              <Link to={dashboardLink} className="bg-gray-200 hover:bg-gray-300 text-gray-700 hover:text-gray-900 px-4 py-2 rounded-lg text-sm font-medium transition">
+                ← Dashboard
+              </Link>
+            </div>
+          </div>
+
+          {weeks.length === 0 ? (
+            <div className="text-center py-12 bg-white rounded-xl border border-gray-200 shadow-sm">
+              <p className="text-gray-500">No weeks available for this student.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-sm bg-white">
+              <table className="min-w-full border-collapse">
+                <thead className="bg-gray-50 border-b">
+                  <tr>
+                    <th className="sticky left-0 bg-gray-50 z-10 px-4 py-3 text-left text-gray-500 text-xs font-semibold uppercase w-48">FIELD / WEEK</th>
+                    {weeks.map(week => (
+                      <th key={week.id} className="px-3 py-3 text-left text-gray-800 text-sm font-medium min-w-[200px] border-l border-gray-200">
+                        {cleanTitle(week.title)}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-100">
+                  {rows.map(row => (
+                    <tr key={row.field} className="hover:bg-gray-50/40">
+                      <td className="sticky left-0 bg-white px-4 py-3 text-gray-600 text-sm font-medium border-r border-gray-200">{row.label}</td>
+                      {weeks.map(week => (
+                        <td key={week.id} className="px-3 py-2 border-l border-gray-200 align-top">
+                          {renderCell(week.id, row)}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+
+                  {/* Total Score row */}
+                  <tr className="hover:bg-gray-50/40">
+                    <td className="sticky left-0 bg-white px-4 py-3 text-gray-600 text-sm font-medium border-r border-gray-200">Total Score (out of 35)</td>
+                    {weeks.map(week => {
+                      const { total } = getWeekComputed(week.id);
+                      return (
+                        <td key={week.id} className="px-3 py-2 border-l border-gray-200 align-top">
+                          <div className="px-2 py-1">{total}</div>
+                        </td>
+                      );
+                    })}
+                  </tr>
+
+                  {/* Star Rating row – auto‑computed, read‑only, supports 0/5 */}
+                  <tr className="hover:bg-gray-50/40">
+                    <td className="sticky left-0 bg-white px-4 py-3 text-gray-600 text-sm font-medium border-r border-gray-200">Star Rating</td>
+                    {weeks.map(week => {
+                      const { stars } = getWeekComputed(week.id);
+                      return (
+                        <td key={week.id} className="px-3 py-2 border-l border-gray-200 align-top">
+                          <div className="px-2 py-1">
+                            <StarDisplay value={stars} />
+                          </div>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {isStudent && (
+            <>
+              <div className="mt-6 bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+                <h3 className="text-sm font-semibold text-gray-800 mb-2">Personal Details</h3>
+                <div className="flex flex-wrap gap-4 text-xs">
+                  {[
+                    { label: "Week 0 - 12", start: 1, end: 12 },
+                    { label: "Week 13 - 16", start: 13, end: 16 },
+                    { label: "Week 17 - 24", start: 17, end: 24 },
+                    { label: "Week 25 - 32", start: 25, end: 32 },
+                    { label: "Week 33 - 40", start: 33, end: 40 },
+                    { label: "Week 41 - 44", start: 41, end: 44 },
+                  ].map((range) => (
+                    <Link
+                      key={range.label}
+                      to={`/student/review-sheet/range/${range.start}/${range.end}`}
+                      className="text-gray-500 hover:text-green-600 transition"
+                    >
+                      {range.label}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+              <div className="mt-4 text-right text-gray-400 text-xs">
+                💡 Your weekly progress report. Click the edit icon next to the video link to update it.
+                {weeks.length < 44 && (
+                  <div className="mt-1 text-amber-600">⚠️ Only {weeks.length} weeks available. Please create weeks 1‑44 in the admin panel.</div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </main>
     </div>
-  ) : (
-    <div className="min-h-screen bg-gray-50">{content}</div>
   );
 }
 

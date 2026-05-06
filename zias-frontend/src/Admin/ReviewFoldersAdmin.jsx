@@ -1,11 +1,10 @@
-// src/Admin/ReviewFoldersAdmin.jsx
+// src/Admin/ReviewFoldersAdmin.jsx – final, crash‑proof version
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../api/api";
 import { useAuth } from "../context/AuthContext";
 
-// 🔧 Change this to your default review sheet URL if needed
-const DEFAULT_REVIEW_SHEET_URL = ""; // e.g., "https://docs.google.com/..."
+const DEFAULT_REVIEW_SHEET_URL = "";
 
 function Toast({ message, type, onClose }) {
   useEffect(() => {
@@ -29,6 +28,30 @@ function Toast({ message, type, onClose }) {
   );
 }
 
+// Inline error boundary component
+class SafeTable extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, errorInfo: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, errorInfo: error?.message || "Unknown error" };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error("Table render error:", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-8 text-center text-red-600 bg-white rounded-xl border border-gray-200">
+          ⚠️ Failed to render entries. Check console for details.
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function ReviewFoldersAdmin() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -43,6 +66,8 @@ function ReviewFoldersAdmin() {
   const [students, setStudents] = useState([]);
   const [studentMap, setStudentMap] = useState(new Map());
   const [studentCourseMap, setStudentCourseMap] = useState(new Map());
+  const [mentorsList, setMentorsList] = useState([]);
+  const [selectedMentorId, setSelectedMentorId] = useState("");
   const [selectedFolder, setSelectedFolder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -62,6 +87,7 @@ function ReviewFoldersAdmin() {
   });
   const [errorLogs, setErrorLogs] = useState([]);
   const errorLogsRef = useRef([]);
+  const hasFetched = useRef(false);
 
   const addErrorLog = (error, context = {}) => {
     const logEntry = {
@@ -89,7 +115,6 @@ function ReviewFoldersAdmin() {
     showToast("Logs downloaded", "success");
   };
 
-  const hasFetched = useRef(false);
   const showToast = (message, type = "success") => setToast({ message, type });
   const hideToast = () => setToast(null);
 
@@ -98,9 +123,7 @@ function ReviewFoldersAdmin() {
       const modulesRes = await API.get(`/modules/student-modules/?student_id=${studentId}`);
       const modules = modulesRes.data.results || modulesRes.data;
       const theModule = modules.find(m => m.order === weekNumber);
-      if (theModule && theModule.work_document_url) {
-        return theModule.work_document_url;
-      }
+      if (theModule && theModule.work_document_url) return theModule.work_document_url;
       if (theModule && theModule.content) {
         const urlMatch = theModule.content.match(/https?:\/\/[^\s]+/);
         if (urlMatch) return urlMatch[0];
@@ -112,17 +135,13 @@ function ReviewFoldersAdmin() {
     }
   };
 
-  // ✅ NEW: Get a default review sheet for a student from their module (if exists)
   const getDefaultReviewSheetFromModule = async (studentId, weekNumber) => {
     try {
       const modulesRes = await API.get(`/modules/student-modules/?student_id=${studentId}`);
       const modules = modulesRes.data.results || modulesRes.data;
       const theModule = modules.find(m => m.order === weekNumber);
-      if (theModule && theModule.review_sheet_template) {
-        return theModule.review_sheet_template;
-      }
-      return "";
-    } catch (err) {
+      return theModule?.review_sheet_template || "";
+    } catch {
       return "";
     }
   };
@@ -134,6 +153,7 @@ function ReviewFoldersAdmin() {
         ...s,
         displayName: s.full_name || s.name || s.username || `Student ${s.id}`,
         currentCourse: s.course_name || s.course || s.program || "—",
+        mentor_id: s.mentor?.id || s.mentor_id || null,
       }));
       setStudents(studentsList);
       const nameMap = new Map();
@@ -147,6 +167,15 @@ function ReviewFoldersAdmin() {
     } catch (err) {
       addErrorLog(err, { api: "/students/" });
       showToast("Failed to load students", "error");
+    }
+  };
+
+  const fetchMentors = async () => {
+    try {
+      const res = await API.get("/mentors/");
+      setMentorsList(res.data.results || res.data);
+    } catch (err) {
+      addErrorLog(err, { api: "/mentors/" });
     }
   };
 
@@ -166,9 +195,13 @@ function ReviewFoldersAdmin() {
   useEffect(() => {
     if (!hasFetched.current) {
       hasFetched.current = true;
-      fetchStudents().then(() => fetchAllFolders());
+      Promise.all([fetchStudents(), fetchMentors(), fetchAllFolders()]);
     }
   }, []);
+
+  const filteredStudentsForBulk = selectedMentorId
+    ? students.filter(s => s.mentor_id == selectedMentorId)
+    : students;
 
   const foldersMap = allFolders
     .filter(f => f.week_folder)
@@ -193,7 +226,9 @@ function ReviewFoldersAdmin() {
     .filter(folder => folder.name.toLowerCase().includes(folderSearchTerm.toLowerCase()))
     .sort((a, b) => new Date(b.modified) - new Date(a.modified));
 
-  const rawEntries = selectedFolder ? foldersMap[selectedFolder]?.entries || [] : [];
+  // Safe access to entries
+  const safeEntries = selectedFolder && foldersMap[selectedFolder] ? foldersMap[selectedFolder].entries : [];
+  const rawEntries = safeEntries;
   const filteredEntries = rawEntries.filter(entry => {
     if (!searchTerm && !selectedWeek) return true;
     const matchesSearch = !searchTerm
@@ -203,6 +238,7 @@ function ReviewFoldersAdmin() {
     return matchesSearch && matchesWeek;
   });
 
+  // ----- Handlers (unchanged, kept from your code) -----
   const handleCreateChange = (e) => {
     const { name, value } = e.target;
     setCreateForm(prev => ({ ...prev, [name]: value }));
@@ -218,7 +254,7 @@ function ReviewFoldersAdmin() {
   };
 
   const selectAllStudents = () => {
-    const allIds = students.map(s => s.id);
+    const allIds = filteredStudentsForBulk.map(s => s.id);
     setCreateForm(prev => ({ ...prev, students: allIds }));
   };
 
@@ -243,27 +279,15 @@ function ReviewFoldersAdmin() {
         maxWeek = parseInt(latest.week,10);
         previousReviewSheet = latest.review_sheet || "";
         previousCourse = latest.course || "";
-        if (previousCourse && previousCourse !== currentCourse) {
-          courseChanged = true;
-        }
+        if (previousCourse && previousCourse !== currentCourse) courseChanged = true;
       }
       let newWeek = courseChanged ? 1 : maxWeek + 1;
       const workDocUrl = await getWorkDocForWeek(studentId, newWeek);
-      
-      // ✅ GUARANTEE review sheet: if previousReviewSheet is empty, try module default, then global default
       let reviewSheetValue = previousReviewSheet;
       if (!reviewSheetValue) {
         const moduleDefault = await getDefaultReviewSheetFromModule(studentId, newWeek);
         reviewSheetValue = moduleDefault || DEFAULT_REVIEW_SHEET_URL;
-        if (reviewSheetValue) {
-          console.log(`📄 Using default review sheet for student ${studentId} (no previous): ${reviewSheetValue}`);
-        } else {
-          console.warn(`⚠️ No review sheet found for student ${studentId}`);
-        }
-      } else {
-        console.log(`📄 Using previous review sheet for student ${studentId}: ${reviewSheetValue}`);
       }
-      
       await API.post("/review-folders/", {
         student: studentId,
         week_folder: createForm.week_folder,
@@ -315,27 +339,15 @@ function ReviewFoldersAdmin() {
             maxWeek = parseInt(latest.week,10);
             previousReviewSheet = latest.review_sheet || "";
             previousCourse = latest.course || "";
-            if (previousCourse && previousCourse !== currentCourse) {
-              courseChanged = true;
-            }
+            if (previousCourse && previousCourse !== currentCourse) courseChanged = true;
           }
           let newWeek = courseChanged ? 1 : maxWeek + 1;
           const workDocUrl = await getWorkDocForWeek(studentId, newWeek);
-          
-          // ✅ GUARANTEE review sheet: fallback chain
           let reviewSheetValue = previousReviewSheet;
           if (!reviewSheetValue) {
             const moduleDefault = await getDefaultReviewSheetFromModule(studentId, newWeek);
             reviewSheetValue = moduleDefault || DEFAULT_REVIEW_SHEET_URL;
-            if (reviewSheetValue) {
-              console.log(`📄 Using default review sheet for student ${studentId} (no previous): ${reviewSheetValue}`);
-            } else {
-              console.warn(`⚠️ No review sheet found for student ${studentId}`);
-            }
-          } else {
-            console.log(`📄 Using previous review sheet for student ${studentId}: ${reviewSheetValue}`);
           }
-          
           await API.post("/review-folders/", {
             student: studentId,
             week_folder: createForm.week_folder,
@@ -369,10 +381,7 @@ function ReviewFoldersAdmin() {
 
   const handleEditChange = (e) => {
     const { name, value } = e.target;
-    setEditData(prev => ({
-      ...prev,
-      [name]: value === "" ? null : value,
-    }));
+    setEditData(prev => ({ ...prev, [name]: value === "" ? null : value }));
   };
 
   const startEdit = (entry) => {
@@ -554,6 +563,29 @@ function ReviewFoldersAdmin() {
     return <span className="text-gray-700 break-all">{url}</span>;
   };
 
+  const handleFolderClick = (folderName, e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    console.log("📁 Folder clicked:", folderName);
+    // Verify folder exists before trying to show entries
+    if (!foldersMap[folderName]) {
+      console.error(`Folder "${folderName}" not found in foldersMap. Available:`, Object.keys(foldersMap));
+      showToast("Folder data not ready. Please try again.", "error");
+      return;
+    }
+    setSelectedFolder(folderName);
+  };
+
+  const handleBackClick = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    setSelectedFolder(null);
+  };
+
   if (loading) return <div className="text-center p-8">Loading...</div>;
 
   return (
@@ -588,6 +620,31 @@ function ReviewFoldersAdmin() {
                   <span className="text-sm">Single Student</span>
                 </label>
               </div>
+
+              {createMode === "bulk" && (
+                <div className="mb-4">
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Filter by Mentor (optional)</label>
+                  <select
+                    value={selectedMentorId}
+                    onChange={(e) => {
+                      setSelectedMentorId(e.target.value);
+                      setCreateForm(prev => ({ ...prev, students: [] }));
+                    }}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  >
+                    <option value="">All Mentors</option>
+                    {mentorsList.map(mentor => (
+                      <option key={mentor.id} value={mentor.id}>
+                        {mentor.full_name || mentor.username}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-400 mt-1">
+                    {selectedMentorId ? "Showing students assigned to this mentor" : "Showing all students"}
+                  </p>
+                </div>
+              )}
+
               <form onSubmit={createMode === "bulk" ? createMultipleEntries : createSingleEntry} className="space-y-4">
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Folder Name *</label>
@@ -600,9 +657,13 @@ function ReviewFoldersAdmin() {
                 {createMode === "bulk" ? (
                   <div>
                     <label className="block text-xs font-medium text-gray-500 mb-1">Select Students *</label>
-                    <button type="button" onClick={selectAllStudents} className="text-xs bg-gray-200 px-2 py-1 rounded mb-2">Select All</button>
+                    <button type="button" onClick={selectAllStudents} className="text-xs bg-gray-200 px-2 py-1 rounded mb-2">
+                      Select All {selectedMentorId ? "under this mentor" : ""}
+                    </button>
                     <select multiple size={6} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={createForm.students} onChange={handleStudentSelection}>
-                      {students.map(s => <option key={s.id} value={s.id}>{s.displayName}</option>)}
+                      {filteredStudentsForBulk.map(s => (
+                        <option key={s.id} value={s.id}>{s.displayName}</option>
+                      ))}
                     </select>
                     <p className="text-xs text-gray-400 mt-1">Hold Ctrl (Cmd) to select multiple.</p>
                   </div>
@@ -643,11 +704,13 @@ function ReviewFoldersAdmin() {
                 </thead>
                 <tbody>
                   {folderList.length === 0 ? (
-                    <tr><td colSpan="6" className="px-4 py-8 text-center text-gray-400">No folders found. Click "+ New Week Folder".</td></tr>
+                    <tr>
+                      <td colSpan="6" className="px-4 py-8 text-center text-gray-400">No folders found. Click "+ New Week Folder".</td>
+                    </tr>
                   ) : (
                     folderList.map(folder => (
-                      <tr key={folder.name} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 text-sm text-blue-600 hover:underline cursor-pointer" onClick={() => setSelectedFolder(folder.name)}>📁 {folder.name}</td>
+                      <tr key={folder.name} className="hover:bg-gray-50 cursor-pointer" onClick={(e) => handleFolderClick(folder.name, e)}>
+                        <td className="px-4 py-3 text-sm text-blue-600">📁 {folder.name}</td>
                         <td className="px-4 py-3 text-sm text-gray-700">Folder</td>
                         <td className="px-4 py-3 text-sm text-gray-700">{folder.people}</td>
                         <td className="px-4 py-3 text-sm text-gray-700">{folder.modified}</td>
@@ -667,91 +730,99 @@ function ReviewFoldersAdmin() {
           ) : (
             <div className="mt-0">
               <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
-                <button onClick={() => setSelectedFolder(null)} className="text-green-600 hover:text-green-800 flex items-center gap-1 text-sm">← Back to all folders</button>
+                <button onClick={handleBackClick} className="text-green-600 hover:text-green-800 flex items-center gap-1 text-sm">← Back to all folders</button>
                 <div className="flex gap-2">
                   <input type="text" placeholder="Search student or week..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-48 border border-gray-300 rounded-lg px-3 py-1 text-sm" />
                   <select value={selectedWeek} onChange={(e) => setSelectedWeek(e.target.value)} className="border border-gray-300 rounded-lg px-3 py-1 text-sm">
                     <option value="">All Weeks</option>
-                    {[...new Set(rawEntries.map(e => e.week))].sort().map(w => <option key={w} value={w}>Week {w}</option>)}
+                    {[...new Set(rawEntries.map(e => e.week))].filter(w => w != null).sort().map(w => <option key={w} value={w}>Week {w}</option>)}
                   </select>
                 </div>
               </div>
-              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Student</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Week</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Review Date</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Work Doc</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Industry Expert</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Meeting Link</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Review Sheet</th>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredEntries.length === 0 ? (
-                      <tr><td colSpan="9" className="px-4 py-8 text-center text-gray-400">No entries found.</td></tr>
-                    ) : (
-                      filteredEntries.map(entry => (
-                        <tr key={entry.id} className="hover:bg-gray-50">
-                          <td className="px-4 py-3 text-sm text-gray-900">{studentMap.get(entry.student) || entry.student_name || "—"}</td>
-                          <td className="px-4 py-3 text-sm text-gray-700">
-                            {editingId === entry.id ? (
-                              <input type="number" name="week" value={editData.week || ""} onChange={handleEditChange} className="w-20 border border-gray-300 rounded px-2 py-1 text-sm" />
-                            ) : `Week ${entry.week}`}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-700">
-                            {editingId === entry.id ? (
-                              <input type="date" name="review_date" value={editData.review_date || ""} onChange={handleEditChange} className="w-full border border-gray-300 rounded px-2 py-1 text-sm" />
-                            ) : entry.review_date || "—"}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-700">
-                            {editingId === entry.id ? (
-                              <input type="url" name="work_documents" value={editData.work_documents || ""} onChange={handleEditChange} className="w-36 border border-gray-300 rounded px-2 py-1 text-sm" />
-                            ) : renderLink(entry.work_documents, "Work Doc")}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-700">
-                            {editingId === entry.id ? (
-                              <input type="text" name="industry_expert" value={editData.industry_expert || ""} onChange={handleEditChange} className="w-36 border border-gray-300 rounded px-2 py-1 text-sm" />
-                            ) : entry.industry_expert || "—"}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-700">
-                            {editingId === entry.id ? (
-                              <input type="url" name="meeting_link" value={editData.meeting_link || ""} onChange={handleEditChange} className="w-36 border border-gray-300 rounded px-2 py-1 text-sm" />
-                            ) : renderLink(entry.meeting_link, "Meeting")}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-700">
-                            {editingId === entry.id ? (
-                              <input type="url" name="review_sheet" value={editData.review_sheet || ""} onChange={handleEditChange} className="w-36 border border-gray-300 rounded px-2 py-1 text-sm" />
-                            ) : renderLink(entry.review_sheet, "Review Sheet")}
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <button onClick={() => toggleDone(entry.id, !entry.is_done)} className={`px-3 py-1 rounded-full text-xs font-medium transition cursor-pointer ${entry.is_done ? "bg-green-100 text-green-800 hover:bg-green-200" : "bg-yellow-100 text-yellow-800 hover:bg-yellow-200"}`}>
-                              {entry.is_done ? "Completed" : "Pending"}
-                            </button>
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            {editingId === entry.id ? (
-                              <div className="flex gap-2 justify-center">
-                                <button onClick={() => saveEdit(entry.id)} className="text-green-600 hover:text-green-800"><SaveIcon /></button>
-                                <button onClick={cancelEdit} className="text-gray-600 hover:text-gray-800"><CancelIcon /></button>
-                              </div>
-                            ) : (
-                              <div className="flex gap-2 justify-center">
-                                <button onClick={() => startEdit(entry)} className="text-blue-600 hover:text-blue-800"><EditIcon /></button>
-                                <button onClick={() => deleteEntry(entry.id)} className="text-red-600 hover:text-red-800"><DeleteIcon /></button>
-                              </div>
-                            )}
-                          </td>
+              <SafeTable>
+                <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Student</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Week</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Review Date</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Work Doc</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Industry Expert</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Meeting Link</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Review Sheet</th>
+                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
+                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-100">
+                      {filteredEntries.length === 0 ? (
+                        <tr>
+                          <td colSpan="9" className="px-4 py-8 text-center text-gray-400">No entries found.</td>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                      ) : (
+                        filteredEntries.map(entry => {
+                          // Defensive: skip if entry malformed
+                          if (!entry || !entry.id) return null;
+                          return (
+                            <tr key={entry.id} className="hover:bg-gray-50">
+                              <td className="px-4 py-3 text-sm text-gray-900">{studentMap.get(entry.student) || entry.student_name || "—"}</td>
+                              <td className="px-4 py-3 text-sm text-gray-700">
+                                {editingId === entry.id ? (
+                                  <input type="number" name="week" value={editData.week || ""} onChange={handleEditChange} className="w-20 border border-gray-300 rounded px-2 py-1 text-sm" />
+                                ) : `Week ${entry.week}`}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-700">
+                                {editingId === entry.id ? (
+                                  <input type="date" name="review_date" value={editData.review_date || ""} onChange={handleEditChange} className="w-full border border-gray-300 rounded px-2 py-1 text-sm" />
+                                ) : entry.review_date || "—"}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-700">
+                                {editingId === entry.id ? (
+                                  <input type="url" name="work_documents" value={editData.work_documents || ""} onChange={handleEditChange} className="w-36 border border-gray-300 rounded px-2 py-1 text-sm" />
+                                ) : renderLink(entry.work_documents, "Work Doc")}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-700">
+                                {editingId === entry.id ? (
+                                  <input type="text" name="industry_expert" value={editData.industry_expert || ""} onChange={handleEditChange} className="w-36 border border-gray-300 rounded px-2 py-1 text-sm" />
+                                ) : entry.industry_expert || "—"}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-700">
+                                {editingId === entry.id ? (
+                                  <input type="url" name="meeting_link" value={editData.meeting_link || ""} onChange={handleEditChange} className="w-36 border border-gray-300 rounded px-2 py-1 text-sm" />
+                                ) : renderLink(entry.meeting_link, "Meeting")}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-700">
+                                {editingId === entry.id ? (
+                                  <input type="url" name="review_sheet" value={editData.review_sheet || ""} onChange={handleEditChange} className="w-36 border border-gray-300 rounded px-2 py-1 text-sm" />
+                                ) : renderLink(entry.review_sheet, "Review Sheet")}
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <button onClick={() => toggleDone(entry.id, !entry.is_done)} className={`px-3 py-1 rounded-full text-xs font-medium transition cursor-pointer ${entry.is_done ? "bg-green-100 text-green-800 hover:bg-green-200" : "bg-yellow-100 text-yellow-800 hover:bg-yellow-200"}`}>
+                                  {entry.is_done ? "Completed" : "Pending"}
+                                </button>
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                {editingId === entry.id ? (
+                                  <div className="flex gap-2 justify-center">
+                                    <button onClick={() => saveEdit(entry.id)} className="text-green-600 hover:text-green-800"><SaveIcon /></button>
+                                    <button onClick={cancelEdit} className="text-gray-600 hover:text-gray-800"><CancelIcon /></button>
+                                  </div>
+                                ) : (
+                                  <div className="flex gap-2 justify-center">
+                                    <button onClick={() => startEdit(entry)} className="text-blue-600 hover:text-blue-800"><EditIcon /></button>
+                                    <button onClick={() => deleteEntry(entry.id)} className="text-red-600 hover:text-red-800"><DeleteIcon /></button>
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </SafeTable>
             </div>
           )}
         </div>

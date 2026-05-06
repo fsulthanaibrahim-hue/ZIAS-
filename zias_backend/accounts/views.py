@@ -22,16 +22,18 @@ from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
 
 from .models import (
     User, Student, Mentor, Reviewer, Course, Module, Day, Task, Batch,
-    StudentModule, PasswordResetToken, ContactMessage, StudentWeekReview, WeekUpdate, ReviewFolder,
-    ChatRoom, ChatMessage, CourseStatus, Notification, StudentDocument, MentorDocument, ReviewAssignment
+    StudentModule, PasswordResetToken, ContactMessage, StudentWeekReview, WeekUpdate, 
+    ReviewFolder, ChatRoom, ChatMessage, CourseStatus, Notification, StudentDocument,
+    MentorDocument, ReviewAssignment, WeeklySubmission,
 )
 
 from .serializers import (
     StudentSerializer, MentorSerializer, ReviewerSerializer, UserSerializer,
     CourseSerializer, ModuleSerializer, DaySerializer, TaskSerializer, BatchSerializer,
-    ContactMessageSerializer, StudentModuleSerializer, StudentWeekReviewSerializer, WeekUpdateSerializer,
-    ReviewFolderSerializer, ChatRoomSerializer, ChatMessageSerializer, CourseStatusSerializer, 
-    NotificationSerializer, StudentDocumentSerializer, MentorDocumentSerializer, ReviewAssignmentSerializer
+    ContactMessageSerializer, StudentModuleSerializer, StudentWeekReviewSerializer, 
+    WeekUpdateSerializer, ReviewFolderSerializer, ChatRoomSerializer, ChatMessageSerializer, 
+    CourseStatusSerializer, NotificationSerializer, StudentDocumentSerializer, MentorDocumentSerializer, 
+    ReviewAssignmentSerializer, WeeklySubmissionSerializer
 )
 
 from .permissions import (
@@ -1282,3 +1284,45 @@ class RecentMessagesAPIView(generics.ListAPIView):
 
     def get_queryset(self):
         return ContactMessage.objects.all().order_by('-created_at')
+
+
+class StudentSubmissionListCreateView(generics.ListCreateAPIView):
+    serializer_class = WeeklySubmissionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        # Students see only their own submissions
+        if hasattr(user, 'student_profile'):
+            return WeeklySubmission.objects.filter(student=user.student_profile)
+        # Mentors/admins see all, optionally filtered by student_id and week_id
+        student_id = self.request.query_params.get('student_id')
+        week_id = self.request.query_params.get('week_id')
+        qs = WeeklySubmission.objects.all()
+        if student_id:
+            qs = qs.filter(student_id=student_id)
+        if week_id:
+            qs = qs.filter(week_id=week_id)
+        return qs
+
+    def perform_create(self, serializer):
+        student = self.request.user.student_profile
+        serializer.save(student=student)
+
+class SubmissionBulkUpdateView(generics.GenericAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        updates = request.data.get('updates', [])
+        for upd in updates:
+            submission = WeeklySubmission.objects.get(id=upd['id'])
+            if 'marks' in upd:
+                submission.marks = upd['marks']
+            if 'mentor_feedback' in upd:
+                submission.mentor_feedback = upd['mentor_feedback']
+            if 'reviewed' in upd:
+                submission.reviewed = upd['reviewed']
+                submission.reviewed_at = timezone.now() if upd['reviewed'] else None
+            submission.save()
+        return Response({'status': 'ok'})
+

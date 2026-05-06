@@ -1,4 +1,4 @@
-// src/pages/student/StudentReviewSheetRange.jsx
+// src/pages/student/StudentReviewSheetRange.jsx – with student‑editable progress video link
 import React, { useEffect, useState, useCallback } from "react";
 import { useParams, useSearchParams, Link } from "react-router-dom";
 import API from "../../api/api";
@@ -13,6 +13,38 @@ const cleanTitle = (title) => {
   if (!title) return "";
   const pattern = /^week\s+\d+\s*[–:\-]\s*/i;
   return title.replace(pattern, "").trim();
+};
+
+// Helper to compute total score (0‑35) and star rating from three 0‑5 marks
+const computeTotalAndStars = (extra, english, video) => {
+  const extraNum = Number(extra) || 0;
+  const englishNum = Number(english) || 0;
+  const videoNum = Number(video) || 0;
+  const sum = Math.min(5, Math.max(0, extraNum)) +
+              Math.min(5, Math.max(0, englishNum)) +
+              Math.min(5, Math.max(0, videoNum));
+  const total = Math.round((sum * 35) / 15);
+  const finalTotal = Math.min(35, Math.max(0, total));
+  let stars = 1;
+  if (finalTotal >= 29) stars = 5;
+  else if (finalTotal >= 22) stars = 4;
+  else if (finalTotal >= 15) stars = 3;
+  else if (finalTotal >= 8) stars = 2;
+  else stars = 1;
+  return { total: finalTotal, stars };
+};
+
+// Star rating display component (reusable)
+const StarDisplay = ({ value }) => {
+  const fullStars = value;
+  const emptyStars = 5 - fullStars;
+  return (
+    <div className="flex gap-1">
+      {[...Array(fullStars)].map((_, i) => <span key={i} className="text-yellow-500 text-lg">★</span>)}
+      {[...Array(emptyStars)].map((_, i) => <span key={i} className="text-gray-300 text-lg">★</span>)}
+      <span className="ml-2 text-xs text-gray-500">({value}/5)</span>
+    </div>
+  );
 };
 
 function debounce(func, delay) {
@@ -37,6 +69,7 @@ function StudentReviewSheetRange() {
   const [expandedWeekId, setExpandedWeekId] = useState(null);
   const [updates, setUpdates] = useState({});
 
+  // Save a single field to the backend (auto‑save for reviewers)
   const saveField = useCallback(async (weekId, field, value) => {
     try {
       let url = `week-review/${weekId}/`;
@@ -50,11 +83,27 @@ function StudentReviewSheetRange() {
 
   const debouncedSave = useCallback(debounce(saveField, 800), [saveField]);
 
-  const handleChange = (weekId, field, value) => {
-    setReviews(prev => ({ ...prev, [weekId]: { ...prev[weekId], [field]: value } }));
-    debouncedSave(weekId, field, value);
+  // For students, we will save immediately (no debounce)
+  const saveStudentField = async (weekId, field, value) => {
+    try {
+      await API.patch(`week-review/${weekId}/?student_id=${selectedStudentId}`, { [field]: value });
+    } catch (err) {
+      console.error("Save failed", err);
+    }
   };
 
+  const handleChange = (weekId, field, value) => {
+    // Update local state
+    setReviews(prev => ({ ...prev, [weekId]: { ...prev[weekId], [field]: value } }));
+    // Save to backend
+    if (userRole === "student") {
+      saveStudentField(weekId, field, value);
+    } else {
+      debouncedSave(weekId, field, value);
+    }
+  };
+
+  // Updates logic (unchanged)
   const fetchUpdates = async (weekReviewId) => {
     try {
       const res = await API.get(`week-updates/?week_review=${weekReviewId}`);
@@ -90,6 +139,7 @@ function StudentReviewSheetRange() {
     } catch (err) { console.error(err); }
   };
 
+  // Determine user role and, for reviewers, fetch students
   useEffect(() => {
     const fetchUser = async () => {
       try {
@@ -99,26 +149,36 @@ function StudentReviewSheetRange() {
         else if (user.is_mentor) setUserRole("mentor");
         else if (user.is_reviewer) setUserRole("reviewer");
         else setUserRole("student");
-
-        const canReview = user.is_admin || user.is_mentor || user.is_reviewer;
-        if (canReview) {
-          const studentsRes = await API.get("students/list/");
-          setStudents(studentsRes.data);
-          if (!selectedStudentId && studentsRes.data.length) {
-            setSelectedStudentId(studentsRes.data[0].id);
-          }
-        } else setSelectedStudentId(null);
       } catch (err) { console.error(err); }
     };
     fetchUser();
   }, []);
 
+  // For reviewers, fetch students list
   useEffect(() => {
+    const isReviewer = userRole === "admin" || userRole === "mentor" || userRole === "reviewer";
+    if (!isReviewer) return;
+    if (studentIdParam) {
+      setSelectedStudentId(parseInt(studentIdParam));
+      return;
+    }
+    const fetchStudents = async () => {
+      try {
+        const res = await API.get("students/list/");
+        setStudents(res.data);
+        if (res.data.length) setSelectedStudentId(res.data[0].id);
+      } catch (err) { console.error(err); }
+    };
+    fetchStudents();
+  }, [userRole, studentIdParam]);
+
+  // Fetch weeks and reviews
+  useEffect(() => {
+    const isReviewer = userRole === "admin" || userRole === "mentor" || userRole === "reviewer";
+    if (isReviewer && !selectedStudentId) return;
+    setLoading(true);
+    setError(null);
     const fetchData = async () => {
-      const isReviewer = userRole === "admin" || userRole === "mentor" || userRole === "reviewer";
-      if (isReviewer && !selectedStudentId) return;
-      setLoading(true);
-      setError(null);
       try {
         let modulesUrl = "modules/student-modules/";
         if (isReviewer && selectedStudentId) modulesUrl += `?student_id=${selectedStudentId}`;
@@ -148,7 +208,7 @@ function StudentReviewSheetRange() {
         setReviews(reviewsData);
       } catch (err) {
         console.error(err);
-        setError("Failed to load week data.");
+        setError("Failed to load review data.");
       } finally {
         setLoading(false);
       }
@@ -157,33 +217,57 @@ function StudentReviewSheetRange() {
   }, [selectedStudentId, userRole, start, end]);
 
   const isReviewer = userRole === "admin" || userRole === "mentor" || userRole === "reviewer";
-  const isEditable = isReviewer;
+  const isStudent = userRole === "student";
 
+  // Row definitions – add rows for total score and star rating later (computed)
   const rows = [
-    { key: "link_to_task_folder", label: "Link to Task Folder", type: "text", placeholder: "Paste folder link here" },
-    { key: "status", label: "Status", type: "select", options: ["Task Completed", "In Progress", "Not Started", "Blocked"] },
-    { key: "project_updates", label: "Project Updates", type: "textarea", rows: 2 },
-    { key: "next_week_task", label: "Next Week Task", type: "textarea", rows: 2 },
-    { key: "reviewer_name", label: "Reviewer Name", type: "text", placeholder: "e.g. Rizan sir" },
-    { key: "advisor_name", label: "Advisor Name", type: "text", placeholder: "e.g. Aleema" },
-    { key: "score_20", label: "Score [20]", type: "number", placeholder: "0-20" },
-    { key: "extra_workouts_review", label: "Extra Workouts Review", type: "textarea", rows: 2 },
-    { key: "score_10", label: "Score [10]", type: "number", placeholder: "0-10" },
-    { key: "progress_video", label: "Progress Video", type: "text", placeholder: "YouTube link" },
-    { key: "review_date", label: "Review Date", type: "date" },
-    { key: "english_review", label: "English Review", type: "textarea", rows: 2 },
-    { key: "score_20_english", label: "Score [20]", type: "number", placeholder: "0-20" },
+    { key: "link_to_task_folder", label: "Link to Task Folder", type: "text", placeholder: "Paste folder link here", editableForStudent: true },
+    { key: "status", label: "Status", type: "select", options: ["Task Completed", "In Progress", "Not Started", "Blocked"], editableForStudent: false },
+    { key: "project_updates", label: "Project Updates", type: "textarea", rows: 2, editableForStudent: false },
+    { key: "next_week_task", label: "Next Week Task", type: "textarea", rows: 2, editableForStudent: false },
+    { key: "reviewer_name", label: "Reviewer Name", type: "text", placeholder: "e.g. Rizan sir", editableForStudent: false },
+    { key: "advisor_name", label: "Advisor Name", type: "text", placeholder: "e.g. Aleema", editableForStudent: false },
+    { key: "score_20", label: "Score [20]", type: "number", placeholder: "0-20", editableForStudent: false },
+    { key: "extra_workouts_review", label: "Extra Workouts Review", type: "textarea", rows: 2, editableForStudent: false },
+    { key: "score_10", label: "Score [10]", type: "number", placeholder: "0-10", editableForStudent: false },
+    { key: "progress_video", label: "Progress Video", type: "text", placeholder: "YouTube link", editableForStudent: true }, // ✅ Student can edit this
+    { key: "review_date", label: "Review Date", type: "date", editableForStudent: false },
+    { key: "english_review", label: "English Review", type: "textarea", rows: 2, editableForStudent: false },
+    { key: "score_20_english", label: "Score [20]", type: "number", placeholder: "0-20", editableForStudent: false },
   ];
 
+  // Helper to get week's computed total and stars
+  const getWeekComputed = (weekId) => {
+    const extra = reviews[weekId]?.extra_workouts_mark;
+    const english = reviews[weekId]?.english_score;
+    const video = reviews[weekId]?.progress_video_mark;
+    return computeTotalAndStars(extra, english, video);
+  };
+
+  // Render a single cell (editable based on user role and row.editableForStudent)
   const renderCell = (weekId, row) => {
     const value = reviews[weekId]?.[row.key] ?? "";
-    if (!isEditable) {
+    // Determine if editable
+    let editable = false;
+    if (isReviewer) {
+      editable = true; // Reviewers can edit everything
+    } else if (isStudent && row.editableForStudent) {
+      editable = true; // Students can only edit specific fields (e.g., progress_video)
+    }
+
+    if (!editable) {
+      // Read‑only display
       if (row.type === "select") return <div className="px-2 py-1 text-gray-700">{value || "—"}</div>;
       if (row.type === "textarea") return <div className="whitespace-pre-wrap break-words px-2 py-1 text-gray-700">{value || "—"}</div>;
+      if (row.type === "number") return <div className="px-2 py-1 text-gray-700">{value !== "" ? value : "—"}</div>;
       if (row.type === "date") return <div className="px-2 py-1 text-gray-700">{value || "—"}</div>;
+      if (row.key === "progress_video" && value) {
+        return <a href={value} target="_blank" rel="noopener noreferrer" className="text-green-600 underline break-all">Link</a>;
+      }
       return <div className="px-2 py-1 text-gray-700">{value || "—"}</div>;
     }
 
+    // Editable input
     if (row.type === "select") {
       return (
         <select
@@ -228,9 +312,10 @@ function StudentReviewSheetRange() {
         />
       );
     }
+    // text or url
     return (
       <input
-        type="text"
+        type={row.key === "progress_video" ? "url" : "text"}
         value={value}
         onChange={(e) => handleChange(weekId, row.key, e.target.value)}
         className="w-full bg-white border border-gray-300 rounded px-2 py-1 text-sm text-gray-800 focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none"
@@ -293,7 +378,6 @@ function StudentReviewSheetRange() {
                     FIELD / WEEK
                   </th>
                   {weeks.map(week => {
-                    const weekNum = extractWeekNumber(week.title);
                     return (
                       <th
                         key={week.id}
@@ -318,7 +402,31 @@ function StudentReviewSheetRange() {
                     ))}
                   </tr>
                 ))}
-                {/* Updates row */}
+                {/* Total Score row (computed) */}
+                <tr className="hover:bg-gray-50/40">
+                  <td className="sticky left-0 bg-white px-4 py-3 text-gray-600 text-sm font-medium border-r border-gray-200">
+                    Total Score (out of 35)
+                  </td>
+                  {weeks.map(week => {
+                    const { total } = getWeekComputed(week.id);
+                    return <td key={week.id} className="px-3 py-2 border-l border-gray-200 align-top">
+                      <div className="px-2 py-1">{total}</div>
+                    </td>;
+                  })}
+                </tr>
+                {/* Star Rating row (computed) */}
+                <tr className="hover:bg-gray-50/40">
+                  <td className="sticky left-0 bg-white px-4 py-3 text-gray-600 text-sm font-medium border-r border-gray-200">
+                    Star Rating
+                  </td>
+                  {weeks.map(week => {
+                    const { stars } = getWeekComputed(week.id);
+                    return <td key={week.id} className="px-3 py-2 border-l border-gray-200 align-top">
+                      <div className="px-2 py-1"><StarDisplay value={stars} /></div>
+                    </td>;
+                  })}
+                </tr>
+                {/* Updates row (unchanged) */}
                 <tr className="hover:bg-gray-50/40">
                   <td className="sticky left-0 bg-white px-4 py-3 text-gray-600 text-sm font-medium border-r border-gray-200">
                     Updates & Extra Scores
@@ -390,7 +498,7 @@ function StudentReviewSheetRange() {
           </div>
 
           <div className="mt-4 text-right text-gray-400 text-xs">
-            💡 {isReviewer ? "Click any cell to edit. Changes auto‑save." : "View‑only mode."}
+            💡 {isStudent ? "You can edit the Progress Video link." : "Click any cell to edit. Changes auto‑save."}
           </div>
         </div>
       </div>
