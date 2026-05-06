@@ -12,7 +12,7 @@ from .models import (
     User, Student, Mentor, Reviewer, Course, Module, Day, Task, Batch,
     StudentModule, ContactMessage, StudentWeekReview, WeekUpdate, ReviewFolder,
     ChatRoom, ChatMessage, CourseStatus, Notification, StudentDocument, MentorDocument, 
-    ReviewAssignment, WeeklySubmission
+    ReviewAssignment, WeeklySubmission, AttendanceRecord
 )
 
 
@@ -578,4 +578,13 @@ class WeeklySubmissionSerializer(serializers.ModelSerializer):
         model = WeeklySubmission
         fields = '__all__'
         read_only_fields = ['student', 'submitted_at', 'reviewed_at']
+
+
+
+class AttendanceRecordSerializer(serializers.ModelSerializer):
+    net_work_hours = serializers.ReadOnlyField()
+    class Meta:
+        model = AttendanceRecord
+        fields = '__all__'
+        read_only_fields = ['student', 'check_in', 'created_at', 'net_work_hours']
 

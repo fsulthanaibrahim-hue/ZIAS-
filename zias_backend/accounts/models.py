@@ -503,5 +503,34 @@ class WeeklySubmission(models.Model):
 
     def __str__(self):
         return f"{self.student.user.username} - Week {self.week.id} - {self.get_submission_type_display()}"
+
+
+
+class AttendanceRecord(models.Model):
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='attendance_records')
+    check_in = models.DateTimeField()
+    check_out = models.DateTimeField(null=True, blank=True)
+    break_minutes = models.PositiveIntegerField(default=0, help_text="Total break time in minutes")
+    check_out_reason = models.TextField(blank=True, help_text="Reason for checking out (if early or unusual)")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-check_in']
+
+    @property
+    def net_work_seconds(self):
+        if not self.check_out:
+            return 0
+        total_seconds = (self.check_out - self.check_in).total_seconds()
+        break_seconds = self.break_minutes * 60
+        return max(0, total_seconds - break_seconds)
+
+    @property
+    def net_work_hours(self):
+        return round(self.net_work_seconds / 3600, 2)
+
+    def __str__(self):
+        return f"{self.student.user.username} - {self.check_in.strftime('%Y-%m-%d %H:%M')}"
+
     
-    
+        

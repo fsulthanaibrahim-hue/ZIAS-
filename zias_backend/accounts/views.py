@@ -8,8 +8,9 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.filters import BaseFilterBackend
 from rest_framework.parsers import MultiPartParser, FormParser
-from rest_framework.exceptions import ValidationError   
+from rest_framework.exceptions import ValidationError, NotFound
 from django.utils import timezone
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils.crypto import get_random_string
 from datetime import timedelta
@@ -24,7 +25,7 @@ from .models import (
     User, Student, Mentor, Reviewer, Course, Module, Day, Task, Batch,
     StudentModule, PasswordResetToken, ContactMessage, StudentWeekReview, WeekUpdate, 
     ReviewFolder, ChatRoom, ChatMessage, CourseStatus, Notification, StudentDocument,
-    MentorDocument, ReviewAssignment, WeeklySubmission,
+    MentorDocument, ReviewAssignment, WeeklySubmission, AttendanceRecord
 )
 
 from .serializers import (
@@ -33,7 +34,7 @@ from .serializers import (
     ContactMessageSerializer, StudentModuleSerializer, StudentWeekReviewSerializer, 
     WeekUpdateSerializer, ReviewFolderSerializer, ChatRoomSerializer, ChatMessageSerializer, 
     CourseStatusSerializer, NotificationSerializer, StudentDocumentSerializer, MentorDocumentSerializer, 
-    ReviewAssignmentSerializer, WeeklySubmissionSerializer
+    ReviewAssignmentSerializer, WeeklySubmissionSerializer, AttendanceRecordSerializer
 )
 
 from .permissions import (
@@ -132,10 +133,8 @@ class StudentViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(student)
         return Response(serializer.data)
 
-    # ✅ CORRECTED PROGRESS METHOD
     @action(detail=True, methods=['get'], url_path='progress')
     def progress(self, request, pk=None):
-        import traceback
         try:
             student = self.get_object()
             student_modules = StudentModule.objects.filter(student=student).select_related('module')
@@ -147,8 +146,8 @@ class StudentViewSet(viewsets.ModelViewSet):
             next_week = current_week + 1
             total_weeks = 52
             if student.course:
-                course_obj = Course.objects.get(name=student.course)
-                if course_obj.duration:
+                course_obj = Course.objects.filter(name=student.course).first()
+                if course_obj and course_obj.duration:
                     total_weeks = int(course_obj.duration)
             progress_percent = round((current_week / total_weeks) * 100, 1) if total_weeks else 0
             return Response({
@@ -163,9 +162,7 @@ class StudentViewSet(viewsets.ModelViewSet):
                 'progress_percent': progress_percent,
             })
         except Exception as e:
-           import traceback
-           traceback.print_exc()  # this prints to your Django terminal
-           return Response({"error": str(e)}, status=500)
+            return Response({"error": str(e)}, status=500)
 
     def destroy(self, request, *args, **kwargs):
         student = self.get_object()
@@ -174,50 +171,6 @@ class StudentViewSet(viewsets.ModelViewSet):
         user.save()
         student.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
-    
-
-    # ========== STUDENT PROGRESS ENDPOINT (FIXED) ==========
-    @action(detail=True, methods=['get'], url_path='progress')
-    def progress(self, request, pk=None):
-        """
-        Returns progress information for a single student:
-        - enrolled course
-        - completed weeks (list of week numbers)
-        - current week (highest completed)
-        - next week
-        - total weeks from the course's duration
-        - percentage of completion
-        """
-        student = self.get_object()
-        student_modules = StudentModule.objects.filter(student=student).select_related('module')
-        completed_weeks = []
-        for sm in student_modules:
-            if sm.is_completed and sm.module.order:
-                completed_weeks.append(sm.module.order)
-        current_week = max(completed_weeks) if completed_weeks else 0
-        next_week = current_week + 1
-        total_weeks = 0
-        # Get course duration – handle missing course gracefully
-        if student.course:
-            try:
-                course_obj = Course.objects.get(name=student.course)
-                total_weeks = course_obj.duration or 0
-            except Course.DoesNotExist:
-                total_weeks = 52    # default if course not found
-        else:
-            total_weeks = 52        # default if student has no course
-        progress_percent = round((current_week / total_weeks) * 100, 1) if total_weeks else 0
-        return Response({
-            'student_id': student.id,
-            'full_name': student.full_name or student.user.username,
-            'course': student.course or '',
-            'batch': student.batch or '',
-            'completed_weeks': sorted(completed_weeks),
-            'current_week': current_week,
-            'next_week': next_week if next_week <= total_weeks else None,
-            'total_weeks': total_weeks,
-            'progress_percent': progress_percent,
-        })
 
 
 # ----------------------------
@@ -372,7 +325,8 @@ class ModuleViewSet(viewsets.ModelViewSet):
         reviews = StudentWeekReview.objects.filter(student=student)
         completed_modules = set()
         for r in reviews:
-            if r.total_score is not None and r.total_score >= 70:
+            # Fixed threshold: total_score out of 35, >=30 means completed
+            if r.total_score is not None and r.total_score >= 30:
                 completed_modules.add(r.module_id)
 
         # Build response with is_locked flag
@@ -423,7 +377,7 @@ class CompleteModuleView(APIView):
         if module.course and hasattr(module, 'order'):
             course_status, _ = CourseStatus.objects.get_or_create(
                 student=student,
-                course=module.course,
+                course_name=student.course,   # Fixed: use course_name
                 defaults={'current_week': 1}
             )
             total_weeks = Module.objects.filter(course=module.course).count()
@@ -837,9 +791,9 @@ class StudentReviewStatusView(APIView):
         for r in reviews:
             if r.total_score is None:
                 status = "pending"
-            elif r.total_score >= 70:
+            elif r.total_score >= 30:
                 status = "completed"
-            elif r.total_score >= 40:
+            elif r.total_score >= 15:
                 status = "need_improvement"
             else:
                 status = "critical"
@@ -904,7 +858,8 @@ class StudentWeekReviewView(generics.RetrieveUpdateAPIView):
         return obj
     def perform_update(self, serializer):
         review = serializer.save()
-        if review.total_score is not None:
+        # Auto-complete module if total score passes threshold (>=30)
+        if review.total_score is not None and review.total_score >= 30:
             student_module, created = StudentModule.objects.get_or_create(
                 student=review.student,
                 module=review.module
@@ -1100,10 +1055,9 @@ class StudentCourseStatusView(generics.RetrieveUpdateAPIView):
         student = get_object_or_404(Student, id=student_id)
         if not student.course:
             raise ValidationError({"detail": "Student has no course assigned"})
-        course_obj = get_object_or_404(Course, name=student.course)
         status_obj, created = CourseStatus.objects.get_or_create(
             student=student,
-            course=course_obj
+            course_name=student.course   # Fixed field name
         )
         return status_obj
 
@@ -1286,16 +1240,17 @@ class RecentMessagesAPIView(generics.ListAPIView):
         return ContactMessage.objects.all().order_by('-created_at')
 
 
+# ----------------------------
+# WEEKLY SUBMISSIONS VIEWS
+# ----------------------------
 class StudentSubmissionListCreateView(generics.ListCreateAPIView):
     serializer_class = WeeklySubmissionSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
         user = self.request.user
-        # Students see only their own submissions
         if hasattr(user, 'student_profile'):
             return WeeklySubmission.objects.filter(student=user.student_profile)
-        # Mentors/admins see all, optionally filtered by student_id and week_id
         student_id = self.request.query_params.get('student_id')
         week_id = self.request.query_params.get('week_id')
         qs = WeeklySubmission.objects.all()
@@ -1306,6 +1261,8 @@ class StudentSubmissionListCreateView(generics.ListCreateAPIView):
         return qs
 
     def perform_create(self, serializer):
+        if not hasattr(self.request.user, 'student_profile'):
+            raise ValidationError("Only students can submit weekly items.")
         student = self.request.user.student_profile
         serializer.save(student=student)
 
@@ -1326,3 +1283,69 @@ class SubmissionBulkUpdateView(generics.GenericAPIView):
             submission.save()
         return Response({'status': 'ok'})
 
+
+# ----------------------------
+# ATTENDANCE (IN/OUT REGISTER) VIEWS
+# ----------------------------
+class CheckInView(generics.CreateAPIView):
+    serializer_class = AttendanceRecordSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def perform_create(self, serializer):
+        student = getattr(self.request.user, 'student_profile', None)
+        if not student:
+            raise ValidationError("Only students can check in.")
+        today = timezone.now().date()
+        existing = AttendanceRecord.objects.filter(student=student, check_in__date=today).first()
+        if existing and existing.check_out is None:
+            raise ValidationError("You are already checked in today. Please check out first.")
+        serializer.save(student=student, check_in=timezone.now())
+
+
+class CheckOutView(generics.UpdateAPIView):
+    serializer_class = AttendanceRecordSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self):
+        student = getattr(self.request.user, 'student_profile', None)
+        if not student:
+            raise NotFound("Only students can check out.")
+        today = timezone.now().date()
+        record = AttendanceRecord.objects.filter(
+            student=student, check_in__date=today, check_out__isnull=True
+        ).first()
+        if not record:
+            raise NotFound("No active check-in found for today.")
+        return record
+
+    def perform_update(self, serializer):
+        break_minutes = int(self.request.data.get('break_minutes', 0))
+        check_out_reason = self.request.data.get('check_out_reason', '')
+        serializer.save(
+            check_out=timezone.now(),
+            break_minutes=break_minutes,
+            check_out_reason=check_out_reason
+        )
+
+
+class AttendanceHistoryView(generics.ListAPIView):
+    serializer_class = AttendanceRecordSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if hasattr(user, 'student_profile'):
+            return AttendanceRecord.objects.filter(student=user.student_profile)
+        if user.is_mentor:
+            try:
+                mentor = Mentor.objects.get(user=user)
+                student_ids = Student.objects.filter(mentor=mentor).values_list('id', flat=True)
+                return AttendanceRecord.objects.filter(student_id__in=student_ids)
+            except Mentor.DoesNotExist:
+                return AttendanceRecord.objects.none()
+        student_id = self.request.query_params.get('student_id')
+        qs = AttendanceRecord.objects.all()
+        if student_id:
+            qs = qs.filter(student_id=student_id)
+        return qs
+    

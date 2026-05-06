@@ -15,7 +15,7 @@ from .views import (
     StudentDocumentDeleteView, MentorDocumentListView, UploadMentorDocumentView,
     MentorDocumentDeleteView, RespondToMessageView, ReviewAssignmentViewSet, 
     UnreadNotificationCountView, StudentReviewStatusView, StudentSubmissionListCreateView,
-    SubmissionBulkUpdateView, 
+    SubmissionBulkUpdateView, CheckInView, CheckOutView, AttendanceHistoryView,
 )
 
 router = DefaultRouter()
@@ -72,4 +72,7 @@ urlpatterns = [
     path('api/student/review-status/', StudentReviewStatusView.as_view(), name='student-review-status'),
     path('api/submissions/', StudentSubmissionListCreateView.as_view(), name='submissions'),
     path('api/submissions/bulk-update/', SubmissionBulkUpdateView.as_view(), name='submission-bulk-update'),
+    path('api/attendance/check-in/', CheckInView.as_view(), name='check-in'),
+    path('api/attendance/check-out/', CheckOutView.as_view(), name='check-out'),
+    path('api/attendance/history/', AttendanceHistoryView.as_view(), name='attendance-history'),
 ]

@@ -1,9 +1,9 @@
-// src/pages/student/StudentDashboard.jsx
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../../api/api";
 import StudentSidebar from "../../components/StudentSidebar";
-import WeeklySubmissions from "./WeeklySubmissions"; // adjust path if needed
+import WeeklySubmissions from "./WeeklySubmissions";
+import InOutRegister from "./InOutRegister";
 
 function StudentDashboard() {
   const [loading, setLoading] = useState(true);
@@ -67,7 +67,28 @@ function StudentDashboard() {
             )}
           </div>
 
-          {/* Weekly Submissions component for the selected week */}
+          {/* ✅ In/Out Register (attendance) */}
+          <InOutRegister />
+
+          {/* Week Selector */}
+          {weeks.length > 0 && (
+            <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Select Week</label>
+              <select
+                value={selectedWeekId || ""}
+                onChange={(e) => setSelectedWeekId(parseInt(e.target.value))}
+                className="w-full md:w-96 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+              >
+                {weeks.map((week) => (
+                  <option key={week.id} value={week.id}>
+                    {week.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Weekly Submissions */}
           {selectedWeekId && (
             <div className="bg-white rounded-xl shadow-sm p-6">
               <WeeklySubmissions weekId={selectedWeekId} studentId={student?.id} />

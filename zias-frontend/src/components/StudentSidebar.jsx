@@ -1,4 +1,4 @@
-// src/components/StudentSidebar.jsx – removed Chat option
+// src/components/StudentSidebar.jsx
 import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import NotificationBell from "./NotificationBell";
@@ -32,6 +32,8 @@ function getIcon(label) {
       return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}><path d="M3 2h10v12H3V2zm1 1v10h8V3H4zm2 2h4v1H6V5zm0 2h4v1H6V7zm0 2h2v1H6V9z" /></svg>;
     case "Modules":
       return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}><path d="M2 2h12v12H2V2zm1 1v10h10V3H3zm2 2h6v1H5V5zm0 2h6v1H5V7zm0 2h6v1H5V9z" /></svg>;
+    case "My Attendance":
+      return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}><path d="M5 2h6v2H5V2zm10 3H1v10h14V5zM3 7h10v6H3V7z" /></svg>;
     case "Profile":
       return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}><path d="M8 8a3 3 0 100-6 3 3 0 000 6zm-2 1a5 5 0 00-5 5h14a5 5 0 00-5-5H6z" /></svg>;
     default:
@@ -69,12 +71,12 @@ function StudentSidebar() {
     return pathname.startsWith(linkPath);
   };
 
-  // Chat option removed
   const navItems = [
     { path: "/student/dashboard", label: "Dashboard" },
     { path: "/student/review-folders", label: "Review Folders" },
     { path: "/student/review-sheet", label: "Review Sheet" },
     { path: "/student/modules", label: "Modules" },
+    { path: "/student/attendance", label: "My Attendance" },
     { path: "/student/profile", label: "Profile" },
   ];
 

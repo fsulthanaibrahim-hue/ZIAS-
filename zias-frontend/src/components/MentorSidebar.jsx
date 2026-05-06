@@ -1,4 +1,4 @@
-// src/components/MentorSidebar.jsx – removed Chat option
+// src/components/MentorSidebar.jsx
 import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import NotificationBell from "./NotificationBell";
@@ -31,6 +31,8 @@ function getIcon(label) {
       return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}><path d="M2 2h4v4H2V2zm6 0h4v4H8V2zM2 8h4v4H2V8zm6 0h4v4H8V8z" /></svg>;
     case "Review Folders":
       return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}><path d="M2 2h12v12H2V2zm1 1v10h10V3H3zm2 2h6v1H5V5zm0 2h6v1H5V7zm0 2h6v1H5V9z" /></svg>;
+    case "Attendance Monitor":
+      return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}><path d="M8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13zm0 1a5.5 5.5 0 110 11 5.5 5.5 0 010-11zm.5 2H7v5.5l4 2.5.5-1-3.5-2V4.5z" /></svg>;
     case "Profile":
       return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}><path d="M8 8a3 3 0 100-6 3 3 0 000 6zm-2 1a5 5 0 00-5 5h14a5 5 0 00-5-5H6z" /></svg>;
     default:
@@ -57,12 +59,12 @@ function MentorSidebar() {
     return pathname.startsWith(linkPath);
   };
 
-  // Chat option removed
   const navItems = [
     { path: "/mentor/dashboard", label: "Dashboard" },
     { path: "/mentor/students", label: "My Students" },
     { path: "/mentor/modules", label: "Modules" },
     { path: "/mentor/review-folders", label: "Review Folders" },
+    { path: "/mentor/attendance", label: "Attendance Monitor" },
     { path: "/mentor/profile", label: "Profile" },
   ];
 

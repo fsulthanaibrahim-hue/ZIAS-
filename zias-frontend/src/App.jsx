@@ -16,6 +16,9 @@ import ChangePassword from "./pages/ChangePassword";
 import DashboardLock from "./pages/student/DashboardLock";
 import StudentReviewFolders from "./pages/student/StudentReviewFolders";
 import StudentModules from "./pages/student/StudentModules";
+import InOutRegister from "./pages/student/InOutRegister";
+import StudentAttendance from "./pages/student/StudentAttendance";
+
 
 // Reviewer pages
 import ReviewerDashboard from "./pages/reviewer/ReviewerDashboard";
@@ -36,6 +39,8 @@ import MentorReviewSheetRange from "./pages/mentor/MentorReviewSheetRange";
 import MentorNotifications from "./pages/mentor/MentorNotifications";
 import ReviewTracker from "./pages/mentor/ReviewTracker";
 import MentorReviewFolders from "./pages/mentor/MentorReviewFolders";
+import AttendanceMonitor from "./pages/mentor/AttendanceMonitor";
+
 
 // Admin pages
 import Sidebar from "./components/Sidebar";
@@ -54,6 +59,7 @@ import NotificationsPage from "./Admin/NotificationsPage";
 import ContactMessageDetail from "./Admin/ContactMessageDetail";
 import ReviewFoldersAdmin from "./Admin/ReviewFoldersAdmin";
 
+
 // Common pages
 import Navbar from "./components/Navbar";
 import Home from "./pages/Home";
@@ -63,9 +69,12 @@ import Contact from "./pages/Contact";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 
+
 // Sidebars
 import MentorSidebar from "./components/MentorSidebar";
 import ReviewerSidebar from "./components/ReviewerSidebar";
+
+
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem("access_token");
@@ -149,6 +158,8 @@ function App() {
         <Route path="/student/dashboard-lock" element={<PrivateRoute><DashboardLock /></PrivateRoute>} />
         <Route path="/student/modules" element={<PrivateRoute><StudentModules /></PrivateRoute>} />
         <Route path="/student/review-folders" element={<PrivateRoute><StudentReviewFolders /></PrivateRoute>} />
+        <Route path="/student/in-out-register" element={<PrivateRoute><InOutRegister /></PrivateRoute>} />
+        <Route path="/student/attendance" element={<PrivateRoute><StudentAttendance /></PrivateRoute>} />
 
         {/* Generic change password route */}
         <Route path="/change-password" element={<PrivateRoute><ChangePassword /></PrivateRoute>} />
@@ -281,6 +292,14 @@ function App() {
             <div style={{ display: "flex" }}>
               <MentorSidebar />
               <MentorNotifications />
+            </div>
+          </PrivateRoute>
+        } />
+        <Route path="/mentor/attendance" element={
+          <PrivateRoute>
+            <div style={{ display: "flex" }}>
+              <MentorSidebar />
+              <AttendanceMonitor />
             </div>
           </PrivateRoute>
         } />
