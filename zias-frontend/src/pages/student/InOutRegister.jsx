@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import API from '../../api/api';
 import { toast } from 'react-hot-toast';
 
-const InOutRegister = () => {
+const InOutRegister = ({ showHistory = true }) => {
   const [activeRecord, setActiveRecord] = useState(null);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -22,20 +22,23 @@ const InOutRegister = () => {
   // Fetch attendance data
   useEffect(() => {
     fetchTodayStatus();
-    fetchHistory();
+    if (showHistory) fetchHistory();
+    else setLoading(false);
   }, []);
 
   const fetchTodayStatus = async () => {
     try {
       const res = await API.get('attendance/history/');
       let records = Array.isArray(res.data) ? res.data : (res.data.results || []);
-      // ✅ Find the latest open record (most recent check‑in without check_out)
+      // Find the latest open record
       const openRecord = records
         .filter(r => r.check_out === null)
         .sort((a, b) => new Date(b.check_in) - new Date(a.check_in))[0];
       setActiveRecord(openRecord || null);
     } catch (err) {
       console.error(err);
+    } finally {
+      if (!showHistory) setLoading(false);
     }
   };
 
@@ -57,7 +60,7 @@ const InOutRegister = () => {
       await API.post('attendance/check-in/');
       toast.success('Checked in successfully');
       await fetchTodayStatus();
-      await fetchHistory();
+      if (showHistory) await fetchHistory();
     } catch (err) {
       const msg = err.response?.data?.detail || err.response?.data?.message || 'Check-in failed';
       toast.error(msg);
@@ -78,7 +81,7 @@ const InOutRegister = () => {
       setBreakMinutes(0);
       setCheckOutReason('');
       await fetchTodayStatus();
-      await fetchHistory();
+      if (showHistory) await fetchHistory();
     } catch (err) {
       const msg = err.response?.data?.detail || err.response?.data?.message || 'Check-out failed';
       toast.error(msg);
@@ -90,8 +93,6 @@ const InOutRegister = () => {
   const isCheckedIn = activeRecord !== null;
 
   if (loading) return <div className="text-center py-4">Loading attendance...</div>;
-
-  // If token expired, show a helpful message
   if (!localStorage.getItem('access_token')) return <div className="text-center py-4 text-red-500">Please log in again.</div>;
 
   return (
@@ -155,8 +156,8 @@ const InOutRegister = () => {
         </div>
       )}
 
-      {/* History Table */}
-      {history.length > 0 && (
+      {/* History table – only shown if showHistory === true */}
+      {showHistory && history.length > 0 && (
         <div className="mt-6">
           <h3 className="text-lg font-medium text-gray-700 mb-2">Recent Activity</h3>
           <div className="overflow-x-auto">
