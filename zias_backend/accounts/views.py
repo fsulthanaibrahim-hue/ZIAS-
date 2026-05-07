@@ -1268,21 +1268,17 @@ class CheckInView(generics.CreateAPIView):
 
     def perform_create(self, serializer):
         user = self.request.user
-        
-        # Ensure the student profile exists (create if missing)
+        # Auto‑create student profile if missing
         student, created = Student.objects.get_or_create(
             user=user,
             defaults={'course': '', 'batch': ''}
         )
         if created:
             print(f"Auto-created student profile for {user.username} during check‑in")
-
-        today = timezone.now().date()
-        existing = AttendanceRecord.objects.filter(student=student, check_in__date=today).first()
-        if existing and existing.check_out is None:
-            raise ValidationError("You are already checked in today. Please check out first.")
-        
+        # ✅ Allow unlimited check‑ins – no daily limit
         serializer.save(student=student, check_in=timezone.now())
+
+
 
 class CheckOutView(generics.UpdateAPIView):
     serializer_class = AttendanceRecordSerializer
@@ -1292,23 +1288,22 @@ class CheckOutView(generics.UpdateAPIView):
         student = getattr(self.request.user, 'student_profile', None)
         if not student:
             raise NotFound("Only students can check out.")
-        today = timezone.now().date()
+        # Get the most recent open record
         record = AttendanceRecord.objects.filter(
-            student=student, check_in__date=today, check_out__isnull=True
-        ).first()
+            student=student, check_out__isnull=True
+        ).order_by('-check_in').first()
         if not record:
-            raise NotFound("No active check-in found for today.")
+            raise NotFound("No active check‑in found for this student.")
         return record
 
     def perform_update(self, serializer):
-        break_minutes = self.request.data.get('break_minutes', 0)
+        break_minutes = int(self.request.data.get('break_minutes', 0))
         check_out_reason = self.request.data.get('check_out_reason', '')
         serializer.save(
             check_out=timezone.now(),
             break_minutes=break_minutes,
             check_out_reason=check_out_reason
         )
-
 
 
 class AttendanceHistoryView(generics.ListAPIView):

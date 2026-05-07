@@ -29,7 +29,10 @@ const InOutRegister = () => {
     try {
       const res = await API.get('attendance/history/');
       let records = Array.isArray(res.data) ? res.data : (res.data.results || []);
-      const openRecord = records.find(r => r.check_out === null);
+      // ✅ Find the latest open record (most recent check‑in without check_out)
+      const openRecord = records
+        .filter(r => r.check_out === null)
+        .sort((a, b) => new Date(b.check_in) - new Date(a.check_in))[0];
       setActiveRecord(openRecord || null);
     } catch (err) {
       console.error(err);
