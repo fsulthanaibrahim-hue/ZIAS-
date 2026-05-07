@@ -91,7 +91,6 @@ const StudentAttendance = () => {
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Check In</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Check Out</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Break (min)</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Net Hours</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Reason</th>
                     </tr>
@@ -105,7 +104,6 @@ const StudentAttendance = () => {
                           <td className="px-6 py-3 text-sm">{checkIn.toLocaleDateString()}</td>
                           <td className="px-6 py-3 text-sm">{checkIn.toLocaleTimeString()}</td>
                           <td className="px-6 py-3 text-sm">{checkOut ? checkOut.toLocaleTimeString() : '—'}</td>
-                          <td className="px-6 py-3 text-sm">{rec.break_minutes ?? 0}</td>
                           <td className="px-6 py-3 text-sm font-medium text-green-700">{rec.net_work_hours ?? 0} hrs</td>
                           <td className="px-6 py-3 text-sm text-gray-500">{rec.check_out_reason || '—'}</td>
                         </tr>

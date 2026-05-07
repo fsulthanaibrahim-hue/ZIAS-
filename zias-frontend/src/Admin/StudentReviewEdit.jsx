@@ -17,8 +17,7 @@ const cleanTitle = (title) => {
   return title.replace(pattern, "").trim();
 };
 
-// Helper to calculate total score (0‑35) and star rating from:
-// review_score (0-20) + extra_mark (0-5) + english_score (0-5) + video_mark (0-5)
+// ✅ CORRECTED: star rating starts at 0, only >=1 gives first star
 const calculateTotalAndStars = (reviewScore, extra, english, video) => {
   const safeReview = Math.min(20, Math.max(0, reviewScore || 0));
   const safeExtra = Math.min(5, Math.max(0, extra || 0));
@@ -26,12 +25,15 @@ const calculateTotalAndStars = (reviewScore, extra, english, video) => {
   const safeVideo = Math.min(5, Math.max(0, video || 0));
   const total = safeReview + safeExtra + safeEnglish + safeVideo; // max 20+5+5+5=35
   const finalTotal = Math.min(35, Math.max(0, total));
-  let stars = 1;
+
+  let stars = 0;                        // start at 0 (all empty)
   if (finalTotal >= 29) stars = 5;
   else if (finalTotal >= 22) stars = 4;
   else if (finalTotal >= 15) stars = 3;
   else if (finalTotal >= 8) stars = 2;
-  else stars = 1;
+  else if (finalTotal >= 1) stars = 1;
+  // else stars stays 0
+
   return { total: finalTotal, stars };
 };
 
@@ -396,9 +398,11 @@ function StudentReviewEdit() {
                 <td className="sticky left-0 bg-white px-4 py-3 text-gray-600 text-sm font-medium border-r border-gray-200">Total Score (out of 35)</td>
                 {filteredWeeks.map(week => {
                   const { total } = getWeekTotalAndStars(week.id);
-                  return <td key={week.id} className="px-3 py-2 border-l border-gray-200 align-top">
-                    <input type="number" value={total} readOnly className="w-full bg-gray-100 border border-gray-300 rounded px-2 py-1 text-sm cursor-default" />
-                  </td>;
+                  return (
+                    <td key={week.id} className="px-3 py-2 border-l border-gray-200 align-top">
+                      <input type="number" value={total} readOnly className="w-full bg-gray-100 border border-gray-300 rounded px-2 py-1 text-sm cursor-default" />
+                    </td>
+                  );
                 })}
               </tr>
               {/* Star Rating row */}
@@ -406,7 +410,11 @@ function StudentReviewEdit() {
                 <td className="sticky left-0 bg-white px-4 py-3 text-gray-600 text-sm font-medium border-r border-gray-200">Star Rating</td>
                 {filteredWeeks.map(week => {
                   const { stars } = getWeekTotalAndStars(week.id);
-                  return <td key={week.id} className="px-3 py-2 border-l border-gray-200 align-top"><StarDisplay value={stars} /></td>;
+                  return (
+                    <td key={week.id} className="px-3 py-2 border-l border-gray-200 align-top">
+                      <StarDisplay value={stars} />
+                    </td>
+                  );
                 })}
               </tr>
             </tbody>

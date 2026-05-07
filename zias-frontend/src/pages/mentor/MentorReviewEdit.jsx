@@ -15,7 +15,7 @@ const cleanTitle = (title) => {
   return title.replace(pattern, "").trim();
 };
 
-// Helper to calculate total score (0‑35) and star rating from four fields
+// ✅ FIXED: star rating starts at 0, only >=1 gives first star
 const calculateTotalAndStars = (reviewScore, extra, english, video) => {
   const safeReview = Math.min(20, Math.max(0, reviewScore || 0));
   const safeExtra = Math.min(5, Math.max(0, extra || 0));
@@ -23,12 +23,15 @@ const calculateTotalAndStars = (reviewScore, extra, english, video) => {
   const safeVideo = Math.min(5, Math.max(0, video || 0));
   const total = safeReview + safeExtra + safeEnglish + safeVideo; // max 35
   const finalTotal = Math.min(35, Math.max(0, total));
-  let stars = 1;
+
+  let stars = 0;                        // ✅ start at 0 (all empty)
   if (finalTotal >= 29) stars = 5;
   else if (finalTotal >= 22) stars = 4;
   else if (finalTotal >= 15) stars = 3;
   else if (finalTotal >= 8) stars = 2;
-  else stars = 1;
+  else if (finalTotal >= 1) stars = 1;
+  // otherwise stars stays 0
+
   return { total: finalTotal, stars };
 };
 
@@ -336,7 +339,7 @@ function MentorReviewEdit() {
                     </td>
                   );
                 })}
-               </tr>
+              </tr>
             </tbody>
           </table>
         </div>

@@ -314,7 +314,7 @@ function App() {
         <Route path="/admin/notifications" element={<AdminRoute><div style={{display: "flex"}}><Sidebar /><NotificationsPage /></div></AdminRoute>} />
         <Route path="/admin/contact-messages/:id" element={<AdminRoute><div style={{display: "flex"}}><Sidebar /><ContactMessageDetail /></div></AdminRoute>} />
         <Route path="/admin/review-folders" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><ReviewFoldersAdmin /></div></AdminRoute>} />
-        <Route path="/admin/attendance" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><AdminAttendance /></div></AdminRoute>} />  {/* ✅ fixed duplicate, uses AdminRoute + Sidebar */}
+        <Route path="/admin/attendance" element={<AdminRoute><div style={{display:"flex"}}><AdminAttendance /></div></AdminRoute>} />  
 
         {/* 404 page */}
         <Route path="*" element={

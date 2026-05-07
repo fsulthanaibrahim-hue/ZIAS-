@@ -1,10 +1,14 @@
-// src/pages/mentor/MentorStudents.jsx – with progress button
+// src/pages/mentor/MentorStudents.jsx – Elegant Light Green Theme
 import { useEffect, useState, useRef } from "react";
 import { Link } from "react-router-dom";
 import API from "../../api/api";
 import toast from "react-hot-toast";
 import { useAuth } from "../../context/AuthContext";
-import ProgressModal from "../../components/ProgressModal"; // <-- import
+import ProgressModal from "../../components/ProgressModal";
+
+/* Add to index.html:
+   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
+*/
 
 function MentorStudents() {
   const { user: authUser } = useAuth();
@@ -25,29 +29,15 @@ function MentorStudents() {
   const [studentToDelete, setStudentToDelete] = useState(null);
   const [viewingStudent, setViewingStudent] = useState(null);
   const [viewerDocuments, setViewerDocuments] = useState([]);
-
-  // Progress modal state
   const [progressStudent, setProgressStudent] = useState(null);
   const [showProgressModal, setShowProgressModal] = useState(false);
 
   const [formData, setFormData] = useState({
-    full_name: "",
-    email: "",
-    course: "",
-    phone: "",
-    date_of_birth: "",
-    age: "",
-    gender: "",
-    fathers_name: "",
-    fathers_contact: "",
-    mothers_name: "",
-    mothers_contact: "",
-    address: "",
-    educational_qualification: "",
-    college_school: "",
-    parent_name: "",
-    parent_phone: "",
-    emergency_contact: "",
+    full_name: "", email: "", course: "", phone: "", date_of_birth: "",
+    age: "", gender: "", fathers_name: "", fathers_contact: "",
+    mothers_name: "", mothers_contact: "", address: "",
+    educational_qualification: "", college_school: "", parent_name: "",
+    parent_phone: "", emergency_contact: "",
   });
 
   const [phoneError, setPhoneError] = useState("");
@@ -69,16 +59,14 @@ function MentorStudents() {
     return batchId;
   };
 
-  const getStudentMentorName = (student) => {
-    if (student.mentor_name) return student.mentor_name;
-    return mentorName;
-  };
+  const getStudentMentorName = (student) => student.mentor_name || mentorName;
 
-  // Fetch mentor info – only once, prefer from authUser
+  const getInitials = (name) =>
+    (name || "?").split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+
   useEffect(() => {
     if (mentorFetched.current) return;
     mentorFetched.current = true;
-
     const fetchMentor = async () => {
       if (authUser?.mentor_id) {
         setMentorId(authUser.mentor_id);
@@ -99,7 +87,6 @@ function MentorStudents() {
     fetchMentor();
   }, [authUser]);
 
-  // Fetch students, courses, batches after mentorId is available
   useEffect(() => {
     if (!mentorId) return;
     const fetchAll = async () => {
@@ -128,7 +115,7 @@ function MentorStudents() {
     try {
       const res = await API.get("students/", { params: { mentor: mentorId } });
       setStudents(res.data.results || res.data);
-    } catch (err) {
+    } catch {
       toast.error("Failed to refresh list");
     }
   };
@@ -136,12 +123,10 @@ function MentorStudents() {
   const openViewModal = async (student) => {
     try {
       const fullStudentRes = await API.get(`students/${student.id}/`);
-      const fullStudent = fullStudentRes.data;
       const docsRes = await API.get(`students/${student.id}/documents/`);
       setViewerDocuments(docsRes.data.results || docsRes.data);
-      setViewingStudent(fullStudent);
-    } catch (err) {
-      console.error(err);
+      setViewingStudent(fullStudentRes.data);
+    } catch {
       toast.error("Could not load student details");
     }
   };
@@ -149,23 +134,15 @@ function MentorStudents() {
   const handleEdit = (student) => {
     setEditingId(student.id);
     setFormData({
-      full_name: student.full_name ?? "",
-      email: student.email ?? "",
-      course: student.course ?? "",
-      phone: student.phone ?? "",
-      date_of_birth: student.date_of_birth ?? "",
-      age: student.age ?? "",
-      gender: student.gender ?? "",
-      fathers_name: student.fathers_name ?? "",
-      fathers_contact: student.fathers_contact ?? "",
-      mothers_name: student.mothers_name ?? "",
-      mothers_contact: student.mothers_contact ?? "",
-      address: student.address ?? "",
+      full_name: student.full_name ?? "", email: student.email ?? "",
+      course: student.course ?? "", phone: student.phone ?? "",
+      date_of_birth: student.date_of_birth ?? "", age: student.age ?? "",
+      gender: student.gender ?? "", fathers_name: student.fathers_name ?? "",
+      fathers_contact: student.fathers_contact ?? "", mothers_name: student.mothers_name ?? "",
+      mothers_contact: student.mothers_contact ?? "", address: student.address ?? "",
       educational_qualification: student.educational_qualification ?? "",
-      college_school: student.college_school ?? "",
-      parent_name: student.parent_name ?? "",
-      parent_phone: student.parent_phone ?? "",
-      emergency_contact: student.emergency_contact ?? "",
+      college_school: student.college_school ?? "", parent_name: student.parent_name ?? "",
+      parent_phone: student.parent_phone ?? "", emergency_contact: student.emergency_contact ?? "",
     });
     setShowModal(true);
   };
@@ -179,10 +156,9 @@ function MentorStudents() {
     if (!studentToDelete) return;
     try {
       await API.delete(`students/${studentToDelete.id}/`);
-      toast.success(`Student ${studentToDelete.full_name || studentToDelete.username} deleted`);
+      toast.success(`${studentToDelete.full_name || studentToDelete.username} removed`);
       await refreshList();
-    } catch (err) {
-      console.error(err);
+    } catch {
       toast.error("Failed to delete student");
     } finally {
       setShowDeleteConfirm(false);
@@ -198,16 +174,12 @@ function MentorStudents() {
   };
 
   const uploadDocs = async (studentId, files) => {
-    if (!files.length) return;
     for (const f of files) {
       const fd = new FormData();
       fd.append("file", f);
       fd.append("student", studentId);
-      try {
-        await API.post("upload-student-document/", fd);
-      } catch (err) {
-        toast.error(`Failed to upload ${f.name}`);
-      }
+      try { await API.post("upload-student-document/", fd); }
+      catch { toast.error(`Failed to upload ${f.name}`); }
     }
   };
 
@@ -246,36 +218,19 @@ function MentorStudents() {
 
   const resetForm = () => {
     setFormData({
-      full_name: "",
-      email: "",
-      course: "",
-      phone: "",
-      date_of_birth: "",
-      age: "",
-      gender: "",
-      fathers_name: "",
-      fathers_contact: "",
-      mothers_name: "",
-      mothers_contact: "",
-      address: "",
-      educational_qualification: "",
-      college_school: "",
-      parent_name: "",
-      parent_phone: "",
-      emergency_contact: "",
+      full_name: "", email: "", course: "", phone: "", date_of_birth: "",
+      age: "", gender: "", fathers_name: "", fathers_contact: "",
+      mothers_name: "", mothers_contact: "", address: "",
+      educational_qualification: "", college_school: "", parent_name: "",
+      parent_phone: "", emergency_contact: "",
     });
-    setPhoneError("");
-    setFathersContactError("");
-    setMothersContactError("");
-    setParentPhoneError("");
-    setEmergencyContactError("");
-    setSelectedFiles([]);
-    setEditingId(null);
+    setPhoneError(""); setFathersContactError(""); setMothersContactError("");
+    setParentPhoneError(""); setEmergencyContactError("");
+    setSelectedFiles([]); setEditingId(null);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     const checks = [
       { field: "phone", setErr: setPhoneError, label: "Student phone" },
       { field: "fathers_contact", setErr: setFathersContactError, label: "Father's contact" },
@@ -287,88 +242,54 @@ function MentorStudents() {
     for (const { field, setErr, label } of checks) {
       const val = formData[field];
       if (val && !/^\d{10}$/.test(val)) {
-        setErr("Must be 10 digits");
-        toast.error(`${label} must be 10 digits`);
-        hasErr = true;
-      } else {
-        setErr("");
-      }
+        setErr("Must be 10 digits"); toast.error(`${label} must be 10 digits`); hasErr = true;
+      } else { setErr(""); }
     }
     if (hasErr) return;
-
     setSubmitting(true);
     try {
       if (editingId) {
-        // EDIT: PATCH request
         const payload = {
-          full_name: formData.full_name?.trim() || null,
-          email: formData.email,
-          course: formData.course,
-          phone: formData.phone || null,
+          full_name: formData.full_name?.trim() || null, email: formData.email,
+          course: formData.course, phone: formData.phone || null,
           date_of_birth: formData.date_of_birth || null,
           age: formData.age ? parseInt(formData.age) : null,
-          gender: formData.gender || null,
-          fathers_name: formData.fathers_name || null,
-          fathers_contact: formData.fathers_contact || null,
-          mothers_name: formData.mothers_name || null,
-          mothers_contact: formData.mothers_contact || null,
-          address: formData.address || null,
+          gender: formData.gender || null, fathers_name: formData.fathers_name || null,
+          fathers_contact: formData.fathers_contact || null, mothers_name: formData.mothers_name || null,
+          mothers_contact: formData.mothers_contact || null, address: formData.address || null,
           educational_qualification: formData.educational_qualification || null,
-          college_school: formData.college_school || null,
-          parent_name: formData.parent_name || null,
-          parent_phone: formData.parent_phone || null,
-          emergency_contact: formData.emergency_contact || null,
+          college_school: formData.college_school || null, parent_name: formData.parent_name || null,
+          parent_phone: formData.parent_phone || null, emergency_contact: formData.emergency_contact || null,
         };
         await API.patch(`students/${editingId}/`, payload);
         toast.success("Student updated successfully!");
-        if (selectedFiles.length) {
-          await uploadDocs(editingId, selectedFiles);
-        }
-        await refreshList();
-        setShowModal(false);
-        resetForm();
+        if (selectedFiles.length) await uploadDocs(editingId, selectedFiles);
       } else {
-        // ADD: POST request
         const username = generateUsername(formData.email, formData.full_name);
         const payload = {
-          full_name: formData.full_name?.trim() || null,
-          email: formData.email,
-          course: formData.course,
-          batch: mentorBatch,
-          mentor: mentorId,
-          username,
-          phone: formData.phone || null,
-          date_of_birth: formData.date_of_birth || null,
-          age: formData.age ? parseInt(formData.age) : null,
-          gender: formData.gender || null,
-          fathers_name: formData.fathers_name || null,
-          fathers_contact: formData.fathers_contact || null,
-          mothers_name: formData.mothers_name || null,
-          mothers_contact: formData.mothers_contact || null,
-          address: formData.address || null,
-          educational_qualification: formData.educational_qualification || null,
-          college_school: formData.college_school || null,
-          parent_name: formData.parent_name || null,
-          parent_phone: formData.parent_phone || null,
-          emergency_contact: formData.emergency_contact || null,
+          full_name: formData.full_name?.trim() || null, email: formData.email,
+          course: formData.course, batch: mentorBatch, mentor: mentorId, username,
+          phone: formData.phone || null, date_of_birth: formData.date_of_birth || null,
+          age: formData.age ? parseInt(formData.age) : null, gender: formData.gender || null,
+          fathers_name: formData.fathers_name || null, fathers_contact: formData.fathers_contact || null,
+          mothers_name: formData.mothers_name || null, mothers_contact: formData.mothers_contact || null,
+          address: formData.address || null, educational_qualification: formData.educational_qualification || null,
+          college_school: formData.college_school || null, parent_name: formData.parent_name || null,
+          parent_phone: formData.parent_phone || null, emergency_contact: formData.emergency_contact || null,
         };
         const res = await API.post("students/", payload);
         toast.success(`Student added! Username: ${username}`);
-        if (selectedFiles.length) {
-          await uploadDocs(res.data.id, selectedFiles);
-        }
-        await refreshList();
-        setShowModal(false);
-        resetForm();
+        if (selectedFiles.length) await uploadDocs(res.data.id, selectedFiles);
       }
+      await refreshList();
+      setShowModal(false);
+      resetForm();
     } catch (err) {
       console.error(err);
       let msg = err.response?.data?.detail || "Operation failed";
-      if (err.response?.data) {
-        const data = err.response.data;
-        if (data.email) msg = `Email: ${data.email.join(", ")}`;
-        else if (data.username) msg = `Username: ${data.username.join(", ")}`;
-      }
+      const data = err.response?.data;
+      if (data?.email) msg = `Email: ${data.email.join(", ")}`;
+      else if (data?.username) msg = `Username: ${data.username.join(", ")}`;
       toast.error(msg);
     } finally {
       setSubmitting(false);
@@ -385,29 +306,34 @@ function MentorStudents() {
     );
   });
 
-  const openProgressModal = (student) => {
-    setProgressStudent(student);
-    setShowProgressModal(true);
-  };
+  // ─── Shared styles ───────────────────────────────────────────────────────
+  const inputCls =
+    "w-full bg-white border border-green-200 rounded-xl px-4 py-2.5 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 text-sm transition-all";
+  const readOnlyCls =
+    "w-full bg-green-50 border border-green-100 rounded-xl px-4 py-2.5 text-gray-400 cursor-not-allowed text-sm";
+  const labelCls =
+    "block text-gray-500 text-[11px] font-medium mb-1 tracking-wide uppercase";
+  const sectionTitleCls =
+    "text-[11px] font-semibold tracking-[0.15em] uppercase mb-3";
 
-  const inputClass =
-    "w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/30 text-sm";
-  const readOnlyClass =
-    "w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 text-gray-600 cursor-not-allowed text-sm";
-
+  // ─── Loading ─────────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="flex-1 p-8 bg-gray-50 flex justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-2 border-green-600 border-t-transparent" />
+      <div className="flex-1 flex flex-col items-center justify-center bg-green-50 min-h-screen gap-3">
+        <div className="w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+        <p className="text-green-600 text-xs tracking-widest uppercase">Loading students…</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex-1 p-8 bg-gray-50 text-center text-red-600">
-        {error}
-        <button onClick={() => window.location.reload()} className="ml-2 bg-green-600 text-white px-3 py-1 rounded">
+      <div className="flex-1 flex flex-col items-center justify-center bg-green-50 min-h-screen gap-4">
+        <p className="text-red-500">{error}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="border border-green-500 text-green-600 px-6 py-2 rounded-xl text-sm hover:bg-green-500 hover:text-white transition-colors"
+        >
           Retry
         </button>
       </div>
@@ -415,7 +341,7 @@ function MentorStudents() {
   }
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gray-50">
+    <main className="flex-1 bg-green-50/40 overflow-y-auto" style={{ fontFamily: '"DM Sans", sans-serif' }}>
       <ProgressModal
         isOpen={showProgressModal}
         onClose={() => setShowProgressModal(false)}
@@ -423,103 +349,129 @@ function MentorStudents() {
         studentName={progressStudent?.full_name || progressStudent?.username}
       />
 
-      <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
+      {/* ── Top Banner ───────────────────────────────────────────────────── */}
+      <div className="bg-white border-b border-green-100 px-8 py-6">
+        <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-800">My Students</h1>
-            <p className="text-gray-500 text-sm">Assigned to you ({filteredStudents.length})</p>
+            <p className="text-[10px] tracking-[0.2em] uppercase text-green-400 mb-1.5 font-medium">
+              Mentor Portal
+            </p>
+            <h1
+              className="text-2xl text-gray-800 leading-tight"
+              style={{ fontFamily: '"DM Serif Display", serif' }}
+            >
+              My Students
+            </h1>
+            <p className="text-gray-400 text-xs mt-1 font-light">
+              {filteredStudents.length} student{filteredStudents.length !== 1 ? "s" : ""} in your cohort
+            </p>
           </div>
+
           <button
-            onClick={() => {
-              resetForm();
-              setShowModal(true);
-            }}
-            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2"
+            onClick={() => { resetForm(); setShowModal(true); }}
+            className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white text-xs tracking-wide px-5 py-2.5 rounded-xl font-medium transition-all shadow-sm hover:shadow-md"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
             </svg>
             Add Student
           </button>
         </div>
+      </div>
 
-        <div className="mb-6 relative max-w-md">
-          <input
-            type="text"
-            placeholder="Search by name, email, course, batch..."
-            className="w-full border border-gray-300 rounded-lg py-2 pl-10 pr-4 text-sm focus:ring-2 focus:ring-green-500"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          <svg
-            className="absolute left-3 top-2.5 w-4 h-4 text-gray-400"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+      {/* ── Toolbar ──────────────────────────────────────────────────────── */}
+      <div className="bg-white border-b border-green-100 px-8 py-3">
+        <div className="max-w-6xl mx-auto flex items-center gap-3">
+          <div className="relative flex-1 max-w-sm">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              type="text"
+              placeholder="Search by name, course, batch…"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full bg-green-50 border border-green-200 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-green-400 focus:ring-2 focus:ring-green-100 text-gray-700 placeholder-gray-400 transition-all"
             />
-          </svg>
+          </div>
+          <span className="text-[11px] bg-green-50 border border-green-200 text-green-700 px-4 py-2 rounded-full whitespace-nowrap font-medium">
+            {filteredStudents.length} result{filteredStudents.length !== 1 ? "s" : ""}
+          </span>
         </div>
+      </div>
 
+      {/* ── Card Grid ────────────────────────────────────────────────────── */}
+      <div className="max-w-6xl mx-auto px-8 py-8">
         {filteredStudents.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-xl border border-gray-200 shadow-sm">
-            <p className="text-gray-500">
+          <div className="text-center py-20 bg-white rounded-2xl border border-green-100">
+            <div className="w-14 h-14 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-4">
+              <svg className="w-6 h-6 text-green-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </div>
+            <p className="text-gray-500 text-sm" style={{ fontFamily: '"DM Serif Display", serif' }}>
               {searchTerm ? "No students match your search." : "No students assigned to you yet."}
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {filteredStudents.map((student) => (
               <div
                 key={student.id}
-                className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 hover:shadow-md transition-all duration-200"
+                className="bg-white rounded-2xl border border-green-100 overflow-hidden hover:-translate-y-1 hover:shadow-lg hover:shadow-green-100/80 hover:border-green-300 transition-all duration-200"
               >
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center uppercase font-bold text-green-700">
-                    {student.username?.charAt(0) || "?"}
+                {/* green top accent stripe */}
+                <div className="h-1 bg-gradient-to-r from-green-500 to-green-300" />
+
+                <div className="p-5">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-11 h-11 rounded-full bg-green-600 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0 shadow-sm">
+                      {getInitials(student.full_name || student.username)}
+                    </div>
+                    <div className="min-w-0">
+                      <button
+                        onClick={() => openViewModal(student)}
+                        className="font-semibold text-gray-800 hover:text-green-600 transition-colors text-sm text-left leading-snug truncate w-full block"
+                      >
+                        {student.full_name || student.username}
+                      </button>
+                      <p className="text-[11px] text-gray-500 font-light mt-0.5 truncate">
+                        {student.course}
+                      </p>
+                      <span className="inline-block mt-1 text-[10px] bg-green-50 text-green-600 border border-green-200 px-2 py-0.5 rounded-full font-medium">
+                        {getBatchName(student.batch)}
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <button
-                      onClick={() => openViewModal(student)}
-                      className="font-semibold text-gray-800 hover:text-green-600 transition text-left"
+
+                  <div className="h-px bg-green-50 mb-3" />
+
+                  <div className="flex flex-wrap gap-1.5">
+                    <Link
+                      to={`/mentor/review-sheet?student_id=${student.id}`}
+                      className="text-[11px] px-3 py-1.5 rounded-full border border-green-200 bg-green-50 text-green-700 hover:bg-green-600 hover:text-white hover:border-green-600 transition-all font-medium"
                     >
-                      {student.full_name || student.username}
+                      Review Sheet
+                    </Link>
+                    <button
+                      onClick={() => { setProgressStudent(student); setShowProgressModal(true); }}
+                      className="text-[11px] px-3 py-1.5 rounded-full border border-green-200 bg-green-50 text-green-700 hover:bg-green-600 hover:text-white hover:border-green-600 transition-all font-medium"
+                    >
+                      Progress
                     </button>
-                    <p className="text-xs text-gray-500">
-                      {student.course} • {getBatchName(student.batch)}
-                    </p>
+                    <button
+                      onClick={() => handleEdit(student)}
+                      className="text-[11px] px-3 py-1.5 rounded-full border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-all font-medium"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDeleteClick(student)}
+                      className="text-[11px] px-3 py-1.5 rounded-full border border-red-200 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white hover:border-red-500 transition-all font-medium"
+                    >
+                      Delete
+                    </button>
                   </div>
-                </div>
-                <div className="flex flex-wrap gap-2 mt-3">
-                  <Link
-                    to={`/mentor/review-sheet?student_id=${student.id}`}
-                    className="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-full transition"
-                  >
-                    Review Sheet
-                  </Link>
-                  <button
-                    onClick={() => handleEdit(student)}
-                    className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-full transition"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => handleDeleteClick(student)}
-                    className="text-xs bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-full transition"
-                  >
-                    Delete
-                  </button>
-                  <button
-                    onClick={() => openProgressModal(student)}
-                    className="text-xs bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-full transition"
-                  >
-                    Progress
-                  </button>
                 </div>
               </div>
             ))}
@@ -527,159 +479,40 @@ function MentorStudents() {
         )}
       </div>
 
-      {/* Add/Edit Modal (unchanged) */}
+      {/* ══════════════════════════════════════════════════════════════════════
+          ADD / EDIT MODAL
+      ══════════════════════════════════════════════════════════════════════ */}
       {showModal && (
         <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4"
           onClick={() => setShowModal(false)}
         >
           <form
             onSubmit={handleSubmit}
-            className="bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto"
+            className="bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto border border-green-100 shadow-2xl shadow-green-100/50"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="sticky top-0 bg-white px-4 py-3 border-b flex justify-between items-center">
-              <div className="flex gap-3">
-                <div className="w-7 h-7 rounded-lg bg-green-100 flex items-center justify-center">
-                  <svg className="w-3.5 h-3.5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d={editingId ? "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" : "M12 4v16m8-8H4"}
-                    />
+            <div className="sticky top-0 z-10 bg-white px-6 py-4 border-b border-green-100 rounded-t-2xl flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-green-600 flex items-center justify-center shadow-sm">
+                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                      d={editingId
+                        ? "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                        : "M12 4v16m8-8H4"} />
                   </svg>
                 </div>
                 <div>
-                  <h3 className="font-semibold">{editingId ? "Edit Student" : "Add New Student"}</h3>
-                  <p className="text-xs text-gray-500">
+                  <h3 className="font-semibold text-gray-800 text-sm">
+                    {editingId ? "Edit Student" : "Add New Student"}
+                  </h3>
+                  <p className="text-[11px] text-gray-400 font-light">
                     {editingId ? "Update student information" : "Add a student to your batch"}
                   </p>
                 </div>
               </div>
-              <button type="button" onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600">
-                ✕
-              </button>
-            </div>
-
-            <div className="p-6 space-y-5">
-              {/* Basic Information */}
-              <div>
-                <h4 className="text-xs font-semibold text-green-600 uppercase mb-2">Basic Information</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div><label className="block text-gray-600 text-xs font-medium mb-1">Full Name</label><input type="text" name="full_name" value={formData.full_name} onChange={handleChange} className={inputClass} /></div>
-                  <div><label className="block text-gray-600 text-xs font-medium mb-1">Email *</label><input type="email" name="email" value={formData.email} onChange={handleChange} required className={inputClass} /></div>
-                  <div><label className="block text-gray-600 text-xs font-medium mb-1">Course *</label><select name="course" value={formData.course} onChange={handleChange} required className={inputClass}><option value="">Select a course</option>{coursesList.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select></div>
-                  <div>
-                    <label className="block text-gray-600 text-xs font-medium mb-1">Batch</label>
-                    <input
-                      type="text"
-                      value={editingId ? getBatchName(students.find(s => s.id === editingId)?.batch) : (getBatchName(mentorBatch) || "Not assigned")}
-                      readOnly
-                      className={readOnlyClass}
-                    />
-                    {!editingId && <p className="text-xs text-gray-400 mt-1">Auto‑assigned from your mentor profile</p>}
-                  </div>
-                  <div>
-                    <label className="block text-gray-600 text-xs font-medium mb-1">Mentor</label>
-                    <input
-                      type="text"
-                      value={editingId ? (students.find(s => s.id === editingId)?.mentor_name || mentorName) : mentorName}
-                      readOnly
-                      className={readOnlyClass}
-                    />
-                    {!editingId && <p className="text-xs text-gray-400 mt-1">You are the assigned mentor</p>}
-                  </div>
-                  <div><label className="block text-gray-600 text-xs font-medium mb-1">Phone</label><input type="text" name="phone" value={formData.phone} onChange={handleChange} className={inputClass} />{phoneError && <p className="text-red-500 text-xs mt-1">{phoneError}</p>}</div>
-                  <div><label className="block text-gray-600 text-xs font-medium mb-1">Date of Birth</label><input type="date" name="date_of_birth" value={formData.date_of_birth} onChange={handleChange} className={inputClass} /></div>
-                  <div><label className="block text-gray-600 text-xs font-medium mb-1">Age</label><input type="text" name="age" value={formData.age} readOnly className={readOnlyClass} /></div>
-                  <div><label className="block text-gray-600 text-xs font-medium mb-1">Gender</label><select name="gender" value={formData.gender} onChange={handleChange} className={inputClass}><option value="">Select</option><option>Male</option><option>Female</option><option>Other</option></select></div>
-                </div>
-              </div>
-
-              {/* Parents */}
-              <div className="border-t pt-4">
-                <h4 className="text-xs font-semibold text-amber-600 uppercase mb-2">Parents</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div><label className="block text-gray-600 text-xs mb-1">Father's Name</label><input type="text" name="fathers_name" value={formData.fathers_name} onChange={handleChange} className={inputClass} /></div>
-                  <div><label className="block text-gray-600 text-xs mb-1">Father's Contact</label><input type="text" name="fathers_contact" value={formData.fathers_contact} onChange={handleChange} className={inputClass} />{fathersContactError && <p className="text-red-500 text-xs mt-1">{fathersContactError}</p>}</div>
-                  <div><label className="block text-gray-600 text-xs mb-1">Mother's Name</label><input type="text" name="mothers_name" value={formData.mothers_name} onChange={handleChange} className={inputClass} /></div>
-                  <div><label className="block text-gray-600 text-xs mb-1">Mother's Contact</label><input type="text" name="mothers_contact" value={formData.mothers_contact} onChange={handleChange} className={inputClass} />{mothersContactError && <p className="text-red-500 text-xs mt-1">{mothersContactError}</p>}</div>
-                </div>
-              </div>
-
-              {/* Address */}
-              <div className="border-t pt-4">
-                <h4 className="text-xs font-semibold text-amber-600 uppercase mb-2">Address</h4>
-                <textarea name="address" rows="2" value={formData.address} onChange={handleChange} className={`${inputClass} resize-none`} />
-              </div>
-
-              {/* Education */}
-              <div className="border-t pt-4">
-                <h4 className="text-xs font-semibold text-amber-600 uppercase mb-2">Education</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div><label className="block text-gray-600 text-xs mb-1">Educational Qualification</label><input type="text" name="educational_qualification" value={formData.educational_qualification} onChange={handleChange} className={inputClass} /></div>
-                  <div><label className="block text-gray-600 text-xs mb-1">College / School</label><input type="text" name="college_school" value={formData.college_school} onChange={handleChange} className={inputClass} /></div>
-                  <div><label className="block text-gray-600 text-xs mb-1">Parent Name</label><input type="text" name="parent_name" value={formData.parent_name} onChange={handleChange} className={inputClass} /></div>
-                  <div><label className="block text-gray-600 text-xs mb-1">Parent Phone</label><input type="text" name="parent_phone" value={formData.parent_phone} onChange={handleChange} className={inputClass} />{parentPhoneError && <p className="text-red-500 text-xs mt-1">{parentPhoneError}</p>}</div>
-                  <div><label className="block text-gray-600 text-xs mb-1">Emergency Contact</label><input type="text" name="emergency_contact" value={formData.emergency_contact} onChange={handleChange} className={inputClass} />{emergencyContactError && <p className="text-red-500 text-xs mt-1">{emergencyContactError}</p>}</div>
-                </div>
-              </div>
-
-              {/* Documents */}
-              <div className="border-t pt-4">
-                <h4 className="text-xs font-semibold text-blue-600 uppercase mb-2">Documents</h4>
-                <input
-                  type="file"
-                  multiple
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  onChange={(e) => setSelectedFiles(Array.from(e.target.files))}
-                  className="w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
-                />
-                {selectedFiles.length > 0 && (
-                  <ul className="mt-2 text-xs text-gray-500 list-disc pl-5">
-                    {selectedFiles.map((f, i) => <li key={i}>📎 {f.name}</li>)}
-                  </ul>
-                )}
-              </div>
-            </div>
-
-            <div className="sticky bottom-0 bg-white px-6 py-4 border-t">
-              <button
-                type="submit"
-                disabled={submitting}
-                className="w-full bg-green-600 hover:bg-green-700 text-white py-2.5 rounded-lg transition text-sm font-medium disabled:opacity-50"
-              >
-                {submitting ? (editingId ? "Saving..." : "Adding...") : (editingId ? "Save Changes" : "Add Student")}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* View Details Modal (unchanged) */}
-      {viewingStudent && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-          onClick={() => setViewingStudent(null)}
-        >
-          <div
-            className="bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="sticky top-0 bg-white px-4 py-3 border-b flex justify-between items-center">
-              <div className="flex gap-3">
-                <div className="w-7 h-7 rounded-lg bg-green-100 flex items-center justify-center">
-                  <svg className="w-3.5 h-3.5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                  </svg>
-                </div>
-                <div>
-                  <h3 className="font-semibold">Student Details</h3>
-                  <p className="text-xs text-gray-500">Complete information (same as admin)</p>
-                </div>
-              </div>
-              <button onClick={() => setViewingStudent(null)} className="text-gray-400 hover:text-gray-600">
+              <button type="button" onClick={() => setShowModal(false)}
+                className="text-gray-400 hover:text-gray-600 text-xl leading-none transition-colors">
                 ✕
               </button>
             </div>
@@ -687,65 +520,231 @@ function MentorStudents() {
             <div className="p-6 space-y-6">
               {/* Basic Information */}
               <div>
-                <h4 className="text-xs font-semibold text-green-600 uppercase tracking-wider mb-3">Basic Information</h4>
+                <p className={`${sectionTitleCls} text-green-600`}>Basic Information</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div><label className="block text-gray-500 text-xs">Full Name</label><p className="text-gray-800 text-sm">{viewingStudent.full_name || "—"}</p></div>
-                  <div><label className="block text-gray-500 text-xs">Email</label><p className="text-gray-800 text-sm">{viewingStudent.email}</p></div>
-                  <div><label className="block text-gray-500 text-xs">Course</label><p className="text-gray-800 text-sm">{viewingStudent.course}</p></div>
-                  <div><label className="block text-gray-500 text-xs">Batch</label><p className="text-gray-800 text-sm">{getBatchName(viewingStudent.batch)}</p></div>
-                  <div><label className="block text-gray-500 text-xs">Mentor</label><p className="text-gray-800 text-sm">{getStudentMentorName(viewingStudent)}</p></div>
-                  <div><label className="block text-gray-500 text-xs">Phone</label><p className="text-gray-800 text-sm">{viewingStudent.phone || "—"}</p></div>
-                  <div><label className="block text-gray-500 text-xs">Date of Birth</label><p className="text-gray-800 text-sm">{viewingStudent.date_of_birth || "—"}</p></div>
-                  <div><label className="block text-gray-500 text-xs">Age</label><p className="text-gray-800 text-sm">{viewingStudent.age || "—"}</p></div>
-                  <div><label className="block text-gray-500 text-xs">Gender</label><p className="text-gray-800 text-sm">{viewingStudent.gender || "—"}</p></div>
+                  <div><label className={labelCls}>Full Name</label><input type="text" name="full_name" value={formData.full_name} onChange={handleChange} className={inputCls} /></div>
+                  <div><label className={labelCls}>Email *</label><input type="email" name="email" value={formData.email} onChange={handleChange} required className={inputCls} /></div>
+                  <div>
+                    <label className={labelCls}>Course *</label>
+                    <select name="course" value={formData.course} onChange={handleChange} required className={inputCls}>
+                      <option value="">Select a course</option>
+                      {coursesList.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Batch</label>
+                    <input type="text" readOnly
+                      value={editingId ? getBatchName(students.find((s) => s.id === editingId)?.batch) : (getBatchName(mentorBatch) || "Not assigned")}
+                      className={readOnlyCls} />
+                    {!editingId && <p className="text-[11px] text-gray-400 mt-1">Auto-assigned from your profile</p>}
+                  </div>
+                  <div>
+                    <label className={labelCls}>Mentor</label>
+                    <input type="text" readOnly
+                      value={editingId ? (students.find((s) => s.id === editingId)?.mentor_name || mentorName) : mentorName}
+                      className={readOnlyCls} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Phone</label>
+                    <input type="text" name="phone" value={formData.phone} onChange={handleChange} className={inputCls} />
+                    {phoneError && <p className="text-red-500 text-xs mt-1">{phoneError}</p>}
+                  </div>
+                  <div><label className={labelCls}>Date of Birth</label><input type="date" name="date_of_birth" value={formData.date_of_birth} onChange={handleChange} className={inputCls} /></div>
+                  <div><label className={labelCls}>Age</label><input type="text" name="age" value={formData.age} readOnly className={readOnlyCls} /></div>
+                  <div>
+                    <label className={labelCls}>Gender</label>
+                    <select name="gender" value={formData.gender} onChange={handleChange} className={inputCls}>
+                      <option value="">Select</option>
+                      <option>Male</option><option>Female</option><option>Other</option>
+                    </select>
+                  </div>
                 </div>
               </div>
 
               {/* Parents */}
-              <div className="border-t pt-4">
-                <h4 className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-3">Parents</h4>
+              <div className="border-t border-green-50 pt-5">
+                <p className={`${sectionTitleCls} text-gray-400`}>Parents</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div><label className="block text-gray-500 text-xs">Father's Name</label><p>{viewingStudent.fathers_name || "—"}</p></div>
-                  <div><label className="block text-gray-500 text-xs">Father's Contact</label><p>{viewingStudent.fathers_contact || "—"}</p></div>
-                  <div><label className="block text-gray-500 text-xs">Mother's Name</label><p>{viewingStudent.mothers_name || "—"}</p></div>
-                  <div><label className="block text-gray-500 text-xs">Mother's Contact</label><p>{viewingStudent.mothers_contact || "—"}</p></div>
+                  <div><label className={labelCls}>Father's Name</label><input type="text" name="fathers_name" value={formData.fathers_name} onChange={handleChange} className={inputCls} /></div>
+                  <div>
+                    <label className={labelCls}>Father's Contact</label>
+                    <input type="text" name="fathers_contact" value={formData.fathers_contact} onChange={handleChange} className={inputCls} />
+                    {fathersContactError && <p className="text-red-500 text-xs mt-1">{fathersContactError}</p>}
+                  </div>
+                  <div><label className={labelCls}>Mother's Name</label><input type="text" name="mothers_name" value={formData.mothers_name} onChange={handleChange} className={inputCls} /></div>
+                  <div>
+                    <label className={labelCls}>Mother's Contact</label>
+                    <input type="text" name="mothers_contact" value={formData.mothers_contact} onChange={handleChange} className={inputCls} />
+                    {mothersContactError && <p className="text-red-500 text-xs mt-1">{mothersContactError}</p>}
+                  </div>
                 </div>
               </div>
 
               {/* Address */}
-              <div className="border-t pt-4">
-                <h4 className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-3">Address</h4>
-                <p className="text-gray-800 text-sm">{viewingStudent.address || "—"}</p>
+              <div className="border-t border-green-50 pt-5">
+                <p className={`${sectionTitleCls} text-gray-400`}>Address</p>
+                <textarea name="address" rows={2} value={formData.address} onChange={handleChange} className={`${inputCls} resize-none`} />
               </div>
 
               {/* Education */}
-              <div className="border-t pt-4">
-                <h4 className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-3">Education</h4>
+              <div className="border-t border-green-50 pt-5">
+                <p className={`${sectionTitleCls} text-gray-400`}>Education</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div><label className="block text-gray-500 text-xs">Educational Qualification</label><p>{viewingStudent.educational_qualification || "—"}</p></div>
-                  <div><label className="block text-gray-500 text-xs">College / School</label><p>{viewingStudent.college_school || "—"}</p></div>
-                  <div><label className="block text-gray-500 text-xs">Parent Name</label><p>{viewingStudent.parent_name || "—"}</p></div>
-                  <div><label className="block text-gray-500 text-xs">Parent Phone</label><p>{viewingStudent.parent_phone || "—"}</p></div>
-                  <div><label className="block text-gray-500 text-xs">Emergency Contact</label><p>{viewingStudent.emergency_contact || "—"}</p></div>
+                  <div><label className={labelCls}>Qualification</label><input type="text" name="educational_qualification" value={formData.educational_qualification} onChange={handleChange} className={inputCls} /></div>
+                  <div><label className={labelCls}>College / School</label><input type="text" name="college_school" value={formData.college_school} onChange={handleChange} className={inputCls} /></div>
+                  <div><label className={labelCls}>Parent Name</label><input type="text" name="parent_name" value={formData.parent_name} onChange={handleChange} className={inputCls} /></div>
+                  <div>
+                    <label className={labelCls}>Parent Phone</label>
+                    <input type="text" name="parent_phone" value={formData.parent_phone} onChange={handleChange} className={inputCls} />
+                    {parentPhoneError && <p className="text-red-500 text-xs mt-1">{parentPhoneError}</p>}
+                  </div>
+                  <div>
+                    <label className={labelCls}>Emergency Contact</label>
+                    <input type="text" name="emergency_contact" value={formData.emergency_contact} onChange={handleChange} className={inputCls} />
+                    {emergencyContactError && <p className="text-red-500 text-xs mt-1">{emergencyContactError}</p>}
+                  </div>
                 </div>
               </div>
 
               {/* Documents */}
-              <div className="border-t pt-4">
-                <h4 className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-3">Documents</h4>
+              <div className="border-t border-green-50 pt-5">
+                <p className={`${sectionTitleCls} text-green-600`}>Documents</p>
+                <input
+                  type="file" multiple accept=".pdf,.jpg,.jpeg,.png"
+                  onChange={(e) => setSelectedFiles(Array.from(e.target.files))}
+                  className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border file:border-green-200 file:text-xs file:font-medium file:bg-green-50 file:text-green-700 hover:file:bg-green-600 hover:file:text-white file:transition-colors file:cursor-pointer"
+                />
+                {selectedFiles.length > 0 && (
+                  <ul className="mt-2 space-y-1">
+                    {selectedFiles.map((f, i) => (
+                      <li key={i} className="text-xs text-gray-500 flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" />
+                        {f.name}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+
+            <div className="sticky bottom-0 bg-white px-6 py-4 border-t border-green-100 rounded-b-2xl">
+              <button
+                type="submit"
+                disabled={submitting}
+                className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl text-sm font-medium transition-all disabled:opacity-50 shadow-sm hover:shadow-md"
+              >
+                {submitting
+                  ? (editingId ? "Saving…" : "Adding…")
+                  : (editingId ? "Save Changes" : "Add Student")}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          VIEW DETAILS MODAL
+      ══════════════════════════════════════════════════════════════════════ */}
+      {viewingStudent && (
+        <div
+          className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          onClick={() => setViewingStudent(null)}
+        >
+          <div
+            className="bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto border border-green-100 shadow-2xl shadow-green-100/50"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="sticky top-0 bg-white px-6 py-4 border-b border-green-100 rounded-t-2xl flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-green-600 flex items-center justify-center text-white font-semibold text-sm shadow-sm">
+                  {getInitials(viewingStudent.full_name || viewingStudent.username)}
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-800 text-sm">
+                    {viewingStudent.full_name || viewingStudent.username}
+                  </h3>
+                  <p className="text-[11px] text-gray-400">{viewingStudent.course}</p>
+                </div>
+              </div>
+              <button onClick={() => setViewingStudent(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              <div>
+                <p className={`${sectionTitleCls} text-green-600`}>Basic Information</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {[
+                    ["Full Name", viewingStudent.full_name],
+                    ["Email", viewingStudent.email],
+                    ["Course", viewingStudent.course],
+                    ["Batch", getBatchName(viewingStudent.batch)],
+                    ["Mentor", getStudentMentorName(viewingStudent)],
+                    ["Phone", viewingStudent.phone],
+                    ["Date of Birth", viewingStudent.date_of_birth],
+                    ["Age", viewingStudent.age],
+                    ["Gender", viewingStudent.gender],
+                  ].map(([label, val]) => (
+                    <div key={label} className="bg-green-50/60 rounded-xl p-3 border border-green-100/60">
+                      <p className="text-[10px] uppercase tracking-widest text-green-400 mb-1">{label}</p>
+                      <p className="text-gray-800 text-sm font-medium">{val || "—"}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="border-t border-green-50 pt-5">
+                <p className={`${sectionTitleCls} text-gray-400`}>Parents</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {[
+                    ["Father's Name", viewingStudent.fathers_name],
+                    ["Father's Contact", viewingStudent.fathers_contact],
+                    ["Mother's Name", viewingStudent.mothers_name],
+                    ["Mother's Contact", viewingStudent.mothers_contact],
+                  ].map(([label, val]) => (
+                    <div key={label} className="bg-green-50/60 rounded-xl p-3 border border-green-100/60">
+                      <p className="text-[10px] uppercase tracking-widest text-green-400 mb-1">{label}</p>
+                      <p className="text-gray-800 text-sm font-medium">{val || "—"}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="border-t border-green-50 pt-5">
+                <p className={`${sectionTitleCls} text-gray-400`}>Address</p>
+                <div className="bg-green-50/60 rounded-xl p-3 border border-green-100/60">
+                  <p className="text-gray-800 text-sm">{viewingStudent.address || "—"}</p>
+                </div>
+              </div>
+
+              <div className="border-t border-green-50 pt-5">
+                <p className={`${sectionTitleCls} text-gray-400`}>Education</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {[
+                    ["Qualification", viewingStudent.educational_qualification],
+                    ["Institution", viewingStudent.college_school],
+                    ["Parent Name", viewingStudent.parent_name],
+                    ["Parent Phone", viewingStudent.parent_phone],
+                    ["Emergency Contact", viewingStudent.emergency_contact],
+                  ].map(([label, val]) => (
+                    <div key={label} className="bg-green-50/60 rounded-xl p-3 border border-green-100/60">
+                      <p className="text-[10px] uppercase tracking-widest text-green-400 mb-1">{label}</p>
+                      <p className="text-gray-800 text-sm font-medium">{val || "—"}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="border-t border-green-50 pt-5">
+                <p className={`${sectionTitleCls} text-green-600`}>Documents</p>
                 {viewerDocuments.length === 0 ? (
                   <p className="text-gray-400 text-sm">No documents uploaded.</p>
                 ) : (
                   <ul className="space-y-2">
                     {viewerDocuments.map((doc) => (
                       <li key={doc.id}>
-                        <a
-                          href={doc.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:underline flex items-center gap-2"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <a href={doc.url} target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-2 text-green-600 hover:text-green-700 transition-colors text-sm">
+                          <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                           </svg>
                           {doc.file_name}
@@ -757,8 +756,9 @@ function MentorStudents() {
               </div>
             </div>
 
-            <div className="sticky bottom-0 bg-white px-6 py-4 border-t flex justify-end">
-              <button onClick={() => setViewingStudent(null)} className="bg-gray-100 hover:bg-gray-200 px-5 py-2 rounded-lg">
+            <div className="sticky bottom-0 bg-white px-6 py-4 border-t border-green-100 rounded-b-2xl flex justify-end">
+              <button onClick={() => setViewingStudent(null)}
+                className="border border-green-200 text-gray-500 px-6 py-2 rounded-xl text-sm hover:border-green-400 hover:text-green-600 transition-colors">
                 Close
               </button>
             </div>
@@ -766,21 +766,34 @@ function MentorStudents() {
         </div>
       )}
 
-      {/* Delete Confirmation Modal (unchanged) */}
+      {/* ══════════════════════════════════════════════════════════════════════
+          DELETE CONFIRM MODAL
+      ══════════════════════════════════════════════════════════════════════ */}
       {showDeleteConfirm && studentToDelete && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6">
-            <h3 className="text-lg font-semibold">Confirm Delete</h3>
-            <p className="text-gray-600 my-4">
-              Delete <strong>{studentToDelete.full_name || studentToDelete.username}</strong>? This action cannot be undone.
-            </p>
-            <div className="flex justify-end gap-3">
-              <button onClick={() => setShowDeleteConfirm(false)} className="px-4 py-2 bg-gray-100 rounded-lg">
-                Cancel
-              </button>
-              <button onClick={confirmDelete} className="px-4 py-2 bg-red-600 text-white rounded-lg">
-                Delete
-              </button>
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full border border-red-100 shadow-2xl overflow-hidden">
+            <div className="h-1 bg-gradient-to-r from-red-400 to-red-300" />
+            <div className="p-6">
+              <p className="text-[10px] tracking-[0.2em] uppercase text-red-400 mb-2 font-medium">Confirm Removal</p>
+              <h3 className="text-lg text-gray-800 mb-3" style={{ fontFamily: '"DM Serif Display", serif' }}>
+                Remove Student?
+              </h3>
+              <p className="text-gray-500 text-sm leading-relaxed">
+                You are about to remove{" "}
+                <span className="text-gray-800 font-semibold">
+                  {studentToDelete.full_name || studentToDelete.username}
+                </span>. This action cannot be undone.
+              </p>
+              <div className="flex justify-end gap-3 mt-6">
+                <button onClick={() => setShowDeleteConfirm(false)}
+                  className="px-5 py-2 border border-gray-200 text-gray-500 rounded-xl text-sm hover:border-gray-300 transition-colors">
+                  Cancel
+                </button>
+                <button onClick={confirmDelete}
+                  className="px-5 py-2 bg-red-500 hover:bg-red-600 text-white rounded-xl text-sm transition-colors">
+                  Delete
+                </button>
+              </div>
             </div>
           </div>
         </div>

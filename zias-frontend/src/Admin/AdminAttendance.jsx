@@ -1,4 +1,4 @@
-// src/Admin/AdminAttendance.jsx (no chart, only date picker + details)
+// src/Admin/AdminAttendance.jsx
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import API from '../api/api';
@@ -11,6 +11,12 @@ function AdminAttendance() {
   const [attendance, setAttendance] = useState(null);
   const [loading, setLoading] = useState(false);
   const [studentLoading, setStudentLoading] = useState(true);
+
+  // Helper to get student display name
+  const getStudentName = (student) => {
+    if (!student) return '';
+    return student.name || student.full_name || student.username || `Student ${student.id}`;
+  };
 
   // Load student list
   useEffect(() => {
@@ -54,7 +60,7 @@ function AdminAttendance() {
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen w-screen bg-gray-50">
       <Sidebar />
       <main className="flex-1 p-6 overflow-y-auto">
         <div className="max-w-4xl mx-auto">
@@ -72,7 +78,7 @@ function AdminAttendance() {
                 >
                   <option value="">-- Select Student --</option>
                   {students.map(s => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
+                    <option key={s.id} value={s.id}>{getStudentName(s)}</option>
                   ))}
                 </select>
               </div>
@@ -95,12 +101,11 @@ function AdminAttendance() {
               {!loading && attendance ? (
                 <div className="bg-white rounded-xl shadow-sm p-5">
                   <h2 className="text-lg font-semibold mb-3">
-                    {selectedStudent?.name} – {new Date(selectedDate).toLocaleDateString()}
+                    {getStudentName(selectedStudent)} – {new Date(selectedDate).toLocaleDateString()}
                   </h2>
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div><span className="text-gray-500">Check In:</span> {new Date(attendance.check_in).toLocaleTimeString()}</div>
                     <div><span className="text-gray-500">Check Out:</span> {attendance.check_out ? new Date(attendance.check_out).toLocaleTimeString() : '—'}</div>
-                    <div><span className="text-gray-500">Break (min):</span> {attendance.break_minutes || 0}</div>
                     <div><span className="text-gray-500">Net Hours:</span> <span className="font-semibold text-green-700">{attendance.net_work_hours?.toFixed(2) || 0} hrs</span></div>
                     <div className="col-span-2"><span className="text-gray-500">Reason:</span> {attendance.check_out_reason || '—'}</div>
                   </div>
@@ -108,7 +113,7 @@ function AdminAttendance() {
               ) : (
                 !loading && (
                   <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-5 text-center text-yellow-800">
-                    No attendance record for {selectedStudent?.name} on {selectedDate}.
+                    No attendance record for {getStudentName(selectedStudent)} on {new Date(selectedDate).toLocaleDateString()}.
                   </div>
                 )
               )}

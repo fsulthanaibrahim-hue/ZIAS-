@@ -1,4 +1,4 @@
-// src/components/Sidebar.jsx – added Review Folders navigation
+// src/components/Sidebar.jsx – added Review Folders navigation + Attendance icon
 import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import NotificationBell from "./NotificationBell";
@@ -50,6 +50,10 @@ function getIcon(label) {
       return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}>
         <path d="M2 2h12v12H2V2zm1 1v10h10V3H3zm2 2h6v1H5V5zm0 2h6v1H5V7zm0 2h6v1H5V9zm0 2h4v1H5v-1z" />
       </svg>;
+    case "Attendance":
+      return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}>
+        <path d="M8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13zm0 1a5.5 5.5 0 110 11 5.5 5.5 0 010-11zm.5 2H7v5.5l4 2.5.5-1-3.5-2V4.5z"/>
+      </svg>;
     case "Profile":
       return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}><path d="M8 8a3 3 0 100-6 3 3 0 000 6zm-2 1a5 5 0 00-5 5h14a5 5 0 00-5-5H6z" /></svg>;
     default:
@@ -84,7 +88,7 @@ function Sidebar() {
     { path: "/admin/courses", label: "Courses" },
     { path: "/admin/modules", label: "Modules" },
     { path: "/admin/batches", label: "Batches" },
-    { path: "/admin/review-folders", label: "Review Folders" },  
+    { path: "/admin/review-folders", label: "Review Folders" },
     { path: "/admin/attendance", label: "Attendance" },
     { path: "/admin/messages", label: "Messages" },
     { path: "/admin/review-sheets", label: "Review Sheets" },
@@ -99,7 +103,6 @@ function Sidebar() {
     >
       {/* Header: clickable logo (left) and notification bell (right) */}
       <div className="p-3 border-b border-gray-200 flex items-center justify-between gap-2">
-        {/* Clickable logo area */}
         <button
           onClick={toggleSidebar}
           className="flex items-center gap-3 focus:outline-none cursor-pointer hover:opacity-80 transition-opacity"

@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../../api/api";
 import StudentSidebar from "../../components/StudentSidebar";
-import WeeklySubmissions from "./WeeklySubmissions";
 import InOutRegister from "./InOutRegister";
 
 // 🔥 UNIQUE WIDGET: Module Marathon – visual progress + streak
@@ -16,7 +15,6 @@ const ModuleMarathon = ({ studentId }) => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Get module progress
         const moduleRes = await API.get("modules/student-modules/");
         const modules = moduleRes.data;
         const unlocked = modules.filter(m => !m.is_locked).length;
@@ -24,7 +22,6 @@ const ModuleMarathon = ({ studentId }) => {
         const percentage = total > 0 ? Math.round((unlocked / total) * 100) : 0;
         setProgress({ completedWeeks: unlocked, totalWeeks: total, percentage });
 
-        // Get attendance history to calculate streak
         const attRes = await API.get("attendance/history/");
         let records = attRes.data.results || attRes.data || [];
         records.sort((a,b) => new Date(b.check_in) - new Date(a.check_in));
@@ -45,7 +42,6 @@ const ModuleMarathon = ({ studentId }) => {
         }
         setStreak(currentStreak);
 
-        // Find next locked module
         const nextLocked = modules.find(m => m.is_locked === true);
         setNextWeek(nextLocked ? { title: nextLocked.title, id: nextLocked.id } : null);
       } catch (err) {
@@ -104,19 +100,18 @@ const ModuleMarathon = ({ studentId }) => {
 function StudentDashboard() {
   const [loading, setLoading] = useState(true);
   const [student, setStudent] = useState(null);
-  const [weeks, setWeeks] = useState([]);
-  const [selectedWeekId, setSelectedWeekId] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         await API.post("update-dashboard-access/");
-        try { const studentRes = await API.get("students/me/"); setStudent(studentRes.data); } catch (err) { console.warn(err); }
-        const modulesRes = await API.get("modules/student-modules/");
-        const modulesData = modulesRes.data;
-        setWeeks(modulesData);
-        if (modulesData.length > 0) setSelectedWeekId(modulesData[0].id);
+        try {
+          const studentRes = await API.get("students/me/");
+          setStudent(studentRes.data);
+        } catch (err) {
+          console.warn(err);
+        }
       } catch (err) {
         if (err.response?.status === 401) navigate("/login");
       } finally {
@@ -130,7 +125,9 @@ function StudentDashboard() {
     return (
       <div className="flex min-h-screen bg-gray-50">
         <StudentSidebar />
-        <div className="flex-1 flex items-center justify-center"><div className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin" /></div>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
+        </div>
       </div>
     );
   }
@@ -147,17 +144,11 @@ function StudentDashboard() {
             {student?.course && <p className="text-sm text-gray-500 mt-1">Course: <span className="text-gray-700">{student.course}</span></p>}
           </div>
 
-          {/* 🔥 UNIQUE – Module Marathon widget */}
-          <ModuleMarathon studentId={student?.id} />
-
           {/* In/Out Register (without history) */}
           <InOutRegister showHistory={false} />
 
-
-          {selectedWeekId && (
-            <div className="bg-white rounded-xl shadow-sm p-6"><WeeklySubmissions weekId={selectedWeekId} studentId={student?.id} /></div>
-          )}
-          {weeks.length === 0 && <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-500">No weeks assigned yet.</div>}
+          {/* Module Marathon widget */}
+          <ModuleMarathon studentId={student?.id} />
         </div>
       </main>
     </div>
