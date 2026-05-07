@@ -586,5 +586,3 @@ class AttendanceRecordSerializer(serializers.ModelSerializer):
     class Meta:
         model = AttendanceRecord
         fields = '__all__'
-        read_only_fields = ['student', 'check_in', 'created_at', 'net_work_hours']
-

@@ -11,6 +11,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.exceptions import ValidationError, NotFound
 from django.utils import timezone
 from django.db.models import Q
+from django.db import models
 from django.shortcuts import get_object_or_404
 from django.utils.crypto import get_random_string
 from datetime import timedelta
@@ -20,6 +21,7 @@ from django.conf import settings
 from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken, TokenError
 from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
+from datetime import datetime
 
 from .models import (
     User, Student, Mentor, Reviewer, Course, Module, Day, Task, Batch,
@@ -241,10 +243,8 @@ class CourseViewSet(viewsets.ModelViewSet):
 
 
 # ----------------------------
-# MODULE VIEWSET – WITH LOCKING LOGIC
+# MODULE VIEWSET – WITH LOCKING LOGIC BASED ON TASK_STATUS
 # ----------------------------
-# students/views.py – relevant sections
-
 class ModuleViewSet(viewsets.ModelViewSet):
     queryset = Module.objects.all()
     serializer_class = ModuleSerializer
@@ -253,8 +253,15 @@ class ModuleViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='for-course')
     def for_course(self, request):
-        # ... keep existing code unchanged ...
-        pass
+        course_id = request.query_params.get('course_id')
+        if not course_id:
+            return Response({"error": "course_id is required"}, status=400)
+        common_modules = Module.objects.filter(is_common=True)
+        course_modules = Module.objects.filter(course_id=course_id, is_common=False)
+        all_modules = list(common_modules) + list(course_modules)
+        all_modules.sort(key=lambda x: x.order)
+        serializer = self.get_serializer(all_modules, many=True)
+        return Response(serializer.data)
 
     @action(detail=False, methods=['get'], url_path='student-modules', permission_classes=[IsAuthenticated])
     def student_modules(self, request):
@@ -289,21 +296,21 @@ class ModuleViewSet(viewsets.ModelViewSet):
             all_modules = list(common_modules) + list(course_modules)
             all_modules.sort(key=lambda x: x.order)
 
-        # Find the highest completed week number from Week Reviews with total_score >= 30
-        reviews = StudentWeekReview.objects.filter(student=student, total_score__isnull=False)
+        # 🔁 Determine completed weeks based on task_status, not total_score
+        reviews = StudentWeekReview.objects.filter(student=student)
         completed_weeks = set()
         for review in reviews:
-            week_order = review.module.order
-            if review.total_score >= 30:
-                completed_weeks.add(week_order)
+            if review.task_status == 'Task Completed':
+                week_order = review.module.order
+                if week_order is not None:
+                    completed_weeks.add(week_order)
         current_week = max(completed_weeks) if completed_weeks else 0
 
         # Build response with is_locked flag
         result = []
         for module in all_modules:
             week_num = module.order or 0
-            # A module is locked if its week number > current_week + 1
-            # (current_week is the highest completed week)
+            # Next week unlocks only if previous week is task_status = 'Task Completed'
             is_locked = week_num > current_week + 1
             result.append({
                 'id': module.id,
@@ -313,7 +320,7 @@ class ModuleViewSet(viewsets.ModelViewSet):
                 'course_name': module.course.name if module.course else None,
                 'is_common': module.is_common,
                 'is_locked': is_locked,
-                'completion_percentage': 0,  # optional, can be calculated
+                'completion_percentage': 0,  # optional
             })
         return Response(result)
 
@@ -345,7 +352,7 @@ class CompleteModuleView(APIView):
         if module.course and hasattr(module, 'order'):
             course_status, _ = CourseStatus.objects.get_or_create(
                 student=student,
-                course_name=student.course,   # Fixed: use course_name
+                course_name=student.course,
                 defaults={'current_week': 1}
             )
             total_weeks = Module.objects.filter(course=module.course).count()
@@ -826,7 +833,7 @@ class StudentWeekReviewView(generics.RetrieveUpdateAPIView):
         return obj
     def perform_update(self, serializer):
         review = serializer.save()
-        # Auto-complete module if total score passes threshold (>=30)
+        # Auto-complete module if total score passes threshold (>=30) – optional, can be removed
         if review.total_score is not None and review.total_score >= 30:
             student_module, created = StudentModule.objects.get_or_create(
                 student=review.student,
@@ -1025,7 +1032,7 @@ class StudentCourseStatusView(generics.RetrieveUpdateAPIView):
             raise ValidationError({"detail": "Student has no course assigned"})
         status_obj, created = CourseStatus.objects.get_or_create(
             student=student,
-            course_name=student.course   # Fixed field name
+            course_name=student.course
         )
         return status_obj
 
@@ -1260,15 +1267,22 @@ class CheckInView(generics.CreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def perform_create(self, serializer):
-        student = getattr(self.request.user, 'student_profile', None)
-        if not student:
-            raise ValidationError("Only students can check in.")
+        user = self.request.user
+        
+        # Ensure the student profile exists (create if missing)
+        student, created = Student.objects.get_or_create(
+            user=user,
+            defaults={'course': '', 'batch': ''}
+        )
+        if created:
+            print(f"Auto-created student profile for {user.username} during check‑in")
+
         today = timezone.now().date()
         existing = AttendanceRecord.objects.filter(student=student, check_in__date=today).first()
         if existing and existing.check_out is None:
             raise ValidationError("You are already checked in today. Please check out first.")
+        
         serializer.save(student=student, check_in=timezone.now())
-
 
 class CheckOutView(generics.UpdateAPIView):
     serializer_class = AttendanceRecordSerializer
@@ -1287,7 +1301,7 @@ class CheckOutView(generics.UpdateAPIView):
         return record
 
     def perform_update(self, serializer):
-        break_minutes = int(self.request.data.get('break_minutes', 0))
+        break_minutes = self.request.data.get('break_minutes', 0)
         check_out_reason = self.request.data.get('check_out_reason', '')
         serializer.save(
             check_out=timezone.now(),
@@ -1295,25 +1309,45 @@ class CheckOutView(generics.UpdateAPIView):
             check_out_reason=check_out_reason
         )
 
-
 class AttendanceHistoryView(generics.ListAPIView):
     serializer_class = AttendanceRecordSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
         user = self.request.user
-        if hasattr(user, 'student_profile'):
-            return AttendanceRecord.objects.filter(student=user.student_profile)
-        if user.is_mentor:
-            try:
-                mentor = Mentor.objects.get(user=user)
-                student_ids = Student.objects.filter(mentor=mentor).values_list('id', flat=True)
-                return AttendanceRecord.objects.filter(student_id__in=student_ids)
-            except Mentor.DoesNotExist:
-                return AttendanceRecord.objects.none()
         student_id = self.request.query_params.get('student_id')
-        qs = AttendanceRecord.objects.all()
-        if student_id:
-            qs = qs.filter(student_id=student_id)
+        date_str = self.request.query_params.get('date')
+
+        # ---- Students see only their own records ----
+        if hasattr(user, 'student_profile'):
+            qs = AttendanceRecord.objects.filter(student=user.student_profile)
+
+        # ---- Mentors see only their assigned students ----
+        elif user.is_mentor:
+            mentor = Mentor.objects.get(user=user)
+            mentor_student_ids = Student.objects.filter(mentor=mentor).values_list('id', flat=True)
+            if student_id:
+                if int(student_id) not in mentor_student_ids:
+                    qs = AttendanceRecord.objects.none()
+                else:
+                    qs = AttendanceRecord.objects.filter(student_id=student_id)
+            else:
+                qs = AttendanceRecord.objects.filter(student_id__in=mentor_student_ids)
+
+        # ---- Admin / reviewer see all, optionally filtered by student_id ----
+        else:
+            qs = AttendanceRecord.objects.all()
+            if student_id:
+                qs = qs.filter(student_id=student_id)
+
+        # ✅ APPLY DATE FILTER (exact day, ignores time of day)
+        if date_str:
+            try:
+                target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+                qs = qs.filter(check_in__date=target_date)
+            except ValueError:
+                pass
+
         return qs
+    
     

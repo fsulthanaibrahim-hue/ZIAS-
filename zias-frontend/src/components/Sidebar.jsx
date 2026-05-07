@@ -84,7 +84,8 @@ function Sidebar() {
     { path: "/admin/courses", label: "Courses" },
     { path: "/admin/modules", label: "Modules" },
     { path: "/admin/batches", label: "Batches" },
-    { path: "/admin/review-folders", label: "Review Folders" },   // ✅ new item
+    { path: "/admin/review-folders", label: "Review Folders" },  
+    { path: "/admin/attendance", label: "Attendance" },
     { path: "/admin/messages", label: "Messages" },
     { path: "/admin/review-sheets", label: "Review Sheets" },
     { path: "/admin/profile", label: "Profile" },

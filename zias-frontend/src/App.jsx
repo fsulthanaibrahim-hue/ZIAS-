@@ -19,7 +19,6 @@ import StudentModules from "./pages/student/StudentModules";
 import InOutRegister from "./pages/student/InOutRegister";
 import StudentAttendance from "./pages/student/StudentAttendance";
 
-
 // Reviewer pages
 import ReviewerDashboard from "./pages/reviewer/ReviewerDashboard";
 import ReviewerProfile from "./pages/reviewer/ReviewerProfile";
@@ -41,7 +40,6 @@ import ReviewTracker from "./pages/mentor/ReviewTracker";
 import MentorReviewFolders from "./pages/mentor/MentorReviewFolders";
 import AttendanceMonitor from "./pages/mentor/AttendanceMonitor";
 
-
 // Admin pages
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./Admin/Dashboard";
@@ -58,7 +56,7 @@ import AdminProfile from "./Admin/AdminProfile";
 import NotificationsPage from "./Admin/NotificationsPage";
 import ContactMessageDetail from "./Admin/ContactMessageDetail";
 import ReviewFoldersAdmin from "./Admin/ReviewFoldersAdmin";
-
+import AdminAttendance from "./Admin/AdminAttendance";
 
 // Common pages
 import Navbar from "./components/Navbar";
@@ -69,12 +67,9 @@ import Contact from "./pages/Contact";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 
-
 // Sidebars
 import MentorSidebar from "./components/MentorSidebar";
 import ReviewerSidebar from "./components/ReviewerSidebar";
-
-
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem("access_token");
@@ -159,7 +154,7 @@ function App() {
         <Route path="/student/modules" element={<PrivateRoute><StudentModules /></PrivateRoute>} />
         <Route path="/student/review-folders" element={<PrivateRoute><StudentReviewFolders /></PrivateRoute>} />
         <Route path="/student/in-out-register" element={<PrivateRoute><InOutRegister /></PrivateRoute>} />
-        <Route path="/student/attendance" element={<PrivateRoute><StudentAttendance /></PrivateRoute>} />
+        <Route path="/student/attendance" element={<PrivateRoute><StudentAttendance /></PrivateRoute>} />  {/* ✅ ADDED student attendance route */}
 
         {/* Generic change password route */}
         <Route path="/change-password" element={<PrivateRoute><ChangePassword /></PrivateRoute>} />
@@ -304,7 +299,7 @@ function App() {
           </PrivateRoute>
         } />
 
-        {/* Admin routes */}
+        {/* Admin routes (protected by AdminRoute) */}
         <Route path="/admin/dashboard" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Dashboard /></div></AdminRoute>} />
         <Route path="/admin/students" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Students /></div></AdminRoute>} />
         <Route path="/admin/mentors" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Mentors /></div></AdminRoute>} />
@@ -319,6 +314,7 @@ function App() {
         <Route path="/admin/notifications" element={<AdminRoute><div style={{display: "flex"}}><Sidebar /><NotificationsPage /></div></AdminRoute>} />
         <Route path="/admin/contact-messages/:id" element={<AdminRoute><div style={{display: "flex"}}><Sidebar /><ContactMessageDetail /></div></AdminRoute>} />
         <Route path="/admin/review-folders" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><ReviewFoldersAdmin /></div></AdminRoute>} />
+        <Route path="/admin/attendance" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><AdminAttendance /></div></AdminRoute>} />  {/* ✅ fixed duplicate, uses AdminRoute + Sidebar */}
 
         {/* 404 page */}
         <Route path="*" element={
