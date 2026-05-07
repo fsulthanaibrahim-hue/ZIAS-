@@ -1309,6 +1309,8 @@ class CheckOutView(generics.UpdateAPIView):
             check_out_reason=check_out_reason
         )
 
+
+
 class AttendanceHistoryView(generics.ListAPIView):
     serializer_class = AttendanceRecordSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -1316,7 +1318,7 @@ class AttendanceHistoryView(generics.ListAPIView):
     def get_queryset(self):
         user = self.request.user
         student_id = self.request.query_params.get('student_id')
-        date_str = self.request.query_params.get('date')
+        date_str = self.request.query_params.get('date')   # YYYY-MM-DD
 
         # ---- Students see only their own records ----
         if hasattr(user, 'student_profile'):
@@ -1334,20 +1336,20 @@ class AttendanceHistoryView(generics.ListAPIView):
             else:
                 qs = AttendanceRecord.objects.filter(student_id__in=mentor_student_ids)
 
-        # ---- Admin / reviewer see all, optionally filtered by student_id ----
+        # ---- Admin / reviewer see all ----
         else:
             qs = AttendanceRecord.objects.all()
             if student_id:
                 qs = qs.filter(student_id=student_id)
 
-        # ✅ APPLY DATE FILTER (exact day, ignores time of day)
+        # ✅ APPLY DATE FILTER (exact day, ignores time)
         if date_str:
             try:
                 target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
                 qs = qs.filter(check_in__date=target_date)
             except ValueError:
-                pass
+                pass   # ignore invalid date format
 
-        return qs
-    
+        # ✅ Order by most recent first (optional)
+        return qs.order_by('-check_in')    
     
