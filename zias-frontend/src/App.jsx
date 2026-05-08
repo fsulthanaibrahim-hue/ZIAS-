@@ -25,7 +25,6 @@ import ReviewerProfile from "./pages/reviewer/ReviewerProfile";
 import ReviewerReviewFolders from "./pages/reviewer/ReviewerReviewFolders";
 import ReviewerReviewSheet from "./pages/reviewer/ReviewerReviewSheet";
 import ReviewerReviewSheetRange from "./pages/reviewer/ReviewerReviewSheetRange";
-import ReviewerNotifications from "./pages/reviewer/ReviewerNotifications";
 import ReviewerAssignments from "./pages/reviewer/ReviewerAssignments";
 
 // Mentor pages
@@ -35,7 +34,6 @@ import MentorStudents from "./pages/mentor/MentorStudents";
 import MentorModules from "./pages/mentor/MentorModules";
 import MentorReviewEdit from "./pages/mentor/MentorReviewEdit";
 import MentorReviewSheetRange from "./pages/mentor/MentorReviewSheetRange";
-import MentorNotifications from "./pages/mentor/MentorNotifications";
 import ReviewTracker from "./pages/mentor/ReviewTracker";
 import MentorReviewFolders from "./pages/mentor/MentorReviewFolders";
 import AttendanceMonitor from "./pages/mentor/AttendanceMonitor";
@@ -53,7 +51,6 @@ import Batches from "./Admin/Batches";
 import ReviewSheets from "./Admin/ReviewSheets";
 import StudentReviewEdit from "./Admin/StudentReviewEdit";
 import AdminProfile from "./Admin/AdminProfile";
-import NotificationsPage from "./Admin/NotificationsPage";
 import ContactMessageDetail from "./Admin/ContactMessageDetail";
 import ReviewFoldersAdmin from "./Admin/ReviewFoldersAdmin";
 import AdminAttendance from "./Admin/AdminAttendance";
@@ -67,7 +64,11 @@ import Contact from "./pages/Contact";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 
+// Notifications
+import NotificationPage from "./components/NotificationPage";
+
 // Sidebars
+import StudentSidebar from "./components/StudentSidebar";
 import MentorSidebar from "./components/MentorSidebar";
 import ReviewerSidebar from "./components/ReviewerSidebar";
 
@@ -154,12 +155,20 @@ function App() {
         <Route path="/student/modules" element={<PrivateRoute><StudentModules /></PrivateRoute>} />
         <Route path="/student/review-folders" element={<PrivateRoute><StudentReviewFolders /></PrivateRoute>} />
         <Route path="/student/in-out-register" element={<PrivateRoute><InOutRegister /></PrivateRoute>} />
-        <Route path="/student/attendance" element={<PrivateRoute><StudentAttendance /></PrivateRoute>} />  {/* ✅ ADDED student attendance route */}
+        <Route path="/student/attendance" element={<PrivateRoute><StudentAttendance /></PrivateRoute>} />
+        <Route path="/student/notifications" element={
+          <PrivateRoute>
+            <div style={{ display: "flex" }}>
+              <StudentSidebar />
+              <NotificationPage />
+            </div>
+          </PrivateRoute>
+        } />
 
         {/* Generic change password route */}
         <Route path="/change-password" element={<PrivateRoute><ChangePassword /></PrivateRoute>} />
 
-        {/* Reviewer routes with sidebar */}
+        {/* Reviewer routes */}
         <Route path="/reviewer/dashboard" element={
           <PrivateRoute>
             <div style={{ display: "flex" }}>
@@ -172,7 +181,7 @@ function App() {
           <PrivateRoute>
             <div style={{ display: "flex" }}>
               <ReviewerSidebar />
-              <ReviewerNotifications />
+              <NotificationPage />
             </div>
           </PrivateRoute>
         } />
@@ -217,7 +226,7 @@ function App() {
           </PrivateRoute>
         } />
 
-        {/* Mentor routes with sidebar */}
+        {/* Mentor routes */}
         <Route path="/mentor/dashboard" element={
           <PrivateRoute>
             <div style={{ display: "flex" }}>
@@ -286,7 +295,7 @@ function App() {
           <PrivateRoute>
             <div style={{ display: "flex" }}>
               <MentorSidebar />
-              <MentorNotifications />
+              <NotificationPage />
             </div>
           </PrivateRoute>
         } />
@@ -299,7 +308,7 @@ function App() {
           </PrivateRoute>
         } />
 
-        {/* Admin routes (protected by AdminRoute) */}
+        {/* Admin routes */}
         <Route path="/admin/dashboard" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Dashboard /></div></AdminRoute>} />
         <Route path="/admin/students" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Students /></div></AdminRoute>} />
         <Route path="/admin/mentors" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Mentors /></div></AdminRoute>} />
@@ -311,10 +320,10 @@ function App() {
         <Route path="/admin/review-sheets" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><ReviewSheets /></div></AdminRoute>} />
         <Route path="/admin/student-review-edit" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><StudentReviewEdit /></div></AdminRoute>} />
         <Route path="/admin/profile" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><AdminProfile /></div></AdminRoute>} />
-        <Route path="/admin/notifications" element={<AdminRoute><div style={{display: "flex"}}><Sidebar /><NotificationsPage /></div></AdminRoute>} />
-        <Route path="/admin/contact-messages/:id" element={<AdminRoute><div style={{display: "flex"}}><Sidebar /><ContactMessageDetail /></div></AdminRoute>} />
+        <Route path="/admin/notifications" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><NotificationPage /></div></AdminRoute>} />
+        <Route path="/admin/contact-messages/:id" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><ContactMessageDetail /></div></AdminRoute>} />
         <Route path="/admin/review-folders" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><ReviewFoldersAdmin /></div></AdminRoute>} />
-        <Route path="/admin/attendance" element={<AdminRoute><div style={{display:"flex"}}><AdminAttendance /></div></AdminRoute>} />  
+        <Route path="/admin/attendance" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><AdminAttendance /></div></AdminRoute>} />
 
         {/* 404 page */}
         <Route path="*" element={

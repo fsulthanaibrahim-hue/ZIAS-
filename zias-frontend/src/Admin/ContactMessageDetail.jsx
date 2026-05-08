@@ -1,38 +1,129 @@
+// src/Admin/ContactMessageDetail.jsx
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import API from '../api/api';
+import { toast } from 'react-hot-toast';
 
 const ContactMessageDetail = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [message, setMessage] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
 
   useEffect(() => {
-    const fetchMessage = async () => {
-      try {
-        const res = await API.get(`contact-messages/${id}/`);
-        setMessage(res.data);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchMessage();
   }, [id]);
 
-  if (loading) return <div className="p-8 text-center">Loading...</div>;
-  if (!message) return <div className="p-8 text-center">Message not found</div>;
+  const fetchMessage = async () => {
+    try {
+      const res = await API.get(`contact-messages/${id}/`);
+      setMessage(res.data);
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to load message');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const markAsRead = async () => {
+    if (message?.is_read) return;
+    setUpdating(true);
+    try {
+      await API.patch(`contact-messages/${id}/`, { is_read: true });
+      setMessage(prev => ({ ...prev, is_read: true }));
+      toast.success('Marked as read');
+    } catch (err) {
+      toast.error('Failed to update');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleReply = () => {
+    if (!message?.email) return;
+    window.location.href = `mailto:${message.email}?subject=Re: ${encodeURIComponent(message.subject || 'Contact Message')}`;
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!message) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-gray-500">Message not found.</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-3xl mx-auto p-6">
-      <h1 className="text-2xl font-bold mb-4">Contact Message Details</h1>
-      <div className="bg-white rounded-lg shadow p-6 space-y-3">
-        <div><span className="font-semibold">Name:</span> {message.name || '—'}</div>
-        <div><span className="font-semibold">Email:</span> {message.email}</div>
-        <div><span className="font-semibold">Subject:</span> {message.subject || '—'}</div>
-        <div><span className="font-semibold">Message:</span> <p className="mt-1">{message.message}</p></div>
-        <div><span className="font-semibold">Received:</span> {new Date(message.created_at).toLocaleString()}</div>
+    <div className="max-w-3xl mx-auto px-4 py-6">
+      {/* Header with back button */}
+      <div className="flex items-center gap-4 mb-6">
+        <button
+          onClick={() => navigate('/admin/messages')}
+          className="text-gray-600 hover:text-gray-900 transition flex items-center gap-1"
+        >
+          ← Back to Messages
+        </button>
+        <div className="flex-1" />
+        {!message.is_read && (
+          <button
+            onClick={markAsRead}
+            disabled={updating}
+            className="px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-sm hover:bg-emerald-100 transition disabled:opacity-50"
+          >
+            {updating ? 'Updating...' : 'Mark as read'}
+          </button>
+        )}
+        <button
+          onClick={handleReply}
+          className="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm hover:bg-blue-100 transition"
+        >
+          Reply via email
+        </button>
+      </div>
+
+      {/* Message card */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
+          <h1 className="text-xl font-bold text-gray-800">Contact Message</h1>
+          <div className="flex flex-wrap gap-3 mt-1">
+            <span className={`text-xs px-2 py-1 rounded-full ${message.is_read ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+              {message.is_read ? 'Read' : 'Unread'}
+            </span>
+            <span className="text-xs text-gray-500">Received {new Date(message.created_at).toLocaleString()}</span>
+          </div>
+        </div>
+
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-500">Name</label>
+            <p className="text-gray-800 mt-0.5">{message.name || '—'}</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-500">Email</label>
+            <a href={`mailto:${message.email}`} className="text-emerald-600 hover:underline mt-0.5">
+              {message.email}
+            </a>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-500">Subject</label>
+            <p className="text-gray-800 mt-0.5">{message.subject || '—'}</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-500">Message</label>
+            <div className="mt-1 p-3 bg-gray-50 rounded-lg border border-gray-200 whitespace-pre-wrap">
+              {message.message}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

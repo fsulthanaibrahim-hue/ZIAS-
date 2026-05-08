@@ -116,7 +116,8 @@ function StudentSidebar() {
             </div>
           )}
         </button>
-        {!isCollapsed && <NotificationBell role="student" />}
+        {/* ✅ NotificationBell auto-detects role – no need to pass 'student' */}
+        {!isCollapsed && <NotificationBell />}
       </div>
 
       <nav className="flex-1 py-4 px-2 space-y-1 overflow-y-auto">

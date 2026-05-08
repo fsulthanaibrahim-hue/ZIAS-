@@ -102,7 +102,8 @@ function ReviewerSidebar() {
           )}
         </button>
 
-        {!isCollapsed && <NotificationBell role="reviewer" />}
+        {/* ✅ NotificationBell auto‑detects role – no need to pass 'reviewer' */}
+        {!isCollapsed && <NotificationBell />}
       </div>
 
       {/* Navigation */}

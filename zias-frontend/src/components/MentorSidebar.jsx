@@ -109,7 +109,8 @@ function MentorSidebar() {
           )}
         </button>
 
-        {!isCollapsed && <NotificationBell role="mentor" />}
+        {/* ✅ NotificationBell auto‑detects role – no need to pass 'mentor' */}
+        {!isCollapsed && <NotificationBell />}
       </div>
 
       {/* Navigation with sections */}

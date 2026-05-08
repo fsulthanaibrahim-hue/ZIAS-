@@ -817,6 +817,7 @@ class WeeklyToppersView(APIView):
 class StudentWeekReviewView(generics.RetrieveUpdateAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = StudentWeekReviewSerializer
+
     def get_object(self):
         module_id = self.kwargs.get('module_id')
         user = self.request.user
@@ -831,9 +832,24 @@ class StudentWeekReviewView(generics.RetrieveUpdateAPIView):
             student = Student.objects.get(user=user)
         obj, created = StudentWeekReview.objects.get_or_create(student=student, module_id=module_id)
         return obj
+
     def perform_update(self, serializer):
+        # Capture old status before save
+        old_instance = serializer.instance
+        old_status = old_instance.task_status if old_instance else None
+
         review = serializer.save()
-        # Auto-complete module if total score passes threshold (>=30) – optional, can be removed
+
+        # 1. Notify student when task status changes to 'Task Completed'
+        if review.task_status == 'Task Completed' and old_status != 'Task Completed':
+            Notification.objects.create(
+                user=review.student.user,
+                message=f"🎉 Congratulations! Your week {review.module.order} review has been marked as completed.",
+                link="/student/review-sheet",
+                is_read=False
+            )
+
+        # 2. Auto-complete module if total score >= 30 (optional)
         if review.total_score is not None and review.total_score >= 30:
             student_module, created = StudentModule.objects.get_or_create(
                 student=review.student,
@@ -843,6 +859,14 @@ class StudentWeekReviewView(generics.RetrieveUpdateAPIView):
                 student_module.is_completed = True
                 student_module.completed_at = timezone.now()
                 student_module.save()
+
+                # Optionally notify student about module completion
+                Notification.objects.create(
+                    user=review.student.user,
+                    message=f"🏆 You've completed the module: {review.module.title}. Great work!",
+                    link=f"/student/modules",
+                    is_read=False
+                )
 
 
 # ----------------------------
@@ -1239,7 +1263,18 @@ class StudentSubmissionListCreateView(generics.ListCreateAPIView):
         if not hasattr(self.request.user, 'student_profile'):
             raise ValidationError("Only students can submit weekly items.")
         student = self.request.user.student_profile
-        serializer.save(student=student)
+        submission = serializer.save(student=student)
+
+        # 🔔 Notify the student's mentor about the new submission
+        if student.mentor:
+            Notification.objects.create(
+                user=student.mentor.user,
+                message=f"{student.full_name or student.user.username} submitted '{submission.get_submission_type_display()}' for week {submission.week.order or submission.week.id}.",
+                link=f"/mentor/review-sheet?student_id={student.id}",
+                is_read=False
+            )
+
+
 
 class SubmissionBulkUpdateView(generics.GenericAPIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -1248,6 +1283,10 @@ class SubmissionBulkUpdateView(generics.GenericAPIView):
         updates = request.data.get('updates', [])
         for upd in updates:
             submission = WeeklySubmission.objects.get(id=upd['id'])
+            old_reviewed = submission.reviewed
+            old_marks = submission.marks
+            old_feedback = submission.mentor_feedback
+
             if 'marks' in upd:
                 submission.marks = upd['marks']
             if 'mentor_feedback' in upd:
@@ -1255,8 +1294,38 @@ class SubmissionBulkUpdateView(generics.GenericAPIView):
             if 'reviewed' in upd:
                 submission.reviewed = upd['reviewed']
                 submission.reviewed_at = timezone.now() if upd['reviewed'] else None
+
             submission.save()
+
+            # 🔔 Notify student if the submission was just marked as reviewed,
+            # or if marks/feedback changed (even if already reviewed)
+            if submission.reviewed and not old_reviewed:
+                # First time being reviewed
+                Notification.objects.create(
+                    user=submission.student.user,
+                    message=f"✅ Your {submission.get_submission_type_display()} for week {submission.week.order} has been reviewed. Marks: {submission.marks}/5",
+                    link=f"/student/submissions?week_id={submission.week.id}",
+                    is_read=False
+                )
+            elif submission.reviewed and (submission.marks != old_marks or submission.mentor_feedback != old_feedback):
+                # Marks or feedback updated after review
+                Notification.objects.create(
+                    user=submission.student.user,
+                    message=f"📝 Your {submission.get_submission_type_display()} for week {submission.week.order} was updated. New marks: {submission.marks}/5. Feedback: {submission.mentor_feedback or '—'}",
+                    link=f"/student/submissions?week_id={submission.week.id}",
+                    is_read=False
+                )
+            elif not submission.reviewed and submission.reviewed != old_reviewed:
+                # If reviewed was turned off (unlikely), notify as well
+                Notification.objects.create(
+                    user=submission.student.user,
+                    message=f"ℹ️ The review status for your {submission.get_submission_type_display()} was changed back to pending.",
+                    link=f"/student/submissions?week_id={submission.week.id}",
+                    is_read=False
+                )
+
         return Response({'status': 'ok'})
+    
 
 
 # ----------------------------
