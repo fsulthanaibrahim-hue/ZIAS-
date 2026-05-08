@@ -205,7 +205,14 @@ class MentorViewSet(viewsets.ModelViewSet):
 class ReviewerViewSet(viewsets.ModelViewSet):
     queryset = Reviewer.objects.all()
     serializer_class = ReviewerSerializer
-    permission_classes = [IsAdminUser]
+
+    def get_permissions(self):
+        # Allow any authenticated user to list and retrieve reviewers
+        if self.action in ['list', 'retrieve']:
+            permission_classes = [IsAuthenticated]
+        else:
+            permission_classes = [IsAdminUser]
+        return [permission() for permission in permission_classes]
 
     def destroy(self, request, *args, **kwargs):
         reviewer = self.get_object()
@@ -231,7 +238,8 @@ class ReviewerViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
-
+    
+    
 
 # ----------------------------
 # COURSE VIEWSET

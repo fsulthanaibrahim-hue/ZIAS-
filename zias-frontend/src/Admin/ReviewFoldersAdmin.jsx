@@ -1,4 +1,4 @@
-// src/Admin/ReviewFoldersAdmin.jsx – final, crash‑proof version
+// src/Admin/ReviewFoldersAdmin.jsx – fully working, no JSX errors
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../api/api";
@@ -28,7 +28,6 @@ function Toast({ message, type, onClose }) {
   );
 }
 
-// Inline error boundary component
 class SafeTable extends React.Component {
   constructor(props) {
     super(props);
@@ -52,6 +51,134 @@ class SafeTable extends React.Component {
   }
 }
 
+// Modal for adding week folder inside a batch
+function AddWeekModal({ isOpen, onClose, batchStudents, batchName, onCreate, creating }) {
+  const [folderName, setFolderName] = useState("");
+  const [reviewDate, setReviewDate] = useState("");
+  const [selectedStudents, setSelectedStudents] = useState([]);
+  const [selectAll, setSelectAll] = useState(true);
+
+  useEffect(() => {
+    if (isOpen && batchStudents.length) {
+      setSelectedStudents(batchStudents.map(s => s.id));
+      setSelectAll(true);
+    }
+  }, [isOpen, batchStudents]);
+
+  if (!isOpen) return null;
+
+  const handleSelectAllChange = (e) => {
+    const checked = e.target.checked;
+    setSelectAll(checked);
+    if (checked) {
+      setSelectedStudents(batchStudents.map(s => s.id));
+    } else {
+      setSelectedStudents([]);
+    }
+  };
+
+  const handleStudentToggle = (studentId) => {
+    let newSelected;
+    if (selectedStudents.includes(studentId)) {
+      newSelected = selectedStudents.filter(id => id !== studentId);
+    } else {
+      newSelected = [...selectedStudents, studentId];
+    }
+    setSelectedStudents(newSelected);
+    setSelectAll(newSelected.length === batchStudents.length);
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!folderName.trim() || !reviewDate) {
+      alert("Folder name and review date are required.");
+      return;
+    }
+    if (selectedStudents.length === 0) {
+      alert("Select at least one student.");
+      return;
+    }
+    onCreate(folderName.trim(), reviewDate, selectedStudents);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+        <div className="p-5 border-b border-gray-200 flex justify-between items-center">
+          <h2 className="text-lg font-semibold">Add Week Folder – {batchName}</h2>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-700 text-xl">×</button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Folder Name *</label>
+            <input
+              type="text"
+              value={folderName}
+              onChange={(e) => setFolderName(e.target.value)}
+              className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              placeholder="e.g., May 1st Week"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Review Date *</label>
+            <input
+              type="date"
+              value={reviewDate}
+              onChange={(e) => setReviewDate(e.target.value)}
+              className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              required
+            />
+          </div>
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-sm font-medium text-gray-700">Students</label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={selectAll} onChange={handleSelectAllChange} />
+                Select all
+              </label>
+            </div>
+            {batchStudents.length === 0 ? (
+              <div className="text-center text-gray-400 text-sm py-4 border border-dashed rounded-lg">
+                No students assigned to this batch.
+              </div>
+            ) : (
+              <div className="border border-gray-200 rounded-lg max-h-48 overflow-y-auto p-2 space-y-1">
+                {batchStudents.map(student => (
+                  <label key={student.id} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={selectedStudents.includes(student.id)}
+                      onChange={() => handleStudentToggle(student.id)}
+                    />
+                    {student.displayName}
+                  </label>
+                ))}
+              </div>
+            )}
+            <p className="text-xs text-gray-400 mt-1">{selectedStudents.length} selected</p>
+          </div>
+          <div className="flex gap-2 pt-2">
+            <button
+              type="submit"
+              disabled={creating || batchStudents.length === 0}
+              className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+            >
+              {creating ? "Creating..." : "Create Week Folder"}
+            </button>
+            <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// --------------------------------------------------------------
+// Main component
+// --------------------------------------------------------------
 function ReviewFoldersAdmin() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -62,33 +189,33 @@ function ReviewFoldersAdmin() {
     }
   }, [user, navigate]);
 
+  // Data states
   const [allFolders, setAllFolders] = useState([]);
   const [students, setStudents] = useState([]);
   const [studentMap, setStudentMap] = useState(new Map());
   const [studentCourseMap, setStudentCourseMap] = useState(new Map());
   const [mentorsList, setMentorsList] = useState([]);
-  const [selectedMentorId, setSelectedMentorId] = useState("");
-  const [selectedFolder, setSelectedFolder] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
-  const [editingId, setEditingId] = useState(null);
-  const [editData, setEditData] = useState({});
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedWeek, setSelectedWeek] = useState("");
-  const [folderSearchTerm, setFolderSearchTerm] = useState("");
-  const [toast, setToast] = useState(null);
-  const [createMode, setCreateMode] = useState("bulk");
-  const [createForm, setCreateForm] = useState({
-    week_folder: "",
-    review_date: "",
-    students: [],
-    student: "",
-  });
   const [errorLogs, setErrorLogs] = useState([]);
   const errorLogsRef = useRef([]);
   const hasFetched = useRef(false);
 
+  // UI states
+  const [selectedBatchMentorId, setSelectedBatchMentorId] = useState(null);
+  const [selectedFolder, setSelectedFolder] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedWeek, setSelectedWeek] = useState("");
+  const [folderSearchTerm, setFolderSearchTerm] = useState("");
+  const [batchSearchTerm, setBatchSearchTerm] = useState("");
+  const [toast, setToast] = useState(null);
+  const [showAddWeekModal, setShowAddWeekModal] = useState(false);
+  const [creatingWeek, setCreatingWeek] = useState(false);
+
+  // Editing states for entries
+  const [editingId, setEditingId] = useState(null);
+  const [editData, setEditData] = useState({});
+
+  // Helper functions
   const addErrorLog = (error, context = {}) => {
     const logEntry = {
       timestamp: new Date().toISOString(),
@@ -101,23 +228,10 @@ function ReviewFoldersAdmin() {
     console.error("📋 ERROR LOG:", logEntry);
   };
 
-  const downloadLogs = () => {
-    const dataStr = JSON.stringify(errorLogsRef.current, null, 2);
-    const blob = new Blob([dataStr], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `admin_error_log_${new Date().toISOString()}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    showToast("Logs downloaded", "success");
-  };
-
   const showToast = (message, type = "success") => setToast({ message, type });
   const hideToast = () => setToast(null);
 
+  // API calls
   const getWorkDocForWeek = async (studentId, weekNumber) => {
     try {
       const modulesRes = await API.get(`/modules/student-modules/?student_id=${studentId}`);
@@ -146,15 +260,67 @@ function ReviewFoldersAdmin() {
     }
   };
 
+  const ensureWeekReviewExists = async (studentId, weekNumber) => {
+    try {
+      const modulesRes = await API.get(`/modules/student-modules/?student_id=${studentId}`);
+      const modules = modulesRes.data.results || modulesRes.data;
+      const moduleObj = modules.find(m => m.order === weekNumber);
+      if (!moduleObj) {
+        console.error(`❌ No module found for student ${studentId}, week ${weekNumber}`);
+        showToast(`⚠️ Review sheet not created: no module for week ${weekNumber}`, "error");
+        return false;
+      }
+      const moduleId = moduleObj.id;
+      try {
+        const checkRes = await API.get(`week-review/${moduleId}/?student_id=${studentId}`);
+        if (checkRes.data && checkRes.data.id) return true;
+      } catch (err) {
+        if (err.response?.status !== 404) return false;
+      }
+      const defaultReview = {
+        student: studentId,
+        module: moduleId,
+        task_status: "Pending",
+        feedback: "",
+        reviewer_name: "",
+        advisor_name: "",
+        extra_workouts: "Not Completed",
+        review_date: new Date().toISOString().split("T")[0],
+        english_score: 0,
+        extra_workouts_mark: 0,
+        progress_video: "",
+        progress_video_mark: 0,
+        review_score: 0,
+        english_review: "",
+      };
+      await API.post("/week-review/", defaultReview);
+      showToast(`Review sheet created for week ${weekNumber}`, "success");
+      return true;
+    } catch (err) {
+      addErrorLog(err, { action: "ensureWeekReviewExists", studentId, weekNumber });
+      showToast(`Failed to create review sheet: ${err.response?.data?.detail || err.message}`, "error");
+      return false;
+    }
+  };
+
   const fetchStudents = async () => {
     try {
       const res = await API.get("/students/");
-      const studentsList = (res.data.results || res.data).map(s => ({
-        ...s,
-        displayName: s.full_name || s.name || s.username || `Student ${s.id}`,
-        currentCourse: s.course_name || s.course || s.program || "—",
-        mentor_id: s.mentor?.id || s.mentor_id || null,
-      }));
+      const studentsList = (res.data.results || res.data).map(s => {
+        let mentorId = null;
+        if (s.mentor) {
+          if (typeof s.mentor === 'object' && s.mentor.id) mentorId = s.mentor.id;
+          else if (typeof s.mentor === 'number') mentorId = s.mentor;
+          else if (typeof s.mentor === 'string' && !isNaN(parseInt(s.mentor))) mentorId = parseInt(s.mentor);
+        }
+        if (mentorId === null && s.mentor_id) mentorId = s.mentor_id;
+        return {
+          ...s,
+          displayName: s.full_name || s.name || s.username || `Student ${s.id}`,
+          currentCourse: s.course_name || s.course || s.program || "—",
+          mentor_id: mentorId,
+        };
+      });
       setStudents(studentsList);
       const nameMap = new Map();
       const courseMap = new Map();
@@ -199,185 +365,192 @@ function ReviewFoldersAdmin() {
     }
   }, []);
 
-  const filteredStudentsForBulk = selectedMentorId
-    ? students.filter(s => s.mentor_id == selectedMentorId)
-    : students;
+  // Batch helpers
+  const batches = mentorsList.map((mentor, index) => ({
+    id: mentor.id,
+    label: `B${index + 1}`,
+    mentorName: mentor.full_name || mentor.username || `Mentor ${index + 1}`,
+    studentCount: students.filter(s => s.mentor_id === mentor.id).length,
+  }));
 
-  const foldersMap = allFolders
-    .filter(f => f.week_folder)
-    .reduce((acc, f) => {
-      const name = f.week_folder;
-      if (!acc[name]) {
-        acc[name] = {
-          name,
-          type: "Folder",
-          people: f.created_by?.username || "Admin",
-          modified: f.review_date,
-          source: "Review",
-          entries: [],
-        };
+  const filteredBatches = batches.filter(batch =>
+    batch.label.toLowerCase().includes(batchSearchTerm.toLowerCase()) ||
+    batch.mentorName.toLowerCase().includes(batchSearchTerm.toLowerCase())
+  );
+
+  const getStudentsInBatch = (mentorId) => {
+    return students.filter(s => s.mentor_id === mentorId);
+  };
+
+  // Folders aggregation
+  const batchFolders = () => {
+    if (selectedBatchMentorId === null) return [];
+    const studentIds = new Set(getStudentsInBatch(selectedBatchMentorId).map(s => s.id));
+    const folderMap = new Map();
+    allFolders.forEach(f => {
+      if (studentIds.has(f.student) && f.week_folder) {
+        if (!folderMap.has(f.week_folder)) {
+          folderMap.set(f.week_folder, {
+            name: f.week_folder,
+            type: "Folder",
+            people: f.created_by?.username || "Admin",
+            modified: f.review_date,
+            source: "Review",
+            entries: [],
+          });
+        }
+        const folder = folderMap.get(f.week_folder);
+        folder.entries.push(f);
+        if (f.review_date > folder.modified) folder.modified = f.review_date;
       }
-      acc[name].entries.push(f);
-      if (f.review_date > acc[name].modified) acc[name].modified = f.review_date;
-      return acc;
-    }, {});
-
-  const folderList = Object.values(foldersMap)
-    .filter(folder => folder.name.toLowerCase().includes(folderSearchTerm.toLowerCase()))
-    .sort((a, b) => new Date(b.modified) - new Date(a.modified));
-
-  // Safe access to entries
-  const safeEntries = selectedFolder && foldersMap[selectedFolder] ? foldersMap[selectedFolder].entries : [];
-  const rawEntries = safeEntries;
-  const filteredEntries = rawEntries.filter(entry => {
-    if (!searchTerm && !selectedWeek) return true;
-    const matchesSearch = !searchTerm
-      || entry.student_name?.toLowerCase().includes(searchTerm.toLowerCase())
-      || entry.week?.toString().toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesWeek = !selectedWeek || entry.week?.toString() === selectedWeek;
-    return matchesSearch && matchesWeek;
-  });
-
-  // ----- Handlers (unchanged, kept from your code) -----
-  const handleCreateChange = (e) => {
-    const { name, value } = e.target;
-    setCreateForm(prev => ({ ...prev, [name]: value }));
+    });
+    return Array.from(folderMap.values())
+      .filter(folder => folder.name.toLowerCase().includes(folderSearchTerm.toLowerCase()))
+      .sort((a, b) => new Date(b.modified) - new Date(a.modified));
   };
 
-  const handleStudentSelection = (e) => {
-    const options = e.target.options;
-    const selected = [];
-    for (let i = 0; i < options.length; i++) {
-      if (options[i].selected) selected.push(parseInt(options[i].value));
-    }
-    setCreateForm(prev => ({ ...prev, students: selected }));
+  const allFoldersAggregated = () => {
+    const folderMap = allFolders
+      .filter(f => f.week_folder)
+      .reduce((acc, f) => {
+        const name = f.week_folder;
+        if (!acc[name]) {
+          acc[name] = {
+            name,
+            type: "Folder",
+            people: f.created_by?.username || "Admin",
+            modified: f.review_date,
+            source: "Review",
+            entries: [],
+          };
+        }
+        acc[name].entries.push(f);
+        if (f.review_date > acc[name].modified) acc[name].modified = f.review_date;
+        return acc;
+      }, {});
+    return Object.values(folderMap)
+      .filter(folder => folder.name.toLowerCase().includes(folderSearchTerm.toLowerCase()))
+      .sort((a, b) => new Date(b.modified) - new Date(a.modified));
   };
 
-  const selectAllStudents = () => {
-    const allIds = filteredStudentsForBulk.map(s => s.id);
-    setCreateForm(prev => ({ ...prev, students: allIds }));
-  };
+  const foldersToShow = selectedBatchMentorId === null ? allFoldersAggregated() : batchFolders();
 
-  const createSingleEntry = async (e) => {
-    e.preventDefault();
-    if (!createForm.week_folder || !createForm.review_date || !createForm.student) {
-      showToast("Please fill folder name, review date and select a student.", "error");
+  // Folder actions
+  const editFolder = async (oldName) => {
+    const newName = prompt("Enter new folder name:", oldName);
+    if (!newName || newName.trim() === "" || newName === oldName) return;
+    const folderData = foldersToShow.find(f => f.name === oldName);
+    const entries = folderData?.entries || [];
+    if (entries.length === 0) {
+      showToast("No entries to rename.", "error");
       return;
     }
-    setCreating(true);
     try {
-      const studentId = parseInt(createForm.student);
-      const currentCourse = studentCourseMap.get(studentId) || "—";
-      const studentReviews = allFolders.filter(f => f.student === studentId && f.week != null);
-      let maxWeek = 0;
-      let previousReviewSheet = "";
-      let previousCourse = null;
-      let courseChanged = false;
-      if (studentReviews.length > 0) {
-        const sorted = [...studentReviews].sort((a, b) => parseInt(b.week,10) - parseInt(a.week,10));
-        const latest = sorted[0];
-        maxWeek = parseInt(latest.week,10);
-        previousReviewSheet = latest.review_sheet || "";
-        previousCourse = latest.course || "";
-        if (previousCourse && previousCourse !== currentCourse) courseChanged = true;
+      for (const entry of entries) {
+        await API.patch(`/review-folders/${entry.id}/`, { week_folder: newName.trim() });
       }
-      let newWeek = courseChanged ? 1 : maxWeek + 1;
-      const workDocUrl = await getWorkDocForWeek(studentId, newWeek);
-      let reviewSheetValue = previousReviewSheet;
-      if (!reviewSheetValue) {
-        const moduleDefault = await getDefaultReviewSheetFromModule(studentId, newWeek);
-        reviewSheetValue = moduleDefault || DEFAULT_REVIEW_SHEET_URL;
-      }
-      await API.post("/review-folders/", {
-        student: studentId,
-        week_folder: createForm.week_folder,
-        week: String(newWeek),
-        course: currentCourse,
-        review_date: createForm.review_date,
-        work_documents: workDocUrl,
-        review_sheet: reviewSheetValue,
-        industry_expert: "",
-        meeting_link: "",
-        is_done: false,
-      });
-      showToast(`Created entry for ${studentMap.get(studentId)} in folder "${createForm.week_folder}".`, "success");
-      setCreateForm({ week_folder: "", review_date: "", students: [], student: "" });
-      setShowCreateForm(false);
+      if (selectedFolder === oldName) setSelectedFolder(newName.trim());
       await fetchAllFolders();
-      setSelectedFolder(createForm.week_folder);
+      showToast(`Folder renamed to "${newName}"`, "success");
     } catch (err) {
-      addErrorLog(err, { action: "createSingleEntry", studentId: createForm.student });
-      let errorMsg = "Error creating entry.";
-      if (err.response && err.response.data) errorMsg = JSON.stringify(err.response.data);
-      showToast(errorMsg, "error");
-    } finally {
-      setCreating(false);
+      addErrorLog(err, { action: "editFolder", oldName, newName });
+      showToast("Failed to rename folder.", "error");
     }
   };
 
-  const createMultipleEntries = async (e) => {
-    e.preventDefault();
-    if (!createForm.week_folder || !createForm.review_date || createForm.students.length === 0) {
-      showToast("Please fill folder name, review date and select at least one student.", "error");
-      return;
+  const deleteFolder = async (folderName) => {
+    if (!window.confirm(`Delete folder "${folderName}" and all its entries? This cannot be undone.`)) return;
+    const folderData = foldersToShow.find(f => f.name === folderName);
+    const entries = folderData?.entries || [];
+    try {
+      for (const entry of entries) {
+        await API.delete(`/review-folders/${entry.id}/`);
+      }
+      if (selectedFolder === folderName) setSelectedFolder(null);
+      await fetchAllFolders();
+      showToast(`Folder "${folderName}" deleted.`, "success");
+    } catch (err) {
+      addErrorLog(err, { action: "deleteFolder", folderName });
+      showToast("Failed to delete folder.", "error");
     }
-    setCreating(true);
+  };
+
+  const handleAddWeekForBatch = async (folderName, reviewDate, selectedStudentIds) => {
+    setCreatingWeek(true);
     let successCount = 0;
     let errorCount = 0;
-    try {
-      for (const studentId of createForm.students) {
-        try {
-          const currentCourse = studentCourseMap.get(studentId) || "—";
-          const studentReviews = allFolders.filter(f => f.student === studentId && f.week != null);
-          let maxWeek = 0;
-          let previousReviewSheet = "";
-          let previousCourse = null;
-          let courseChanged = false;
-          if (studentReviews.length > 0) {
-            const sorted = [...studentReviews].sort((a, b) => parseInt(b.week,10) - parseInt(a.week,10));
-            const latest = sorted[0];
-            maxWeek = parseInt(latest.week,10);
-            previousReviewSheet = latest.review_sheet || "";
-            previousCourse = latest.course || "";
-            if (previousCourse && previousCourse !== currentCourse) courseChanged = true;
-          }
-          let newWeek = courseChanged ? 1 : maxWeek + 1;
-          const workDocUrl = await getWorkDocForWeek(studentId, newWeek);
-          let reviewSheetValue = previousReviewSheet;
-          if (!reviewSheetValue) {
-            const moduleDefault = await getDefaultReviewSheetFromModule(studentId, newWeek);
-            reviewSheetValue = moduleDefault || DEFAULT_REVIEW_SHEET_URL;
-          }
-          await API.post("/review-folders/", {
-            student: studentId,
-            week_folder: createForm.week_folder,
-            week: String(newWeek),
-            course: currentCourse,
-            review_date: createForm.review_date,
-            work_documents: workDocUrl,
-            review_sheet: reviewSheetValue,
-            industry_expert: "",
-            meeting_link: "",
-            is_done: false,
-          });
-          successCount++;
-        } catch (innerErr) {
-          errorCount++;
-          addErrorLog(innerErr, { action: "createMultipleEntries", studentId });
+    for (const studentId of selectedStudentIds) {
+      try {
+        const currentCourse = studentCourseMap.get(studentId) || "—";
+        const studentReviews = allFolders.filter(f => f.student === studentId && f.week != null);
+        let maxWeek = 0;
+        let previousReviewSheet = "";
+        let previousCourse = null;
+        let courseChanged = false;
+        if (studentReviews.length > 0) {
+          const sorted = [...studentReviews].sort((a, b) => parseInt(b.week,10) - parseInt(a.week,10));
+          const latest = sorted[0];
+          maxWeek = parseInt(latest.week,10);
+          previousReviewSheet = latest.review_sheet || "";
+          previousCourse = latest.course || "";
+          if (previousCourse && previousCourse !== currentCourse) courseChanged = true;
         }
+        let newWeek = courseChanged ? 1 : maxWeek + 1;
+        const workDocUrl = await getWorkDocForWeek(studentId, newWeek);
+        let reviewSheetValue = previousReviewSheet;
+        if (!reviewSheetValue) {
+          const moduleDefault = await getDefaultReviewSheetFromModule(studentId, newWeek);
+          reviewSheetValue = moduleDefault || DEFAULT_REVIEW_SHEET_URL;
+        }
+        await API.post("/review-folders/", {
+          student: studentId,
+          week_folder: folderName,
+          week: String(newWeek),
+          course: currentCourse,
+          review_date: reviewDate,
+          work_documents: workDocUrl,
+          review_sheet: reviewSheetValue,
+          industry_expert: "",
+          meeting_link: "",
+          is_done: false,
+        });
+        await ensureWeekReviewExists(studentId, newWeek);
+        successCount++;
+      } catch (err) {
+        errorCount++;
+        addErrorLog(err, { action: "handleAddWeekForBatch", studentId, folderName });
       }
-      showToast(`Created ${successCount} entries for folder "${createForm.week_folder}" (${errorCount} failed)`, successCount > 0 ? "success" : "error");
-      setCreateForm({ week_folder: "", review_date: "", students: [], student: "" });
-      setShowCreateForm(false);
-      await fetchAllFolders();
-      setSelectedFolder(createForm.week_folder);
-    } catch (err) {
-      addErrorLog(err, { action: "createMultipleEntries", studentIds: createForm.students });
-      showToast("Error creating entries", "error");
-    } finally {
-      setCreating(false);
     }
+    showToast(`Created ${successCount} entries for "${folderName}" (${errorCount} failed)`, successCount > 0 ? "success" : "error");
+    setShowAddWeekModal(false);
+    await fetchAllFolders();
+    if (selectedFolder === folderName) setSelectedFolder(folderName);
+    else if (!selectedFolder) setSelectedFolder(null);
+    setCreatingWeek(false);
   };
+
+  // Entry actions inside a folder
+  const handleFolderClick = (folderName, e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    setSelectedFolder(folderName);
+  };
+
+  const getCurrentEntries = () => {
+    if (!selectedFolder) return [];
+    const folderData = foldersToShow.find(f => f.name === selectedFolder);
+    if (!folderData) return [];
+    let entries = folderData.entries;
+    if (selectedBatchMentorId !== null) {
+      const studentIdsInBatch = new Set(getStudentsInBatch(selectedBatchMentorId).map(s => s.id));
+      entries = entries.filter(e => studentIdsInBatch.has(e.student));
+    }
+    return entries;
+  };
+
+  const currentEntries = getCurrentEntries();
 
   const handleEditChange = (e) => {
     const { name, value } = e.target;
@@ -423,15 +596,15 @@ function ReviewFoldersAdmin() {
   };
 
   const saveEdit = async (id) => {
-    const currentEntry = rawEntries.find(e => e.id === id);
-    if (!currentEntry) return;
-    const oldExpert = currentEntry.industry_expert;
+    const entry = currentEntries.find(e => e.id === id);
+    if (!entry) return;
+    const oldExpert = entry.industry_expert;
     const newExpert = editData.industry_expert;
-    const studentName = studentMap.get(currentEntry.student) || currentEntry.student_name || "a student";
-    const folderName = selectedFolder || currentEntry.week_folder || "review folder";
+    const studentName = studentMap.get(entry.student) || entry.student_name || "a student";
+    const folderName = selectedFolder || entry.week_folder || "review folder";
     const payload = {};
     if (editData.review_date && editData.review_date.trim() !== "") payload.review_date = editData.review_date;
-    let weekValue = currentEntry.week;
+    let weekValue = entry.week;
     if (editData.week !== undefined && editData.week !== null && editData.week.trim() !== "") {
       const parsed = parseInt(editData.week, 10);
       if (!isNaN(parsed) && parsed >= 0) weekValue = parsed;
@@ -473,45 +646,8 @@ function ReviewFoldersAdmin() {
     }
   };
 
-  const editFolder = async (oldName) => {
-    const newName = prompt("Enter new folder name:", oldName);
-    if (!newName || newName.trim() === "" || newName === oldName) return;
-    const entries = foldersMap[oldName]?.entries || [];
-    if (entries.length === 0) {
-      showToast("No entries to rename.", "error");
-      return;
-    }
-    try {
-      for (const entry of entries) {
-        await API.patch(`/review-folders/${entry.id}/`, { week_folder: newName.trim() });
-      }
-      if (selectedFolder === oldName) setSelectedFolder(newName.trim());
-      await fetchAllFolders();
-      showToast(`Folder renamed to "${newName}"`, "success");
-    } catch (err) {
-      addErrorLog(err, { action: "editFolder", oldName, newName });
-      showToast("Failed to rename folder.", "error");
-    }
-  };
-
-  const deleteFolder = async (folderName) => {
-    if (!window.confirm(`Delete folder "${folderName}" and all its entries? This cannot be undone.`)) return;
-    const entries = foldersMap[folderName]?.entries || [];
-    try {
-      for (const entry of entries) {
-        await API.delete(`/review-folders/${entry.id}/`);
-      }
-      if (selectedFolder === folderName) setSelectedFolder(null);
-      await fetchAllFolders();
-      showToast(`Folder "${folderName}" deleted.`, "success");
-    } catch (err) {
-      addErrorLog(err, { action: "deleteFolder", folderName });
-      showToast("Failed to delete folder.", "error");
-    }
-  };
-
   const toggleDone = async (id, newValue) => {
-    const entry = rawEntries.find(e => e.id === id);
+    const entry = currentEntries.find(e => e.id === id);
     if (!entry) return;
     try {
       await API.patch(`/review-folders/${id}/`, { is_done: newValue });
@@ -530,30 +666,6 @@ function ReviewFoldersAdmin() {
     }
   };
 
-  const EditIcon = () => (
-    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-    </svg>
-  );
-
-  const DeleteIcon = () => (
-    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-    </svg>
-  );
-
-  const SaveIcon = () => (
-    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-    </svg>
-  );
-
-  const CancelIcon = () => (
-    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-    </svg>
-  );
-
   const renderLink = (url, label = "Link") => {
     if (!url) return "—";
     const isUrl = /^(https?:\/\/|www\.)/i.test(url);
@@ -563,30 +675,20 @@ function ReviewFoldersAdmin() {
     return <span className="text-gray-700 break-all">{url}</span>;
   };
 
-  const handleFolderClick = (folderName, e) => {
-    if (e) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
-    console.log("📁 Folder clicked:", folderName);
-    // Verify folder exists before trying to show entries
-    if (!foldersMap[folderName]) {
-      console.error(`Folder "${folderName}" not found in foldersMap. Available:`, Object.keys(foldersMap));
-      showToast("Folder data not ready. Please try again.", "error");
-      return;
-    }
-    setSelectedFolder(folderName);
-  };
-
-  const handleBackClick = (e) => {
-    if (e) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
-    setSelectedFolder(null);
-  };
-
   if (loading) return <div className="text-center p-8">Loading...</div>;
+
+  // Icons
+  const EditIcon = () => (<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>);
+  const DeleteIcon = () => (<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>);
+  const SaveIcon = () => (<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>);
+  const CancelIcon = () => (<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>);
+
+  const selectedBatchLabel = selectedBatchMentorId !== null
+    ? batches.find(b => b.id === selectedBatchMentorId)?.label || ""
+    : null;
+  const selectedBatchMentorName = selectedBatchMentorId !== null
+    ? batches.find(b => b.id === selectedBatchMentorId)?.mentorName || ""
+    : null;
 
   return (
     <>
@@ -597,145 +699,160 @@ function ReviewFoldersAdmin() {
             <div>
               <h1 className="text-xl sm:text-2xl font-bold text-gray-800">Review Folders (Admin)</h1>
               <p className="text-gray-500 text-xs sm:text-sm">
-                {selectedFolder ? `Showing entries for "${selectedFolder}"` : "Manage all student review folders"}
+                {selectedFolder
+                  ? `Showing entries for "${selectedFolder}"`
+                  : selectedBatchMentorId !== null
+                  ? `Batch ${selectedBatchLabel} (${selectedBatchMentorName})`
+                  : "Select a batch"}
               </p>
             </div>
-            <div className="flex gap-2">
-              <button onClick={downloadLogs} className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-2 rounded-lg text-sm font-medium">📥 Download Logs</button>
-              <button onClick={() => setShowCreateForm(!showCreateForm)} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
-                {showCreateForm ? "Cancel" : "+ New Week Folder"}
+            {(selectedBatchMentorId !== null || selectedFolder) && (
+              <button
+                onClick={() => {
+                  setSelectedFolder(null);
+                  setSelectedBatchMentorId(null);
+                }}
+                className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium"
+              >
+                ← Back to Batches
               </button>
-            </div>
+            )}
           </div>
 
-          {showCreateForm && (
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 sm:p-5 mb-6">
-              <div className="flex gap-4 mb-4 border-b pb-2">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="radio" name="createMode" value="bulk" checked={createMode === "bulk"} onChange={() => setCreateMode("bulk")} />
-                  <span className="text-sm">Multiple Students</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="radio" name="createMode" value="single" checked={createMode === "single"} onChange={() => setCreateMode("single")} />
-                  <span className="text-sm">Single Student</span>
-                </label>
+          {/* Batch cards view – only when no batch/folder selected */}
+          {selectedBatchMentorId === null && !selectedFolder && (
+            <>
+              {/* Statistics bar: total students */}
+              <div className="mb-6 bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+                <div className="flex items-center gap-3">
+                  <div className="text-2xl">📊</div>
+                  <div>
+                    <div className="text-sm text-gray-500">Total Students</div>
+                    <div className="text-2xl font-bold text-gray-800">{students.length}</div>
+                  </div>
+                </div>
               </div>
 
-              {createMode === "bulk" && (
-                <div className="mb-4">
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Filter by Mentor (optional)</label>
-                  <select
-                    value={selectedMentorId}
-                    onChange={(e) => {
-                      setSelectedMentorId(e.target.value);
-                      setCreateForm(prev => ({ ...prev, students: [] }));
-                    }}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              <div className="mb-4">
+                <input
+                  type="text"
+                  placeholder="🔍 Search batches by name (B1, B2...) or mentor name..."
+                  value={batchSearchTerm}
+                  onChange={(e) => setBatchSearchTerm(e.target.value)}
+                  className="w-full sm:w-80 border border-gray-300 rounded-lg px-4 py-2 text-sm bg-white"
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {filteredBatches.map((batch) => (
+                  <div
+                    key={batch.id}
+                    onClick={() => setSelectedBatchMentorId(batch.id)}
+                    className="cursor-pointer bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all p-4"
                   >
-                    <option value="">All Mentors</option>
-                    {mentorsList.map(mentor => (
-                      <option key={mentor.id} value={mentor.id}>
-                        {mentor.full_name || mentor.username}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-gray-400 mt-1">
-                    {selectedMentorId ? "Showing students assigned to this mentor" : "Showing all students"}
-                  </p>
-                </div>
-              )}
-
-              <form onSubmit={createMode === "bulk" ? createMultipleEntries : createSingleEntry} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Folder Name *</label>
-                  <input type="text" name="week_folder" value={createForm.week_folder} onChange={handleCreateChange} required className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="e.g., April 4th Week" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Review Date *</label>
-                  <input type="date" name="review_date" value={createForm.review_date} onChange={handleCreateChange} required className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
-                </div>
-                {createMode === "bulk" ? (
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Select Students *</label>
-                    <button type="button" onClick={selectAllStudents} className="text-xs bg-gray-200 px-2 py-1 rounded mb-2">
-                      Select All {selectedMentorId ? "under this mentor" : ""}
-                    </button>
-                    <select multiple size={6} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={createForm.students} onChange={handleStudentSelection}>
-                      {filteredStudentsForBulk.map(s => (
-                        <option key={s.id} value={s.id}>{s.displayName}</option>
-                      ))}
-                    </select>
-                    <p className="text-xs text-gray-400 mt-1">Hold Ctrl (Cmd) to select multiple.</p>
+                    <div className="text-2xl mb-2">👥</div>
+                    <div className="text-lg font-semibold text-gray-800">{batch.label}</div>
+                    <div className="text-sm text-gray-500 mt-1">{batch.studentCount} students</div>
+                    <div className="text-xs text-gray-400 mt-1">👤 {batch.mentorName}</div>
                   </div>
-                ) : (
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Select Student *</label>
-                    <select name="student" value={createForm.student} onChange={handleCreateChange} required className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
-                      <option value="">Choose a student</option>
-                      {students.map(s => <option key={s.id} value={s.id}>{s.displayName}</option>)}
-                    </select>
+                ))}
+                {filteredBatches.length === 0 && (
+                  <div className="col-span-full text-center text-gray-400 py-8">
+                    No batches match your search.
                   </div>
                 )}
-                <div className="flex gap-2">
-                  <button type="submit" disabled={creating} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm disabled:opacity-50">
-                    {creating ? "Creating..." : (createMode === "bulk" ? `Create Entries (${createForm.students.length} selected)` : "Create Entry")}
-                  </button>
-                  <button type="button" onClick={() => setShowCreateForm(false)} className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm">Cancel</button>
-                </div>
-              </form>
-            </div>
+              </div>
+            </>
           )}
 
-          {!selectedFolder ? (
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-x-auto">
-              <div className="p-3 border-b border-gray-200 bg-gray-50">
-                <input type="text" placeholder="Search folders..." value={folderSearchTerm} onChange={(e) => setFolderSearchTerm(e.target.value)} className="w-full sm:w-64 border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+          {/* Folder table – shown when a batch is selected */}
+          {selectedBatchMentorId !== null && !selectedFolder && (
+            <>
+              <div className="mb-4 flex justify-between items-center">
+                <h2 className="text-lg font-semibold text-gray-800">
+                  Batch {selectedBatchLabel}
+                </h2>
+                <button
+                  onClick={() => setShowAddWeekModal(true)}
+                  disabled={getStudentsInBatch(selectedBatchMentorId).length === 0}
+                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  + Add Week Folder
+                </button>
               </div>
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">People</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Modified</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source</th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {folderList.length === 0 ? (
+
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-x-auto">
+                <div className="p-3 border-b border-gray-200 bg-gray-50">
+                  <input
+                    type="text"
+                    placeholder="Search folders..."
+                    value={folderSearchTerm}
+                    onChange={(e) => setFolderSearchTerm(e.target.value)}
+                    className="w-full sm:w-64 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  />
+                </div>
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
                     <tr>
-                      <td colSpan="6" className="px-4 py-8 text-center text-gray-400">No folders found. Click "+ New Week Folder".</td>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">People</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Modified</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source</th>
+                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
                     </tr>
-                  ) : (
-                    folderList.map(folder => (
-                      <tr key={folder.name} className="hover:bg-gray-50 cursor-pointer" onClick={(e) => handleFolderClick(folder.name, e)}>
-                        <td className="px-4 py-3 text-sm text-blue-600">📁 {folder.name}</td>
-                        <td className="px-4 py-3 text-sm text-gray-700">Folder</td>
-                        <td className="px-4 py-3 text-sm text-gray-700">{folder.people}</td>
-                        <td className="px-4 py-3 text-sm text-gray-700">{folder.modified}</td>
-                        <td className="px-4 py-3 text-sm text-gray-700">{folder.source}</td>
-                        <td className="px-4 py-3 text-center">
-                          <div className="flex gap-2 justify-center">
-                            <button onClick={() => editFolder(folder.name)} className="text-blue-600 hover:text-blue-800"><EditIcon /></button>
-                            <button onClick={() => deleteFolder(folder.name)} className="text-red-600 hover:text-red-800"><DeleteIcon /></button>
-                          </div>
+                  </thead>
+                  <tbody>
+                    {foldersToShow.length === 0 ? (
+                      <tr>
+                        <td colSpan="6" className="px-4 py-8 text-center text-gray-400">
+                          No week folders yet. Click '+ Add Week Folder'.
                         </td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="mt-0">
+                    ) : (
+                      foldersToShow.map(folder => (
+                        <tr key={folder.name} className="hover:bg-gray-50 cursor-pointer" onClick={(e) => handleFolderClick(folder.name, e)}>
+                          <td className="px-4 py-3 text-sm text-blue-600">📁 {folder.name}</td>
+                          <td className="px-4 py-3 text-sm text-gray-700">Folder</td>
+                          <td className="px-4 py-3 text-sm text-gray-700">{folder.people}</td>
+                          <td className="px-4 py-3 text-sm text-gray-700">{folder.modified}</td>
+                          <td className="px-4 py-3 text-sm text-gray-700">{folder.source}</td>
+                          <td className="px-4 py-3 text-center">
+                            <div className="flex gap-2 justify-center">
+                              <button onClick={(e) => { e.stopPropagation(); editFolder(folder.name); }} className="text-blue-600 hover:text-blue-800"><EditIcon /></button>
+                              <button onClick={(e) => { e.stopPropagation(); deleteFolder(folder.name); }} className="text-red-600 hover:text-red-800"><DeleteIcon /></button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+
+          {/* Entries inside a selected folder – FIXED: all tags closed */}
+          {selectedFolder && (
+            <div>
               <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
-                <button onClick={handleBackClick} className="text-green-600 hover:text-green-800 flex items-center gap-1 text-sm">← Back to all folders</button>
+                <button onClick={() => setSelectedFolder(null)} className="text-green-600 hover:text-green-800 flex items-center gap-1 text-sm">← Back to folders</button>
                 <div className="flex gap-2">
-                  <input type="text" placeholder="Search student or week..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-48 border border-gray-300 rounded-lg px-3 py-1 text-sm" />
-                  <select value={selectedWeek} onChange={(e) => setSelectedWeek(e.target.value)} className="border border-gray-300 rounded-lg px-3 py-1 text-sm">
+                  <input
+                    type="text"
+                    placeholder="Search student or week..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-48 border border-gray-300 rounded-lg px-3 py-1 text-sm"
+                  />
+                  <select
+                    value={selectedWeek}
+                    onChange={(e) => setSelectedWeek(e.target.value)}
+                    className="border border-gray-300 rounded-lg px-3 py-1 text-sm"
+                  >
                     <option value="">All Weeks</option>
-                    {[...new Set(rawEntries.map(e => e.week))].filter(w => w != null).sort().map(w => <option key={w} value={w}>Week {w}</option>)}
+                    {[...new Set(currentEntries.map(e => e.week))].filter(w => w != null).sort().map(w => (
+                      <option key={w} value={w}>Week {w}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -755,70 +872,67 @@ function ReviewFoldersAdmin() {
                         <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-100">
-                      {filteredEntries.length === 0 ? (
-                        <tr>
-                          <td colSpan="9" className="px-4 py-8 text-center text-gray-400">No entries found.</td>
+                    <tbody>
+                      {currentEntries.filter(entry => {
+                        if (!searchTerm && !selectedWeek) return true;
+                        const matchesSearch = !searchTerm
+                          || entry.student_name?.toLowerCase().includes(searchTerm.toLowerCase())
+                          || entry.week?.toString().toLowerCase().includes(searchTerm.toLowerCase());
+                        const matchesWeek = !selectedWeek || entry.week?.toString() === selectedWeek;
+                        return matchesSearch && matchesWeek;
+                      }).map(entry => (
+                        <tr key={entry.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 text-sm text-gray-900">{studentMap.get(entry.student) || entry.student_name || "—"}</td>
+                          <td className="px-4 py-3 text-sm text-gray-700">
+                            {editingId === entry.id ? (
+                              <input type="number" name="week" value={editData.week || ""} onChange={handleEditChange} className="w-20 border border-gray-300 rounded px-2 py-1 text-sm" />
+                            ) : `Week ${entry.week}`}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-700">
+                            {editingId === entry.id ? (
+                              <input type="date" name="review_date" value={editData.review_date || ""} onChange={handleEditChange} className="w-full border border-gray-300 rounded px-2 py-1 text-sm" />
+                            ) : entry.review_date || "—"}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-700">
+                            {editingId === entry.id ? (
+                              <input type="url" name="work_documents" value={editData.work_documents || ""} onChange={handleEditChange} className="w-36 border border-gray-300 rounded px-2 py-1 text-sm" />
+                            ) : renderLink(entry.work_documents, "Work Doc")}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-700">
+                            {editingId === entry.id ? (
+                              <input type="text" name="industry_expert" value={editData.industry_expert || ""} onChange={handleEditChange} className="w-36 border border-gray-300 rounded px-2 py-1 text-sm" />
+                            ) : entry.industry_expert || "—"}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-700">
+                            {editingId === entry.id ? (
+                              <input type="url" name="meeting_link" value={editData.meeting_link || ""} onChange={handleEditChange} className="w-36 border border-gray-300 rounded px-2 py-1 text-sm" />
+                            ) : renderLink(entry.meeting_link, "Meeting")}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-700">
+                            {editingId === entry.id ? (
+                              <input type="url" name="review_sheet" value={editData.review_sheet || ""} onChange={handleEditChange} className="w-36 border border-gray-300 rounded px-2 py-1 text-sm" />
+                            ) : renderLink(entry.review_sheet, "Review Sheet")}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <button onClick={() => toggleDone(entry.id, !entry.is_done)} className={`px-3 py-1 rounded-full text-xs font-medium transition cursor-pointer ${entry.is_done ? "bg-green-100 text-green-800 hover:bg-green-200" : "bg-yellow-100 text-yellow-800 hover:bg-yellow-200"}`}>
+                              {entry.is_done ? "Completed" : "Pending"}
+                            </button>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {editingId === entry.id ? (
+                              <div className="flex gap-2 justify-center">
+                                <button onClick={() => saveEdit(entry.id)} className="text-green-600 hover:text-green-800"><SaveIcon /></button>
+                                <button onClick={cancelEdit} className="text-gray-600 hover:text-gray-800"><CancelIcon /></button>
+                              </div>
+                            ) : (
+                              <div className="flex gap-2 justify-center">
+                                <button onClick={() => startEdit(entry)} className="text-blue-600 hover:text-blue-800"><EditIcon /></button>
+                                <button onClick={() => deleteEntry(entry.id)} className="text-red-600 hover:text-red-800"><DeleteIcon /></button>
+                              </div>
+                            )}
+                          </td>
                         </tr>
-                      ) : (
-                        filteredEntries.map(entry => {
-                          // Defensive: skip if entry malformed
-                          if (!entry || !entry.id) return null;
-                          return (
-                            <tr key={entry.id} className="hover:bg-gray-50">
-                              <td className="px-4 py-3 text-sm text-gray-900">{studentMap.get(entry.student) || entry.student_name || "—"}</td>
-                              <td className="px-4 py-3 text-sm text-gray-700">
-                                {editingId === entry.id ? (
-                                  <input type="number" name="week" value={editData.week || ""} onChange={handleEditChange} className="w-20 border border-gray-300 rounded px-2 py-1 text-sm" />
-                                ) : `Week ${entry.week}`}
-                              </td>
-                              <td className="px-4 py-3 text-sm text-gray-700">
-                                {editingId === entry.id ? (
-                                  <input type="date" name="review_date" value={editData.review_date || ""} onChange={handleEditChange} className="w-full border border-gray-300 rounded px-2 py-1 text-sm" />
-                                ) : entry.review_date || "—"}
-                              </td>
-                              <td className="px-4 py-3 text-sm text-gray-700">
-                                {editingId === entry.id ? (
-                                  <input type="url" name="work_documents" value={editData.work_documents || ""} onChange={handleEditChange} className="w-36 border border-gray-300 rounded px-2 py-1 text-sm" />
-                                ) : renderLink(entry.work_documents, "Work Doc")}
-                              </td>
-                              <td className="px-4 py-3 text-sm text-gray-700">
-                                {editingId === entry.id ? (
-                                  <input type="text" name="industry_expert" value={editData.industry_expert || ""} onChange={handleEditChange} className="w-36 border border-gray-300 rounded px-2 py-1 text-sm" />
-                                ) : entry.industry_expert || "—"}
-                              </td>
-                              <td className="px-4 py-3 text-sm text-gray-700">
-                                {editingId === entry.id ? (
-                                  <input type="url" name="meeting_link" value={editData.meeting_link || ""} onChange={handleEditChange} className="w-36 border border-gray-300 rounded px-2 py-1 text-sm" />
-                                ) : renderLink(entry.meeting_link, "Meeting")}
-                              </td>
-                              <td className="px-4 py-3 text-sm text-gray-700">
-                                {editingId === entry.id ? (
-                                  <input type="url" name="review_sheet" value={editData.review_sheet || ""} onChange={handleEditChange} className="w-36 border border-gray-300 rounded px-2 py-1 text-sm" />
-                                ) : renderLink(entry.review_sheet, "Review Sheet")}
-                              </td>
-                              <td className="px-4 py-3 text-center">
-                                <button onClick={() => toggleDone(entry.id, !entry.is_done)} className={`px-3 py-1 rounded-full text-xs font-medium transition cursor-pointer ${entry.is_done ? "bg-green-100 text-green-800 hover:bg-green-200" : "bg-yellow-100 text-yellow-800 hover:bg-yellow-200"}`}>
-                                  {entry.is_done ? "Completed" : "Pending"}
-                                </button>
-                              </td>
-                              <td className="px-4 py-3 text-center">
-                                {editingId === entry.id ? (
-                                  <div className="flex gap-2 justify-center">
-                                    <button onClick={() => saveEdit(entry.id)} className="text-green-600 hover:text-green-800"><SaveIcon /></button>
-                                    <button onClick={cancelEdit} className="text-gray-600 hover:text-gray-800"><CancelIcon /></button>
-                                  </div>
-                                ) : (
-                                  <div className="flex gap-2 justify-center">
-                                    <button onClick={() => startEdit(entry)} className="text-blue-600 hover:text-blue-800"><EditIcon /></button>
-                                    <button onClick={() => deleteEntry(entry.id)} className="text-red-600 hover:text-red-800"><DeleteIcon /></button>
-                                  </div>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })
-                      )}
+                      ))}
                     </tbody>
                   </table>
                 </div>
@@ -827,6 +941,18 @@ function ReviewFoldersAdmin() {
           )}
         </div>
       </div>
+
+      {/* Add Week Modal */}
+      {selectedBatchMentorId !== null && !selectedFolder && (
+        <AddWeekModal
+          isOpen={showAddWeekModal}
+          onClose={() => setShowAddWeekModal(false)}
+          batchStudents={getStudentsInBatch(selectedBatchMentorId)}
+          batchName={`Batch ${selectedBatchLabel}`}
+          onCreate={handleAddWeekForBatch}
+          creating={creatingWeek}
+        />
+      )}
     </>
   );
 }

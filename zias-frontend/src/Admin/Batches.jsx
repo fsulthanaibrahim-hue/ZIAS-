@@ -1,4 +1,4 @@
-// src/Admin/Batches.jsx – with small edit/delete icons (like Courses.jsx)
+// src/Admin/Batches.jsx – FINAL, NO FOCUS LOSS
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../api/api";
@@ -6,7 +6,7 @@ import API from "../api/api";
 function Toast({ message, type, onClose }) {
   useEffect(() => {
     const timer = setTimeout(onClose, 3000);
-    return () => clearTimeout(timer);
+    return () => clearInterval(timer);
   }, [onClose]);
 
   const bgColor = type === "success"
@@ -106,9 +106,7 @@ function Batches() {
   }, []);
 
   const filteredBatches = Array.isArray(batches)
-    ? batches.filter(b =>
-        b.name?.toLowerCase().includes(searchTerm.toLowerCase())
-      )
+    ? batches.filter(b => b.name?.toLowerCase().includes(searchTerm.toLowerCase()))
     : [];
 
   const totalFiltered = filteredBatches.length;
@@ -228,6 +226,8 @@ function Batches() {
     );
   }
 
+  const existingBatchNames = [...new Set(batches.map(b => b.name).filter(Boolean))];
+
   return (
     <div className="min-h-screen w-full bg-gray-50 text-gray-800" style={{ fontFamily: "'DM Sans', 'Geist', system-ui, sans-serif" }}>
       <style>{`
@@ -239,7 +239,6 @@ function Batches() {
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
       <ConfirmModal isOpen={showConfirmModal} onClose={() => setShowConfirmModal(false)} onConfirm={confirmDelete} batchName={batchToDelete?.name} />
 
-      {/* Add/Edit Modal */}
       {showForm && (
         <ModalWrapper onClose={() => setShowForm(false)}>
           <form onSubmit={handleSubmit}>
@@ -251,14 +250,26 @@ function Batches() {
               <button type="button" onClick={() => setShowForm(false)} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-gray-100 text-gray-400 text-lg">×</button>
             </div>
             <div className="px-6 py-5 space-y-3.5">
-              <input
-                type="text"
-                placeholder="Batch name (e.g., Batch 2025)"
-                value={formData.name}
-                onChange={e => setFormData({ ...formData, name: e.target.value })}
-                required
-                className={inputClass}
-              />
+              {/* SIMPLE INPUT WITH DATALIST – NO FOCUS STEALING */}
+              <div>
+                <input
+                  type="text"
+                  list="batch-names"
+                  placeholder="Batch name (e.g., Batch 2025)"
+                  value={formData.name}
+                  onChange={e => setFormData({ ...formData, name: e.target.value })}
+                  required
+                  className={inputClass}
+                  autoComplete="off"
+                />
+                <datalist id="batch-names">
+                  {existingBatchNames.map(name => (
+                    <option key={name} value={name} />
+                  ))}
+                </datalist>
+                <p className="text-xs text-gray-400 mt-1">💡 Type freely – the input never loses focus.</p>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-gray-500 text-xs mb-1">Start Date</label>
@@ -303,7 +314,6 @@ function Batches() {
       )}
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
-        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Batches</h1>
@@ -339,7 +349,6 @@ function Batches() {
           </div>
         </div>
 
-        {/* Batches Table */}
         {paginatedBatches.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 gap-4 bg-white rounded-2xl border border-gray-200">
             <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center">
@@ -366,7 +375,6 @@ function Batches() {
                 <tbody className="divide-y divide-gray-100">
                   {paginatedBatches.map((batch) => (
                     <tr key={batch.id} className="hover:bg-gray-50 transition-colors">
-                      {/* Batch Name – clickable to filter students */}
                       <td className="px-6 py-4 whitespace-nowrap">
                         <button
                           onClick={(e) => handleBatchNameClick(batch.name, e)}
@@ -388,7 +396,6 @@ function Batches() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
                         <div className="flex items-center justify-center gap-2">
-                          {/* Edit Icon (small, like in Courses) */}
                           <button
                             onClick={() => handleEdit(batch)}
                             className="p-1.5 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
@@ -398,7 +405,6 @@ function Batches() {
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                             </svg>
                           </button>
-                          {/* Delete Icon (small) */}
                           <button
                             onClick={() => handleDeleteClick(batch.id, batch.name)}
                             className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
@@ -415,7 +421,6 @@ function Batches() {
                 </tbody>
               </table>
             </div>
-            {/* Pagination */}
             {totalPages > 1 && (
               <div className="flex justify-between items-center px-6 py-3 border-t border-gray-100 bg-gray-50/50">
                 <p className="text-sm text-gray-500">

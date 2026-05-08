@@ -1,11 +1,11 @@
-// src/pages/mentor/MentorReviewFolders.jsx – folder browser, full edit (mentor only)
+// src/pages/mentor/MentorReviewFolders.jsx – final, no JSX errors
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../../api/api";
 import { useAuth } from "../../context/AuthContext";
 
 function MentorReviewFolders() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [allFolders, setAllFolders] = useState([]);
   const [selectedFolder, setSelectedFolder] = useState(null);
@@ -16,32 +16,66 @@ function MentorReviewFolders() {
   const [folderSearchTerm, setFolderSearchTerm] = useState("");
   const [entriesSearchTerm, setEntriesSearchTerm] = useState("");
   const [selectedWeek, setSelectedWeek] = useState("");
+  const [reviewersList, setReviewersList] = useState([]);
 
+  // Fetch reviewers for dropdown (optional, fallback to text input if 403)
   useEffect(() => {
-    if (user && !user.is_mentor) {
-      navigate("/");
-      return;
+    const fetchReviewers = async () => {
+      try {
+        const res = await API.get("/reviewers/");
+        const reviewers = res.data.results || res.data;
+        const names = reviewers.map(rev => rev.full_name || rev.name || rev.user?.full_name || rev.username || `Reviewer ${rev.id}`);
+        setReviewersList([...new Set(names)]);
+      } catch (err) {
+        if (err.response?.status !== 403) console.error("Failed to fetch reviewers", err);
+        setReviewersList([]);
+      }
+    };
+    if (!authLoading && user) fetchReviewers();
+  }, [authLoading, user]);
+
+  // Auth check and fetch folders
+  useEffect(() => {
+    if (authLoading) return;
+    const token = localStorage.getItem("access_token");
+    if (!user && !token) {
+      navigate("/login");
+    } else if (user) {
+      fetchMentorFolders();
+    } else {
+      setLoading(false);
     }
-    fetchMentorFolders();
-  }, [user, navigate]);
+  }, [user, authLoading, navigate]);
 
   const fetchMentorFolders = async () => {
     setLoading(true);
+    setError(null);
     try {
-      // Get all students under this mentor
-      const studentsRes = await API.get(`/students/?mentor_id=${user.id}`);
-      const studentIds = studentsRes.data.results?.map(s => s.id) || [];
+      // 1. Get mentor's own database ID
+      const mentorRes = await API.get("/mentors/me/");
+      const mentorId = mentorRes.data.id;
+      console.log("Mentor ID:", mentorId);
+
+      // 2. Get all students under this mentor
+      const studentsRes = await API.get(`/students/?mentor=${mentorId}`);
+      const students = studentsRes.data.results || studentsRes.data;
+      const studentIds = students.map(s => s.id);
+      console.log("Students under mentor:", studentIds);
+
       if (studentIds.length === 0) {
         setAllFolders([]);
+        setError("No students assigned to you. Please contact the admin.");
         setLoading(false);
         return;
       }
-      const query = studentIds.map(id => `student_id=${id}`).join('&');
+
+      // 3. Fetch review folders for those students
+      const query = studentIds.map(id => `student=${id}`).join('&');
       const foldersRes = await API.get(`/review-folders/?${query}`);
       setAllFolders(foldersRes.data);
     } catch (err) {
       console.error(err);
-      setError("Failed to load folders.");
+      setError("Failed to load folders. Please try again later.");
     } finally {
       setLoading(false);
     }
@@ -85,7 +119,7 @@ function MentorReviewFolders() {
     setEditingId(entry.id);
     setEditData({
       review_date: entry.review_date || "",
-      week: entry.week || "",
+      week: entry.week?.toString() || "",
       industry_expert: entry.industry_expert || "",
       meeting_link: entry.meeting_link || "",
       time_started: entry.time_started || "",
@@ -111,9 +145,13 @@ function MentorReviewFolders() {
     const original = rawEntries.find(e => e.id === id);
     if (!original) return;
     for (const key in editData) {
-      if (editData[key] !== (original[key] || "")) {
-        payload[key] = editData[key];
+      let newVal = editData[key];
+      let oldVal = original[key] !== undefined && original[key] !== null ? original[key] : "";
+      if (key === "week") {
+        newVal = newVal ? Number(newVal) : null;
+        oldVal = oldVal ? Number(oldVal) : null;
       }
+      if (newVal !== oldVal) payload[key] = newVal;
     }
     if (Object.keys(payload).length === 0) {
       cancelEdit();
@@ -124,8 +162,7 @@ function MentorReviewFolders() {
       await fetchMentorFolders();
       cancelEdit();
     } catch (err) {
-      console.error(err);
-      alert("Update failed");
+      alert("Update failed: " + (err.response?.data?.detail || err.message));
     }
   };
 
@@ -134,7 +171,6 @@ function MentorReviewFolders() {
       await API.patch(`/review-folders/${id}/`, { is_done: newValue });
       await fetchMentorFolders();
     } catch (err) {
-      console.error(err);
       alert("Failed to update status");
     }
   };
@@ -148,10 +184,13 @@ function MentorReviewFolders() {
     );
   };
 
-  const inputClass = "border border-gray-300 rounded px-2 py-1 text-sm w-full";
+  if (authLoading || loading) {
+    return <div className="p-8 text-center">Loading...</div>;
+  }
 
-  if (loading) return <div className="p-8 text-center">Loading...</div>;
-  if (error) return <div className="p-8 text-center text-red-500">{error}</div>;
+  if (error) {
+    return <div className="p-8 text-center text-red-500 whitespace-pre-line">{error}</div>;
+  }
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen w-full">
@@ -159,7 +198,6 @@ function MentorReviewFolders() {
       <p className="text-gray-500 text-sm mb-6">Click a folder to view/edit entries.</p>
 
       {!selectedFolder ? (
-        // Folder grid view
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-x-auto">
           <div className="p-3 border-b border-gray-200 bg-gray-50">
             <input
@@ -187,7 +225,6 @@ function MentorReviewFolders() {
                 </tr>
               ) : (
                 folderList.map((folder) => (
-                  // Click on the whole row – no navigation to home
                   <tr key={folder.name} className="hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedFolder(folder.name)}>
                     <td className="px-4 py-3 text-sm text-blue-600 hover:underline">📁 {folder.name}</td>
                     <td className="px-4 py-3 text-sm text-gray-700">Folder</td>
@@ -201,15 +238,9 @@ function MentorReviewFolders() {
           </table>
         </div>
       ) : (
-        // Entries table view (full editable)
         <div>
           <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
-            <button
-              onClick={() => setSelectedFolder(null)}
-              className="text-green-600 hover:text-green-800 flex items-center gap-1 text-sm"
-            >
-              ← Back to all folders
-            </button>
+            <button onClick={() => setSelectedFolder(null)} className="text-green-600 hover:text-green-800 flex items-center gap-1 text-sm">← Back to all folders</button>
             <div className="flex gap-2">
               <input
                 type="text"
@@ -224,7 +255,7 @@ function MentorReviewFolders() {
                 className="border border-gray-300 rounded-lg px-3 py-1 text-sm"
               >
                 <option value="">All Weeks</option>
-                {[...new Set(rawEntries.map(e => e.week))].sort().map(w => (
+                {[...new Set(rawEntries.map(e => e.week))].filter(w => w != null).sort().map(w => (
                   <option key={w} value={w}>Week {w}</option>
                 ))}
               </select>
@@ -248,108 +279,111 @@ function MentorReviewFolders() {
                 </tr>
               </thead>
               <tbody>
-                {filteredEntries.length === 0 ? (
-                  <tr>
-                    <td colSpan="11" className="px-4 py-8 text-center text-gray-400">No entries found.</td>
+                {filteredEntries.map((entry) => (
+                  <tr key={entry.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 text-sm text-gray-900">{entry.student_name || entry.student?.full_name || "—"}</td>
+                    <td className="px-4 py-3 text-sm">
+                      {editingId === entry.id ? (
+                        <input type="number" name="week" value={editData.week} onChange={handleChange} className="w-20 border rounded px-2 py-1 text-sm" />
+                      ) : (
+                        `Week ${entry.week}`
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      {editingId === entry.id ? (
+                        <input type="date" name="review_date" value={editData.review_date} onChange={handleChange} className="w-32 border rounded px-2 py-1 text-sm" />
+                      ) : (
+                        entry.review_date || "—"
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      {editingId === entry.id ? (
+                        reviewersList.length > 0 ? (
+                          <select name="industry_expert" value={editData.industry_expert} onChange={handleChange} className="w-36 border rounded px-2 py-1 text-sm">
+                            <option value="">— Select Reviewer —</option>
+                            {reviewersList.map((name) => (
+                              <option key={name} value={name}>{name}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input type="text" name="industry_expert" value={editData.industry_expert} onChange={handleChange} className="w-36 border rounded px-2 py-1 text-sm" placeholder="Reviewer name" />
+                        )
+                      ) : (
+                        entry.industry_expert || "—"
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      {editingId === entry.id ? (
+                        <input type="url" name="meeting_link" value={editData.meeting_link} onChange={handleChange} className="w-36 border rounded px-2 py-1 text-sm" />
+                      ) : (
+                        renderLink(entry.meeting_link, "Meeting")
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      {editingId === entry.id ? (
+                        <input type="time" name="time_started" value={editData.time_started} onChange={handleChange} className="w-28 border rounded px-2 py-1 text-sm" />
+                      ) : (
+                        entry.time_started || "—"
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      {editingId === entry.id ? (
+                        <input type="time" name="time_ended" value={editData.time_ended} onChange={handleChange} className="w-28 border rounded px-2 py-1 text-sm" />
+                      ) : (
+                        entry.time_ended || "—"
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      {editingId === entry.id ? (
+                        <input type="url" name="work_documents" value={editData.work_documents} onChange={handleChange} className="w-36 border rounded px-2 py-1 text-sm" />
+                      ) : (
+                        renderLink(entry.work_documents, "Doc")
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      {editingId === entry.id ? (
+                        <input type="url" name="review_sheet" value={editData.review_sheet} onChange={handleChange} className="w-36 border rounded px-2 py-1 text-sm" />
+                      ) : (
+                        renderLink(entry.review_sheet, "Sheet")
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {editingId === entry.id ? (
+                        <label className="flex items-center justify-center gap-1 cursor-pointer">
+                          <input type="checkbox" name="is_done" checked={editData.is_done} onChange={handleChange} />
+                          <span className="text-xs">{editData.is_done ? "Completed" : "Pending"}</span>
+                        </label>
+                      ) : (
+                        <button
+                          onClick={() => toggleDone(entry.id, !entry.is_done)}
+                          className={`px-2 py-1 rounded-full text-xs font-medium cursor-pointer ${
+                            entry.is_done
+                              ? "bg-green-100 text-green-800 hover:bg-green-200"
+                              : "bg-yellow-100 text-yellow-800 hover:bg-yellow-200"
+                          }`}
+                        >
+                          {entry.is_done ? "Completed" : "Pending"}
+                        </button>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {editingId === entry.id ? (
+                        <div className="flex gap-2 justify-center">
+                          <button onClick={() => saveEdit(entry.id)} className="text-green-600 hover:text-green-800">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" /></svg>
+                          </button>
+                          <button onClick={cancelEdit} className="text-gray-600 hover:text-gray-800">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" /></svg>
+                          </button>
+                        </div>
+                      ) : (
+                        <button onClick={() => startEdit(entry)} className="text-blue-600 hover:text-blue-800">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                        </button>
+                      )}
+                    </td>
                   </tr>
-                ) : (
-                  filteredEntries.map((entry) => (
-                    <tr key={entry.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-sm text-gray-900">{entry.student_name || entry.student?.full_name || "—"}</td>
-                      <td className="px-4 py-3 text-sm">
-                        {editingId === entry.id ? (
-                          <input type="number" name="week" value={editData.week} onChange={handleChange} className="w-20 border rounded px-2 py-1 text-sm" />
-                        ) : (
-                          `Week ${entry.week}`
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        {editingId === entry.id ? (
-                          <input type="date" name="review_date" value={editData.review_date} onChange={handleChange} className="w-32 border rounded px-2 py-1 text-sm" />
-                        ) : (
-                          entry.review_date || "—"
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        {editingId === entry.id ? (
-                          <input type="text" name="industry_expert" value={editData.industry_expert} onChange={handleChange} className="w-36 border rounded px-2 py-1 text-sm" />
-                        ) : (
-                          entry.industry_expert || "—"
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        {editingId === entry.id ? (
-                          <input type="url" name="meeting_link" value={editData.meeting_link} onChange={handleChange} className="w-36 border rounded px-2 py-1 text-sm" />
-                        ) : (
-                          renderLink(entry.meeting_link, "Meeting")
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        {editingId === entry.id ? (
-                          <input type="time" name="time_started" value={editData.time_started} onChange={handleChange} className="w-28 border rounded px-2 py-1 text-sm" />
-                        ) : (
-                          entry.time_started || "—"
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        {editingId === entry.id ? (
-                          <input type="time" name="time_ended" value={editData.time_ended} onChange={handleChange} className="w-28 border rounded px-2 py-1 text-sm" />
-                        ) : (
-                          entry.time_ended || "—"
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        {editingId === entry.id ? (
-                          <input type="url" name="work_documents" value={editData.work_documents} onChange={handleChange} className="w-36 border rounded px-2 py-1 text-sm" />
-                        ) : (
-                          renderLink(entry.work_documents, "Doc")
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        {editingId === entry.id ? (
-                          <input type="url" name="review_sheet" value={editData.review_sheet} onChange={handleChange} className="w-36 border rounded px-2 py-1 text-sm" />
-                        ) : (
-                          renderLink(entry.review_sheet, "Sheet")
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        {editingId === entry.id ? (
-                          <label className="flex items-center justify-center gap-1 cursor-pointer">
-                            <input type="checkbox" name="is_done" checked={editData.is_done} onChange={handleChange} />
-                            <span className="text-xs">{editData.is_done ? "Completed" : "Pending"}</span>
-                          </label>
-                        ) : (
-                          <button
-                            onClick={() => toggleDone(entry.id, !entry.is_done)}
-                            className={`px-2 py-1 rounded-full text-xs font-medium transition cursor-pointer ${
-                              entry.is_done
-                                ? "bg-green-100 text-green-800 hover:bg-green-200"
-                                : "bg-yellow-100 text-yellow-800 hover:bg-yellow-200"
-                            }`}
-                          >
-                            {entry.is_done ? "Completed" : "Pending"}
-                          </button>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        {editingId === entry.id ? (
-                          <div className="flex gap-2 justify-center">
-                            <button onClick={() => saveEdit(entry.id)} className="text-green-600 hover:text-green-800">
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" /></svg>
-                            </button>
-                            <button onClick={cancelEdit} className="text-gray-600 hover:text-gray-800">
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" /></svg>
-                            </button>
-                          </div>
-                        ) : (
-                          <button onClick={() => startEdit(entry)} className="text-blue-600 hover:text-blue-800">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))
-                )}
+                ))}
               </tbody>
             </table>
           </div>
