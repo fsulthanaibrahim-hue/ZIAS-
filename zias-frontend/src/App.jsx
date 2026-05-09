@@ -37,6 +37,7 @@ import MentorReviewSheetRange from "./pages/mentor/MentorReviewSheetRange";
 import ReviewTracker from "./pages/mentor/ReviewTracker";
 import MentorReviewFolders from "./pages/mentor/MentorReviewFolders";
 import AttendanceMonitor from "./pages/mentor/AttendanceMonitor";
+import MentorAssignments from "./pages/mentor/MentorAssignments";
 
 // Admin pages
 import Sidebar from "./components/Sidebar";
@@ -107,15 +108,16 @@ function App() {
       return;
     }
 
-    if (token && user) {
-      const resetPaths = ["/forgot-password", "/reset-password/:token"];
-      const isResetPath = resetPaths.some(path => location.pathname === path);
-      if (isResetPath) {
-        if (user.is_admin) navigate("/admin/dashboard", { replace: true });
-        else if (user.is_student) navigate("/student/dashboard", { replace: true });
-        else if (user.is_mentor) navigate("/mentor/dashboard", { replace: true });
-        else if (user.is_reviewer) navigate("/reviewer/dashboard", { replace: true });
-      }
+    // Fix: correctly detect reset‑password routes (path starts with /reset-password/)
+    const isForgotPassword = location.pathname === "/forgot-password";
+    const isResetPassword = location.pathname.startsWith("/reset-password/");
+    const isResetPath = isForgotPassword || isResetPassword;
+
+    if (token && user && isResetPath) {
+      if (user.is_admin) navigate("/admin/dashboard", { replace: true });
+      else if (user.is_student) navigate("/student/dashboard", { replace: true });
+      else if (user.is_mentor) navigate("/mentor/dashboard", { replace: true });
+      else if (user.is_reviewer) navigate("/reviewer/dashboard", { replace: true });
     }
   }, [location.pathname, navigate]);
 
@@ -226,6 +228,9 @@ function App() {
           </PrivateRoute>
         } />
 
+
+
+
         {/* Mentor routes */}
         <Route path="/mentor/dashboard" element={
           <PrivateRoute>
@@ -307,6 +312,14 @@ function App() {
             </div>
           </PrivateRoute>
         } />
+        <Route path="/mentor/assignments" element={
+          <PrivateRoute>
+            <div style={{ display: "flex" }}>
+              <MentorSidebar />
+              <MentorAssignments />
+            </div>
+          </PrivateRoute>
+        } />
 
         {/* Admin routes */}
         <Route path="/admin/dashboard" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Dashboard /></div></AdminRoute>} />
@@ -337,3 +350,4 @@ function App() {
 }
 
 export default App;
+

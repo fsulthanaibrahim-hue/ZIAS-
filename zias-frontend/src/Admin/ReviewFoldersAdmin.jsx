@@ -1,4 +1,4 @@
-// src/Admin/ReviewFoldersAdmin.jsx – fully working, no JSX errors
+// src/Admin/ReviewFoldersAdmin.jsx – uses batches API for correct labels
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../api/api";
@@ -51,7 +51,6 @@ class SafeTable extends React.Component {
   }
 }
 
-// Modal for adding week folder inside a batch
 function AddWeekModal({ isOpen, onClose, batchStudents, batchName, onCreate, creating }) {
   const [folderName, setFolderName] = useState("");
   const [reviewDate, setReviewDate] = useState("");
@@ -176,9 +175,6 @@ function AddWeekModal({ isOpen, onClose, batchStudents, batchName, onCreate, cre
   );
 }
 
-// --------------------------------------------------------------
-// Main component
-// --------------------------------------------------------------
 function ReviewFoldersAdmin() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -195,6 +191,7 @@ function ReviewFoldersAdmin() {
   const [studentMap, setStudentMap] = useState(new Map());
   const [studentCourseMap, setStudentCourseMap] = useState(new Map());
   const [mentorsList, setMentorsList] = useState([]);
+  const [batchesList, setBatchesList] = useState([]);    // <-- new
   const [loading, setLoading] = useState(true);
   const [errorLogs, setErrorLogs] = useState([]);
   const errorLogsRef = useRef([]);
@@ -345,6 +342,22 @@ function ReviewFoldersAdmin() {
     }
   };
 
+  const fetchBatches = async () => {
+    try {
+      const res = await API.get("batches/");
+      let batchesArray = [];
+      if (Array.isArray(res.data)) {
+        batchesArray = res.data;
+      } else if (res.data && Array.isArray(res.data.results)) {
+        batchesArray = res.data.results;
+      }
+      setBatchesList(batchesArray);
+    } catch (err) {
+      addErrorLog(err, { api: "batches/" });
+      showToast("Failed to load batches", "error");
+    }
+  };
+
   const fetchAllFolders = async () => {
     setLoading(true);
     try {
@@ -361,28 +374,74 @@ function ReviewFoldersAdmin() {
   useEffect(() => {
     if (!hasFetched.current) {
       hasFetched.current = true;
-      Promise.all([fetchStudents(), fetchMentors(), fetchAllFolders()]);
+      Promise.all([fetchStudents(), fetchMentors(), fetchBatches(), fetchAllFolders()]);
     }
   }, []);
 
-  // Batch helpers
-  const batches = mentorsList.map((mentor, index) => ({
-    id: mentor.id,
-    label: `B${index + 1}`,
-    mentorName: mentor.full_name || mentor.username || `Mentor ${index + 1}`,
-    studentCount: students.filter(s => s.mentor_id === mentor.id).length,
-  }));
+  // ----- Helper: get batch name from batch ID -----
+  const getBatchName = (batchId) => {
+    if (!batchId) return null;
+    const batch = batchesList.find(b => b.id === batchId);
+    return batch ? batch.name : null;
+  };
 
-  const filteredBatches = batches.filter(batch =>
-    batch.label.toLowerCase().includes(batchSearchTerm.toLowerCase()) ||
-    batch.mentorName.toLowerCase().includes(batchSearchTerm.toLowerCase())
+  // ----- Build batch cards using mentor.batch (ID) mapped to batch name -----
+  // We group by the actual batch name (e.g., "B1") – mentors with same batch name are merged.
+  const batchGroups = React.useMemo(() => {
+    const groups = new Map(); // key: batch name, value: { batchName, mentorIds, mentorNames, totalStudents }
+    mentorsList.forEach(mentor => {
+      const batchName = getBatchName(mentor.batch);
+      if (!batchName) return; // skip mentors without a batch
+      if (!groups.has(batchName)) {
+        groups.set(batchName, {
+          batchName,
+          mentorIds: [],
+          mentorNames: [],
+          totalStudents: 0,
+        });
+      }
+      const group = groups.get(batchName);
+      group.mentorIds.push(mentor.id);
+      group.mentorNames.push(mentor.full_name || mentor.username);
+      // Count students belonging to any of the mentors in this batch?
+      // Actually students are linked to a specific mentor. For display we show total students in the batch (sum over mentors).
+    });
+    // Calculate student count per batch group
+    for (const [batchName, group] of groups.entries()) {
+      let count = 0;
+      group.mentorIds.forEach(mentorId => {
+        count += students.filter(s => s.mentor_id === mentorId).length;
+      });
+      group.totalStudents = count;
+    }
+    return Array.from(groups.values()).sort((a, b) => a.batchName.localeCompare(b.batchName));
+  }, [mentorsList, students, batchesList]);
+
+  // For backward compatibility: also produce a flat list of batches per mentor (if you want to keep old logic)
+  // But we'll use batchGroups for the cards.
+  // We'll also need to map selectedBatchMentorId (which is currently a mentor ID) to a batch group.
+  // However the old code used selectedBatchMentorId to filter students by mentor. Now that we group by batch name,
+  // we need to change the selection to be batch name based. Simpler: keep mentor-based selection but adjust display.
+  // To avoid breaking existing code, we'll keep the selectedBatchMentorId as mentor ID, but the cards will show batch groups.
+  // When a user clicks on a batch card, we need to set selectedBatchMentorId to one of the mentor IDs in that group (the first one).
+  // Then the folder logic (which filters by mentor ID) will work as before. But this means multiple mentors under same batch name would each show their own folders – that might be fine.
+
+  // Alternatively, we can change the folder view to show all students from all mentors in the batch.
+  // But the original code uses selectedBatchMentorId to get studentsInBatch via getStudentsInBatch(mentorId).
+  // So we'll keep mentor-level selection, but the card will represent the batch name and total students.
+  // Clicking the card will select the first mentor of that batch.
+  // This ensures that all existing folder logic (which refers to mentor ID) continues to work.
+
+  const filteredBatchGroups = batchGroups.filter(group =>
+    group.batchName.toLowerCase().includes(batchSearchTerm.toLowerCase()) ||
+    group.mentorNames.some(name => name.toLowerCase().includes(batchSearchTerm.toLowerCase()))
   );
 
   const getStudentsInBatch = (mentorId) => {
     return students.filter(s => s.mentor_id === mentorId);
   };
 
-  // Folders aggregation
+  // Folder aggregation - unchanged logic (still uses mentor ID)
   const batchFolders = () => {
     if (selectedBatchMentorId === null) return [];
     const studentIds = new Set(getStudentsInBatch(selectedBatchMentorId).map(s => s.id));
@@ -435,7 +494,7 @@ function ReviewFoldersAdmin() {
 
   const foldersToShow = selectedBatchMentorId === null ? allFoldersAggregated() : batchFolders();
 
-  // Folder actions
+  // Folder actions (edit, delete) unchanged
   const editFolder = async (oldName) => {
     const newName = prompt("Enter new folder name:", oldName);
     if (!newName || newName.trim() === "" || newName === oldName) return;
@@ -529,7 +588,6 @@ function ReviewFoldersAdmin() {
     setCreatingWeek(false);
   };
 
-  // Entry actions inside a folder
   const handleFolderClick = (folderName, e) => {
     if (e) {
       e.preventDefault();
@@ -677,17 +735,18 @@ function ReviewFoldersAdmin() {
 
   if (loading) return <div className="text-center p-8">Loading...</div>;
 
-  // Icons
   const EditIcon = () => (<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>);
   const DeleteIcon = () => (<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>);
   const SaveIcon = () => (<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>);
   const CancelIcon = () => (<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>);
 
-  const selectedBatchLabel = selectedBatchMentorId !== null
-    ? batches.find(b => b.id === selectedBatchMentorId)?.label || ""
-    : null;
-  const selectedBatchMentorName = selectedBatchMentorId !== null
-    ? batches.find(b => b.id === selectedBatchMentorId)?.mentorName || ""
+  // For selected batch display
+  const selectedBatchInfo = selectedBatchMentorId
+    ? (() => {
+        const mentor = mentorsList.find(m => m.id === selectedBatchMentorId);
+        const batchName = mentor ? getBatchName(mentor.batch) : null;
+        return { batchName, mentorName: mentor?.full_name || mentor?.username };
+      })()
     : null;
 
   return (
@@ -702,7 +761,7 @@ function ReviewFoldersAdmin() {
                 {selectedFolder
                   ? `Showing entries for "${selectedFolder}"`
                   : selectedBatchMentorId !== null
-                  ? `Batch ${selectedBatchLabel} (${selectedBatchMentorName})`
+                  ? `Batch ${selectedBatchInfo?.batchName || ""} (${selectedBatchInfo?.mentorName || ""})`
                   : "Select a batch"}
               </p>
             </div>
@@ -719,10 +778,9 @@ function ReviewFoldersAdmin() {
             )}
           </div>
 
-          {/* Batch cards view – only when no batch/folder selected */}
+          {/* Batch cards view – using batchGroups from batches API */}
           {selectedBatchMentorId === null && !selectedFolder && (
             <>
-              {/* Statistics bar: total students */}
               <div className="mb-6 bg-white rounded-xl border border-gray-200 shadow-sm p-4">
                 <div className="flex items-center gap-3">
                   <div className="text-2xl">📊</div>
@@ -743,19 +801,23 @@ function ReviewFoldersAdmin() {
                 />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {filteredBatches.map((batch) => (
-                  <div
-                    key={batch.id}
-                    onClick={() => setSelectedBatchMentorId(batch.id)}
-                    className="cursor-pointer bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all p-4"
-                  >
-                    <div className="text-2xl mb-2">👥</div>
-                    <div className="text-lg font-semibold text-gray-800">{batch.label}</div>
-                    <div className="text-sm text-gray-500 mt-1">{batch.studentCount} students</div>
-                    <div className="text-xs text-gray-400 mt-1">👤 {batch.mentorName}</div>
-                  </div>
-                ))}
-                {filteredBatches.length === 0 && (
+                {filteredBatchGroups.map((group) => {
+                  // Pick first mentor ID from the group to use as selection
+                  const firstMentorId = group.mentorIds[0];
+                  return (
+                    <div
+                      key={group.batchName}
+                      onClick={() => setSelectedBatchMentorId(firstMentorId)}
+                      className="cursor-pointer bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all p-4"
+                    >
+                      <div className="text-2xl mb-2">👥</div>
+                      <div className="text-lg font-semibold text-gray-800">{group.batchName}</div>
+                      <div className="text-sm text-gray-500 mt-1">{group.totalStudents} students</div>
+                      <div className="text-xs text-gray-400 mt-1">👤 {group.mentorNames.join(", ")}</div>
+                    </div>
+                  );
+                })}
+                {filteredBatchGroups.length === 0 && (
                   <div className="col-span-full text-center text-gray-400 py-8">
                     No batches match your search.
                   </div>
@@ -769,7 +831,7 @@ function ReviewFoldersAdmin() {
             <>
               <div className="mb-4 flex justify-between items-center">
                 <h2 className="text-lg font-semibold text-gray-800">
-                  Batch {selectedBatchLabel}
+                  Batch {selectedBatchInfo?.batchName || ""}
                 </h2>
                 <button
                   onClick={() => setShowAddWeekModal(true)}
@@ -831,7 +893,7 @@ function ReviewFoldersAdmin() {
             </>
           )}
 
-          {/* Entries inside a selected folder – FIXED: all tags closed */}
+          {/* Entries inside a selected folder */}
           {selectedFolder && (
             <div>
               <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
@@ -948,7 +1010,7 @@ function ReviewFoldersAdmin() {
           isOpen={showAddWeekModal}
           onClose={() => setShowAddWeekModal(false)}
           batchStudents={getStudentsInBatch(selectedBatchMentorId)}
-          batchName={`Batch ${selectedBatchLabel}`}
+          batchName={`Batch ${selectedBatchInfo?.batchName || ""}`}
           onCreate={handleAddWeekForBatch}
           creating={creatingWeek}
         />

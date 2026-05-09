@@ -450,6 +450,7 @@ class MentorDocument(models.Model):
         super().save(*args, **kwargs)
 
 
+# models.py
 class ReviewAssignment(models.Model):
     STATUS_CHOICES = (
         ('assigned', 'Assigned'),
@@ -462,19 +463,21 @@ class ReviewAssignment(models.Model):
     reviewer = models.ForeignKey('Reviewer', on_delete=models.CASCADE, related_name='assigned_reviews')
     student = models.ForeignKey('Student', on_delete=models.CASCADE, related_name='review_assignments')
     review_sheet = models.URLField(max_length=500, blank=True, null=True)
+    work_documents = models.URLField(max_length=500, blank=True, null=True)   # NEW
+    week = models.CharField(max_length=10, blank=True, null=True)              # NEW
     course = models.CharField(max_length=100, blank=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending approval')
     comments = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    # review date = (reviewsheet also datetimefield)
 
     class Meta:
         ordering = ['-created_at']
 
     def __str__(self):
         return f"{self.reviewer.user.username} – {self.student.user.username} ({self.status})"
-
+    
+    
 
 class WeeklySubmission(models.Model):
     SUBMISSION_TYPES = [

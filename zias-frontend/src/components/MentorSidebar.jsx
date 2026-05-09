@@ -1,4 +1,4 @@
-// src/components/MentorSidebar.jsx
+// src/components/MentorSidebar.jsx – with Review Assignments link
 import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import NotificationBell from "./NotificationBell";
@@ -31,6 +31,8 @@ function getIcon(label) {
       return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}><path d="M2 2h4v4H2V2zm6 0h4v4H8V2zM2 8h4v4H2V8zm6 0h4v4H8V8z" /></svg>;
     case "Review Folders":
       return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}><path d="M2 2h12v12H2V2zm1 1v10h10V3H3zm2 2h6v1H5V5zm0 2h6v1H5V7zm0 2h6v1H5V9z" /></svg>;
+    case "Review Assignments":
+      return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}><path d="M4 2h8v2H4V2zm0 3h8v2H4V5zm0 3h8v2H4V8zm0 3h8v2H4v-2zM2 2h1v12H2V2z" /></svg>;
     case "Attendance Monitor":
       return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}><path d="M8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13zm0 1a5.5 5.5 0 110 11 5.5 5.5 0 010-11zm.5 2H7v5.5l4 2.5.5-1-3.5-2V4.5z" /></svg>;
     case "Profile":
@@ -64,6 +66,7 @@ function MentorSidebar() {
     { path: "/mentor/students", label: "My Students" },
     { path: "/mentor/modules", label: "Modules" },
     { path: "/mentor/review-folders", label: "Review Folders" },
+    { path: "/mentor/assignments", label: "Review Assignments" }, // NEW
     { path: "/mentor/attendance", label: "Attendance Monitor" },
     { path: "/mentor/profile", label: "Profile" },
   ];
@@ -109,7 +112,7 @@ function MentorSidebar() {
           )}
         </button>
 
-        {/* ✅ NotificationBell auto‑detects role – no need to pass 'mentor' */}
+        {/* NotificationBell auto‑detects role */}
         {!isCollapsed && <NotificationBell />}
       </div>
 

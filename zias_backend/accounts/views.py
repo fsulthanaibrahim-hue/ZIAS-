@@ -8,7 +8,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.filters import BaseFilterBackend
 from rest_framework.parsers import MultiPartParser, FormParser
-from rest_framework.exceptions import ValidationError, NotFound
+from rest_framework.exceptions import ValidationError, NotFound, PermissionDenied
 from django.utils import timezone
 from django.db.models import Q
 from django.db import models
@@ -200,19 +200,18 @@ class MentorViewSet(viewsets.ModelViewSet):
 
 
 # ----------------------------
-# REVIEWER VIEWSET
+# REVIEWER VIEWSET – FIXED: 'me' action allowed for authenticated users
 # ----------------------------
 class ReviewerViewSet(viewsets.ModelViewSet):
     queryset = Reviewer.objects.all()
     serializer_class = ReviewerSerializer
 
     def get_permissions(self):
-        # Allow any authenticated user to list and retrieve reviewers
-        if self.action in ['list', 'retrieve']:
-            permission_classes = [IsAuthenticated]
+        # Allow any authenticated user to list, retrieve, or access 'me'
+        if self.action in ['list', 'retrieve', 'me']:
+            return [IsAuthenticated()]
         else:
-            permission_classes = [IsAdminUser]
-        return [permission() for permission in permission_classes]
+            return [IsAdminUser()]
 
     def destroy(self, request, *args, **kwargs):
         reviewer = self.get_object()
@@ -238,8 +237,7 @@ class ReviewerViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
-    
-    
+
 
 # ----------------------------
 # COURSE VIEWSET
@@ -304,7 +302,7 @@ class ModuleViewSet(viewsets.ModelViewSet):
             all_modules = list(common_modules) + list(course_modules)
             all_modules.sort(key=lambda x: x.order)
 
-        # 🔁 Determine completed weeks based on task_status, not total_score
+        # Determine completed weeks based on task_status, not total_score
         reviews = StudentWeekReview.objects.filter(student=student)
         completed_weeks = set()
         for review in reviews:
@@ -328,7 +326,7 @@ class ModuleViewSet(viewsets.ModelViewSet):
                 'course_name': module.course.name if module.course else None,
                 'is_common': module.is_common,
                 'is_locked': is_locked,
-                'completion_percentage': 0,  # optional
+                'completion_percentage': 0,
             })
         return Response(result)
 
@@ -842,13 +840,9 @@ class StudentWeekReviewView(generics.RetrieveUpdateAPIView):
         return obj
 
     def perform_update(self, serializer):
-        # Capture old status before save
         old_instance = serializer.instance
         old_status = old_instance.task_status if old_instance else None
-
         review = serializer.save()
-
-        # 1. Notify student when task status changes to 'Task Completed'
         if review.task_status == 'Task Completed' and old_status != 'Task Completed':
             Notification.objects.create(
                 user=review.student.user,
@@ -856,8 +850,6 @@ class StudentWeekReviewView(generics.RetrieveUpdateAPIView):
                 link="/student/review-sheet",
                 is_read=False
             )
-
-        # 2. Auto-complete module if total score >= 30 (optional)
         if review.total_score is not None and review.total_score >= 30:
             student_module, created = StudentModule.objects.get_or_create(
                 student=review.student,
@@ -867,8 +859,6 @@ class StudentWeekReviewView(generics.RetrieveUpdateAPIView):
                 student_module.is_completed = True
                 student_module.completed_at = timezone.now()
                 student_module.save()
-
-                # Optionally notify student about module completion
                 Notification.objects.create(
                     user=review.student.user,
                     message=f"🏆 You've completed the module: {review.module.title}. Great work!",
@@ -887,7 +877,7 @@ class WeekUpdateViewSet(viewsets.ModelViewSet):
 
 
 # ----------------------------
-# REVIEW FOLDER VIEWSET (SINGLE, WITH NOTIFICATIONS)
+# REVIEW FOLDER VIEWSET (with auto assignment)
 # ----------------------------
 class ReviewFolderViewSet(viewsets.ModelViewSet):
     serializer_class = ReviewFolderSerializer
@@ -907,12 +897,14 @@ class ReviewFolderViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         instance = serializer.save(created_by=self.request.user, updated_by=self.request.user)
         self._notify_reviewer(instance)
+        self._sync_assignment(instance)
 
     def perform_update(self, serializer):
         old = self.get_object()
         instance = serializer.save(updated_by=self.request.user)
         if old.industry_expert != instance.industry_expert and instance.industry_expert:
             self._notify_reviewer(instance)
+            self._sync_assignment(instance)
 
     def _notify_reviewer(self, review_folder):
         expert_name = review_folder.industry_expert
@@ -939,6 +931,65 @@ class ReviewFolderViewSet(viewsets.ModelViewSet):
             link="/reviewer/review-folders",
             is_read=False
         )
+
+    def _sync_assignment(self, review_folder):
+        """Create or update a ReviewAssignment based on the review folder."""
+        from .models import ReviewAssignment  # avoid circular import if needed
+
+        expert_name = review_folder.industry_expert
+        if not expert_name:
+            return
+
+        # Find reviewer by exact full_name or username (case‑insensitive)
+        reviewer = Reviewer.objects.filter(
+            Q(full_name__iexact=expert_name) | Q(user__username__iexact=expert_name)
+        ).first()
+        if not reviewer:
+            print(f"Reviewer not found for name '{expert_name}', cannot sync assignment")
+            return
+
+        student = review_folder.student
+        if not student:
+            return
+
+        mentor = student.mentor
+        if not mentor:
+            print(f"No mentor assigned to student {student.id}, cannot create assignment")
+            return
+
+        course = student.course or ""
+
+        # Create or update assignment
+        assignment, created = ReviewAssignment.objects.get_or_create(
+            mentor=mentor,
+            reviewer=reviewer,
+            student=student,
+            defaults={
+                'course': course,
+                'review_sheet': review_folder.review_sheet or "",
+                'status': 'pending approval',
+            }
+        )
+        if not created:
+            # Update fields if they changed (optional)
+            updated = False
+            if assignment.course != course:
+                assignment.course = course
+                updated = True
+            if assignment.review_sheet != (review_folder.review_sheet or ""):
+                assignment.review_sheet = review_folder.review_sheet or ""
+                updated = True
+            if updated:
+                assignment.save()
+
+        # Notify reviewer only for new assignment
+        if created:
+            Notification.objects.create(
+                user=reviewer.user,
+                message=f"New review assignment from {mentor.full_name or mentor.user.username} for student {student.full_name or student.user.username} (Course: {course})",
+                link="/reviewer/assignments",
+                is_read=False
+            )
 
 
 # ----------------------------
@@ -1189,49 +1240,125 @@ class MentorDocumentDeleteView(APIView):
 class ReviewAssignmentViewSet(viewsets.ModelViewSet):
     queryset = ReviewAssignment.objects.all()
     serializer_class = ReviewAssignmentSerializer
-    permission_classes = [IsMentorOrReviewerOrAdmin]
+    permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [IsAuthenticated()]
+        if self.action == 'create':
+            return [IsAuthenticated()]  # role check inside perform_create
+        if self.action in ['update', 'partial_update', 'destroy']:
+            return [IsAdminUser()]
+        return [IsAuthenticated()]
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_reviewer:
-            reviewer = Reviewer.objects.get(user=user)
-            return ReviewAssignment.objects.filter(reviewer=reviewer)
-        elif user.is_mentor:
-            mentor = Mentor.objects.get(user=user)
-            return ReviewAssignment.objects.filter(mentor=mentor)
-        return ReviewAssignment.objects.all()
+        try:
+            if user.is_mentor:
+                mentor = Mentor.objects.get(user=user)
+                return ReviewAssignment.objects.filter(mentor=mentor)
+            elif user.is_reviewer:
+                reviewer = Reviewer.objects.get(user=user)
+                return ReviewAssignment.objects.filter(reviewer=reviewer)
+            elif user.is_admin:
+                return ReviewAssignment.objects.all()
+        except (Mentor.DoesNotExist, Reviewer.DoesNotExist):
+            return ReviewAssignment.objects.none()
+        return ReviewAssignment.objects.none()
 
     def perform_create(self, serializer):
-        if self.request.user.is_mentor:
-            mentor = Mentor.objects.get(user=self.request.user)
-            assignment = serializer.save(mentor=mentor)
+        if not self.request.user.is_mentor:
+            raise PermissionDenied("Only mentors can create assignments")
+        mentor = Mentor.objects.get(user=self.request.user)
+        reviewer_id = self.request.data.get('reviewer')
+        if not reviewer_id:
+            raise ValidationError({"reviewer": "Reviewer ID required"})
+        reviewer = Reviewer.objects.get(id=reviewer_id)
+
+        work_documents = self.request.data.get('work_documents', '')
+        week = self.request.data.get('week', '')
+
+        assignment = serializer.save(
+            mentor=mentor,
+            reviewer=reviewer,
+            status='pending approval',
+            work_documents=work_documents or None,
+            week=week or None
+        )
+
+        Notification.objects.create(
+            user=reviewer.user,
+            message=f"New review assignment from {mentor.full_name or mentor.user.username} for student {assignment.student.full_name or assignment.student.user.username} (Course: {assignment.course or assignment.student.course})",
+            link="/reviewer/assignments",
+            is_read=False
+        )
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def accept(self, request, pk=None):
+        assignment = self.get_object()
+        user = request.user
+
+        # Allow reviewer OR the mentor who created the assignment
+        is_reviewer = user.is_reviewer and assignment.reviewer.user == user
+        is_mentor_creator = user.is_mentor and assignment.mentor.user == user
+
+        if not (is_reviewer or is_mentor_creator):
+            return Response({"error": "Not allowed"}, status=403)
+
+        assignment.status = 'accepted'
+        assignment.save()
+
+        # Notify the mentor if the reviewer accepted, or notify the reviewer if the mentor accepted
+        if is_reviewer:
             Notification.objects.create(
-                user=assignment.reviewer.user,
-                message=f"You have a new review assignment from {mentor.full_name or mentor.user.username} for student {assignment.student.full_name or assignment.student.user.username} (Course: {assignment.course})",
-                link="/reviewer/assignments"
+                user=assignment.mentor.user,
+                message=f"Reviewer {assignment.reviewer.full_name or assignment.reviewer.user.username} accepted the assignment for {assignment.student.full_name or assignment.student.user.username}.",
+                link="/mentor/assignments",
+                is_read=False
             )
         else:
-            raise PermissionError("Only mentors can create assignments")
+            Notification.objects.create(
+                user=assignment.reviewer.user,
+                message=f"Mentor {assignment.mentor.full_name or assignment.mentor.user.username} marked the assignment as accepted for {assignment.student.full_name or assignment.student.user.username}.",
+                link="/reviewer/assignments",
+                is_read=False
+            )
 
-    def update(self, request, *args, **kwargs):
-        instance = self.get_object()
-        if request.user.is_reviewer:
-            allowed_fields = ['status', 'comments']
-            data = {k: v for k, v in request.data.items() if k in allowed_fields}
-            serializer = self.get_serializer(instance, data=data, partial=True)
-            serializer.is_valid(raise_exception=True)
-            self.perform_update(serializer)
-            if 'status' in data and data['status'] in ['accepted', 'rejected']:
-                Notification.objects.create(
-                    user=instance.mentor.user,
-                    message=f"Reviewer {instance.reviewer.full_name or instance.reviewer.user.username} has {data['status']} the assignment for student {instance.student.full_name or instance.student.user.username} (Course: {instance.course})",
-                    link="/mentor/assignments"
-                )
-            return Response(serializer.data)
-        elif request.user.is_mentor or request.user.is_admin:
-            return super().update(request, *args, **kwargs)
-        else:
+        return Response({"status": "accepted"})
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def reject(self, request, pk=None):
+        assignment = self.get_object()
+        user = request.user
+
+        is_reviewer = user.is_reviewer and assignment.reviewer.user == user
+        is_mentor_creator = user.is_mentor and assignment.mentor.user == user
+
+        if not (is_reviewer or is_mentor_creator):
             return Response({"error": "Not allowed"}, status=403)
+
+        assignment.status = 'rejected'
+        comments = request.data.get('comments', '')
+        if comments:
+            assignment.comments = comments
+        assignment.save()
+
+        if is_reviewer:
+            Notification.objects.create(
+                user=assignment.mentor.user,
+                message=f"Reviewer {assignment.reviewer.full_name or assignment.reviewer.user.username} rejected the assignment for {assignment.student.full_name or assignment.student.user.username}. Reason: {comments or 'No reason provided'}",
+                link="/mentor/assignments",
+                is_read=False
+            )
+        else:
+            Notification.objects.create(
+                user=assignment.reviewer.user,
+                message=f"Mentor {assignment.mentor.full_name or assignment.mentor.user.username} rejected the assignment for {assignment.student.full_name or assignment.student.user.username}. Reason: {comments or 'No reason provided'}",
+                link="/reviewer/assignments",
+                is_read=False
+            )
+
+        return Response({"status": "rejected"})
 
 
 # ----------------------------
@@ -1273,7 +1400,6 @@ class StudentSubmissionListCreateView(generics.ListCreateAPIView):
         student = self.request.user.student_profile
         submission = serializer.save(student=student)
 
-        # 🔔 Notify the student's mentor about the new submission
         if student.mentor:
             Notification.objects.create(
                 user=student.mentor.user,
@@ -1281,7 +1407,6 @@ class StudentSubmissionListCreateView(generics.ListCreateAPIView):
                 link=f"/mentor/review-sheet?student_id={student.id}",
                 is_read=False
             )
-
 
 
 class SubmissionBulkUpdateView(generics.GenericAPIView):
@@ -1305,10 +1430,7 @@ class SubmissionBulkUpdateView(generics.GenericAPIView):
 
             submission.save()
 
-            # 🔔 Notify student if the submission was just marked as reviewed,
-            # or if marks/feedback changed (even if already reviewed)
             if submission.reviewed and not old_reviewed:
-                # First time being reviewed
                 Notification.objects.create(
                     user=submission.student.user,
                     message=f"✅ Your {submission.get_submission_type_display()} for week {submission.week.order} has been reviewed. Marks: {submission.marks}/5",
@@ -1316,7 +1438,6 @@ class SubmissionBulkUpdateView(generics.GenericAPIView):
                     is_read=False
                 )
             elif submission.reviewed and (submission.marks != old_marks or submission.mentor_feedback != old_feedback):
-                # Marks or feedback updated after review
                 Notification.objects.create(
                     user=submission.student.user,
                     message=f"📝 Your {submission.get_submission_type_display()} for week {submission.week.order} was updated. New marks: {submission.marks}/5. Feedback: {submission.mentor_feedback or '—'}",
@@ -1324,7 +1445,6 @@ class SubmissionBulkUpdateView(generics.GenericAPIView):
                     is_read=False
                 )
             elif not submission.reviewed and submission.reviewed != old_reviewed:
-                # If reviewed was turned off (unlikely), notify as well
                 Notification.objects.create(
                     user=submission.student.user,
                     message=f"ℹ️ The review status for your {submission.get_submission_type_display()} was changed back to pending.",
@@ -1345,16 +1465,13 @@ class CheckInView(generics.CreateAPIView):
 
     def perform_create(self, serializer):
         user = self.request.user
-        # Auto‑create student profile if missing
         student, created = Student.objects.get_or_create(
             user=user,
             defaults={'course': '', 'batch': ''}
         )
         if created:
             print(f"Auto-created student profile for {user.username} during check‑in")
-        # ✅ Allow unlimited check‑ins – no daily limit
         serializer.save(student=student, check_in=timezone.now())
-
 
 
 class CheckOutView(generics.UpdateAPIView):
@@ -1365,7 +1482,6 @@ class CheckOutView(generics.UpdateAPIView):
         student = getattr(self.request.user, 'student_profile', None)
         if not student:
             raise NotFound("Only students can check out.")
-        # Get the most recent open record
         record = AttendanceRecord.objects.filter(
             student=student, check_out__isnull=True
         ).order_by('-check_in').first()
@@ -1390,13 +1506,10 @@ class AttendanceHistoryView(generics.ListAPIView):
     def get_queryset(self):
         user = self.request.user
         student_id = self.request.query_params.get('student_id')
-        date_str = self.request.query_params.get('date')   # YYYY-MM-DD
+        date_str = self.request.query_params.get('date')
 
-        # ---- Students see only their own records ----
         if hasattr(user, 'student_profile'):
             qs = AttendanceRecord.objects.filter(student=user.student_profile)
-
-        # ---- Mentors see only their assigned students ----
         elif user.is_mentor:
             mentor = Mentor.objects.get(user=user)
             mentor_student_ids = Student.objects.filter(mentor=mentor).values_list('id', flat=True)
@@ -1407,21 +1520,17 @@ class AttendanceHistoryView(generics.ListAPIView):
                     qs = AttendanceRecord.objects.filter(student_id=student_id)
             else:
                 qs = AttendanceRecord.objects.filter(student_id__in=mentor_student_ids)
-
-        # ---- Admin / reviewer see all ----
         else:
             qs = AttendanceRecord.objects.all()
             if student_id:
                 qs = qs.filter(student_id=student_id)
 
-        # ✅ APPLY DATE FILTER (exact day, ignores time)
         if date_str:
             try:
                 target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
                 qs = qs.filter(check_in__date=target_date)
             except ValueError:
-                pass   # ignore invalid date format
+                pass
 
-        # ✅ Order by most recent first (optional)
-        return qs.order_by('-check_in')    
+        return qs.order_by('-check_in')
     

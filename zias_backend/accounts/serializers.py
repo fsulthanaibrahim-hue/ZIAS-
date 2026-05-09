@@ -555,19 +555,30 @@ class MentorDocumentSerializer(serializers.ModelSerializer):
         return obj.file.url
 
 
+
 class ReviewAssignmentSerializer(serializers.ModelSerializer):
-    mentor_name = serializers.CharField(source='mentor.user.username', read_only=True)
-    reviewer_name = serializers.CharField(source='reviewer.user.username', read_only=True)
-    student_name = serializers.CharField(source='student.user.username', read_only=True)
+    mentor_full_name = serializers.SerializerMethodField()
+    reviewer_full_name = serializers.SerializerMethodField()
+    student_full_name = serializers.SerializerMethodField()
 
     class Meta:
         model = ReviewAssignment
         fields = [
-            'id', 'mentor', 'mentor_name', 'reviewer', 'reviewer_name',
-            'student', 'student_name', 'review_sheet', 'course', 'status',
-            'comments', 'created_at', 'updated_at'
+            'id', 'mentor', 'mentor_full_name', 'reviewer', 'reviewer_full_name',
+            'student', 'student_full_name', 'review_sheet', 'work_documents', 'week',
+            'course', 'status', 'comments', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def get_mentor_full_name(self, obj):
+        return obj.mentor.full_name or obj.mentor.user.get_full_name() or obj.mentor.user.username
+
+    def get_reviewer_full_name(self, obj):
+        return obj.reviewer.full_name or obj.reviewer.user.get_full_name() or obj.reviewer.user.username
+
+    def get_student_full_name(self, obj):
+        return obj.student.full_name or obj.student.user.get_full_name() or obj.student.user.username
+    
 
 
 class WeeklySubmissionSerializer(serializers.ModelSerializer):
