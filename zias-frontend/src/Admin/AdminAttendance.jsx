@@ -1,12 +1,8 @@
-// src/Admin/AdminAttendance.jsx – Elegant Light Green Theme
-import React, { useState, useEffect } from 'react';
+// src/Admin/AdminAttendance.jsx – prevents duplicate API calls
+import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import API from '../api/api';
 import Sidebar from '../components/Sidebar';
-
-/* Add to index.html:
-   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
-*/
 
 function AdminAttendance() {
   const [students, setStudents] = useState([]);
@@ -15,6 +11,9 @@ function AdminAttendance() {
   const [attendance, setAttendance] = useState(null);
   const [loading, setLoading] = useState(false);
   const [studentLoading, setStudentLoading] = useState(true);
+
+  // Prevent duplicate students fetch
+  const studentsFetched = useRef(false);
 
   const getStudentName = (student) => {
     if (!student) return '';
@@ -25,21 +24,24 @@ function AdminAttendance() {
     (name || '?').split(' ').slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 
   useEffect(() => {
+    if (studentsFetched.current) return;
+    studentsFetched.current = true;
     API.get('students/list/')
       .then(res => setStudents(Array.isArray(res.data) ? res.data : []))
       .catch(() => toast.error('Failed to load students'))
       .finally(() => setStudentLoading(false));
   }, []);
 
-  useEffect(() => {
-    if (selectedStudentId && selectedDate) {
-      fetchAttendanceForDate();
-    } else {
-      setAttendance(null);
-    }
-  }, [selectedStudentId, selectedDate]);
+  // Use a ref to prevent duplicate attendance fetches for the same params
+  const lastFetchRef = useRef({ studentId: null, date: null });
 
   const fetchAttendanceForDate = async () => {
+    if (!selectedStudentId || !selectedDate) return;
+    // Prevent duplicate fetch for same student+date
+    if (lastFetchRef.current.studentId === selectedStudentId && lastFetchRef.current.date === selectedDate) {
+      return;
+    }
+    lastFetchRef.current = { studentId: selectedStudentId, date: selectedDate };
     setLoading(true);
     try {
       const res = await API.get(`attendance/history/?student_id=${selectedStudentId}&date=${selectedDate}`);
@@ -51,6 +53,10 @@ function AdminAttendance() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchAttendanceForDate();
+  }, [selectedStudentId, selectedDate]);
 
   const selectedStudent = students.find(s => s.id == selectedStudentId);
 
@@ -77,8 +83,7 @@ function AdminAttendance() {
       <Sidebar />
 
       <main className="flex-1 overflow-y-auto">
-
-        {/* ── Top Banner ─────────────────────────────────────────────────── */}
+        {/* Top Banner */}
         <div className="bg-white border-b border-green-100 px-8 py-6">
           <div className="max-w-4xl mx-auto">
             <p className="text-[10px] tracking-[0.2em] uppercase text-green-400 mb-1.5 font-medium">
@@ -97,8 +102,7 @@ function AdminAttendance() {
         </div>
 
         <div className="max-w-4xl mx-auto px-8 py-8 space-y-6">
-
-          {/* ── Filter Card ──────────────────────────────────────────────── */}
+          {/* Filter Card */}
           <div className="bg-white rounded-2xl border border-green-100 overflow-hidden shadow-sm">
             <div className="h-1 bg-gradient-to-r from-green-500 to-green-300" />
             <div className="p-6">
@@ -106,7 +110,6 @@ function AdminAttendance() {
                 Filter Records
               </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                {/* Student selector */}
                 <div>
                   <label className="block text-[11px] font-medium text-gray-500 mb-1.5 tracking-wide uppercase">
                     Student
@@ -130,8 +133,6 @@ function AdminAttendance() {
                     </svg>
                   </div>
                 </div>
-
-                {/* Date picker */}
                 <div>
                   <label className="block text-[11px] font-medium text-gray-500 mb-1.5 tracking-wide uppercase">
                     Date
@@ -152,49 +153,37 @@ function AdminAttendance() {
             </div>
           </div>
 
-          {/* ── Results Area ─────────────────────────────────────────────── */}
+          {/* Results Area */}
           {!selectedStudentId ? (
-            /* Empty state – no student selected */
             <div className="bg-white rounded-2xl border border-green-100 py-20 text-center">
               <div className="w-14 h-14 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-4">
                 <svg className="w-6 h-6 text-green-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                 </svg>
               </div>
-              <p className="text-gray-400 text-sm" style={{ fontFamily: '"DM Serif Display", serif' }}>
-                Select a student to view attendance
-              </p>
+              <p className="text-gray-400 text-sm">Select a student to view attendance</p>
             </div>
           ) : loading ? (
-            /* Loading state */
             <div className="bg-white rounded-2xl border border-green-100 py-20 flex flex-col items-center gap-3">
               <div className="w-7 h-7 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
               <p className="text-green-600 text-xs tracking-widest uppercase">Fetching record…</p>
             </div>
           ) : attendance ? (
-            /* ── Attendance Record Card ──────────────────────────────────── */
             <div className="bg-white rounded-2xl border border-green-100 overflow-hidden shadow-sm">
               <div className="h-1 bg-gradient-to-r from-green-500 to-green-300" />
-
-              {/* Card header */}
               <div className="px-6 py-5 border-b border-green-50 flex items-center gap-4">
                 <div className="w-12 h-12 rounded-full bg-green-600 flex items-center justify-center text-white font-semibold text-sm shadow-sm flex-shrink-0">
                   {getInitials(getStudentName(selectedStudent))}
                 </div>
                 <div>
-                  <h2 className="font-semibold text-gray-800 text-base" style={{ fontFamily: '"DM Serif Display", serif' }}>
-                    {getStudentName(selectedStudent)}
-                  </h2>
+                  <h2 className="font-semibold text-gray-800 text-base">{getStudentName(selectedStudent)}</h2>
                   <p className="text-xs text-gray-400 mt-0.5">{formatDate(selectedDate)}</p>
                 </div>
                 <span className="ml-auto text-[11px] bg-green-50 border border-green-200 text-green-700 px-3 py-1 rounded-full font-medium">
                   Present
                 </span>
               </div>
-
-              {/* Stats grid */}
               <div className="p-6 grid grid-cols-2 md:grid-cols-4 gap-4">
-                {/* Check In */}
                 <div className="bg-green-50/60 rounded-xl p-4 border border-green-100/60">
                   <div className="flex items-center gap-2 mb-2">
                     <div className="w-7 h-7 rounded-lg bg-green-100 flex items-center justify-center">
@@ -206,8 +195,6 @@ function AdminAttendance() {
                   </div>
                   <p className="text-gray-800 font-semibold text-lg leading-tight">{formatTime(attendance.check_in)}</p>
                 </div>
-
-                {/* Check Out */}
                 <div className="bg-green-50/60 rounded-xl p-4 border border-green-100/60">
                   <div className="flex items-center gap-2 mb-2">
                     <div className="w-7 h-7 rounded-lg bg-green-100 flex items-center justify-center">
@@ -219,8 +206,6 @@ function AdminAttendance() {
                   </div>
                   <p className="text-gray-800 font-semibold text-lg leading-tight">{formatTime(attendance.check_out)}</p>
                 </div>
-
-                {/* Net Hours */}
                 <div className="bg-green-600 rounded-xl p-4">
                   <div className="flex items-center gap-2 mb-2">
                     <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center">
@@ -235,8 +220,6 @@ function AdminAttendance() {
                     <span className="text-sm font-normal text-white/70 ml-1">hrs</span>
                   </p>
                 </div>
-
-                {/* Status */}
                 <div className="bg-green-50/60 rounded-xl p-4 border border-green-100/60">
                   <div className="flex items-center gap-2 mb-2">
                     <div className="w-7 h-7 rounded-lg bg-green-100 flex items-center justify-center">
@@ -249,8 +232,6 @@ function AdminAttendance() {
                   <p className="text-gray-800 font-semibold text-base leading-tight">Present</p>
                 </div>
               </div>
-
-              {/* Reason row */}
               {attendance.check_out_reason && (
                 <div className="px-6 pb-6">
                   <div className="bg-green-50/60 rounded-xl p-4 border border-green-100/60">
@@ -261,7 +242,6 @@ function AdminAttendance() {
               )}
             </div>
           ) : (
-            /* ── No Record Found ─────────────────────────────────────────── */
             <div className="bg-white rounded-2xl border border-orange-100 overflow-hidden shadow-sm">
               <div className="h-1 bg-gradient-to-r from-orange-400 to-amber-300" />
               <div className="p-8 flex items-center gap-5">
@@ -272,9 +252,7 @@ function AdminAttendance() {
                 </div>
                 <div>
                   <p className="text-[10px] uppercase tracking-widest text-orange-400 mb-1 font-medium">No Record</p>
-                  <h3 className="text-gray-800 font-semibold text-base" style={{ fontFamily: '"DM Serif Display", serif' }}>
-                    Absent or Not Recorded
-                  </h3>
+                  <h3 className="text-gray-800 font-semibold text-base">Absent or Not Recorded</h3>
                   <p className="text-gray-400 text-sm mt-1">
                     No attendance found for{' '}
                     <span className="text-gray-600 font-medium">{getStudentName(selectedStudent)}</span>

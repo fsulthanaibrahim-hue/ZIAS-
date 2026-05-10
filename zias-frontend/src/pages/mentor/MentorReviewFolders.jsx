@@ -1,5 +1,5 @@
-// src/pages/mentor/MentorReviewFolders.jsx – final with delete entry and refresh work doc
-import React, { useEffect, useState } from "react";
+// src/pages/mentor/MentorReviewFolders.jsx – optimized (reduces API calls)
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../../api/api";
 import { useAuth } from "../../context/AuthContext";
@@ -7,7 +7,7 @@ import { useAuth } from "../../context/AuthContext";
 const DEFAULT_REVIEW_SHEET_URL = "";
 
 // --------------------------------------------------------------
-// Modal for adding week folder (same as admin side)
+// Modal for adding week folder (unchanged)
 // --------------------------------------------------------------
 function AddWeekModal({ isOpen, onClose, batchStudents, batchName, onCreate, creating }) {
   const [folderName, setFolderName] = useState("");
@@ -134,11 +134,13 @@ function AddWeekModal({ isOpen, onClose, batchStudents, batchName, onCreate, cre
 }
 
 // --------------------------------------------------------------
-// Main component
+// Main component - optimized
 // --------------------------------------------------------------
 function MentorReviewFolders() {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+
+  // State
   const [allFolders, setAllFolders] = useState([]);
   const [selectedFolder, setSelectedFolder] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -154,57 +156,55 @@ function MentorReviewFolders() {
   const [creatingWeek, setCreatingWeek] = useState(false);
   const [refreshingDocId, setRefreshingDocId] = useState(null);
 
-  // Fetch reviewers for dropdown
-  useEffect(() => {
-    const fetchReviewers = async () => {
-      try {
-        const res = await API.get("/reviewers/");
-        const reviewers = res.data.results || res.data;
-        const names = reviewers.map(rev => rev.full_name || rev.name || rev.user?.full_name || rev.username || `Reviewer ${rev.id}`);
-        setReviewersList([...new Set(names)]);
-      } catch (err) {
-        if (err.response?.status !== 403) console.error("Failed to fetch reviewers", err);
-        setReviewersList([]);
-      }
-    };
-    if (!authLoading && user) fetchReviewers();
-  }, [authLoading, user]);
+  // Refs to prevent duplicate API calls
+  const initialDataFetched = useRef(false);
+  const reviewersFetched = useRef(false);
+  const mentorDataFetched = useRef(false);
+  const refreshInProgress = useRef(false);
 
-  // Fetch mentor's students (for modal)
-  const fetchMentorStudents = async () => {
+  // ----- Fetch reviewers (once) -----
+  const fetchReviewers = useCallback(async () => {
+    if (reviewersFetched.current) return;
+    reviewersFetched.current = true;
     try {
+      const res = await API.get("/reviewers/");
+      const reviewers = res.data.results || res.data;
+      const names = reviewers.map(rev => rev.full_name || rev.name || rev.user?.full_name || rev.username || `Reviewer ${rev.id}`);
+      setReviewersList([...new Set(names)]);
+    } catch (err) {
+      if (err.response?.status !== 403) console.error("Failed to fetch reviewers", err);
+    }
+  }, []);
+
+  // ----- Fetch mentor's students and folders together (once) -----
+  const fetchMentorData = useCallback(async () => {
+    if (mentorDataFetched.current) return;
+    mentorDataFetched.current = true;
+    setLoading(true);
+    try {
+      // Get mentor info
       const mentorRes = await API.get("/mentors/me/");
       const mentorId = mentorRes.data.id;
+
+      // Get students
       const studentsRes = await API.get(`/students/?mentor=${mentorId}`);
       const students = studentsRes.data.results || studentsRes.data || [];
-      const mapped = students.map(s => ({
+      const mappedStudents = students.map(s => ({
         id: s.id,
         displayName: s.full_name || s.user?.username || `Student ${s.id}`,
         course: s.course,
       }));
-      setStudentsList(mapped);
-    } catch (err) {
-      console.error("Failed to fetch mentor's students", err);
-      setStudentsList([]);
-    }
-  };
+      setStudentsList(mappedStudents);
 
-  // Fetch folders
-  const fetchMentorFolders = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const mentorRes = await API.get("/mentors/me/");
-      const mentorId = mentorRes.data.id;
-      const studentsRes = await API.get(`/students/?mentor=${mentorId}`);
-      const students = studentsRes.data.results || studentsRes.data;
-      const studentIds = students.map(s => s.id);
-      if (studentIds.length === 0) {
+      if (mappedStudents.length === 0) {
         setAllFolders([]);
         setError("No students assigned to you. Please contact the admin.");
         setLoading(false);
         return;
       }
+
+      // Get folders for all students
+      const studentIds = mappedStudents.map(s => s.id);
       const query = studentIds.map(id => `student=${id}`).join('&');
       const foldersRes = await API.get(`/review-folders/?${query}`);
       setAllFolders(foldersRes.data);
@@ -214,23 +214,39 @@ function MentorReviewFolders() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  // Auth check and fetch data
+  // ----- Combined initial fetch -----
+  const fetchInitialData = useCallback(async () => {
+    if (initialDataFetched.current) return;
+    initialDataFetched.current = true;
+    await Promise.all([fetchReviewers(), fetchMentorData()]);
+  }, [fetchReviewers, fetchMentorData]);
+
+  // ----- Refresh function (after mutations, resets flags) -----
+  const refreshData = useCallback(async () => {
+    if (refreshInProgress.current) return;
+    refreshInProgress.current = true;
+    // Reset only the refs for data that might have changed
+    mentorDataFetched.current = false;
+    await fetchMentorData();
+    refreshInProgress.current = false;
+  }, [fetchMentorData]);
+
+  // Auth check and initial fetch
   useEffect(() => {
     if (authLoading) return;
     const token = localStorage.getItem("access_token");
     if (!user && !token) {
       navigate("/login");
-    } else if (user) {
-      fetchMentorFolders();
-      fetchMentorStudents();
-    } else {
-      setLoading(false);
+      return;
     }
-  }, [user, authLoading, navigate]);
+    if (user) {
+      fetchInitialData();
+    }
+  }, [user, authLoading, navigate, fetchInitialData]);
 
-  // Group folders by week_folder
+  // Group folders by week_folder (computational, no API)
   const foldersMap = allFolders
     .filter(f => f.week_folder)
     .reduce((acc, f) => {
@@ -264,14 +280,13 @@ function MentorReviewFolders() {
     return matchesSearch && matchesWeek;
   });
 
-  // ----- Helper to fetch work doc from module -----
+  // ----- Helper: fetch work doc from module -----
   const getWorkDocForWeek = async (studentId, weekNumber) => {
     try {
       const modulesRes = await API.get(`/modules/student-modules/?student_id=${studentId}`);
       let modules = modulesRes.data.results || modulesRes.data;
       if (!Array.isArray(modules)) modules = [];
-      const weekNum = Number(weekNumber);
-      const theModule = modules.find(m => m.order === weekNumber);
+      const theModule = modules.find(m => Number(m.order) === Number(weekNumber));
       if (theModule && theModule.work_document_url) return theModule.work_document_url;
       if (theModule && theModule.content) {
         const urlMatch = theModule.content.match(/https?:\/\/[^\s]+/);
@@ -283,7 +298,7 @@ function MentorReviewFolders() {
     }
   };
 
-  // ----- Refresh work document for an existing entry -----
+  // ----- Refresh work doc for an existing entry -----
   const refreshWorkDoc = async (entryId, studentId, weekNumber) => {
     setRefreshingDocId(entryId);
     try {
@@ -293,7 +308,7 @@ function MentorReviewFolders() {
         return;
       }
       await API.patch(`/review-folders/${entryId}/`, { work_documents: newUrl });
-      await fetchMentorFolders();
+      await refreshData();
       alert("Work document refreshed successfully.");
     } catch (err) {
       console.error(err);
@@ -303,7 +318,7 @@ function MentorReviewFolders() {
     }
   };
 
-  // ----- Folder actions (rename / delete) -----
+  // ----- Folder actions -----
   const editFolder = async (oldName) => {
     const newName = prompt("Enter new folder name:", oldName);
     if (!newName || newName.trim() === "" || newName === oldName) return;
@@ -318,7 +333,7 @@ function MentorReviewFolders() {
         await API.patch(`/review-folders/${entry.id}/`, { week_folder: newName.trim() });
       }
       if (selectedFolder === oldName) setSelectedFolder(newName.trim());
-      await fetchMentorFolders();
+      await refreshData();
       alert(`Folder renamed to "${newName}"`);
     } catch (err) {
       console.error(err);
@@ -335,7 +350,7 @@ function MentorReviewFolders() {
         await API.delete(`/review-folders/${entry.id}/`);
       }
       if (selectedFolder === folderName) setSelectedFolder(null);
-      await fetchMentorFolders();
+      await refreshData();
       alert(`Folder "${folderName}" deleted.`);
     } catch (err) {
       console.error(err);
@@ -432,11 +447,11 @@ function MentorReviewFolders() {
     }
     alert(`Created ${successCount} entries for "${folderName}" (${errorCount} failed)`);
     setShowAddWeekModal(false);
-    await fetchMentorFolders();
+    await refreshData();
     setCreatingWeek(false);
   };
 
-  // ----- Entry actions (edit/delete/toggle) -----
+  // ----- Entry actions -----
   const startEdit = (entry) => {
     setEditingId(entry.id);
     setEditData({
@@ -481,7 +496,7 @@ function MentorReviewFolders() {
     }
     try {
       await API.patch(`/review-folders/${id}/`, payload);
-      await fetchMentorFolders();
+      await refreshData();
       cancelEdit();
     } catch (err) {
       alert("Update failed: " + (err.response?.data?.detail || err.message));
@@ -492,7 +507,7 @@ function MentorReviewFolders() {
     if (window.confirm("Delete this entry?")) {
       try {
         await API.delete(`/review-folders/${id}/`);
-        await fetchMentorFolders();
+        await refreshData();
         alert("Entry deleted successfully.");
       } catch (err) {
         alert("Failed to delete entry.");
@@ -503,7 +518,7 @@ function MentorReviewFolders() {
   const toggleDone = async (id, newValue) => {
     try {
       await API.patch(`/review-folders/${id}/`, { is_done: newValue });
-      await fetchMentorFolders();
+      await refreshData();
     } catch (err) {
       alert("Failed to update status");
     }
@@ -694,7 +709,14 @@ function MentorReviewFolders() {
                         <div className="flex gap-2 justify-center">
                           <button onClick={() => startEdit(entry)} className="text-blue-600 hover:text-blue-800"><Icons.Edit /></button>
                           <button onClick={() => deleteEntry(entry.id)} className="text-red-600 hover:text-red-800"><Icons.Delete /></button>
-
+                          <button
+                            onClick={() => refreshWorkDoc(entry.id, entry.student, entry.week)}
+                            disabled={refreshingDocId === entry.id}
+                            className="text-purple-600 hover:text-purple-800"
+                            title="Refresh work document from student module"
+                          >
+                            {refreshingDocId === entry.id ? <div className="w-4 h-4 border-2 border-purple-600 border-t-transparent rounded-full animate-spin" /> : <Icons.Refresh />}
+                          </button>
                         </div>
                       )}
                     </td>

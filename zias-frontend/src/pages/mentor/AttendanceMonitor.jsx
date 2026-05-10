@@ -1,5 +1,5 @@
 // src/pages/mentor/AttendanceMonitor.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import API from '../../api/api';
@@ -15,16 +15,19 @@ const AttendanceMonitor = () => {
   const [totalBreakSeconds, setTotalBreakSeconds] = useState(0);
   const [totalNetSeconds, setTotalNetSeconds] = useState(0);
 
-  // ----- FILTER STATES (impressive & calendar‑free) -----
-  const [selectedWeekdays, setSelectedWeekdays] = useState([]); // e.g. ['Mon','Wed','Fri']
-  const [breakCategory, setBreakCategory] = useState('all'); // 'all', 'none', 'short', 'long'
+  // ----- FILTER STATES -----
+  const [selectedWeekdays, setSelectedWeekdays] = useState([]);
+  const [breakCategory, setBreakCategory] = useState('all');
   const [reasonKeyword, setReasonKeyword] = useState('');
-  const [lastN, setLastN] = useState('all'); // '10', '20', '50', 'all'
+  const [lastN, setLastN] = useState('all');
 
   const weekdayOptions = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const weekdayMap = {
     'Mon': 1, 'Tue': 2, 'Wed': 3, 'Thu': 4, 'Fri': 5, 'Sat': 6, 'Sun': 0
   };
+
+  // Prevent duplicate student fetch
+  const studentsFetched = useRef(false);
 
   // Helper: format seconds to "Xh Ym Zs"
   const formatTime = (totalSeconds) => {
@@ -36,8 +39,10 @@ const AttendanceMonitor = () => {
   };
   const formatBreak = (minutes) => formatTime((minutes || 0) * 60);
 
-  // Fetch students
+  // Fetch students only once
   useEffect(() => {
+    if (studentsFetched.current) return;
+    studentsFetched.current = true;
     const fetchStudents = async () => {
       try {
         const res = await API.get('students/list/');
@@ -60,7 +65,7 @@ const AttendanceMonitor = () => {
   const getStudentName = (student) =>
     student?.full_name || student?.name || student?.username || `Student ${student?.id}`;
 
-  // Fetch all records when student changes
+  // Fetch records when student changes
   useEffect(() => {
     if (selectedStudentId) {
       fetchAllAttendance();
@@ -87,19 +92,18 @@ const AttendanceMonitor = () => {
     }
   };
 
-  // Apply all filters
   const applyFilters = (records) => {
     let filtered = [...records];
 
-    // 1. Weekday filter
+    // Weekday filter
     if (selectedWeekdays.length > 0) {
       filtered = filtered.filter(rec => {
-        const day = new Date(rec.check_in).getDay(); // 0=Sun,1=Mon...
+        const day = new Date(rec.check_in).getDay();
         return selectedWeekdays.some(w => weekdayMap[w] === day);
       });
     }
 
-    // 2. Break category filter
+    // Break category
     if (breakCategory !== 'all') {
       filtered = filtered.filter(rec => {
         const mins = rec.break_minutes || 0;
@@ -110,7 +114,7 @@ const AttendanceMonitor = () => {
       });
     }
 
-    // 3. Reason keyword search (case‑insensitive)
+    // Reason keyword
     if (reasonKeyword.trim()) {
       const kw = reasonKeyword.trim().toLowerCase();
       filtered = filtered.filter(rec =>
@@ -118,12 +122,12 @@ const AttendanceMonitor = () => {
       );
     }
 
-    // 4. Last N entries (most recent first after sorting)
+    // Last N entries
     if (lastN !== 'all') {
       const limit = parseInt(lastN);
-      filtered = filtered.sort((a,b) => new Date(b.check_in) - new Date(a.check_in)).slice(0, limit);
+      filtered = filtered.sort((a, b) => new Date(b.check_in) - new Date(a.check_in)).slice(0, limit);
     } else {
-      filtered = filtered.sort((a,b) => new Date(b.check_in) - new Date(a.check_in));
+      filtered = filtered.sort((a, b) => new Date(b.check_in) - new Date(a.check_in));
     }
 
     setFilteredRecords(filtered);
@@ -133,7 +137,7 @@ const AttendanceMonitor = () => {
     setTotalNetSeconds(totalNetSecs);
   };
 
-  // Re‑apply when any filter changes
+  // Re‑apply filters when any filter changes
   useEffect(() => {
     if (allRecords.length) applyFilters(allRecords);
   }, [selectedWeekdays, breakCategory, reasonKeyword, lastN]);
@@ -175,7 +179,7 @@ const AttendanceMonitor = () => {
 
       {selectedStudentId && (
         <>
-          {/* Impressive filter bar */}
+          {/* Filter bar */}
           <div className="bg-gray-50 rounded-xl p-4 mb-6 space-y-4">
             <div className="flex flex-wrap justify-between items-center gap-3">
               <span className="text-sm font-semibold text-gray-700">🎯 Smart filters</span>
@@ -187,7 +191,7 @@ const AttendanceMonitor = () => {
               </button>
             </div>
 
-            {/* Weekday checkboxes */}
+            {/* Weekdays */}
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-2">📅 Weekdays</label>
               <div className="flex flex-wrap gap-2">
@@ -207,7 +211,7 @@ const AttendanceMonitor = () => {
               </div>
             </div>
 
-            {/* Break category + Reason keyword + Last N */}
+            {/* Break, Reason, Last N */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">☕ Break length</label>
@@ -248,7 +252,7 @@ const AttendanceMonitor = () => {
             </div>
           </div>
 
-          {/* Loading & results */}
+          {/* Results */}
           {loading && <div className="text-center py-8">Loading attendance records...</div>}
           {!loading && filteredRecords.length === 0 && (
             <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-5 text-center text-yellow-800">
@@ -289,7 +293,7 @@ const AttendanceMonitor = () => {
                 </table>
               </div>
 
-              {/* Impressive totals */}
+              {/* Totals */}
               <div className="mt-4 p-3 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg flex justify-between items-center text-sm font-medium border border-green-100">
                 <span>📊 Totals for {getStudentName(selectedStudent)} (filtered results):</span>
                 <div className="space-x-4">
