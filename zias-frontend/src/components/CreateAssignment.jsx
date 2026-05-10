@@ -1,4 +1,4 @@
-// src/components/CreateAssignment.jsx
+// src/components/CreateAssignment.jsx – responsive
 import { useState, useEffect } from "react";
 import API from "../api/api";
 import toast from "react-hot-toast";
@@ -36,8 +36,8 @@ function CreateAssignment({ studentId, reviewSheetUrl, course, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl p-6 w-96">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl p-6 w-full max-w-md">
         <h2 className="text-xl font-bold mb-4">Assign Reviewer</h2>
         <form onSubmit={handleSubmit}>
           <label className="block mb-2 text-sm font-medium">Select Reviewer</label>

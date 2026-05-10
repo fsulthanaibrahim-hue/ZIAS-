@@ -6,9 +6,7 @@ import toast from "react-hot-toast";
 import { useAuth } from "../../context/AuthContext";
 import ProgressModal from "../../components/ProgressModal";
 
-/* Add to index.html:
-   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
-*/
+
 
 function MentorStudents() {
   const { user: authUser } = useAuth();
