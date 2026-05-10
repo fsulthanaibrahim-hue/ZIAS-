@@ -1,4 +1,4 @@
-// src/components/ProgressModal.jsx – no course API call, uses default 52 weeks
+// src/components/ProgressModal.jsx – real progress from review sheet data
 import { useEffect, useState } from "react";
 import API from "../api/api";
 
@@ -19,51 +19,42 @@ function ProgressModal({ isOpen, onClose, student, studentId, studentName }) {
       setLoading(true);
       setError(null);
       try {
+        // Get student's course & batch
         let courseName = courseFromProp;
         let batch = batchFromProp;
         if (!courseName) {
-          try {
-            const studentRes = await API.get(`students/${actualStudentId}/`);
-            courseName = studentRes.data.course;
-            batch = studentRes.data.batch;
-          } catch (err) {
-            console.warn("Could not fetch student details", err);
-          }
+          const studentRes = await API.get(`students/${actualStudentId}/`);
+          courseName = studentRes.data.course;
+          batch = studentRes.data.batch;
         }
 
-        // Use a fixed default of 52 weeks – no extra API call
-        const totalWeeks = 52;
-
-        // Get modules (weeks) for this student
+        // Get all modules (weeks) for this student
         const modulesRes = await API.get(`modules/student-modules/?student_id=${actualStudentId}`);
         let modules = modulesRes.data.results || modulesRes.data;
         if (!Array.isArray(modules)) modules = [];
 
-        const moduleOrderMap = {};
-        modules.forEach(m => {
-          if (m.id && m.order !== null && m.order !== undefined) {
-            moduleOrderMap[m.id] = m.order;
-          }
-        });
-
-        // Get review statuses
-        const statusRes = await API.get(`student/review-status/?student_id=${actualStudentId}`);
-        const statuses = statusRes.data;
-        if (!Array.isArray(statuses)) throw new Error("Invalid response");
-
+        // For each week, fetch the review and check task_status
         const completedWeeks = [];
-        statuses.forEach(status => {
-          const moduleId = status.module_id;
-          const weekNum = moduleOrderMap[moduleId];
-          if (weekNum && status.status === "completed") {
-            completedWeeks.push(weekNum);
+        for (const module of modules) {
+          const weekNum = module.order;
+          if (!weekNum) continue;
+          try {
+            const reviewRes = await API.get(`week-review/${module.id}/?student_id=${actualStudentId}`);
+            const review = reviewRes.data;
+            if (review && review.task_status === "Task Completed") {
+              completedWeeks.push(weekNum);
+            }
+          } catch {
+            // No review exists – not completed
           }
-        });
-        completedWeeks.sort((a,b) => a-b);
+        }
+        completedWeeks.sort((a, b) => a - b);
 
-        const currentWeek = completedWeeks.length ? Math.max(...completedWeeks) : 0;
+        const totalWeeks = modules.length;
+        const lastCompleted = completedWeeks.length ? Math.max(...completedWeeks) : 0;
+        const currentWeek = lastCompleted + 1;
         const nextWeek = currentWeek + 1;
-        const percent = totalWeeks ? Math.round((currentWeek / totalWeeks) * 100) : 0;
+        const percent = totalWeeks ? Math.round((completedWeeks.length / totalWeeks) * 100) : 0;
 
         setProgress({
           course: courseName || "—",
