@@ -1,4 +1,4 @@
-// src/pages/mentor/MentorAssignments.jsx – DIAGNOSTIC (shows all data) with working Accept/Reject
+// src/pages/mentor/MentorAssignments.jsx – with Proposed Time column
 import { useEffect, useState } from "react";
 import API from "../../api/api";
 import { useAuth } from "../../context/AuthContext";
@@ -43,7 +43,6 @@ function MentorAssignments() {
     fetchAssignments();
   }, [user]);
 
-  // Apply filter whenever allData or filter changes
   useEffect(() => {
     if (!allData.length) {
       setFilteredData([]);
@@ -70,11 +69,10 @@ function MentorAssignments() {
     return classes[status] || "bg-gray-100 text-gray-800";
   };
 
-  // FIXED: Use POST to the action endpoints (not PATCH)
   const handleAccept = async (id) => {
     try {
       await API.post(`/review-assignments/${id}/accept/`);
-      fetchAssignments(); // refresh after success
+      fetchAssignments();
     } catch (err) {
       alert("Failed to accept");
       console.error(err);
@@ -89,6 +87,13 @@ function MentorAssignments() {
       alert("Failed to reject");
       console.error(err);
     }
+  };
+
+  // Extract suggested time from comments (if any)
+  const getSuggestedTime = (comments) => {
+    if (!comments) return null;
+    const match = comments.match(/Suggested time: (.*?)(\n|$)/);
+    return match ? match[1] : null;
   };
 
   if (!user?.id || loading) {
@@ -145,6 +150,7 @@ function MentorAssignments() {
               <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Student</th>
               <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Reviewer</th>
               <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Review Date</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Proposed Time</th>
               <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Course</th>
               <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Status</th>
               <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Review Sheet</th>
@@ -154,13 +160,14 @@ function MentorAssignments() {
           <tbody>
             {filteredData.length === 0 ? (
               <tr>
-                <td colSpan={7} className="text-center py-8 text-gray-400">
+                <td colSpan={8} className="text-center py-8 text-gray-400">
                   No assignments found
                 </td>
               </tr>
             ) : (
               filteredData.map((ass) => {
                 const isPending = ass.status === "pending approval" || ass.status === "pending";
+                const suggestedTime = getSuggestedTime(ass.comments);
                 return (
                   <tr key={ass.id} className="border-b hover:bg-gray-50">
                     <td className="px-4 py-2 text-sm">
@@ -171,6 +178,9 @@ function MentorAssignments() {
                     </td>
                     <td className="px-4 py-2 text-sm">
                       {ass.review_date || ass.created_at?.split('T')[0] || "-"}
+                    </td>
+                    <td className="px-4 py-2 text-sm">
+                      {suggestedTime || "-"}
                     </td>
                     <td className="px-4 py-2 text-sm">{ass.course || "-"}</td>
                     <td className="px-4 py-2 text-sm">

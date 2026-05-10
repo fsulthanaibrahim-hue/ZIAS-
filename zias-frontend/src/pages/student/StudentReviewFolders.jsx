@@ -1,4 +1,4 @@
-// src/pages/student/StudentReviewFolders.jsx
+// src/pages/student/StudentReviewFolders.jsx – clean version (no syntax errors)
 import React, { useEffect, useState, useRef } from "react";
 import API from "../../api/api";
 import StudentSidebar from "../../components/StudentSidebar";
@@ -74,8 +74,8 @@ function StudentReviewFolders() {
     if (!searchTerm && !selectedWeek) return true;
     const matchesSearch = !searchTerm
       || entry.student_name?.toLowerCase().includes(searchTerm.toLowerCase())
-      || entry.week?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesWeek = !selectedWeek || entry.week === selectedWeek;
+      || entry.week?.toString().toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesWeek = !selectedWeek || entry.week?.toString() === selectedWeek;
     return matchesSearch && matchesWeek;
   });
 
@@ -122,7 +122,7 @@ function StudentReviewFolders() {
                   <tbody>
                     {folderList.length === 0 ? (
                       <tr>
-                        <td colSpan="5" className="px-4 py-8 text-center text-gray-400">
+                        <td colSpan="5" className="text-center py-8 text-gray-400">
                           No folders found.
                         </td>
                       </tr>
@@ -174,37 +174,41 @@ function StudentReviewFolders() {
               </div>
 
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-x-auto">
-                <div className="min-w-[700px]">
+                <div className="min-w-[1100px]">
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Student</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Week</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Review Date</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Reviewer</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Work Doc</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Meet Link</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Meeting Link</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Start Time</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">End Time</th>
                         <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
                       </tr>
                     </thead>
                     <tbody>
                       {filteredEntries.length === 0 ? (
                         <tr>
-                          <td colSpan="5" className="px-4 py-8 text-center text-gray-400">
+                          <td colSpan="9" className="text-center py-8 text-gray-400">
                             No matching entries found.
                           </td>
                         </tr>
                       ) : (
                         filteredEntries.map((entry) => (
-                          <tr key={entry.id} className="hover:bg-gray-50">
-                            <td className="px-4 py-3 text-sm text-gray-700">{entry.review_date || "—"}</td>
+                          <tr key={entry.id} className="border-b hover:bg-gray-50">
+                            <td className="px-4 py-3 text-sm text-gray-900">{entry.student_name || entry.student?.full_name || "—"}</td>
                             <td className="px-4 py-3 text-sm">{entry.week || "—"}</td>
+                            <td className="px-4 py-3 text-sm">{entry.review_date || "—"}</td>
+                            <td className="px-4 py-3 text-sm">{entry.industry_expert || "—"}</td>
                             <td className="px-4 py-3 text-sm">{renderLink(entry.work_documents, "Work Doc")}</td>
-                            <td className="px-4 py-3 text-sm">{renderLink(entry.meeting_link, "Meet Link")}</td>
+                            <td className="px-4 py-3 text-sm">{renderLink(entry.meeting_link, "Meeting")}</td>
+                            <td className="px-4 py-3 text-sm">{entry.time_started || "—"}</td>
+                            <td className="px-4 py-3 text-sm">{entry.time_ended || "—"}</td>
                             <td className="px-4 py-3 text-center">
-                              <span
-                                className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                  entry.is_done ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"
-                                }`}
-                              >
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${entry.is_done ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}`}>
                                 {entry.is_done ? "Done" : "Pending"}
                               </span>
                             </td>

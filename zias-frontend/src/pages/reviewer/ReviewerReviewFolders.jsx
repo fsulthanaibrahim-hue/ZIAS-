@@ -1,11 +1,11 @@
-// src/pages/reviewer/ReviewerReviewFolders.jsx – safe version with error handling
+// src/pages/reviewer/ReviewerReviewFolders.jsx – fixed redirect issue
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../../api/api";
 import { useAuth } from "../../context/AuthContext";
 
 function ReviewerReviewFolders() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [allFolders, setAllFolders] = useState([]);
   const [selectedFolder, setSelectedFolder] = useState(null);
@@ -18,19 +18,26 @@ function ReviewerReviewFolders() {
   const prevReviewSheets = useRef({});
 
   useEffect(() => {
-    if (user && !user.is_reviewer) {
+    if (authLoading) return;
+    if (!user) {
+      navigate("/login");
+      return;
+    }
+    const isReviewer = user.is_reviewer === true || user.role === "reviewer";
+    if (!isReviewer) {
       navigate("/");
       return;
     }
     fetchFolders();
     const interval = setInterval(() => fetchFolders(true), 30000);
     return () => clearInterval(interval);
-  }, [user, navigate]);
+  }, [user, authLoading, navigate]);
 
   const fetchFolders = async (silent = false) => {
     if (!silent) setLoading(true);
     try {
       const reviewerName = user?.full_name || user?.username;
+      if (!reviewerName) throw new Error("Reviewer name not found");
       const res = await API.get(`/review-folders/?industry_expert=${encodeURIComponent(reviewerName)}`);
       const newFolders = res.data;
       const newSheets = {};
@@ -54,7 +61,6 @@ function ReviewerReviewFolders() {
     }
   };
 
-  // Build folders map (same as before)
   const foldersMap = allFolders
     .filter(f => f.week_folder)
     .reduce((acc, f) => {
@@ -97,7 +103,6 @@ function ReviewerReviewFolders() {
     );
   };
 
-  // Safe click handlers
   const handleFolderClick = (folderName, e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -110,11 +115,8 @@ function ReviewerReviewFolders() {
     setSelectedFolder(null);
   };
 
-  // Error fallback UI – prevents component crash
+  if (authLoading || loading) return <div className="p-8 text-center">Loading...</div>;
   if (error) return <div className="p-8 text-center text-red-500">{error}</div>;
-
-  // Loading state
-  if (loading) return <div className="p-8 text-center">Loading...</div>;
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen w-full">

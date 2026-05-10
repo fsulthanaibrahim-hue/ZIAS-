@@ -1,9 +1,10 @@
+import re
 from rest_framework import viewsets, status, generics, permissions
 from .models import Notification
 from rest_framework.generics import RetrieveAPIView
 from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.filters import BaseFilterBackend
@@ -928,7 +929,7 @@ class ReviewFolderViewSet(viewsets.ModelViewSet):
         Notification.objects.create(
             user=reviewer.user,
             message=message,
-            link="/reviewer/review-folders",
+            link="/reviewer/assignments",   # ✅ CHANGED from "/reviewer/review-folders"
             is_read=False
         )
 
@@ -940,7 +941,6 @@ class ReviewFolderViewSet(viewsets.ModelViewSet):
         if not expert_name:
             return
 
-        # Find reviewer by exact full_name or username (case‑insensitive)
         reviewer = Reviewer.objects.filter(
             Q(full_name__iexact=expert_name) | Q(user__username__iexact=expert_name)
         ).first()
@@ -959,7 +959,6 @@ class ReviewFolderViewSet(viewsets.ModelViewSet):
 
         course = student.course or ""
 
-        # Create or update assignment
         assignment, created = ReviewAssignment.objects.get_or_create(
             mentor=mentor,
             reviewer=reviewer,
@@ -971,7 +970,6 @@ class ReviewFolderViewSet(viewsets.ModelViewSet):
             }
         )
         if not created:
-            # Update fields if they changed (optional)
             updated = False
             if assignment.course != course:
                 assignment.course = course
@@ -982,7 +980,6 @@ class ReviewFolderViewSet(viewsets.ModelViewSet):
             if updated:
                 assignment.save()
 
-        # Notify reviewer only for new assignment
         if created:
             Notification.objects.create(
                 user=reviewer.user,
@@ -1246,7 +1243,7 @@ class ReviewAssignmentViewSet(viewsets.ModelViewSet):
         if self.action in ['list', 'retrieve']:
             return [IsAuthenticated()]
         if self.action == 'create':
-            return [IsAuthenticated()]  # role check inside perform_create
+            return [IsAuthenticated()]
         if self.action in ['update', 'partial_update', 'destroy']:
             return [IsAdminUser()]
         return [IsAuthenticated()]
@@ -1298,7 +1295,6 @@ class ReviewAssignmentViewSet(viewsets.ModelViewSet):
         assignment = self.get_object()
         user = request.user
 
-        # Allow reviewer OR the mentor who created the assignment
         is_reviewer = user.is_reviewer and assignment.reviewer.user == user
         is_mentor_creator = user.is_mentor and assignment.mentor.user == user
 
@@ -1308,7 +1304,6 @@ class ReviewAssignmentViewSet(viewsets.ModelViewSet):
         assignment.status = 'accepted'
         assignment.save()
 
-        # Notify the mentor if the reviewer accepted, or notify the reviewer if the mentor accepted
         if is_reviewer:
             Notification.objects.create(
                 user=assignment.mentor.user,
@@ -1359,6 +1354,33 @@ class ReviewAssignmentViewSet(viewsets.ModelViewSet):
             )
 
         return Response({"status": "rejected"})
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def suggest_time(self, request, pk=None):
+        assignment = self.get_object()
+        user = request.user
+
+        # Allow reviewer or mentor (creator)
+        is_reviewer = user.is_reviewer and assignment.reviewer.user == user
+        is_mentor_creator = user.is_mentor and assignment.mentor.user == user
+
+        if not (is_reviewer or is_mentor_creator):
+            return Response({"error": "Not allowed"}, status=403)
+
+        proposed_time = request.data.get('proposed_time', '')
+        if not proposed_time:
+            return Response({"error": "proposed_time required"}, status=400)
+
+        # Update the comments field safely
+        current_comments = assignment.comments or ""
+        # Remove any previous "Suggested time:" line
+        cleaned = re.sub(r'Suggested time:.*?(\n|$)', '', current_comments).strip()
+        new_comments = f"{cleaned}\nSuggested time: {proposed_time}".strip()
+        assignment.comments = new_comments
+        assignment.save(update_fields=['comments'])
+
+        return Response({"status": "time suggested", "comments": new_comments})
+    
 
 
 # ----------------------------

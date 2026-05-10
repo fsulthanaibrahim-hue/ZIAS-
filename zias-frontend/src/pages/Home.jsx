@@ -156,7 +156,7 @@ const Home = () => {
   return (
     <main className="font-sans overflow-x-hidden bg-white">
 
-      {/* ── HERO ── (unchanged) */}
+      {/* ── HERO ── */}
       <section
         className="relative py-20 md:py-28 overflow-hidden"
         style={{
@@ -311,37 +311,39 @@ const Home = () => {
         </div>
       </section>
 
-      {/* ── SKILL-INTEGRATED DEGREE PROGRAMS (with images + numbering) ── */}
+      {/* ── SKILL-INTEGRATED DEGREE PROGRAMS (BIGGER SQUARE IMAGES) ── */}
       <section className="py-16 md:py-24 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <SectionLabel>Our Courses</SectionLabel>
           <h2
             className="text-2xl md:text-4xl font-extrabold text-center mb-12 text-gray-900"
             style={{ fontFamily: "'Georgia', serif" }}
           >
-            Skill-Integrated Programs
+            Skill-Integrated Degree Programs
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {/* Card 1 */}
+            {/* BCA Card */}
             <div
               className="rounded-2xl p-6 transition-all duration-300 flex flex-col items-center text-center relative"
               style={styles.cardGlow}
               onMouseEnter={(e) => Object.assign(e.currentTarget.style, styles.cardHoverGlow)}
               onMouseLeave={(e) => Object.assign(e.currentTarget.style, styles.cardGlow)}
             >
-              <div className="flex justify-center mb-4">
-                <img src={coursesImg} alt="BCA" className="w-24 h-24 md:w-28 md:h-28 object-cover rounded-full shadow-md" />
+              <div className="absolute top-4 left-4 bg-green-500 text-white text-xs font-bold w-8 h-8 rounded-full flex items-center justify-center shadow-md">
+                01
               </div>
-              <h3 className="text-3xl font-black text-gray-900 mb-1" style={{ fontFamily: "'Georgia', serif" }}>FullStack Development</h3>
-              <br />
+              <div className="flex justify-center mb-4">
+                <img src={coursesImg} alt="BCA" className="w-32 h-32 md:w-40 md:h-40 object-cover rounded-xl shadow-md" />
+              </div>
+              <h3 className="text-3xl font-black text-gray-900 mb-1" style={{ fontFamily: "'Georgia', serif" }}>BCA</h3>
+              <span className="text-xs font-bold px-3 py-1 rounded-full bg-green-100 text-green-700 mb-4 inline-block">Bachelor of Computer Applications</span>
               <div className="mt-2 mb-6 w-full text-left">
                 <p className="text-sm font-semibold text-gray-700 mb-3">Integrated with</p>
                 <ul className="space-y-2">
-                  <li className="flex items-center gap-2 text-sm text-gray-600"><FaCheckCircle className="text-green-500 text-xs" /> Frontend Development</li>
-                  <li className="flex items-center gap-2 text-sm text-gray-600"><FaCheckCircle className="text-green-500 text-xs" /> Backend Development</li>
+                  <li className="flex items-center gap-2 text-sm text-gray-600"><FaCheckCircle className="text-green-500 text-xs" /> Full Stack Development</li>
                   <li className="flex items-center gap-2 text-sm text-gray-600"><FaCheckCircle className="text-green-500 text-xs" /> Mobile App Development</li>
                   <li className="flex items-center gap-2 text-sm text-gray-600"><FaCheckCircle className="text-green-500 text-xs" /> Data Analytics</li>
                   <li className="flex items-center gap-2 text-sm text-gray-600"><FaCheckCircle className="text-green-500 text-xs" /> AI & ML</li>
-                  <li className="flex items-center gap-2 text-sm text-gray-600"><FaCheckCircle className="text-green-500 text-xs" /> CyberSecurity</li>
                 </ul>
               </div>
               <div className="mt-auto pt-6">
@@ -351,57 +353,57 @@ const Home = () => {
               </div>
             </div>
 
-            {/* Card 2 */}
+            {/* BBA Card */}
             <div
               className="rounded-2xl p-6 transition-all duration-300 flex flex-col items-center text-center relative"
               style={styles.cardGlow}
               onMouseEnter={(e) => Object.assign(e.currentTarget.style, styles.cardHoverGlow)}
               onMouseLeave={(e) => Object.assign(e.currentTarget.style, styles.cardGlow)}
             >
-              <div className="flex justify-center mb-4">
-                <img src={pythonImg} alt="BBA" className="w-24 h-24 md:w-28 md:h-28 object-cover rounded-full shadow-md" />
+              <div className="absolute top-4 left-4 bg-green-500 text-white text-xs font-bold w-8 h-8 rounded-full flex items-center justify-center shadow-md">
+                02
               </div>
-              <br />
-              <br/>
-              <h3 className="text-3xl font-black text-gray-900 mb-1" style={{ fontFamily: "'Georgia', serif" }}>Python Development</h3>
-              <br />
+              <div className="flex justify-center mb-4">
+                <img src={pythonImg} alt="BBA" className="w-32 h-32 md:w-40 md:h-40 object-cover rounded-xl shadow-md" />
+              </div>
+              <h3 className="text-3xl font-black text-gray-900 mb-1" style={{ fontFamily: "'Georgia', serif" }}>BBA</h3>
+              <span className="text-xs font-bold px-3 py-1 rounded-full bg-green-100 text-green-700 mb-4 inline-block">Bachelor of Business Administration</span>
               <div className="mt-2 mb-6 w-full text-left">
                 <p className="text-sm font-semibold text-gray-700 mb-3">Integrated with</p>
                 <ul className="space-y-2">
-                  <li className="flex items-center gap-2 text-sm text-gray-600"><FaCheckCircle className="text-green-500 text-xs" /> Databases</li>
-                  <li className="flex items-center gap-2 text-sm text-gray-600"><FaCheckCircle className="text-green-500 text-xs" /> Web Frameworks</li>
-                  <li className="flex items-center gap-2 text-sm text-gray-600"><FaCheckCircle className="text-green-500 text-xs" /> Data Science</li>
+                  <li className="flex items-center gap-2 text-sm text-gray-600"><FaCheckCircle className="text-green-500 text-xs" /> Digital Marketing</li>
+                  <li className="flex items-center gap-2 text-sm text-gray-600"><FaCheckCircle className="text-green-500 text-xs" /> Creative Visual Media</li>
+                </ul>
+              </div>
+              <div className="mt-auto pt-6">
+                <Link to="/contact" className="inline-flex items-center gap-2 text-green-600 font-bold text-sm hover:gap-3 transition-all">
+                  Apply Now <FaArrowRight className="text-xs" />
+                </Link>
+              </div>
+            </div>
+
+            {/* MCA Card */}
+            <div
+              className="rounded-2xl p-6 transition-all duration-300 flex flex-col items-center text-center relative"
+              style={styles.cardGlow}
+              onMouseEnter={(e) => Object.assign(e.currentTarget.style, styles.cardHoverGlow)}
+              onMouseLeave={(e) => Object.assign(e.currentTarget.style, styles.cardGlow)}
+            >
+              <div className="absolute top-4 left-4 bg-green-500 text-white text-xs font-bold w-8 h-8 rounded-full flex items-center justify-center shadow-md">
+                03
+              </div>
+              <div className="flex justify-center mb-4">
+                <img src={mernImg} alt="MCA" className="w-32 h-32 md:w-40 md:h-40 object-cover rounded-xl shadow-md" />
+              </div>
+              <h3 className="text-3xl font-black text-gray-900 mb-1" style={{ fontFamily: "'Georgia', serif" }}>MCA</h3>
+              <span className="text-xs font-bold px-3 py-1 rounded-full bg-green-100 text-green-700 mb-4 inline-block">Master of Computer Applications</span>
+              <div className="mt-2 mb-6 w-full text-left">
+                <p className="text-sm font-semibold text-gray-700 mb-3">Integrated with</p>
+                <ul className="space-y-2">
+                  <li className="flex items-center gap-2 text-sm text-gray-600"><FaCheckCircle className="text-green-500 text-xs" /> Full Stack Development</li>
+                  <li className="flex items-center gap-2 text-sm text-gray-600"><FaCheckCircle className="text-green-500 text-xs" /> Mobile App Development</li>
+                  <li className="flex items-center gap-2 text-sm text-gray-600"><FaCheckCircle className="text-green-500 text-xs" /> Data Analytics</li>
                   <li className="flex items-center gap-2 text-sm text-gray-600"><FaCheckCircle className="text-green-500 text-xs" /> AI & ML</li>
-
-                </ul>
-              </div>
-              <div className="mt-auto pt-6">
-                <Link to="/contact" className="inline-flex items-center gap-2 text-green-600 font-bold text-sm hover:gap-3 transition-all">
-                  Apply Now <FaArrowRight className="text-xs" />
-                </Link>
-              </div>
-            </div>
-
-            {/* Card 3 */}
-            <div
-              className="rounded-2xl p-6 transition-all duration-300 flex flex-col items-center text-center relative"
-              style={styles.cardGlow}
-              onMouseEnter={(e) => Object.assign(e.currentTarget.style, styles.cardHoverGlow)}
-              onMouseLeave={(e) => Object.assign(e.currentTarget.style, styles.cardGlow)}
-            >
-              <div className="flex justify-center mb-4">
-                <img src={mernImg} alt="MCA" className="w-24 h-24 md:w-28 md:h-28 object-cover rounded-full shadow-md" />
-              </div>
-              <br />
-              <h3 className="text-3xl font-black text-gray-900 mb-1" style={{ fontFamily: "'Georgia', serif" }}>MERN Stack Development</h3>
-              <br />
-              <div className="mt-2 mb-6 w-full text-left">
-                <p className="text-sm font-semibold text-gray-700 mb-3">Integrated with</p>
-                <ul className="space-y-2">
-                  <li className="flex items-center gap-2 text-sm text-gray-600"><FaCheckCircle className="text-green-500 text-xs" /> Databases</li>
-                  <li className="flex items-center gap-2 text-sm text-gray-600"><FaCheckCircle className="text-green-500 text-xs" /> Backend Development</li>
-                  <li className="flex items-center gap-2 text-sm text-gray-600"><FaCheckCircle className="text-green-500 text-xs" /> Frontend Development</li>
-                  <li className="flex items-center gap-2 text-sm text-gray-600"><FaCheckCircle className="text-green-500 text-xs" /> Server Runtime</li>
                 </ul>
               </div>
               <div className="mt-auto pt-6">

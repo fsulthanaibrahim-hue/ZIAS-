@@ -1,4 +1,4 @@
-// src/components/ReviewerSidebar.jsx – removed Chat option
+// src/components/ReviewerSidebar.jsx – removed Chat option, with error handling
 import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import NotificationBell from "./NotificationBell";
@@ -25,15 +25,13 @@ function getIcon(label) {
   switch (label) {
     case "Dashboard":
       return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}><path d="M1 1h6v6H1zM9 1h6v6H9zM1 9h6v6H1zM9 9h6v6H9z" /></svg>;
-    case "Review Folders":
-      return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}><path d="M2 2h12v12H2V2zm1 1v10h10V3H3zm2 2h6v1H5V5zm0 2h6v1H5V7zm0 2h6v1H5V9z" /></svg>;
     case "Assignments":
-      // Clipboard icon for assignments
       return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}><path d="M4 1.5H3a1 1 0 0 0-1 1V14a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V2.5a1 1 0 0 0-1-1h-1M4 1.5V3h8V1.5M4 1.5v1M12 1.5V3" stroke="currentColor" strokeWidth="1"/><path d="M5 5h6v1H5V5zm0 3h6v1H5V8zm0 3h4v1H5v-1z" /></svg>;
     case "Profile":
       return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}><path d="M8 8a3 3 0 100-6 3 3 0 000 6zm-2 1a5 5 0 00-5 5h14a5 5 0 00-5-5H6z" /></svg>;
     default:
-      return null;
+      // Fallback icon for any unknown menu item (prevents visual break)
+      return <span className="w-4 h-4 block rounded bg-gray-300" />;
   }
 }
 
@@ -56,10 +54,8 @@ function ReviewerSidebar() {
     return pathname.startsWith(linkPath);
   };
 
-  // Chat option removed
   const navItems = [
     { path: "/reviewer/dashboard", label: "Dashboard" },
-    { path: "/reviewer/review-folders", label: "Review Folders" },
     { path: "/reviewer/assignments", label: "Assignments" },
     { path: "/reviewer/profile", label: "Profile" },
   ];
@@ -75,7 +71,6 @@ function ReviewerSidebar() {
       }}
       className="bg-white border-r border-gray-200 flex flex-col h-screen sticky top-0 font-sans overflow-y-auto"
     >
-      {/* Header with clickable logo + notification bell */}
       <div className="p-3 border-b border-gray-200 flex items-center justify-between gap-2">
         <button
           onClick={toggleSidebar}
@@ -102,11 +97,10 @@ function ReviewerSidebar() {
           )}
         </button>
 
-        {/* ✅ NotificationBell auto‑detects role – no need to pass 'reviewer' */}
+        {/* NotificationBell auto-detects role – no props needed */}
         {!isCollapsed && <NotificationBell />}
       </div>
 
-      {/* Navigation */}
       <nav className="flex-1 py-4 px-2 space-y-1 overflow-y-auto">
         {navItems.map((item) => (
           <NavLink
@@ -119,7 +113,6 @@ function ReviewerSidebar() {
         ))}
       </nav>
 
-      {/* User section and sign out */}
       <div className={`p-3 border-t border-gray-200 transition-all ${isCollapsed ? "text-center" : ""}`}>
         <div className={`flex items-center gap-3 mb-4 ${isCollapsed ? "justify-center" : ""}`}>
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-500 to-green-700 flex items-center justify-center text-white text-xs font-bold">

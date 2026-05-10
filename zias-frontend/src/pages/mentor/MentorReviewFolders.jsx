@@ -1,4 +1,4 @@
-// src/pages/mentor/MentorReviewFolders.jsx – final with delete entry
+// src/pages/mentor/MentorReviewFolders.jsx – final with delete entry and refresh work doc
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../../api/api";
@@ -152,6 +152,7 @@ function MentorReviewFolders() {
   const [studentsList, setStudentsList] = useState([]);
   const [showAddWeekModal, setShowAddWeekModal] = useState(false);
   const [creatingWeek, setCreatingWeek] = useState(false);
+  const [refreshingDocId, setRefreshingDocId] = useState(null);
 
   // Fetch reviewers for dropdown
   useEffect(() => {
@@ -263,6 +264,45 @@ function MentorReviewFolders() {
     return matchesSearch && matchesWeek;
   });
 
+  // ----- Helper to fetch work doc from module -----
+  const getWorkDocForWeek = async (studentId, weekNumber) => {
+    try {
+      const modulesRes = await API.get(`/modules/student-modules/?student_id=${studentId}`);
+      let modules = modulesRes.data.results || modulesRes.data;
+      if (!Array.isArray(modules)) modules = [];
+      const weekNum = Number(weekNumber);
+      const theModule = modules.find(m => m.order === weekNumber);
+      if (theModule && theModule.work_document_url) return theModule.work_document_url;
+      if (theModule && theModule.content) {
+        const urlMatch = theModule.content.match(/https?:\/\/[^\s]+/);
+        if (urlMatch) return urlMatch[0];
+      }
+      return "";
+    } catch {
+      return "";
+    }
+  };
+
+  // ----- Refresh work document for an existing entry -----
+  const refreshWorkDoc = async (entryId, studentId, weekNumber) => {
+    setRefreshingDocId(entryId);
+    try {
+      const newUrl = await getWorkDocForWeek(studentId, weekNumber);
+      if (!newUrl) {
+        alert("No work document found for this student/week.");
+        return;
+      }
+      await API.patch(`/review-folders/${entryId}/`, { work_documents: newUrl });
+      await fetchMentorFolders();
+      alert("Work document refreshed successfully.");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to refresh work document.");
+    } finally {
+      setRefreshingDocId(null);
+    }
+  };
+
   // ----- Folder actions (rename / delete) -----
   const editFolder = async (oldName) => {
     const newName = prompt("Enter new folder name:", oldName);
@@ -304,22 +344,6 @@ function MentorReviewFolders() {
   };
 
   // ----- Create week folder -----
-  const getWorkDocForWeek = async (studentId, weekNumber) => {
-    try {
-      const modulesRes = await API.get(`/modules/student-modules/?student_id=${studentId}`);
-      const modules = modulesRes.data.results || modulesRes.data;
-      const theModule = modules.find(m => m.order === weekNumber);
-      if (theModule && theModule.work_document_url) return theModule.work_document_url;
-      if (theModule && theModule.content) {
-        const urlMatch = theModule.content.match(/https?:\/\/[^\s]+/);
-        if (urlMatch) return urlMatch[0];
-      }
-      return "";
-    } catch {
-      return "";
-    }
-  };
-
   const getDefaultReviewSheetFromModule = async (studentId, weekNumber) => {
     try {
       const modulesRes = await API.get(`/modules/student-modules/?student_id=${studentId}`);
@@ -507,6 +531,7 @@ function MentorReviewFolders() {
     Delete: () => (<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>),
     Save: () => (<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>),
     Cancel: () => (<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>),
+    Refresh: () => (<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>),
   };
 
   return (
@@ -635,7 +660,6 @@ function MentorReviewFolders() {
                     <td className="px-4 py-3 text-sm">
                       {editingId === entry.id ? <input type="url" name="work_documents" value={editData.work_documents} onChange={handleChange} className="w-36 border rounded px-2 py-1 text-sm" /> : renderLink(entry.work_documents, "Doc")}
                     </td>
-
                     <td className="px-4 py-3 text-sm">
                       {editingId === entry.id ? <input type="url" name="meeting_link" value={editData.meeting_link} onChange={handleChange} className="w-36 border rounded px-2 py-1 text-sm" /> : renderLink(entry.meeting_link, "Meeting")}
                     </td>
@@ -670,6 +694,7 @@ function MentorReviewFolders() {
                         <div className="flex gap-2 justify-center">
                           <button onClick={() => startEdit(entry)} className="text-blue-600 hover:text-blue-800"><Icons.Edit /></button>
                           <button onClick={() => deleteEntry(entry.id)} className="text-red-600 hover:text-red-800"><Icons.Delete /></button>
+
                         </div>
                       )}
                     </td>

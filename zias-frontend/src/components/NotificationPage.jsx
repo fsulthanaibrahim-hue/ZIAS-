@@ -1,4 +1,4 @@
-// src/components/NotificationPage.jsx
+// src/components/NotificationPage.jsx – final (no changes required)
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import API from '../api/api';
@@ -10,6 +10,10 @@ const NotificationPage = () => {
   const [totalCount, setTotalCount] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 12;
+
+  const refreshBell = () => {
+    window.dispatchEvent(new CustomEvent('refreshNotifications'));
+  };
 
   useEffect(() => {
     fetchNotifications();
@@ -35,6 +39,7 @@ const NotificationPage = () => {
       setNotifications(prev =>
         prev.map(n => (n.id === id ? { ...n, is_read: true } : n))
       );
+      refreshBell();
     } catch (err) {
       toast.error('Failed to mark as read');
     }
@@ -45,6 +50,7 @@ const NotificationPage = () => {
       await API.post('notifications/mark_all_read/');
       setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
       toast.success('All notifications marked as read');
+      refreshBell();
     } catch (err) {
       toast.error('Failed to mark all as read');
     }

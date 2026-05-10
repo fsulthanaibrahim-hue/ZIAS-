@@ -22,7 +22,6 @@ import StudentAttendance from "./pages/student/StudentAttendance";
 // Reviewer pages
 import ReviewerDashboard from "./pages/reviewer/ReviewerDashboard";
 import ReviewerProfile from "./pages/reviewer/ReviewerProfile";
-import ReviewerReviewFolders from "./pages/reviewer/ReviewerReviewFolders";
 import ReviewerReviewSheet from "./pages/reviewer/ReviewerReviewSheet";
 import ReviewerReviewSheetRange from "./pages/reviewer/ReviewerReviewSheetRange";
 import ReviewerAssignments from "./pages/reviewer/ReviewerAssignments";
@@ -184,14 +183,6 @@ function App() {
             <div style={{ display: "flex" }}>
               <ReviewerSidebar />
               <NotificationPage />
-            </div>
-          </PrivateRoute>
-        } />
-        <Route path="/reviewer/review-folders" element={
-          <PrivateRoute>
-            <div style={{ display: "flex" }}>
-              <ReviewerSidebar />
-              <ReviewerReviewFolders />
             </div>
           </PrivateRoute>
         } />

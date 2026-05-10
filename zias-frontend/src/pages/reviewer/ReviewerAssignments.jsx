@@ -1,4 +1,4 @@
-// src/pages/reviewer/ReviewerAssignments.jsx – fully corrected
+// src/pages/reviewer/ReviewerAssignments.jsx – final clean version
 import { useEffect, useState } from "react";
 import API from "../../api/api";
 
@@ -7,6 +7,8 @@ function ReviewerAssignments() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
   const [actionLoading, setActionLoading] = useState(null);
+  const [suggestTimeForId, setSuggestTimeForId] = useState(null);
+  const [suggestedTime, setSuggestedTime] = useState("");
 
   const fetchAssignments = async () => {
     setLoading(true);
@@ -56,6 +58,31 @@ function ReviewerAssignments() {
     }
   };
 
+  const handleSuggestTime = async (id) => {
+    if (!suggestedTime.trim()) {
+      alert("Please enter a valid time (e.g., 7:00 PM)");
+      return;
+    }
+    setActionLoading(id);
+    try {
+      await API.post(`/review-assignments/${id}/suggest_time/`, { proposed_time: suggestedTime });
+      alert(`Time suggested: ${suggestedTime}`);
+      setSuggestTimeForId(null);
+      setSuggestedTime("");
+      fetchAssignments();
+    } catch (err) {
+      alert("Failed to suggest time: " + (err.response?.data?.detail || err.message));
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const getSuggestedTime = (comments) => {
+    if (!comments) return null;
+    const match = comments.match(/Suggested time: (.*?)(\n|$)/);
+    return match ? match[1] : null;
+  };
+
   const filtered = assignments.filter(a => {
     if (filter === "all") return true;
     if (filter === "pending") {
@@ -80,7 +107,7 @@ function ReviewerAssignments() {
     return status;
   };
 
-  if (loading) return <div className="p-8 text-center">Loading...</div>;
+  if (loading) return <div className="p-8 text-center">Loading assignments...</div>;
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen w-full">
@@ -89,10 +116,11 @@ function ReviewerAssignments() {
         <button onClick={fetchAssignments} className="bg-gray-200 px-3 py-1 rounded text-sm hover:bg-gray-300">⟳ Refresh</button>
       </div>
       <div className="mb-4 flex gap-2 flex-wrap">
-        <button onClick={() => setFilter("all")} className={`px-3 py-1 rounded text-sm ${filter === "all" ? "bg-green-600 text-white" : "bg-gray-200"}`}>All</button>
-        <button onClick={() => setFilter("pending")} className={`px-3 py-1 rounded text-sm ${filter === "pending" ? "bg-yellow-600 text-white" : "bg-gray-200"}`}>Pending</button>
-        <button onClick={() => setFilter("accepted")} className={`px-3 py-1 rounded text-sm ${filter === "accepted" ? "bg-green-600 text-white" : "bg-gray-200"}`}>Accepted</button>
-        <button onClick={() => setFilter("rejected")} className={`px-3 py-1 rounded text-sm ${filter === "rejected" ? "bg-red-600 text-white" : "bg-gray-200"}`}>Rejected</button>
+        {["all", "pending", "accepted", "rejected"].map(f => (
+          <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1 rounded text-sm ${filter === f ? (f === "all" ? "bg-green-600 text-white" : f === "pending" ? "bg-yellow-600 text-white" : f === "accepted" ? "bg-green-600 text-white" : "bg-red-600 text-white") : "bg-gray-200"}`}>
+            {f === "pending" ? "Pending" : f.charAt(0).toUpperCase() + f.slice(1)}
+          </button>
+        ))}
       </div>
       <div className="overflow-x-auto bg-white rounded-xl shadow">
         <table className="min-w-full">
@@ -101,6 +129,8 @@ function ReviewerAssignments() {
               <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Student</th>
               <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Mentor</th>
               <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Course</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Review Date</th>
+              <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Proposed Time</th>
               <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Review Sheet</th>
               <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Status</th>
               <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Actions</th>
@@ -109,46 +139,90 @@ function ReviewerAssignments() {
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan="6" className="text-center py-8 text-gray-400">No assignments found</td>
+                <td colSpan="8" className="text-center py-8 text-gray-400">No assignments found</td>
               </tr>
             ) : (
-              filtered.map(ass => (
-                <tr key={ass.id} className="border-b hover:bg-gray-50">
-                  <td className="px-4 py-2 text-sm">{ass.student_full_name || ass.student?.full_name || "—"}</td>
-                  <td className="px-4 py-2 text-sm">{ass.mentor_full_name || ass.mentor?.full_name || "—"}</td>
-                  <td className="px-4 py-2 text-sm">{ass.course || "—"}</td>
-                  <td className="px-4 py-2 text-sm">
-                    {ass.review_sheet ? <a href={ass.review_sheet} target="_blank" rel="noopener noreferrer" className="text-green-600 underline">Link</a> : "—"}
-                  </td>
-                  <td className="px-4 py-2 text-sm">
-                    <span className={`px-2 py-1 rounded-full text-xs ${getStatusBadge(ass.status)}`}>
-                      {getStatusText(ass.status)}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2 text-sm">
-                    {(ass.status === "pending approval" || ass.status === "assigned") && (
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleAccept(ass.id)}
-                          disabled={actionLoading === ass.id}
-                          className="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700 disabled:opacity-50"
-                        >
-                          {actionLoading === ass.id ? "..." : "Accept"}
-                        </button>
-                        <button
-                          onClick={() => handleReject(ass.id)}
-                          disabled={actionLoading === ass.id}
-                          className="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700 disabled:opacity-50"
-                        >
-                          {actionLoading === ass.id ? "..." : "Reject"}
-                        </button>
-                      </div>
-                    )}
-                    {ass.status === 'accepted' && <span className="text-green-600 text-sm">✓ Accepted</span>}
-                    {ass.status === 'rejected' && <span className="text-red-600 text-sm">✗ Rejected</span>}
-                  </td>
-                </tr>
-              ))
+              filtered.map(ass => {
+                const isPending = ass.status === "pending approval" || ass.status === "assigned";
+                const showSuggest = isPending && suggestTimeForId === ass.id;
+                const existingTime = getSuggestedTime(ass.comments);
+                return (
+                  <tr key={ass.id} className="border-b hover:bg-gray-50">
+                    <td className="px-4 py-2 text-sm">{ass.student_full_name || ass.student?.full_name || "—"}</td>
+                    <td className="px-4 py-2 text-sm">{ass.mentor_full_name || ass.mentor?.full_name || "—"}</td>
+                    <td className="px-4 py-2 text-sm">{ass.course || "—"}</td>
+                    <td className="px-4 py-2 text-sm">{ass.review_date || ass.created_at?.split('T')[0] || "—"}</td>
+                    <td className="px-4 py-2 text-sm">
+                      {showSuggest ? (
+                        <input
+                          type="text"
+                          value={suggestedTime}
+                          onChange={(e) => setSuggestedTime(e.target.value)}
+                          placeholder="e.g., 7:00 PM"
+                          className="border border-gray-300 rounded px-2 py-1 text-xs w-28"
+                          autoFocus
+                        />
+                      ) : (existingTime || "—")}
+                    </td>
+                    <td className="px-4 py-2 text-sm">
+                      {ass.review_sheet ? <a href={ass.review_sheet} target="_blank" rel="noopener noreferrer" className="text-green-600 underline">Link</a> : "—"}
+                    </td>
+                    <td className="px-4 py-2 text-sm">
+                      <span className={`px-2 py-1 rounded-full text-xs ${getStatusBadge(ass.status)}`}>
+                        {getStatusText(ass.status)}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2 text-sm">
+                      {isPending && (
+                        <div className="flex flex-col gap-1">
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleAccept(ass.id)}
+                              disabled={actionLoading === ass.id}
+                              className="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700 disabled:opacity-50"
+                            >
+                              {actionLoading === ass.id ? "..." : "Accept"}
+                            </button>
+                            <button
+                              onClick={() => handleReject(ass.id)}
+                              disabled={actionLoading === ass.id}
+                              className="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700 disabled:opacity-50"
+                            >
+                              {actionLoading === ass.id ? "..." : "Reject"}
+                            </button>
+                          </div>
+                          {!showSuggest ? (
+                            <button
+                              onClick={() => setSuggestTimeForId(ass.id)}
+                              className="text-blue-600 text-xs border border-blue-300 px-2 py-0.5 rounded hover:bg-blue-50"
+                            >
+                              Suggest Time
+                            </button>
+                          ) : (
+                            <div className="flex gap-2 mt-1">
+                              <button
+                                onClick={() => handleSuggestTime(ass.id)}
+                                disabled={actionLoading === ass.id}
+                                className="text-green-600 text-xs border border-green-300 px-2 py-0.5 rounded hover:bg-green-50"
+                              >
+                                Save
+                              </button>
+                              <button
+                                onClick={() => { setSuggestTimeForId(null); setSuggestedTime(""); }}
+                                className="text-gray-500 text-xs border border-gray-300 px-2 py-0.5 rounded hover:bg-gray-50"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {ass.status === 'accepted' && <span className="text-green-600 text-sm">✓ Accepted</span>}
+                      {ass.status === 'rejected' && <span className="text-red-600 text-sm">✗ Rejected</span>}
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>

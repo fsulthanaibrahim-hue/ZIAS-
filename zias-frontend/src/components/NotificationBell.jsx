@@ -1,3 +1,4 @@
+// src/components/NotificationBell.jsx
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import API from '../api/api';
@@ -5,6 +6,15 @@ import API from '../api/api';
 const NotificationBell = () => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [userRole, setUserRole] = useState(null);
+
+  const fetchUnreadCount = async () => {
+    try {
+      const res = await API.get('notifications/unread-count/');
+      setUnreadCount(res.data.unread_count);
+    } catch (err) {
+      console.error('Failed to fetch unread count', err);
+    }
+  };
 
   useEffect(() => {
     const getUserRole = async () => {
@@ -34,17 +44,17 @@ const NotificationBell = () => {
 
   useEffect(() => {
     if (!userRole) return;
-    const fetchCount = async () => {
-      try {
-        const res = await API.get('notifications/unread-count/');
-        setUnreadCount(res.data.unread_count);
-      } catch (err) {
-        console.error('Failed to fetch unread count', err);
-      }
+    fetchUnreadCount();
+    const interval = setInterval(fetchUnreadCount, 30000);
+    // Listen for custom events to refresh immediately
+    const handleRefresh = () => fetchUnreadCount();
+    window.addEventListener('refreshNotifications', handleRefresh);
+    window.addEventListener('notificationRead', handleRefresh);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('refreshNotifications', handleRefresh);
+      window.removeEventListener('notificationRead', handleRefresh);
     };
-    fetchCount();
-    const interval = setInterval(fetchCount, 30000);
-    return () => clearInterval(interval);
   }, [userRole]);
 
   if (!userRole) return <div className="w-5 h-5"></div>;
