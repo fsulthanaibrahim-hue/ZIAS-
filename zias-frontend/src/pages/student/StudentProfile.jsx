@@ -1,10 +1,10 @@
-// src/pages/student/StudentProfile.jsx
-import { useEffect, useState } from "react";
+// src/pages/student/StudentProfile.jsx – safe (uses localStorage, one API call)
+import { useEffect, useState, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import API from "../../api/api";
 import StudentSidebar from "../../components/StudentSidebar";
 
-/* ── Inject styles once ─────────────────────────────────────── */
+/* ── Styles (same as before) ── */
 const STYLES = `
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600&display=swap');
 
@@ -31,7 +31,6 @@ const STYLES = `
     font-family: 'Plus Jakarta Sans', sans-serif;
   }
 
-  /* Page fade-in */
   .sp-fadein { animation: sp-fade .55s ease both; }
   .sp-fadein-1 { animation: sp-fade .55s .08s ease both; }
   .sp-fadein-2 { animation: sp-fade .55s .16s ease both; }
@@ -42,14 +41,12 @@ const STYLES = `
     to   { opacity:1; transform:translateY(0); }
   }
 
-  /* Avatar ring pulse */
   @keyframes sp-ring {
     0%,100% { box-shadow: 0 0 0 4px rgba(34,197,94,0.15), 0 0 0 8px rgba(34,197,94,0.07); }
     50%      { box-shadow: 0 0 0 6px rgba(34,197,94,0.22), 0 0 0 12px rgba(34,197,94,0.08); }
   }
   .sp-avatar-ring { animation: sp-ring 3s ease-in-out infinite; }
 
-  /* Field card hover */
   .sp-field {
     transition: box-shadow .2s, transform .2s, border-color .2s;
     border: 1.5px solid var(--gray-200);
@@ -60,18 +57,15 @@ const STYLES = `
     transform: translateY(-1px);
   }
 
-  /* Button transitions */
   .sp-btn { transition: all .18s cubic-bezier(.4,0,.2,1); }
   .sp-btn-primary:hover { background: var(--green-700); box-shadow: 0 4px 14px rgba(22,163,74,0.35); transform: translateY(-1px); }
   .sp-btn-ghost:hover { background: var(--gray-100); transform: translateY(-1px); }
   .sp-btn-danger:hover { background: #fef2f2; border-color: #ef4444; transform: translateY(-1px); }
 
-  /* Hex pattern overlay */
   .sp-hero-pattern {
     background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%2316a34a' fill-opacity='0.07'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
   }
 
-  /* Scrollbar */
   .sp-scroll::-webkit-scrollbar { width: 5px; }
   .sp-scroll::-webkit-scrollbar-track { background: transparent; }
   .sp-scroll::-webkit-scrollbar-thumb { background: var(--green-200); border-radius: 99px; }
@@ -85,7 +79,6 @@ function injectStyles() {
   document.head.appendChild(el);
 }
 
-/* ── Helpers ─────────────────────────────────────────────────── */
 function getInitials(username = "") {
   const parts = username.trim().split(/[\s._-]+/);
   return parts.length >= 2
@@ -93,7 +86,6 @@ function getInitials(username = "") {
     : username.slice(0, 2).toUpperCase() || "?";
 }
 
-/* ── Sub-components ──────────────────────────────────────────── */
 function InfoChip({ label, value }) {
   return (
     <div className="sp-field" style={{
@@ -144,22 +136,35 @@ function StatBadge({ label, value }) {
   );
 }
 
-/* ── Main ────────────────────────────────────────────────────── */
 function StudentProfile() {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState({ text: "", type: "" });
   const navigate = useNavigate();
+  const dataFetched = useRef(false);
+
+  // ✅ Get user from localStorage (set during login)
+  const userStr = localStorage.getItem("user");
+  const user = userStr ? JSON.parse(userStr) : null;
 
   useEffect(() => { injectStyles(); }, []);
 
   useEffect(() => {
-    (async () => {
+    if (dataFetched.current) return;
+    dataFetched.current = true;
+
+    const fetchProfile = async () => {
       try {
-        const userRes = await API.get("users/me/");
-        if (!userRes.data.is_student) { navigate("/login"); return; }
+        // Only one API call: /students/me/
         const studentRes = await API.get("students/me/");
-        setProfile(studentRes.data);
+        const student = studentRes.data;
+        // Merge from localStorage user
+        const merged = {
+          ...student,
+          username: user?.username || student.username || "",
+          email: user?.email || student.email || "",
+        };
+        setProfile(merged);
       } catch (err) {
         setMessage({
           text: err.response?.status === 404
@@ -167,16 +172,18 @@ function StudentProfile() {
             : "Failed to load profile.",
           type: "error",
         });
-      } finally { setLoading(false); }
-    })();
-  }, [navigate]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProfile();
+  }, [user?.username]);
 
   const handleLogout = () => {
     ["access_token", "refresh_token", "user"].forEach(k => localStorage.removeItem(k));
     navigate("/login");
   };
 
-  /* ── Loading ── */
   if (loading) {
     return (
       <div className="sp-root" style={{ display: "flex", height: "100vh" }}>
@@ -192,7 +199,6 @@ function StudentProfile() {
     );
   }
 
-  /* ── Error ── */
   if (!profile) {
     return (
       <div className="sp-root" style={{ display: "flex", height: "100vh" }}>
@@ -206,8 +212,8 @@ function StudentProfile() {
     );
   }
 
-  const username = profile?.user?.username || profile?.username || "";
-  const email = profile?.user?.email || profile?.email || "";
+  const username = profile.username || "";
+  const email = profile.email || "";
   const initials = getInitials(username);
 
   const personalFields = [
@@ -224,23 +230,20 @@ function StudentProfile() {
       <div className="sp-scroll" style={{ flex: 1, overflowY: "auto", background: "var(--green-50)", padding: "32px 24px" }}>
         <div style={{ maxWidth: 760, margin: "0 auto" }}>
 
-          {/* ── Hero Card ── */}
+          {/* Hero Card */}
           <div className="sp-fadein" style={{
             background: "#fff", borderRadius: 24, overflow: "hidden",
             boxShadow: "var(--shadow-lg)", border: "1.5px solid var(--green-100)", marginBottom: 20,
           }}>
-            {/* Banner */}
             <div className="sp-hero-pattern" style={{
               height: 150,
               background: "linear-gradient(135deg, #dcfce7 0%, #bbf7d0 50%, #a7f3d0 100%)",
               position: "relative", overflow: "hidden",
             }}>
-              {/* Decorative circles */}
               <div style={{ position: "absolute", top: -40, right: -40, width: 180, height: 180, borderRadius: "50%", background: "rgba(34,197,94,0.12)" }} />
               <div style={{ position: "absolute", top: 20, right: 80, width: 80, height: 80, borderRadius: "50%", background: "rgba(34,197,94,0.10)" }} />
               <div style={{ position: "absolute", bottom: -20, left: 120, width: 100, height: 100, borderRadius: "50%", background: "rgba(22,163,74,0.08)" }} />
 
-              {/* Student badge top-right */}
               <div style={{
                 position: "absolute", top: 16, right: 20,
                 background: "rgba(255,255,255,0.85)", backdropFilter: "blur(8px)",
@@ -252,7 +255,6 @@ function StudentProfile() {
               </div>
             </div>
 
-            {/* Avatar — overlapping banner */}
             <div style={{ position: "relative", paddingLeft: 36, paddingBottom: 28, marginTop: -44 }}>
               <div className="sp-avatar-ring" style={{
                 width: 88, height: 88, borderRadius: "50%",
@@ -273,7 +275,6 @@ function StudentProfile() {
               </div>
             </div>
 
-            {/* Stats strip */}
             <div style={{
               borderTop: "1.5px solid var(--green-100)",
               display: "grid", gridTemplateColumns: "1fr 1fr 1fr",
@@ -288,7 +289,7 @@ function StudentProfile() {
             </div>
           </div>
 
-          {/* ── Account Info ── */}
+          {/* Account Info */}
           <div className="sp-fadein-1" style={{
             background: "#fff", borderRadius: 20, padding: "24px",
             boxShadow: "var(--shadow-sm)", border: "1.5px solid var(--green-100)", marginBottom: 16,
@@ -303,7 +304,7 @@ function StudentProfile() {
             </div>
           </div>
 
-          {/* ── Personal Details ── */}
+          {/* Personal Details */}
           <div className="sp-fadein-2" style={{
             background: "#fff", borderRadius: 20, padding: "24px",
             boxShadow: "var(--shadow-sm)", border: "1.5px solid var(--green-100)", marginBottom: 16,
@@ -319,7 +320,7 @@ function StudentProfile() {
             </div>
           </div>
 
-          {/* ── Notice ── */}
+          {/* Notice */}
           <div className="sp-fadein-3" style={{
             background: "linear-gradient(135deg, #f0fdf4, #dcfce7)",
             border: "1.5px solid var(--green-200)", borderRadius: 16,
@@ -332,7 +333,7 @@ function StudentProfile() {
             </p>
           </div>
 
-          {/* ── Action Buttons ── */}
+          {/* Action Buttons */}
           <div className="sp-fadein-4" style={{ display: "flex", flexWrap: "wrap", gap: 10, justifyContent: "center", paddingBottom: 32 }}>
             <Link
               to="/change-password"
@@ -384,7 +385,7 @@ function StudentProfile() {
             </button>
           </div>
 
-          {/* ── Status message ── */}
+          {/* Status message */}
           {message.text && (
             <div style={{
               marginTop: 8, padding: "12px 18px", borderRadius: 12, fontSize: 13, fontWeight: 500,

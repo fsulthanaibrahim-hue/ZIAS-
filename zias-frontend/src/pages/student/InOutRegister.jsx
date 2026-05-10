@@ -1,5 +1,5 @@
-// src/pages/student/InOutRegister.jsx
-import React, { useState, useEffect } from 'react';
+// src/pages/student/InOutRegister.jsx – optimized (no duplicate API calls)
+import React, { useState, useEffect, useRef } from 'react';
 import API from '../../api/api';
 import { toast } from 'react-hot-toast';
 
@@ -12,6 +12,7 @@ const InOutRegister = ({ showHistory = true }) => {
   const [breakMinutes, setBreakMinutes] = useState(0);
   const [checkOutReason, setCheckOutReason] = useState('');
   const [liveTime, setLiveTime] = useState(new Date());
+  const fetchedRef = useRef(false);  // ✅ prevent duplicate fetch
 
   // Live clock
   useEffect(() => {
@@ -19,39 +20,36 @@ const InOutRegister = ({ showHistory = true }) => {
     return () => clearInterval(timer);
   }, []);
 
-  // Fetch attendance data
-  useEffect(() => {
-    fetchTodayStatus();
-    if (showHistory) fetchHistory();
-    else setLoading(false);
-  }, []);
-
-  const fetchTodayStatus = async () => {
+  // Single function to fetch attendance data (both active record and history)
+  const fetchAttendanceData = async () => {
     try {
       const res = await API.get('attendance/history/');
       let records = Array.isArray(res.data) ? res.data : (res.data.results || []);
-      // Find the latest open record
-      const openRecord = records
-        .filter(r => r.check_out === null)
-        .sort((a, b) => new Date(b.check_in) - new Date(a.check_in))[0];
+      // Sort descending by check-in time
+      records.sort((a, b) => new Date(b.check_in) - new Date(a.check_in));
+      // Find open record (no check-out)
+      const openRecord = records.find(r => r.check_out === null);
       setActiveRecord(openRecord || null);
+      if (showHistory) setHistory(records);
     } catch (err) {
       console.error(err);
-    } finally {
-      if (!showHistory) setLoading(false);
-    }
-  };
-
-  const fetchHistory = async () => {
-    try {
-      const res = await API.get('attendance/history/');
-      let records = Array.isArray(res.data) ? res.data : (res.data.results || []);
-      setHistory(records);
-    } catch (err) {
-      toast.error('Failed to load attendance history');
+      toast.error('Failed to load attendance data');
     } finally {
       setLoading(false);
     }
+  };
+
+  // Fetch only once on mount
+  useEffect(() => {
+    if (fetchedRef.current) return;
+    fetchedRef.current = true;
+    fetchAttendanceData();
+  }, []);
+
+  // Refresh after check-in / check-out (reuse same fetch)
+  const refreshData = async () => {
+    setLoading(true);
+    await fetchAttendanceData();
   };
 
   const handleCheckIn = async () => {
@@ -59,8 +57,7 @@ const InOutRegister = ({ showHistory = true }) => {
     try {
       await API.post('attendance/check-in/');
       toast.success('Checked in successfully');
-      await fetchTodayStatus();
-      if (showHistory) await fetchHistory();
+      await refreshData();
     } catch (err) {
       const msg = err.response?.data?.detail || err.response?.data?.message || 'Check-in failed';
       toast.error(msg);
@@ -80,8 +77,7 @@ const InOutRegister = ({ showHistory = true }) => {
       setShowCheckOutModal(false);
       setBreakMinutes(0);
       setCheckOutReason('');
-      await fetchTodayStatus();
-      if (showHistory) await fetchHistory();
+      await refreshData();
     } catch (err) {
       const msg = err.response?.data?.detail || err.response?.data?.message || 'Check-out failed';
       toast.error(msg);

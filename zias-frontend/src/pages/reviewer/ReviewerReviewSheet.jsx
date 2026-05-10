@@ -1,6 +1,6 @@
-// src/pages/reviewer/ReviewerReviewSheet.jsx
+// src/pages/reviewer/ReviewerReviewSheet.jsx – working save (no bulk endpoint)
 import { useEffect, useState, useRef, useMemo } from "react";
-import { useSearchParams, Link, useNavigate } from "react-router-dom";
+import { useSearchParams, Link, useNavigate, useLocation } from "react-router-dom";
 import toast from "react-hot-toast";
 import API from "../../api/api";
 
@@ -15,32 +15,33 @@ const cleanTitle = (title) => {
   return title.replace(pattern, "").trim();
 };
 
-// ✅ Star rating calculation – starts at 0, only >=1 gives first star
 const calculateTotalAndStars = (reviewScore, extra, english, video) => {
   const safeReview = Math.min(20, Math.max(0, reviewScore || 0));
   const safeExtra = Math.min(5, Math.max(0, extra || 0));
   const safeEnglish = Math.min(5, Math.max(0, english || 0));
   const safeVideo = Math.min(5, Math.max(0, video || 0));
-  const total = safeReview + safeExtra + safeEnglish + safeVideo; // max 35
+  const total = safeReview + safeExtra + safeEnglish + safeVideo;
   const finalTotal = Math.min(35, Math.max(0, total));
-
-  let stars = 0;                        // start at 0 (all empty)
+  let stars = 0;
   if (finalTotal >= 29) stars = 5;
   else if (finalTotal >= 22) stars = 4;
   else if (finalTotal >= 15) stars = 3;
   else if (finalTotal >= 8) stars = 2;
   else if (finalTotal >= 1) stars = 1;
-  // else stars stays 0
-
   return { total: finalTotal, stars };
 };
 
 function ReviewerReviewSheet() {
   const [searchParams] = useSearchParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const studentId = searchParams.get("student_id");
 
-  const [student, setStudent] = useState(null);
+  const stateStudent = location.state || {};
+  const studentName = stateStudent.studentName || "Student";
+  const studentCourse = stateStudent.studentCourse || "";
+  const studentBatch = stateStudent.studentBatch || "";
+
   const [weeks, setWeeks] = useState([]);
   const [reviews, setReviews] = useState({});
   const [originalReviews, setOriginalReviews] = useState({});
@@ -49,7 +50,7 @@ function ReviewerReviewSheet() {
   const [error, setError] = useState(null);
   const dataFetched = useRef(false);
 
-  // All rows – exactly like mentor edit page
+  // Only editable fields for reviewers
   const rows = useMemo(() => [
     { label: "Status", field: "task_status", type: "select", options: ["Task Completed", "Task Need Improvement", "Task Critical", "Task Not Completed"], editable: true },
     { label: "Project Updates", field: "feedback", type: "textarea", editable: true },
@@ -57,11 +58,11 @@ function ReviewerReviewSheet() {
     { label: "Reviewer Name", field: "reviewer_name", type: "text", editable: true },
     { label: "Mentor Name", field: "advisor_name", type: "text", editable: false },
     { label: "Extra Workouts Review", field: "extra_workouts", type: "select", options: ["Completed", "Need Improvement", "Not Completed"], editable: false },
-    { label: "Extra Workouts Mark (0-5)", field: "extra_workouts_mark", type: "number", min: 0, max: 5, step: 1, editable: true },
+    { label: "Extra Workouts Mark (0-5)", field: "extra_workouts_mark", type: "number", min: 0, max: 5, step: 1, editable: false },
     { label: "Review Date", field: "review_date", type: "date", editable: false },
     { label: "Progress Video Link", field: "progress_video", type: "url", editable: false },
-    { label: "Progress Video Mark (0-5)", field: "progress_video_mark", type: "number", min: 0, max: 5, step: 1, editable: true },
-    { label: "English Score (0-5)", field: "english_score", type: "number", min: 0, max: 5, step: 1, editable: true },
+    { label: "Progress Video Mark (0-5)", field: "progress_video_mark", type: "number", min: 0, max: 5, step: 1, editable: false },
+    { label: "English Score (0-5)", field: "english_score", type: "number", min: 0, max: 5, step: 1, editable: false },
     { label: "English Review", field: "english_review", type: "textarea", editable: false },
   ], []);
 
@@ -78,6 +79,7 @@ function ReviewerReviewSheet() {
 
   const handleChange = (weekId, field, value) => {
     const row = rows.find(r => r.field === field);
+    if (!row?.editable) return;
     let processed = value;
     if (row?.type === "number") {
       if (value === "" || value === null || value === undefined) processed = "";
@@ -91,16 +93,15 @@ function ReviewerReviewSheet() {
         }
       }
     }
-    setReviews(prev => ({
-      ...prev,
-      [weekId]: { ...prev[weekId], [field]: processed },
-    }));
+    setReviews(prev => ({ ...prev, [weekId]: { ...prev[weekId], [field]: processed } }));
   };
 
   const handleSave = async () => {
     setSaving(true);
     setError(null);
-    const updates = [];
+    const errors = [];
+    let anySuccess = false;
+
     for (const week of weeks) {
       const weekId = week.id;
       const original = originalReviews[weekId] || {};
@@ -115,65 +116,55 @@ function ReviewerReviewSheet() {
           changedFields[field] = currVal;
         }
       }
-      if (Object.keys(changedFields).length > 0) {
-        updates.push({ week_id: weekId, ...changedFields });
-      }
-    }
-    if (updates.length === 0) {
-      toast("No changes to save.", { icon: "ℹ️" });
-      setSaving(false);
-      return;
-    }
-    try {
-      await API.post("week-review/bulk-update/", { student_id: studentId, updates });
-      toast.success("Changes saved successfully!");
-      // Refresh all reviews
-      const freshReviews = {};
-      for (const week of weeks) {
-        try {
-          const res = await API.get(`week-review/${week.id}/?student_id=${studentId}`);
-          freshReviews[week.id] = res.data;
-        } catch {
-          freshReviews[week.id] = {};
-        }
-      }
-      setReviews(freshReviews);
-      setOriginalReviews(JSON.parse(JSON.stringify(freshReviews)));
-    } catch (err) {
-      console.error("Save failed", err);
-      toast.error("Failed to save changes. Please try again.");
-      setError("Failed to save changes. Please try again.");
-    } finally {
-      setSaving(false);
-    }
-  };
+      if (Object.keys(changedFields).length === 0) continue;
 
-  // Load student
-  useEffect(() => {
-    if (!studentId) {
-      navigate("/reviewer/students");
-      return;
-    }
-    const fetchStudent = async () => {
       try {
-        const res = await API.get(`students/${studentId}/`);
-        setStudent(res.data);
-      } catch {
-        toast.error("Failed to load student");
-        setError("Failed to load student");
+        await API.patch(`week-review/${weekId}/?student_id=${studentId}`, changedFields);
+        anySuccess = true;
+        // Update originalReviews with the new values to avoid re-saving unchanged later
+        setOriginalReviews(prev => ({
+          ...prev,
+          [weekId]: { ...prev[weekId], ...changedFields }
+        }));
+      } catch (err) {
+        console.error(`Failed to save week ${weekId}`, err);
+        errors.push(`Week ${week.title || weekId}: ${err.response?.data?.detail || err.message}`);
       }
-    };
-    fetchStudent();
-  }, [studentId, navigate]);
+    }
+
+    if (errors.length > 0) {
+      toast.error(`Partial save: ${errors.join(", ")}`);
+      setError("Some changes could not be saved.");
+    } else if (anySuccess) {
+      toast.success("All changes saved successfully!");
+    } else {
+      toast("No changes to save.", { icon: "ℹ️" });
+    }
+    setSaving(false);
+    // Refresh all reviews to keep consistency
+    const freshReviews = {};
+    for (const week of weeks) {
+      try {
+        const res = await API.get(`week-review/${week.id}/?student_id=${studentId}`);
+        freshReviews[week.id] = res.data;
+      } catch {
+        freshReviews[week.id] = {};
+      }
+    }
+    setReviews(freshReviews);
+    setOriginalReviews(JSON.parse(JSON.stringify(freshReviews)));
+  };
 
   // Load weeks and reviews
   useEffect(() => {
-    if (!studentId) return;
+    if (!studentId) {
+      navigate("/reviewer/assignments");
+      return;
+    }
     if (!dataFetched.current) {
       dataFetched.current = true;
       const fetchData = async () => {
         setLoading(true);
-        setError(null);
         try {
           const modulesRes = await API.get(`modules/student-modules/?student_id=${studentId}`);
           let allWeeks = modulesRes.data;
@@ -201,7 +192,7 @@ function ReviewerReviewSheet() {
     } else {
       setLoading(false);
     }
-  }, [studentId]);
+  }, [studentId, navigate]);
 
   const renderCell = (weekId, row) => {
     let value = reviews[weekId]?.[row.field] ?? "";
@@ -223,7 +214,6 @@ function ReviewerReviewSheet() {
       return <div className="text-gray-800 text-sm py-1 px-1 whitespace-pre-wrap break-words">{displayValue === "" ? "—" : displayValue}</div>;
     }
 
-    // Editable rows
     if (row.type === "select") {
       return (
         <select value={value} onChange={e => onChange(e.target.value)} className={inputClass}>
@@ -248,12 +238,6 @@ function ReviewerReviewSheet() {
         />
       );
     }
-    if (row.type === "date") {
-      return <input type="date" value={value} onChange={e => onChange(e.target.value)} className={inputClass} />;
-    }
-    if (row.type === "url") {
-      return <input type="url" value={value} onChange={e => onChange(e.target.value)} className={inputClass} placeholder="https://" />;
-    }
     return <input type="text" value={value} onChange={e => onChange(e.target.value)} className={inputClass} />;
   };
 
@@ -276,12 +260,12 @@ function ReviewerReviewSheet() {
           <div>
             <h1 className="text-xl font-semibold text-gray-800">Review Sheet (Reviewer)</h1>
             <p className="text-gray-500 text-sm mt-1">
-              {student?.full_name || student?.username} • {student?.course} • {student?.batch}
+              {studentName} • {studentCourse} • {studentBatch}
             </p>
-            <p className="text-xs text-amber-600 mt-1">✏️ Editable: Status, Project Updates, Reviewer Name, Review Score, Extra Workouts Mark, Progress Video Mark, English Score</p>
+            <p className="text-xs text-amber-600 mt-1">✏️ Editable: Status, Project Updates, Review Score, Reviewer Name</p>
           </div>
           <div className="flex gap-2">
-            <button onClick={() => navigate("/reviewer/students")} className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium">← Back to Students</button>
+            <button onClick={() => navigate("/reviewer/assignments")} className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium">← Back to Assignments</button>
             <button onClick={handleSave} disabled={saving} className="bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-lg text-sm font-medium disabled:opacity-50">{saving ? "Saving..." : "Save Changes"}</button>
           </div>
         </div>

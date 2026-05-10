@@ -93,7 +93,15 @@ class StudentViewSet(viewsets.ModelViewSet):
             except Mentor.DoesNotExist:
                 queryset = queryset.none()
         elif user.is_reviewer:
-            queryset = Student.objects.none()
+            # ✅ reviewers can see students in their own course
+            try:
+                reviewer = Reviewer.objects.get(user=user)
+                if reviewer.course:
+                    queryset = queryset.filter(course=reviewer.course)
+                else:
+                    queryset = queryset.none()
+            except Reviewer.DoesNotExist:
+                queryset = queryset.none()
         else:
             queryset = queryset.filter(user=user)
         return queryset
@@ -113,10 +121,13 @@ class StudentViewSet(viewsets.ModelViewSet):
                 })
             return Response(data)
         elif user.is_reviewer:
-            return Response([])
+            # ✅ return student data for reviewers
+            serializer = self.get_serializer(queryset, many=True)
+            return Response(serializer.data)
         else:
             serializer = self.get_serializer(queryset, many=True)
             return Response(serializer.data)
+
 
     @action(detail=False, methods=['get'], url_path='me', permission_classes=[IsAuthenticated])
     def me(self, request):
@@ -174,7 +185,6 @@ class StudentViewSet(viewsets.ModelViewSet):
         user.save()
         student.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
-
 
 # ----------------------------
 # MENTOR VIEWSET

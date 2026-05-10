@@ -1,8 +1,7 @@
-// src/components/StudentSidebar.jsx
+// src/components/StudentSidebar.jsx – optimized (no API call)
 import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import NotificationBell from "./NotificationBell";
-import API from "../api/api";
 
 function NavLink({ to, label, active, collapsed }) {
   return (
@@ -48,17 +47,12 @@ function StudentSidebar() {
     const saved = localStorage.getItem("studentSidebarCollapsed");
     return saved === "true";
   });
-  const [userName, setUserName] = useState("Student User");
-  const [userRole, setUserRole] = useState("Student");
 
-  useEffect(() => {
-    API.get("users/me/")
-      .then(res => {
-        setUserName(res.data.full_name || res.data.username);
-        setUserRole("Student");
-      })
-      .catch(err => console.error("Failed to fetch user", err));
-  }, []);
+  // ✅ Read user from localStorage (set during login) – no extra API call
+  const userStr = localStorage.getItem("user");
+  const user = userStr ? JSON.parse(userStr) : null;
+  const userName = user?.full_name || user?.username || "Student User";
+  const userRole = "Student";
 
   useEffect(() => {
     localStorage.setItem("studentSidebarCollapsed", isCollapsed);
@@ -116,7 +110,6 @@ function StudentSidebar() {
             </div>
           )}
         </button>
-        {/* ✅ NotificationBell auto-detects role – no need to pass 'student' */}
         {!isCollapsed && <NotificationBell />}
       </div>
 

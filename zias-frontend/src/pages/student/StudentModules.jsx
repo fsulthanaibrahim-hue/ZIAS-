@@ -1,5 +1,5 @@
-// src/pages/student/StudentModules.jsx
-import React, { useState, useEffect } from "react";
+// src/pages/student/StudentModules.jsx – optimized (no duplicate API calls)
+import React, { useState, useEffect, useRef } from "react";
 import StudentSidebar from "../../components/StudentSidebar";
 import API from "../../api/api";
 import { Link } from "react-router-dom";
@@ -9,12 +9,14 @@ function StudentModules() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [error, setError] = useState(null);
+  const fetchedRef = useRef(false);
 
   useEffect(() => {
+    if (fetchedRef.current) return;
+    fetchedRef.current = true;
     const fetchMyModules = async () => {
       setLoading(true);
       try {
-        // Get modules for the current student
         const res = await API.get("/modules/student-modules/");
         let data = res.data.results || res.data;
         if (!Array.isArray(data)) data = [];
@@ -69,7 +71,7 @@ function StudentModules() {
             </p>
           </div>
 
-          {/* Search bar – same as mentor page */}
+          {/* Search bar */}
           <div className="mb-6 relative max-w-md">
             <input
               type="text"

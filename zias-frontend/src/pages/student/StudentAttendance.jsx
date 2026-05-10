@@ -1,5 +1,5 @@
-// src/pages/student/StudentAttendance.jsx
-import React, { useState, useEffect } from 'react';
+// src/pages/student/StudentAttendance.jsx – optimized and error‑free
+import React, { useState, useEffect, useRef } from 'react';
 import API from '../../api/api';
 import { toast } from 'react-hot-toast';
 import StudentSidebar from '../../components/StudentSidebar';
@@ -9,23 +9,12 @@ const StudentAttendance = () => {
   const [loading, setLoading] = useState(true);
   const [totalHours, setTotalHours] = useState(0);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
+  const initialFetchDone = useRef(false);
 
-  // Helper: format YYYY-MM-DD to DD/MM/YYYY
-  const formatDate = (dateStr) => {
-    if (!dateStr) return '';
-    const [year, month, day] = dateStr.split('-');
-    return `${day}/${month}/${year}`;
-  };
-
-  useEffect(() => {
-    fetchAttendance();
-  }, [selectedDate]);
-
-  const fetchAttendance = async () => {
+  const fetchAttendance = async (date) => {
     setLoading(true);
     try {
-      const res = await API.get(`attendance/history/?date=${selectedDate}`);
-      console.log("API response:", res.data); // 👈 DEBUG: check console
+      const res = await API.get(`attendance/history/?date=${date}`);
       const data = Array.isArray(res.data) ? res.data : (res.data.results || []);
       setRecords(data);
       const total = data.reduce((sum, rec) => sum + (rec.net_work_hours || 0), 0);
@@ -37,11 +26,31 @@ const StudentAttendance = () => {
     }
   };
 
+  // Initial fetch only once (prevents duplicate call in StrictMode)
+  useEffect(() => {
+    if (initialFetchDone.current) return;
+    initialFetchDone.current = true;
+    fetchAttendance(selectedDate);
+  }, []);
+
+  // Re‑fetch when date changes (but not on mount)
+  useEffect(() => {
+    if (initialFetchDone.current) {
+      fetchAttendance(selectedDate);
+    }
+  }, [selectedDate]);
+
   const handleDateChange = (e) => {
     setSelectedDate(e.target.value);
   };
 
-  if (loading) {
+  const formatDate = (dateStr) => {
+    if (!dateStr) return '';
+    const [year, month, day] = dateStr.split('-');
+    return `${day}/${month}/${year}`;
+  };
+
+  if (loading && records.length === 0) {
     return (
       <div className="flex min-h-screen bg-gray-50">
         <StudentSidebar />

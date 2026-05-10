@@ -1,5 +1,5 @@
-// src/pages/student/StudentReviewSheet.js – auto star rating (0‑5 possible)
-import React, { useEffect, useState } from "react";
+// src/pages/student/StudentReviewSheet.jsx – optimized (no duplicate calls)
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import API from "../../api/api";
 import StudentSidebar from "../../components/StudentSidebar";
@@ -15,7 +15,6 @@ const cleanTitle = (title) => {
   return title.replace(pattern, "").trim();
 };
 
-// Compute total (0‑35) and star rating (0‑5)
 const computeTotalAndStars = (extra, english, video) => {
   const extraNum = Number(extra) || 0;
   const englishNum = Number(english) || 0;
@@ -25,19 +24,15 @@ const computeTotalAndStars = (extra, english, video) => {
               Math.min(5, Math.max(0, videoNum));
   const total = Math.round((sum * 35) / 15);
   const finalTotal = Math.min(35, Math.max(0, total));
-
   let stars = 0;
   if (finalTotal >= 29) stars = 5;
   else if (finalTotal >= 22) stars = 4;
   else if (finalTotal >= 15) stars = 3;
   else if (finalTotal >= 8) stars = 2;
   else if (finalTotal >= 1) stars = 1;
-  // else stars stays 0
-
   return { total: finalTotal, stars };
 };
 
-// Read‑only star display (0/5 possible)
 const StarDisplay = ({ value }) => {
   const fullStars = value;
   const emptyStars = 5 - fullStars;
@@ -75,7 +70,15 @@ function StudentReviewSheet() {
   const [tempVideoUrl, setTempVideoUrl] = useState("");
   const [savingVideo, setSavingVideo] = useState(false);
 
+  // Refs to prevent duplicate API calls
+  const roleFetched = useRef(false);
+  const studentsFetched = useRef(false);
+  const dataFetched = useRef(false);
+
+  // Fetch user role once
   useEffect(() => {
+    if (roleFetched.current) return;
+    roleFetched.current = true;
     const fetchUser = async () => {
       try {
         const userRes = await API.get("users/me/");
@@ -91,60 +94,76 @@ function StudentReviewSheet() {
     fetchUser();
   }, []);
 
+  // For admin/reviewer: fetch students list once
   useEffect(() => {
-    const isReviewer = userRole === "admin" || userRole === "mentor" || userRole === "reviewer";
-    if (!isReviewer) return;
+    const isReviewer = userRole === "admin" || userRole === "reviewer";
+    if (!isReviewer || studentsFetched.current) return;
     if (studentIdFromUrl) {
       setSelectedStudentId(parseInt(studentIdFromUrl));
+      studentsFetched.current = true;
       return;
     }
-    if (userRole === "admin" || userRole === "reviewer") {
-      const fetchStudents = async () => {
-        try {
-          const res = await API.get("students/list/");
-          setStudents(res.data);
-          if (res.data.length) setSelectedStudentId(res.data[0].id);
-        } catch (err) { console.error(err); }
-      };
-      fetchStudents();
-    }
+    const fetchStudents = async () => {
+      try {
+        const res = await API.get("students/list/");
+        setStudents(res.data);
+        if (res.data.length) setSelectedStudentId(res.data[0].id);
+      } catch (err) { console.error(err); }
+      studentsFetched.current = true;
+    };
+    fetchStudents();
   }, [userRole, studentIdFromUrl]);
 
-  useEffect(() => {
+  // Fetch weeks and reviews (only once per student)
+  const fetchData = useCallback(async () => {
+    if (!userRole) return;
     const isReviewer = userRole === "admin" || userRole === "mentor" || userRole === "reviewer";
     if (isReviewer && !selectedStudentId) return;
+
     setLoading(true);
     setError(null);
-    const fetchData = async () => {
-      try {
-        let modulesUrl = "modules/student-modules/";
-        if (isReviewer && selectedStudentId) modulesUrl += `?student_id=${selectedStudentId}`;
-        const modulesRes = await API.get(modulesUrl);
-        let allWeeks = modulesRes.data;
-        allWeeks.sort((a, b) => extractWeekNumber(a.title) - extractWeekNumber(b.title));
-        setWeeks(allWeeks);
+    try {
+      // Get weeks
+      let modulesUrl = "modules/student-modules/";
+      if (isReviewer && selectedStudentId) modulesUrl += `?student_id=${selectedStudentId}`;
+      const modulesRes = await API.get(modulesUrl);
+      let allWeeks = modulesRes.data;
+      allWeeks.sort((a, b) => extractWeekNumber(a.title) - extractWeekNumber(b.title));
+      setWeeks(allWeeks);
 
-        const reviewsData = {};
-        for (const week of allWeeks) {
-          let reviewUrl = `week-review/${week.id}/`;
-          if (isReviewer && selectedStudentId) reviewUrl += `?student_id=${selectedStudentId}`;
-          try {
-            const reviewRes = await API.get(reviewUrl);
-            reviewsData[week.id] = reviewRes.data;
-          } catch {
-            reviewsData[week.id] = {};
-          }
+      // Get reviews for each week (sequential, but only once)
+      const reviewsData = {};
+      for (const week of allWeeks) {
+        let reviewUrl = `week-review/${week.id}/`;
+        if (isReviewer && selectedStudentId) reviewUrl += `?student_id=${selectedStudentId}`;
+        try {
+          const reviewRes = await API.get(reviewUrl);
+          reviewsData[week.id] = reviewRes.data;
+        } catch {
+          reviewsData[week.id] = {};
         }
-        setReviews(reviewsData);
-      } catch (err) {
-        console.error(err);
-        setError("Failed to load review data.");
-      } finally {
-        setLoading(false);
       }
-    };
-    fetchData();
-  }, [selectedStudentId, userRole]);
+      setReviews(reviewsData);
+    } catch (err) {
+      console.error(err);
+      setError("Failed to load review data.");
+    } finally {
+      setLoading(false);
+    }
+  }, [userRole, selectedStudentId]);
+
+  useEffect(() => {
+    if (!userRole) return;
+    if (dataFetched.current && (!(userRole === "admin" || userRole === "reviewer") || selectedStudentId)) return;
+    // Only reset dataFetched when student ID changes (for reviewer)
+    if (userRole === "admin" || userRole === "reviewer") {
+      dataFetched.current = false;
+    }
+    if (!dataFetched.current) {
+      dataFetched.current = true;
+      fetchData();
+    }
+  }, [userRole, selectedStudentId, fetchData]);
 
   const isStudent = userRole === "student";
   const isAdminOrReviewer = userRole === "admin" || userRole === "reviewer";
@@ -342,8 +361,6 @@ function StudentReviewSheet() {
                       ))}
                     </tr>
                   ))}
-
-                  {/* Total Score row */}
                   <tr className="hover:bg-gray-50/40">
                     <td className="sticky left-0 bg-white px-4 py-3 text-gray-600 text-sm font-medium border-r border-gray-200">Total Score (out of 35)</td>
                     {weeks.map(week => {
@@ -355,8 +372,6 @@ function StudentReviewSheet() {
                       );
                     })}
                   </tr>
-
-                  {/* Star Rating row – auto‑computed, read‑only, supports 0/5 */}
                   <tr className="hover:bg-gray-50/40">
                     <td className="sticky left-0 bg-white px-4 py-3 text-gray-600 text-sm font-medium border-r border-gray-200">Star Rating</td>
                     {weeks.map(week => {

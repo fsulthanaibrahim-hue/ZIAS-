@@ -1,5 +1,6 @@
-// src/pages/reviewer/ReviewerAssignments.jsx – final clean version
-import { useEffect, useState } from "react";
+// src/pages/reviewer/ReviewerAssignments.jsx
+import { useEffect, useState, useRef, useCallback } from "react";
+import { Link } from "react-router-dom";
 import API from "../../api/api";
 
 function ReviewerAssignments() {
@@ -9,13 +10,14 @@ function ReviewerAssignments() {
   const [actionLoading, setActionLoading] = useState(null);
   const [suggestTimeForId, setSuggestTimeForId] = useState(null);
   const [suggestedTime, setSuggestedTime] = useState("");
+  const fetchedRef = useRef(false);
 
-  const fetchAssignments = async () => {
+  const fetchAssignments = useCallback(async () => {
     setLoading(true);
     try {
       const res = await API.get("/review-assignments/");
       let data = res.data;
-      if (data && data.results && Array.isArray(data.results)) data = data.results;
+      if (data?.results && Array.isArray(data.results)) data = data.results;
       else if (!Array.isArray(data)) data = [];
       setAssignments(data);
     } catch (err) {
@@ -24,11 +26,14 @@ function ReviewerAssignments() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchAssignments();
-  }, []);
+    if (!fetchedRef.current) {
+      fetchedRef.current = true;
+      fetchAssignments();
+    }
+  }, [fetchAssignments]);
 
   const handleAccept = async (id) => {
     if (!window.confirm("Accept this assignment?")) return;
@@ -146,11 +151,15 @@ function ReviewerAssignments() {
                 const isPending = ass.status === "pending approval" || ass.status === "assigned";
                 const showSuggest = isPending && suggestTimeForId === ass.id;
                 const existingTime = getSuggestedTime(ass.comments);
+                const studentId = ass.student?.id || ass.student;
+                const studentName = ass.student_full_name || ass.student?.full_name || "Student";
+                const studentCourse = ass.course || "";
+                const studentBatch = ""; // optional
                 return (
                   <tr key={ass.id} className="border-b hover:bg-gray-50">
-                    <td className="px-4 py-2 text-sm">{ass.student_full_name || ass.student?.full_name || "—"}</td>
+                    <td className="px-4 py-2 text-sm">{studentName}</td>
                     <td className="px-4 py-2 text-sm">{ass.mentor_full_name || ass.mentor?.full_name || "—"}</td>
-                    <td className="px-4 py-2 text-sm">{ass.course || "—"}</td>
+                    <td className="px-4 py-2 text-sm">{studentCourse}</td>
                     <td className="px-4 py-2 text-sm">{ass.review_date || ass.created_at?.split('T')[0] || "—"}</td>
                     <td className="px-4 py-2 text-sm">
                       {showSuggest ? (
@@ -165,7 +174,15 @@ function ReviewerAssignments() {
                       ) : (existingTime || "—")}
                     </td>
                     <td className="px-4 py-2 text-sm">
-                      {ass.review_sheet ? <a href={ass.review_sheet} target="_blank" rel="noopener noreferrer" className="text-green-600 underline">Link</a> : "—"}
+                      {studentId ? (
+                        <Link
+                          to={`/reviewer/review-sheet?student_id=${studentId}`}
+                          state={{ studentName, studentCourse, studentBatch }}
+                          className="text-green-600 underline"
+                        >
+                          Link
+                        </Link>
+                      ) : "—"}
                     </td>
                     <td className="px-4 py-2 text-sm">
                       <span className={`px-2 py-1 rounded-full text-xs ${getStatusBadge(ass.status)}`}>
