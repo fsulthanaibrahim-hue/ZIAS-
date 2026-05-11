@@ -13,7 +13,7 @@ const getLocalDateYYYYMMDD = () => {
   return `${year}-${month}-${day}`;
 };
 
-// Format YYYY-MM-DD to DD/MM/YYYY
+// Format YYYY-MM-DD to DD/MM/YYYY for display
 const formatDateDMY = (dateStr) => {
   if (!dateStr) return '';
   const [year, month, day] = dateStr.split('-');
@@ -30,18 +30,8 @@ const formatTimeHHMMSS = (datetimeStr) => {
   return `${hours}:${minutes}:${seconds}`;
 };
 
-// Extract local date (DD/MM/YYYY) from a datetime string
-const getLocalDateFromTimestamp = (datetimeStr) => {
-  if (!datetimeStr) return '';
-  const date = new Date(datetimeStr);
-  const day = String(date.getDate()).padStart(2, '0');
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const year = date.getFullYear();
-  return `${day}/${month}/${year}`;
-};
-
-// Get local date as YYYY-MM-DD for comparison
-const getLocalDateYYYYMMDDFromTimestamp = (datetimeStr) => {
+// Get local date (YYYY-MM-DD) from any timestamp – timezone safe
+const getLocalDateKey = (datetimeStr) => {
   if (!datetimeStr) return '';
   const date = new Date(datetimeStr);
   const year = date.getFullYear();
@@ -70,25 +60,28 @@ const formatDuration = (decimalHours) => {
 // ---------- Main Component ----------
 const StudentAttendance = () => {
   const [selectedLocalDate, setSelectedLocalDate] = useState(getLocalDateYYYYMMDD);
-  const [allRecords, setAllRecords] = useState([]);       // all fetched records
+  const [allRecords, setAllRecords] = useState([]);
   const [filteredRecords, setFilteredRecords] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [totalHours, setTotalHours] = useState(0);
+  const [totalWorkHours, setTotalWorkHours] = useState(0);
+  const [totalBreakHours, setTotalBreakHours] = useState(0);
   const initialFetchDone = useRef(false);
 
-  // Fetch all attendance history (no date filter to avoid timezone issues)
+  // Fetch all attendance records (client-side filtering avoids timezone issues)
   const fetchAllAttendance = async () => {
     setLoading(true);
     try {
-      // Option 1: fetch all (if your API supports no date param)
-      const res = await API.get(`attendance/history/`);
+      let res;
+      try {
+        res = await API.get(`attendance/history/`);
+      } catch (err) {
+        // Fallback: last 90 days
+        const endDate = new Date().toISOString().slice(0, 10);
+        const startDate = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
+        res = await API.get(`attendance/history/?start_date=${startDate}&end_date=${endDate}`);
+      }
       let data = Array.isArray(res.data) ? res.data : (res.data.results || []);
-      
-      // Option 2: if API requires a date range, fetch last 30 days
-      // const endDate = new Date().toISOString().slice(0,10);
-      // const startDate = new Date(Date.now() - 30*86400000).toISOString().slice(0,10);
-      // const res = await API.get(`attendance/history/?start_date=${startDate}&end_date=${endDate}`);
-      
+      data.sort((a, b) => new Date(b.check_in) - new Date(a.check_in));
       setAllRecords(data);
     } catch (err) {
       toast.error('Failed to load attendance records');
@@ -97,16 +90,23 @@ const StudentAttendance = () => {
     }
   };
 
-  // Filter records based on selected local date
+  // Filter records by selected local date and compute totals
   useEffect(() => {
     const filtered = allRecords.filter(rec => {
       if (!rec.check_in) return false;
-      const localDateOfRecord = getLocalDateYYYYMMDDFromTimestamp(rec.check_in);
-      return localDateOfRecord === selectedLocalDate;
+      return getLocalDateKey(rec.check_in) === selectedLocalDate;
     });
     setFilteredRecords(filtered);
-    const total = filtered.reduce((sum, rec) => sum + (rec.net_work_hours || 0), 0);
-    setTotalHours(total);
+
+    // Total work hours (all records)
+    const workTotal = filtered.reduce((sum, rec) => sum + (rec.net_work_hours || 0), 0);
+    setTotalWorkHours(workTotal);
+
+    // Total break hours: sum net_work_hours where reason contains "Break"
+    const breakTotal = filtered
+      .filter(rec => rec.check_out_reason && rec.check_out_reason.toLowerCase().includes('break'))
+      .reduce((sum, rec) => sum + (rec.net_work_hours || 0), 0);
+    setTotalBreakHours(breakTotal);
   }, [selectedLocalDate, allRecords]);
 
   // Fetch once on mount
@@ -141,10 +141,18 @@ const StudentAttendance = () => {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div>
                 <h1 className="text-2xl font-bold text-gray-800">My Attendance</h1>
-                <p className="text-gray-500 mt-1">
-                  Net work hours on <span className="font-medium">{formatDateDMY(selectedLocalDate)}</span>:
-                  <span className="ml-1 font-semibold text-green-600">{totalHours.toFixed(2)} hrs</span>
-                </p>
+                <div className="mt-2 space-y-1">
+                  <p className="text-gray-600">
+                    📅 Net work hours on <span className="font-medium">{formatDateDMY(selectedLocalDate)}</span>:
+                    <span className="ml-1 font-semibold text-green-600">{totalWorkHours.toFixed(2)} hrs</span>
+                    <span className="text-sm text-gray-400 ml-2">({formatDuration(totalWorkHours)})</span>
+                  </p>
+                  <p className="text-gray-600">
+                    ☕ Total break hours on <span className="font-medium">{formatDateDMY(selectedLocalDate)}</span>:
+                    <span className="ml-1 font-semibold text-orange-600">{totalBreakHours.toFixed(2)} hrs</span>
+                    <span className="text-sm text-gray-400 ml-2">({formatDuration(totalBreakHours)})</span>
+                  </p>
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Select Date (Calendar)</label>
@@ -179,7 +187,9 @@ const StudentAttendance = () => {
                   <tbody className="bg-white divide-y divide-gray-100">
                     {filteredRecords.map((rec, idx) => (
                       <tr key={rec.id} className={`hover:bg-gray-50 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                        <td className="px-6 py-3 text-sm text-gray-900">{getLocalDateFromTimestamp(rec.check_in)}</td>
+                        <td className="px-6 py-3 text-sm text-gray-900">
+                          {formatDateDMY(getLocalDateKey(rec.check_in))}
+                        </td>
                         <td className="px-6 py-3 text-sm text-gray-700 font-mono">{formatTimeHHMMSS(rec.check_in)}</td>
                         <td className="px-6 py-3 text-sm text-gray-700 font-mono">{formatTimeHHMMSS(rec.check_out)}</td>
                         <td className="px-6 py-3 text-sm font-medium text-green-700">
