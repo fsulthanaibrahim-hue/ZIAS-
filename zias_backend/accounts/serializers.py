@@ -148,7 +148,9 @@ class StudentSerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
-        validated_data.pop('course', None)
+        # Do NOT remove course – keep it for creation
+        # validated_data.pop('course', None)   # <-- removed
+
         username = validated_data.pop('username', None)
         email = validated_data.pop('email', None)
 
@@ -223,6 +225,7 @@ class StudentSerializer(serializers.ModelSerializer):
                 instance.user.email = email
             instance.user.save()
         return instance
+    
 
 
 # ----------------------------

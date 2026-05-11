@@ -406,7 +406,7 @@ class CourseStatus(models.Model):
     course_name = models.CharField(max_length=100, null=True, blank=True)  
     started_at = models.DateTimeField(auto_now_add=True)
     ended_at = models.DateTimeField(null=True, blank=True)
-    current_week = models.PositiveIntegerField(default=0)   # 0 means not started yet
+    current_week = models.PositiveIntegerField(default=0)   
 
     class Meta:
         unique_together = ['student', 'course_name']   # one active status per course per student
@@ -450,7 +450,7 @@ class MentorDocument(models.Model):
         super().save(*args, **kwargs)
 
 
-# models.py
+
 class ReviewAssignment(models.Model):
     STATUS_CHOICES = (
         ('assigned', 'Assigned'),
@@ -463,8 +463,8 @@ class ReviewAssignment(models.Model):
     reviewer = models.ForeignKey('Reviewer', on_delete=models.CASCADE, related_name='assigned_reviews')
     student = models.ForeignKey('Student', on_delete=models.CASCADE, related_name='review_assignments')
     review_sheet = models.URLField(max_length=500, blank=True, null=True)
-    work_documents = models.URLField(max_length=500, blank=True, null=True)   # NEW
-    week = models.CharField(max_length=10, blank=True, null=True)              # NEW
+    work_documents = models.URLField(max_length=500, blank=True, null=True)   
+    week = models.CharField(max_length=10, blank=True, null=True)              
     course = models.CharField(max_length=100, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending approval')
     comments = models.TextField(blank=True, null=True)
