@@ -1,4 +1,4 @@
-// src/components/NotificationBell.jsx
+// src/components/NotificationBell.jsx – real‑time friendly, no polling
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import API from '../api/api';
@@ -16,6 +16,7 @@ const NotificationBell = () => {
     }
   };
 
+  // Get user role once
   useEffect(() => {
     const getUserRole = async () => {
       try {
@@ -44,14 +45,21 @@ const NotificationBell = () => {
 
   useEffect(() => {
     if (!userRole) return;
+
+    // Initial fetch
     fetchUnreadCount();
-    const interval = setInterval(fetchUnreadCount, 30000);
-    // Listen for custom events to refresh immediately
+
+    // Update when window regains focus (user returns to tab)
+    const handleFocus = () => fetchUnreadCount();
+    window.addEventListener('focus', handleFocus);
+
+    // Custom events triggered after reading notifications
     const handleRefresh = () => fetchUnreadCount();
     window.addEventListener('refreshNotifications', handleRefresh);
     window.addEventListener('notificationRead', handleRefresh);
+
     return () => {
-      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
       window.removeEventListener('refreshNotifications', handleRefresh);
       window.removeEventListener('notificationRead', handleRefresh);
     };
