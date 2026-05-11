@@ -571,14 +571,20 @@ class ReviewAssignmentSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'updated_at']
 
     def get_mentor_full_name(self, obj):
-        return obj.mentor.full_name or obj.mentor.user.get_full_name() or obj.mentor.user.username
+        if obj.mentor and obj.mentor.user:
+            return obj.mentor.full_name or obj.mentor.user.get_full_name() or obj.mentor.user.username
+        return "Unknown Mentor"
 
     def get_reviewer_full_name(self, obj):
-        return obj.reviewer.full_name or obj.reviewer.user.get_full_name() or obj.reviewer.user.username
+        if obj.reviewer and obj.reviewer.user:
+            return obj.reviewer.full_name or obj.reviewer.user.get_full_name() or obj.reviewer.user.username
+        return "Unknown Reviewer"
 
     def get_student_full_name(self, obj):
-        return obj.student.full_name or obj.student.user.get_full_name() or obj.student.user.username
-    
+        if obj.student and obj.student.user:
+            return obj.student.full_name or obj.student.user.get_full_name() or obj.student.user.username
+        return "Unknown Student"
+
 
 
 class WeeklySubmissionSerializer(serializers.ModelSerializer):

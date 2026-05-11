@@ -1,13 +1,23 @@
-// src/components/NotificationBell.jsx – real‑time friendly, no polling
-import React, { useState, useEffect } from 'react';
+// src/components/NotificationBell.jsx
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import API from '../api/api';
 
 const NotificationBell = () => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [userRole, setUserRole] = useState(null);
+  
+  // Throttle: remember last fetch time
+  const lastFetchTime = useRef(0);
+  const THROTTLE_MS = 30000; // 30 seconds – adjust as needed
 
-  const fetchUnreadCount = async () => {
+  const fetchUnreadCount = async (force = false) => {
+    const now = Date.now();
+    // If not forced and last fetch was less than THROTTLE_MS ago, skip
+    if (!force && (now - lastFetchTime.current) < THROTTLE_MS) {
+      return;
+    }
+    lastFetchTime.current = now;
     try {
       const res = await API.get('notifications/unread-count/');
       setUnreadCount(res.data.unread_count);
@@ -47,13 +57,13 @@ const NotificationBell = () => {
     if (!userRole) return;
 
     // Initial fetch
-    fetchUnreadCount();
+    fetchUnreadCount(true); // force initial load
 
-    // Update when window regains focus (user returns to tab)
+    // Focus event – now throttled automatically
     const handleFocus = () => fetchUnreadCount();
     window.addEventListener('focus', handleFocus);
 
-    // Custom events triggered after reading notifications
+    // Custom events – also throttled
     const handleRefresh = () => fetchUnreadCount();
     window.addEventListener('refreshNotifications', handleRefresh);
     window.addEventListener('notificationRead', handleRefresh);

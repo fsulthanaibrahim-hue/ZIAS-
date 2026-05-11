@@ -1,5 +1,5 @@
-// src/pages/mentor/MentorAssignments.jsx – optimized (only one API call)
-import { useEffect, useState, useRef, useCallback } from "react";
+// src/pages/mentor/MentorAssignments.jsx – with Proposed Time column
+import { useEffect, useState } from "react";
 import API from "../../api/api";
 import { useAuth } from "../../context/AuthContext";
 
@@ -10,13 +10,13 @@ function MentorAssignments() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [filter, setFilter] = useState("all");
-  const fetchedRef = useRef(false);
 
-  const fetchAssignments = useCallback(async () => {
+  const fetchAssignments = async () => {
     if (!user?.id) {
       setLoading(false);
       return;
     }
+
     setLoading(true);
     setError(null);
     try {
@@ -24,6 +24,12 @@ function MentorAssignments() {
       let data = res.data;
       if (data?.results && Array.isArray(data.results)) data = data.results;
       else if (!Array.isArray(data)) data = [];
+
+      console.log("=== RAW API RESPONSE ===");
+      console.log(JSON.parse(JSON.stringify(data)));
+      console.log("Logged in user:", user);
+      console.log("Mentor ID:", user.id);
+
       setAllData(data);
     } catch (err) {
       console.error(err);
@@ -31,17 +37,11 @@ function MentorAssignments() {
     } finally {
       setLoading(false);
     }
-  }, [user?.id]);
+  };
 
-  // Only fetch once on mount and when user.id changes, but prevent duplicate if already fetched
   useEffect(() => {
-    if (user?.id && !fetchedRef.current) {
-      fetchedRef.current = true;
-      fetchAssignments();
-    } else if (!user?.id) {
-      setLoading(false);
-    }
-  }, [user?.id, fetchAssignments]);
+    fetchAssignments();
+  }, [user]);
 
   useEffect(() => {
     if (!allData.length) {
@@ -72,7 +72,7 @@ function MentorAssignments() {
   const handleAccept = async (id) => {
     try {
       await API.post(`/review-assignments/${id}/accept/`);
-      await fetchAssignments();
+      fetchAssignments();
     } catch (err) {
       alert("Failed to accept");
       console.error(err);
@@ -82,13 +82,14 @@ function MentorAssignments() {
   const handleReject = async (id) => {
     try {
       await API.post(`/review-assignments/${id}/reject/`);
-      await fetchAssignments();
+      fetchAssignments();
     } catch (err) {
       alert("Failed to reject");
       console.error(err);
     }
   };
 
+  // Extract suggested time from comments (if any)
   const getSuggestedTime = (comments) => {
     if (!comments) return null;
     const match = comments.match(/Suggested time: (.*?)(\n|$)/);
@@ -189,7 +190,7 @@ function MentorAssignments() {
                     </td>
                     <td className="px-4 py-2 text-sm">
                       {ass.review_sheet ? (
-                        <a href={ass.review_sheet} target="_blank" rel="noopener noreferrer" className="text-green-600 underline">
+                        <a href={ass.review_sheet} target="_blank" rel="noreferrer" className="text-green-600 underline">
                           Link
                         </a>
                       ) : "-"}

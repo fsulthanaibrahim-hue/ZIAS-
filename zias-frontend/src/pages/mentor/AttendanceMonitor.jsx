@@ -15,31 +15,64 @@ const AttendanceMonitor = () => {
   const [totalBreakSeconds, setTotalBreakSeconds] = useState(0);
   const [totalNetSeconds, setTotalNetSeconds] = useState(0);
 
-  // ----- FILTER STATES -----
+  // ----- DATE FILTER (local date picker) -----
+  const [selectedDate, setSelectedDate] = useState('');
+
+  // ----- OTHER FILTER STATES -----
   const [selectedWeekdays, setSelectedWeekdays] = useState([]);
   const [breakCategory, setBreakCategory] = useState('all');
   const [reasonKeyword, setReasonKeyword] = useState('');
   const [lastN, setLastN] = useState('all');
 
   const weekdayOptions = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  const weekdayMap = {
-    'Mon': 1, 'Tue': 2, 'Wed': 3, 'Thu': 4, 'Fri': 5, 'Sat': 6, 'Sun': 0
-  };
+  const weekdayMap = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 0 };
 
-  // Prevent duplicate student fetch
   const studentsFetched = useRef(false);
 
-  // Helper: format seconds to "Xh Ym Zs"
-  const formatTime = (totalSeconds) => {
-    if (!totalSeconds) return '0h 0m 0s';
+  // ---------- Helper: get local date string (YYYY-MM-DD) from timestamp ----------
+  const getLocalDateKey = (datetimeStr) => {
+    if (!datetimeStr) return '';
+    const date = new Date(datetimeStr);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  // Format seconds to "Xh Ym Zs" (consistent with student side)
+  const formatDuration = (totalSeconds) => {
+    if (!totalSeconds) return '0 hr 0 min 0 sec';
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
     const seconds = totalSeconds % 60;
-    return `${hours}h ${minutes}m ${seconds}s`;
+    const parts = [];
+    if (hours > 0) parts.push(`${hours} hr${hours !== 1 ? 's' : ''}`);
+    if (minutes > 0) parts.push(`${minutes} min${minutes !== 1 ? 's' : ''}`);
+    if (seconds > 0 || parts.length === 0) parts.push(`${seconds} sec${seconds !== 1 ? 's' : ''}`);
+    return parts.join(' ');
   };
-  const formatBreak = (minutes) => formatTime((minutes || 0) * 60);
 
-  // Fetch students only once
+  // Format datetime to HH:MM:SS (24h)
+  const formatTimeHHMMSS = (datetimeStr) => {
+    if (!datetimeStr) return '—';
+    const date = new Date(datetimeStr);
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+    return `${hours}:${minutes}:${seconds}`;
+  };
+
+  // Format date to DD/MM/YYYY
+  const formatDateDMY = (datetimeStr) => {
+    if (!datetimeStr) return '';
+    const date = new Date(datetimeStr);
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  };
+
+  // Fetch students once
   useEffect(() => {
     if (studentsFetched.current) return;
     studentsFetched.current = true;
@@ -65,7 +98,7 @@ const AttendanceMonitor = () => {
   const getStudentName = (student) =>
     student?.full_name || student?.name || student?.username || `Student ${student?.id}`;
 
-  // Fetch records when student changes
+  // Fetch all attendance for selected student (no server‑side date filter)
   useEffect(() => {
     if (selectedStudentId) {
       fetchAllAttendance();
@@ -84,7 +117,6 @@ const AttendanceMonitor = () => {
       const records = res.data.results || res.data;
       const recordsArray = Array.isArray(records) ? records : [];
       setAllRecords(recordsArray);
-      applyFilters(recordsArray);
     } catch (err) {
       toast.error('Failed to load attendance records');
     } finally {
@@ -92,10 +124,16 @@ const AttendanceMonitor = () => {
     }
   };
 
+  // Apply all filters (including date, weekday, break, reason, lastN)
   const applyFilters = (records) => {
     let filtered = [...records];
 
-    // Weekday filter
+    // 1. Date filter (local date comparison)
+    if (selectedDate) {
+      filtered = filtered.filter(rec => getLocalDateKey(rec.check_in) === selectedDate);
+    }
+
+    // 2. Weekday filter
     if (selectedWeekdays.length > 0) {
       filtered = filtered.filter(rec => {
         const day = new Date(rec.check_in).getDay();
@@ -103,7 +141,7 @@ const AttendanceMonitor = () => {
       });
     }
 
-    // Break category
+    // 3. Break category (using break_minutes)
     if (breakCategory !== 'all') {
       filtered = filtered.filter(rec => {
         const mins = rec.break_minutes || 0;
@@ -114,7 +152,7 @@ const AttendanceMonitor = () => {
       });
     }
 
-    // Reason keyword
+    // 4. Reason keyword
     if (reasonKeyword.trim()) {
       const kw = reasonKeyword.trim().toLowerCase();
       filtered = filtered.filter(rec =>
@@ -122,12 +160,11 @@ const AttendanceMonitor = () => {
       );
     }
 
-    // Last N entries
+    // 5. Last N entries (sort by check_in desc)
+    filtered.sort((a, b) => new Date(b.check_in) - new Date(a.check_in));
     if (lastN !== 'all') {
       const limit = parseInt(lastN);
-      filtered = filtered.sort((a, b) => new Date(b.check_in) - new Date(a.check_in)).slice(0, limit);
-    } else {
-      filtered = filtered.sort((a, b) => new Date(b.check_in) - new Date(a.check_in));
+      filtered = filtered.slice(0, limit);
     }
 
     setFilteredRecords(filtered);
@@ -137,10 +174,11 @@ const AttendanceMonitor = () => {
     setTotalNetSeconds(totalNetSecs);
   };
 
-  // Re‑apply filters when any filter changes
+  // Re‑apply filters when any filter or allRecords changes
   useEffect(() => {
     if (allRecords.length) applyFilters(allRecords);
-  }, [selectedWeekdays, breakCategory, reasonKeyword, lastN]);
+    else setFilteredRecords([]);
+  }, [selectedDate, selectedWeekdays, breakCategory, reasonKeyword, lastN, allRecords]);
 
   const toggleWeekday = (day) => {
     setSelectedWeekdays(prev =>
@@ -149,6 +187,7 @@ const AttendanceMonitor = () => {
   };
 
   const clearAllFilters = () => {
+    setSelectedDate('');
     setSelectedWeekdays([]);
     setBreakCategory('all');
     setReasonKeyword('');
@@ -159,7 +198,7 @@ const AttendanceMonitor = () => {
   if (studentLoading) return <div className="text-center py-8">Loading students...</div>;
 
   return (
-    <div className="bg-white rounded-xl w-screen shadow-sm p-6">
+    <div className="bg-white rounded-xl shadow-sm p-6">
       <h2 className="text-xl font-semibold text-gray-800 mb-4">📊 Student Attendance Monitor</h2>
 
       {/* Student selector */}
@@ -189,6 +228,22 @@ const AttendanceMonitor = () => {
               >
                 Clear all filters
               </button>
+            </div>
+
+            {/* Date picker (local date) */}
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">📅 Specific date (local)</label>
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+              />
+              {selectedDate && (
+                <span className="ml-2 text-xs text-gray-400">
+                  (shows records for {selectedDate.split('-').reverse().join('/')})
+                </span>
+              )}
             </div>
 
             {/* Weekdays */}
@@ -275,16 +330,14 @@ const AttendanceMonitor = () => {
                   </thead>
                   <tbody>
                     {filteredRecords.map(rec => {
-                      const checkIn = new Date(rec.check_in);
-                      const checkOut = rec.check_out ? new Date(rec.check_out) : null;
                       const netSeconds = Math.round((rec.net_work_hours || 0) * 3600);
                       return (
                         <tr key={rec.id}>
-                          <td className="border px-4 py-2">{checkIn.toLocaleDateString()}</td>
-                          <td className="border px-4 py-2">{checkIn.toLocaleTimeString()}</td>
-                          <td className="border px-4 py-2">{checkOut ? checkOut.toLocaleTimeString() : '—'}</td>
-                          <td className="border px-4 py-2 font-mono">{formatBreak(rec.break_minutes)}</td>
-                          <td className="border px-4 py-2 font-mono">{formatTime(netSeconds)}</td>
+                          <td className="border px-4 py-2">{formatDateDMY(rec.check_in)}</td>
+                          <td className="border px-4 py-2 font-mono">{formatTimeHHMMSS(rec.check_in)}</td>
+                          <td className="border px-4 py-2 font-mono">{formatTimeHHMMSS(rec.check_out)}</td>
+                          <td className="border px-4 py-2 font-mono">{formatDuration((rec.break_minutes || 0) * 60)}</td>
+                          <td className="border px-4 py-2 font-mono">{formatDuration(netSeconds)}</td>
                           <td className="border px-4 py-2">{rec.check_out_reason || '—'}</td>
                         </tr>
                       );
@@ -294,11 +347,11 @@ const AttendanceMonitor = () => {
               </div>
 
               {/* Totals */}
-              <div className="mt-4 p-3 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg flex justify-between items-center text-sm font-medium border border-green-100">
+              <div className="mt-4 p-3 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg flex flex-wrap justify-between items-center text-sm font-medium border border-green-100 gap-2">
                 <span>📊 Totals for {getStudentName(selectedStudent)} (filtered results):</span>
-                <div className="space-x-4">
-                  <span>⏱️ Total Break: <span className="font-bold text-orange-600">{formatTime(totalBreakSeconds)}</span></span>
-                  <span>⚡ Total Net Hours: <span className="font-bold text-green-700">{formatTime(totalNetSeconds)}</span></span>
+                <div className="space-x-4 flex flex-wrap gap-2">
+                  <span>⏱️ Total Break: <span className="font-bold text-orange-600">{formatDuration(totalBreakSeconds)}</span></span>
+                  <span>⚡ Total Net Hours: <span className="font-bold text-green-700">{formatDuration(totalNetSeconds)}</span></span>
                 </div>
               </div>
             </>
