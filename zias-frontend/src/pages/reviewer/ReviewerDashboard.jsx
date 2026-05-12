@@ -1,6 +1,8 @@
+// src/pages/reviewer/ReviewerDashboard.jsx
 import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import API from "../../api/api";
+import { toast } from "react-hot-toast";
 
 function ReviewerDashboard() {
   const [reviewer, setReviewer] = useState(null);
@@ -11,6 +13,7 @@ function ReviewerDashboard() {
   });
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -24,10 +27,10 @@ function ReviewerDashboard() {
         if (!isMounted) return;
         setReviewer(reviewerRes.data);
 
-        // Review folders (for stats + recent list) – handle pagination
+        // Review folders (for stats + recent list)
         const foldersRes = await API.get("/review-folders/", { signal: abortController.signal });
         if (!isMounted) return;
-        const allFolders = foldersRes.data.results || foldersRes.data;   // ✅ pagination fix
+        const allFolders = foldersRes.data.results || foldersRes.data;
         setStats({
           pendingReviews: allFolders.filter(f => !f.is_done).length,
           completedReviews: allFolders.filter(f => f.is_done).length,
@@ -35,15 +38,17 @@ function ReviewerDashboard() {
         const sorted = [...allFolders].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
         setRecentFolders(sorted.slice(0, 5));
 
-        // Fetch assignments (upcoming reviews) – handle pagination
+        // Fetch assignments – only pending/assigned for this section
         const assignmentsRes = await API.get("/review-assignments/", { signal: abortController.signal });
         if (!isMounted) return;
-        const assignmentsData = assignmentsRes.data.results || assignmentsRes.data;
+        let assignmentsData = assignmentsRes.data.results || assignmentsRes.data;
+        assignmentsData = assignmentsData.filter(a => a.status === "pending approval" || a.status === "assigned");
         setAssignments(assignmentsData);
       } catch (err) {
         if (err.name === "AbortError" || err.code === "ERR_CANCELED") return;
         console.error(err);
         if (err.response?.status === 401) navigate("/login");
+        else toast.error("Failed to load dashboard data");
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -56,15 +61,21 @@ function ReviewerDashboard() {
     };
   }, [navigate]);
 
-  const handleAssignmentResponse = async (assignmentId, action) => {
+  const handleAssignmentAction = async (assignmentId, action) => {
+    setActionLoading(assignmentId);
     try {
-      await API.patch(`/review-assignments/${assignmentId}/`, { status: action });
-      // Refresh assignments list (handle pagination)
+      await API.post(`/review-assignments/${assignmentId}/${action}/`);
+      toast.success(`Assignment ${action}ed successfully`);
+      // Refresh assignments
       const res = await API.get("/review-assignments/");
-      const assignmentsData = res.data.results || res.data;
+      let assignmentsData = res.data.results || res.data;
+      assignmentsData = assignmentsData.filter(a => a.status === "pending approval" || a.status === "assigned");
       setAssignments(assignmentsData);
     } catch (err) {
       console.error(err);
+      toast.error(`Failed to ${action} assignment`);
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -120,77 +131,71 @@ function ReviewerDashboard() {
           </div>
         </div>
 
-        {/* Upcoming Reviews (Assignments) */}
-        <div className="mb-8">
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-              <h2 className="text-lg font-semibold text-gray-800">Upcoming Reviews</h2>
-            </div>
-            <div className="divide-y divide-gray-200">
-              {assignments.length === 0 ? (
-                <div className="px-6 py-8 text-center text-gray-400">No upcoming reviews assigned.</div>
-              ) : (
-                assignments.map((ass) => (
-                  <div key={ass.id} className="px-6 py-4">
-                    <div className="flex justify-between items-start">
-                      <div className="space-y-1">
-                        <p className="font-medium text-gray-800">{ass.student_name}</p>
-                        <p className="text-sm text-gray-500">Course: {ass.course}</p>
-                        <p className="text-sm text-gray-500">
-                          Review Sheet:{" "}
-                          <a
-                            href={ass.review_sheet}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-green-600 hover:underline"
-                          >
-                            Link
-                          </a>
-                        </p>
-                        <p className="text-xs text-gray-400">
-                          Assigned: {new Date(ass.created_at).toLocaleDateString()}
-                        </p>
-                        <span
-                          className={`inline-block mt-1 px-2 py-0.5 text-xs rounded-full ${
-                            ass.status === "pending"
-                              ? "bg-yellow-100 text-yellow-800"
-                              : ass.status === "accepted"
-                              ? "bg-green-100 text-green-800"
-                              : "bg-red-100 text-red-800"
-                          }`}
-                        >
-                          {ass.status.toUpperCase()}
-                        </span>
-                      </div>
-                      {ass.status === "pending" && (
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => handleAssignmentResponse(ass.id, "accepted")}
-                            className="px-3 py-1 bg-green-600 text-white text-sm rounded-md hover:bg-green-700"
-                          >
-                            Accept
-                          </button>
-                          <button
-                            onClick={() => handleAssignmentResponse(ass.id, "rejected")}
-                            className="px-3 py-1 bg-red-600 text-white text-sm rounded-md hover:bg-red-700"
-                          >
-                            Reject
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-            {assignments.length > 0 && (
+        {/* Upcoming Reviews (Assignments) – compact table */}
+        <div className="mb-8 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+            <h2 className="text-lg font-semibold text-gray-800">Upcoming Reviews</h2>
+          </div>
+          {assignments.length === 0 ? (
+            <div className="px-6 py-12 text-center text-gray-400">No upcoming reviews assigned.</div>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Course</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assigned Date</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {assignments.map((ass) => (
+                      <tr key={ass.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {ass.student_full_name || ass.student?.full_name || "Student"}
+                        </td>
+                        <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-500">{ass.course || "—"}</td>
+                        <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-500">
+                          {new Date(ass.created_at).toLocaleDateString()}
+                        </td>
+                        <td className="px-6 py-3 whitespace-nowrap">
+                          <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                            Pending
+                          </span>
+                        </td>
+                        <td className="px-6 py-3 whitespace-nowrap text-center">
+                          <div className="flex justify-center gap-2">
+                            <button
+                              onClick={() => handleAssignmentAction(ass.id, "accept")}
+                              disabled={actionLoading === ass.id}
+                              className="px-3 py-1 bg-green-600 text-white text-xs rounded-md hover:bg-green-700 disabled:opacity-50 transition"
+                            >
+                              {actionLoading === ass.id ? "..." : "Accept"}
+                            </button>
+                            <button
+                              onClick={() => handleAssignmentAction(ass.id, "reject")}
+                              disabled={actionLoading === ass.id}
+                              className="px-3 py-1 bg-red-600 text-white text-xs rounded-md hover:bg-red-700 disabled:opacity-50 transition"
+                            >
+                              {actionLoading === ass.id ? "..." : "Reject"}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
               <div className="px-6 py-3 bg-gray-50 border-t border-gray-200 text-right">
                 <Link to="/reviewer/assignments" className="text-sm text-green-600 hover:text-green-700 font-medium">
                   View all assignments →
                 </Link>
               </div>
-            )}
-          </div>
+            </>
+          )}
         </div>
 
         {/* Recent Review Folders Table */}
@@ -264,7 +269,7 @@ function ReviewerDashboard() {
             <div className="text-sm text-gray-600 space-y-1">
               <p><span className="font-medium">Qualification:</span> {reviewer?.qualification || "—"}</p>
               <p><span className="font-medium">Experience:</span> {reviewer?.experience || "—"} years</p>
-              <p><span className="font-medium">Batch assigned:</span> {reviewer?.batch || "—"}</p>
+              <p><span className="font-medium">Batch assigned:</span> {reviewer?.batch_name || reviewer?.batch || "—"}</p>
             </div>
           </div>
         </div>
