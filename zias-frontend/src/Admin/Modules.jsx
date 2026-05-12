@@ -1,4 +1,4 @@
-// src/Admin/Modules.jsx – card grid, click card to go to detail page
+// src/Admin/Modules.jsx – card grid, click card to go to detail page (with course filter dropdown)
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import API from "../api/api";
@@ -83,6 +83,7 @@ function Modules() {
   const [editingModule, setEditingModule] = useState(null);
   const [moduleForm, setModuleForm] = useState({ course: "", title: "", content: "", is_common: true, order: "" });
   const [searchTerm, setSearchTerm] = useState("");
+  const [filterCourseId, setFilterCourseId] = useState(courseIdFromUrl || ""); // NEW: course filter
   const [user, setUser] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 9;
@@ -209,11 +210,18 @@ function Modules() {
     } catch { showToast("Error saving module", "error"); }
   };
 
-  // Filter modules by search term and course_id from URL
+  // Filter modules by search term, course filter, and optionally course_id from URL
   let filteredModules = modules.filter(mod => {
     const matchSearch = mod.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (mod.course_name || mod.course?.name || "").toLowerCase().includes(searchTerm.toLowerCase());
-    const matchCourse = courseIdFromUrl ? (mod.course == courseIdFromUrl) : true;
+    
+    // Course filter from dropdown (overrides URL)
+    let matchCourse = true;
+    if (filterCourseId && filterCourseId !== "") {
+      matchCourse = mod.course == filterCourseId;
+    } else if (courseIdFromUrl) {
+      matchCourse = mod.course == courseIdFromUrl;
+    }
     return matchSearch && matchCourse;
   });
 
@@ -229,6 +237,12 @@ function Modules() {
     else if (currentPage >= totalPages - 2) { pages.push(1); pages.push("..."); for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i); }
     else { pages.push(1); pages.push("..."); for (let i = currentPage - 1; i <= currentPage + 1; i++) pages.push(i); pages.push("..."); pages.push(totalPages); }
     return pages;
+  };
+
+  const clearFilters = () => {
+    setSearchTerm("");
+    setFilterCourseId("");
+    setCurrentPage(1);
   };
 
   const inputClass = "w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 text-sm";
@@ -323,6 +337,18 @@ function Modules() {
             <p className="text-gray-400 text-sm mt-0.5">{filteredModules.length} total · {filteredModules.length} shown</p>
           </div>
           <div className="flex flex-col sm:flex-row gap-3">
+            {/* Course filter dropdown */}
+            <select
+              value={filterCourseId}
+              onChange={(e) => { setFilterCourseId(e.target.value); setCurrentPage(1); }}
+              className="w-full sm:w-48 border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white text-gray-800 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20"
+            >
+              <option value="">All Courses</option>
+              {courses.map(course => (
+                <option key={course.id} value={course.id}>{course.name}</option>
+              ))}
+            </select>
+            {/* Search input */}
             <div className="relative">
               <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" /></svg>
               <input
@@ -345,6 +371,19 @@ function Modules() {
             </button>
           </div>
         </div>
+
+        {/* Clear filters button (if any filter active) */}
+        {(searchTerm || filterCourseId) && (
+          <div className="mb-4 flex justify-end">
+            <button
+              onClick={clearFilters}
+              className="text-sm text-emerald-600 hover:text-emerald-700 flex items-center gap-1"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              Clear all filters
+            </button>
+          </div>
+        )}
 
         {paginatedModules.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 gap-4">
