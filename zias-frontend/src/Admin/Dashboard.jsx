@@ -1,4 +1,4 @@
-// src/Admin/Dashboard.jsx – handles paginated API responses
+// src/Admin/Dashboard.jsx – handles paginated API responses & graceful error handling
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../api/api";
@@ -6,6 +6,28 @@ import { useAuth } from "../context/AuthContext";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell,
 } from "recharts";
+import { toast } from "react-hot-toast";
+
+// Helper to turn any API error into a user‑friendly message (never 5xx)
+const getFriendlyErrorMessage = (err, defaultMsg = "An error occurred") => {
+  if (!err?.response) {
+    return "Network error. Please check your connection.";
+  }
+  const status = err.response.status;
+  if (status >= 500) {
+    return "Service temporarily unavailable. Please try again later.";
+  }
+  if (status === 404) {
+    return "Resource not found.";
+  }
+  if (status === 400) {
+    return "Invalid request. Please try again.";
+  }
+  if (status === 401 || status === 403) {
+    return "You are not authorized. Please log in again.";
+  }
+  return err.response?.data?.detail || err.response?.data?.message || defaultMsg;
+};
 
 // Helper to extract array from paginated response
 const extractArray = (response) => {
@@ -110,8 +132,11 @@ function Dashboard() {
       setApiOk(true);
       setLastUpdated(new Date());
     } catch (err) {
-      console.error(err);
+      console.warn(err);
+      const friendlyMsg = getFriendlyErrorMessage(err, "Failed to load dashboard data");
+      toast.error(friendlyMsg);
       setApiOk(false);
+      // Keep previous stats or set to 0? We keep existing stats to avoid resetting.
     }
   };
 
@@ -139,13 +164,12 @@ function Dashboard() {
       });
       setApiOk(true);
       setLastUpdated(new Date());
-      setNotification("Data refreshed");
-      setTimeout(() => setNotification(null), 3000);
+      toast.success("Dashboard refreshed");
     } catch (err) {
-      console.error(err);
+      console.warn(err);
+      const friendlyMsg = getFriendlyErrorMessage(err, "Refresh failed");
+      toast.error(friendlyMsg);
       setApiOk(false);
-      setNotification("Refresh failed");
-      setTimeout(() => setNotification(null), 3000);
     }
   };
 

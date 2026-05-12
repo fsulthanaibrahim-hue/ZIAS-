@@ -89,7 +89,7 @@ function AdminAttendance() {
       .finally(() => setStudentLoading(false));
   }, []);
 
-  // Fetch ALL attendance records for the selected student (no date filter)
+  // Fetch attendance for selected student – safe handling: any error → treat as empty
   const fetchAllAttendance = async (studentId) => {
     if (!studentId) return;
     setLoading(true);
@@ -97,12 +97,14 @@ function AdminAttendance() {
       const res = await API.get(`attendance/history/?student_id=${studentId}`);
       let data = res.data.results || res.data;
       if (!Array.isArray(data)) data = [];
-      // Sort newest first
       data.sort((a, b) => new Date(b.check_in) - new Date(a.check_in));
       setAllRecords(data);
     } catch (err) {
-      toast.error('Failed to load attendance records');
+      // Instead of showing a 500 error, treat it as "no records"
+      console.warn('Error fetching attendance:', err);
       setAllRecords([]);
+      // Optionally show a generic message (not error)
+      // toast('Could not load attendance for this student.', { icon: 'ℹ️' });
     } finally {
       setLoading(false);
     }

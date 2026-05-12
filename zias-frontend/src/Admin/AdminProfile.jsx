@@ -40,17 +40,32 @@ function AdminProfile() {
     fetchProfile();
   }, []);
 
+  // Handle all API errors gracefully – no 500 shown
+  const handleApiError = (err, defaultMsg) => {
+    console.warn(err);
+    // If it's a 500 or any server error, treat it as "not found" / "bad request"
+    if (err.response?.status >= 500) {
+      return { text: "Service temporarily unavailable. Please try again later.", type: "error" };
+    }
+    if (err.response?.status === 404) {
+      return { text: "Profile not found.", type: "error" };
+    }
+    if (err.response?.status === 400) {
+      return { text: "Invalid request. Please check your data.", type: "error" };
+    }
+    return { text: err.response?.data?.detail || defaultMsg, type: "error" };
+  };
+
   const fetchProfile = async () => {
     try {
       const res = await API.get("/users/me/");
       setUser(res.data);
       setFormData({ username: res.data.username, email: res.data.email });
     } catch (err) {
-      console.error(err);
+      const errorMsg = handleApiError(err, "Failed to load profile");
+      setMessage(errorMsg);
       if (err.response?.status === 401) {
         navigate("/login");
-      } else {
-        setMessage({ text: "Failed to load profile", type: "error" });
       }
     } finally {
       setLoading(false);
@@ -71,11 +86,8 @@ function AdminProfile() {
       setMessage({ text: "Profile updated successfully", type: "success" });
       setTimeout(() => setMessage({ text: "", type: "" }), 3000);
     } catch (err) {
-      console.error(err);
-      setMessage({
-        text: err.response?.data?.detail || "Failed to update profile",
-        type: "error",
-      });
+      const errorMsg = handleApiError(err, "Failed to update profile");
+      setMessage(errorMsg);
     } finally {
       setUpdating(false);
     }

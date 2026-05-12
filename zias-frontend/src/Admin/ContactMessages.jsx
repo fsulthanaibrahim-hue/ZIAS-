@@ -1,6 +1,28 @@
 // src/Admin/ContactMessages.jsx – fetches all messages (up to 1000) using LimitOffsetPagination
 import { useEffect, useState, useRef } from "react";
 import API from "../api/api";
+import { toast } from "react-hot-toast";
+
+// Helper to turn any API error into a user‑friendly message (never 5xx)
+const getFriendlyErrorMessage = (err, defaultMsg = "An error occurred") => {
+  if (!err?.response) {
+    return "Network error. Please check your connection.";
+  }
+  const status = err.response.status;
+  if (status >= 500) {
+    return "Service temporarily unavailable. Please try again later.";
+  }
+  if (status === 404) {
+    return "Messages not found.";
+  }
+  if (status === 400) {
+    return "Invalid request. Please try again.";
+  }
+  if (status === 401 || status === 403) {
+    return "You are not authorized. Please log in again.";
+  }
+  return err.response?.data?.detail || err.response?.data?.message || defaultMsg;
+};
 
 function ContactMessages() {
   const [messages, setMessages] = useState([]);
@@ -12,8 +34,8 @@ function ContactMessages() {
   const fetched = useRef(false);
 
   const fetchMessages = async () => {
+    setLoading(true);
     try {
-      // Request a large limit to get all messages (adjust if you have more than 1000)
       const res = await API.get("recent-messages/?limit=1000");
       let data = res.data;
       let messagesArray = [];
@@ -26,12 +48,14 @@ function ContactMessages() {
       }
       setMessages(messagesArray);
     } catch (err) {
-      console.error(err);
+      const friendlyMsg = getFriendlyErrorMessage(err, "Failed to load messages");
+      toast.error(friendlyMsg);
+      console.warn(err);
+      setMessages([]);
       if (err.response?.status === 401) {
         localStorage.clear();
         window.location.href = "/login";
       }
-      setMessages([]);
     } finally {
       setLoading(false);
     }
@@ -41,19 +65,29 @@ function ContactMessages() {
     e?.stopPropagation();
     try {
       await API.patch(`contact-messages/${id}/`, { is_read: true });
-      fetchMessages();
+      await fetchMessages();
+      toast.success("Message marked as read");
     } catch (err) {
-      console.error(err);
+      const friendlyMsg = getFriendlyErrorMessage(err, "Failed to mark as read");
+      toast.error(friendlyMsg);
+      console.warn(err);
     }
   };
 
   const markAllAsRead = async () => {
     try {
       const unreadIds = messages.filter(m => !m.is_read).map(m => m.id);
+      if (unreadIds.length === 0) {
+        toast("No unread messages", { icon: "ℹ️" });
+        return;
+      }
       await Promise.all(unreadIds.map(id => API.patch(`contact-messages/${id}/`, { is_read: true })));
-      fetchMessages();
+      await fetchMessages();
+      toast.success("All messages marked as read");
     } catch (err) {
-      console.error(err);
+      const friendlyMsg = getFriendlyErrorMessage(err, "Failed to mark all as read");
+      toast.error(friendlyMsg);
+      console.warn(err);
     }
   };
 

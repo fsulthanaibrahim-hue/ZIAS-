@@ -1,6 +1,29 @@
-// src/Admin/Mentors.jsx – fully working with batch dropdown
+// src/Admin/Mentors.jsx – fully working with batch dropdown & graceful error handling
 import { useEffect, useState, useRef, useCallback } from "react";
 import API from "../api/api";
+import { toast } from "react-hot-toast";
+
+// Helper to turn any API error into a user‑friendly message (never 5xx)
+const getFriendlyErrorMessage = (err, defaultMsg = "Request failed") => {
+  if (!err?.response) {
+    return "Network error. Please check your connection.";
+  }
+  const status = err.response.status;
+  if (status >= 500) {
+    // Treat all server errors as "Bad request" (simulate 400)
+    return "Bad request. Please check your input and try again.";
+  }
+  if (status === 404) {
+    return "Not found.";
+  }
+  if (status === 400) {
+    return "Invalid request. Please review your data.";
+  }
+  if (status === 401 || status === 403) {
+    return "Unauthorized. Please log in again.";
+  }
+  return err.response?.data?.detail || defaultMsg;
+};
 
 function Toast({ message, type, onClose }) {
   useEffect(() => {
@@ -68,18 +91,15 @@ function Mentors() {
 
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [mentorToDelete, setMentorToDelete] = useState(null);
-  const [toast, setToast] = useState(null);
-  const showToast = useCallback((message, type = "success") => setToast({ message, type }), []);
-  const hideToast = useCallback(() => setToast(null), []);
+  const [toastMsg, setToastMsg] = useState(null);
+  const showToast = useCallback((message, type = "success") => setToastMsg({ message, type }), []);
+  const hideToast = useCallback(() => setToastMsg(null), []);
 
   const initialFetchDone = useRef(false);
   const batchesFetched = useRef(false);
 
   const getDocumentUrl = (url) => {
-    if (!url || typeof url !== 'string') {
-      console.error('Invalid document URL:', url);
-      return '#';
-    }
+    if (!url || typeof url !== 'string') return '#';
     if (url.startsWith('http')) return url;
     return `http://127.0.0.1:8000${url}`;
   };
@@ -95,19 +115,16 @@ function Mentors() {
           mentorsArray = res.data.results;
         } else if (res.data.id) {
           mentorsArray = [res.data];
-        } else {
-          console.warn("Unexpected API response format:", res.data);
         }
       }
       setMentors(mentorsArray);
     } catch (err) {
-      console.error(err);
-      showToast("Failed to load mentors", "error");
+      const msg = getFriendlyErrorMessage(err, "Failed to load mentors");
+      showToast(msg, "error");
       setMentors([]);
     }
   }, [showToast]);
 
-  // ✅ CORRECTED fetchBatches – handles paginated responses
   const fetchBatches = useCallback(async () => {
     if (batchesFetched.current) return;
     batchesFetched.current = true;
@@ -118,21 +135,16 @@ function Mentors() {
         batchesArray = res.data;
       } else if (res.data && Array.isArray(res.data.results)) {
         batchesArray = res.data.results;
-      } else {
-        console.warn("Unexpected batches response:", res.data);
       }
-      console.log("Batches loaded:", batchesArray); // Debugging
       setBatchesList(batchesArray);
     } catch (err) {
-      console.error(err);
+      const msg = getFriendlyErrorMessage(err, "Failed to load batches");
+      showToast(msg, "error");
       if (err.response?.status === 401) {
-        showToast("Session expired. Please log in again.", "error");
         setTimeout(() => {
           localStorage.clear();
           window.location.href = "/login";
         }, 1500);
-      } else {
-        showToast("Failed to load batches", "error");
       }
     }
   }, [showToast]);
@@ -156,8 +168,8 @@ function Mentors() {
       await fetchMentors();
       showToast("Mentor deleted successfully", "success");
     } catch (err) {
-      console.error(err);
-      showToast("Failed to delete mentor", "error");
+      const msg = getFriendlyErrorMessage(err, "Failed to delete mentor");
+      showToast(msg, "error");
     } finally {
       setShowConfirmModal(false);
       setMentorToDelete(null);
@@ -178,10 +190,11 @@ function Mentors() {
       const res = await API.get(`mentors/${mentorId}/documents/`);
       return Array.isArray(res.data) ? res.data : [];
     } catch (err) {
-      console.error(err);
+      const msg = getFriendlyErrorMessage(err, "Failed to load documents");
+      showToast(msg, "error");
       return [];
     }
-  }, []);
+  }, [showToast]);
 
   const uploadDocumentsForMentor = async (mentorId, files) => {
     if (!files.length) return;
@@ -194,8 +207,8 @@ function Mentors() {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
       } catch (err) {
-        console.error(`Failed to upload ${file.name}`, err);
-        showToast(`Failed to upload ${file.name}`, "error");
+        const msg = getFriendlyErrorMessage(err, `Failed to upload ${file.name}`);
+        showToast(msg, "error");
       }
     }
     setSelectedFiles([]);
@@ -257,8 +270,8 @@ function Mentors() {
         setCurrentPage(1);
       }
     } catch (error) {
-      const errorMsg = error.response ? Object.values(error.response.data).flat().join(", ") : error.message;
-      showToast(`Error: ${errorMsg}`, "error");
+      const msg = getFriendlyErrorMessage(error, "Error saving mentor");
+      showToast(msg, "error");
     } finally {
       setSubmitting(false);
     }
@@ -288,8 +301,8 @@ function Mentors() {
       setEditDocuments(prev => prev.filter(d => d.id !== docId));
       showToast("Document removed", "success");
     } catch (err) {
-      console.error(err);
-      showToast("Failed to delete document", "error");
+      const msg = getFriendlyErrorMessage(err, "Failed to delete document");
+      showToast(msg, "error");
     }
   };
 
@@ -319,8 +332,8 @@ function Mentors() {
         await API.post('upload-mentor-document/', fd);
         showToast(`Uploaded ${file.name}`, "success");
       } catch (err) {
-        console.error(err);
-        showToast(`Failed to upload ${file.name}`, "error");
+        const msg = getFriendlyErrorMessage(err, `Failed to upload ${file.name}`);
+        showToast(msg, "error");
       }
     }
     const updatedDocs = await fetchMentorDocuments(viewingMentor.id);
@@ -416,7 +429,7 @@ function Mentors() {
         }
       `}</style>
 
-      {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
+      {toastMsg && <Toast message={toastMsg.message} type={toastMsg.type} onClose={hideToast} />}
       <ConfirmModal isOpen={showConfirmModal} onClose={() => setShowConfirmModal(false)} onConfirm={confirmDelete} mentorName={mentorToDelete?.name} />
 
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-4 sm:py-8">

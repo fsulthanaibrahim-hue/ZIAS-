@@ -4,24 +4,50 @@ import { useParams, useNavigate } from 'react-router-dom';
 import API from '../api/api';
 import { toast } from 'react-hot-toast';
 
+// Helper to turn any API error into a user‑friendly message (never 5xx)
+const getFriendlyErrorMessage = (err, defaultMsg = "An error occurred") => {
+  if (!err?.response) {
+    return "Network error. Please check your connection.";
+  }
+  const status = err.response.status;
+  if (status >= 500) {
+    return "Service temporarily unavailable. Please try again later.";
+  }
+  if (status === 404) {
+    return "Message not found.";
+  }
+  if (status === 400) {
+    return "Invalid request. Please try again.";
+  }
+  if (status === 401 || status === 403) {
+    return "You are not authorized to view this message.";
+  }
+  return err.response?.data?.detail || err.response?.data?.message || defaultMsg;
+};
+
 const ContactMessageDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [message, setMessage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     fetchMessage();
   }, [id]);
 
   const fetchMessage = async () => {
+    setLoading(true);
+    setError(null);
     try {
       const res = await API.get(`contact-messages/${id}/`);
       setMessage(res.data);
     } catch (err) {
-      console.error(err);
-      toast.error('Failed to load message');
+      const friendlyMsg = getFriendlyErrorMessage(err, "Failed to load message");
+      setError(friendlyMsg);
+      toast.error(friendlyMsg);
+      console.warn(err); // log for debugging, never shown to user
     } finally {
       setLoading(false);
     }
@@ -35,7 +61,8 @@ const ContactMessageDetail = () => {
       setMessage(prev => ({ ...prev, is_read: true }));
       toast.success('Marked as read');
     } catch (err) {
-      toast.error('Failed to update');
+      const friendlyMsg = getFriendlyErrorMessage(err, "Failed to mark as read");
+      toast.error(friendlyMsg);
     } finally {
       setUpdating(false);
     }
@@ -54,10 +81,16 @@ const ContactMessageDetail = () => {
     );
   }
 
-  if (!message) {
+  if (error || !message) {
     return (
       <div className="text-center py-12">
-        <p className="text-gray-500">Message not found.</p>
+        <p className="text-gray-500">{error || "Message not found."}</p>
+        <button
+          onClick={() => navigate('/admin/messages')}
+          className="mt-4 text-emerald-600 hover:underline"
+        >
+          ← Back to Messages
+        </button>
       </div>
     );
   }

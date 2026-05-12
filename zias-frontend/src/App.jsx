@@ -54,6 +54,8 @@ import AdminProfile from "./Admin/AdminProfile";
 import ContactMessageDetail from "./Admin/ContactMessageDetail";
 import ReviewFoldersAdmin from "./Admin/ReviewFoldersAdmin";
 import AdminAttendance from "./Admin/AdminAttendance";
+import ModuleDetail from "./Admin/ModuleDetail";
+
 
 // Common pages
 import Navbar from "./components/Navbar";
@@ -71,6 +73,8 @@ import NotificationPage from "./components/NotificationPage";
 import StudentSidebar from "./components/StudentSidebar";
 import MentorSidebar from "./components/MentorSidebar";
 import ReviewerSidebar from "./components/ReviewerSidebar";
+
+
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem("access_token");
@@ -328,6 +332,7 @@ function App() {
         <Route path="/admin/contact-messages/:id" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><ContactMessageDetail /></div></AdminRoute>} />
         <Route path="/admin/review-folders" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><ReviewFoldersAdmin /></div></AdminRoute>} />
         <Route path="/admin/attendance" element={<AdminRoute><div style={{display:"flex"}}><AdminAttendance /></div></AdminRoute>} />
+        <Route path="/admin/module/:id" element={<AdminRoute><div style={{ display: "flex" }}><Sidebar /><ModuleDetail /></div></AdminRoute>} />
 
         {/* 404 page */}
         <Route path="*" element={

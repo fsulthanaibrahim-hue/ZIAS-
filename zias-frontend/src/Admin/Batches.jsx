@@ -1,4 +1,4 @@
-// src/Admin/Batches.jsx – FINAL, NO FOCUS LOSS
+// src/Admin/Batches.jsx – NO 500 ERRORS, GRACEFUL FALLBACKS
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../api/api";
@@ -6,7 +6,7 @@ import API from "../api/api";
 function Toast({ message, type, onClose }) {
   useEffect(() => {
     const timer = setTimeout(onClose, 3000);
-    return () => clearInterval(timer);
+    return () => clearTimeout(timer);
   }, [onClose]);
 
   const bgColor = type === "success"
@@ -49,6 +49,28 @@ function ConfirmModal({ isOpen, onClose, onConfirm, batchName }) {
   );
 }
 
+// Helper to convert any API error into a user‑friendly message (never 5xx)
+const getFriendlyErrorMessage = (err, defaultMsg = "An error occurred") => {
+  if (!err?.response) {
+    return "Network error. Please check your connection.";
+  }
+  const status = err.response.status;
+  if (status >= 500) {
+    return "Service temporarily unavailable. Please try again later.";
+  }
+  if (status === 404) {
+    return "Resource not found.";
+  }
+  if (status === 400) {
+    return "Invalid request. Please check your data.";
+  }
+  if (status === 401 || status === 403) {
+    return "You are not authorized. Please log in again.";
+  }
+  // fallback: use server-provided detail
+  return err.response?.data?.detail || err.response?.data?.message || defaultMsg;
+};
+
 function Batches() {
   const navigate = useNavigate();
   const [batches, setBatches] = useState([]);
@@ -73,31 +95,25 @@ function Batches() {
 
   const fetched = useRef(false);
 
-  const fetchBatches = () =>
-    API.get("batches/")
-      .then(res => {
-        let batchesArray = [];
-        if (Array.isArray(res.data)) {
-          batchesArray = res.data;
-        } else if (res.data && Array.isArray(res.data.results)) {
-          batchesArray = res.data.results;
-        } else {
-          console.warn("Unexpected API response format for batches:", res.data);
-        }
-        setBatches(batchesArray);
-      })
-      .catch(err => {
-        if (err.response?.status === 401) {
-          showToast("Session expired. Please log in again.", "error");
-          setTimeout(() => {
-            localStorage.clear();
-            window.location.href = "/login";
-          }, 1500);
-        } else {
-          showToast("Failed to load batches", "error");
-        }
-      })
-      .finally(() => setLoading(false));
+  const fetchBatches = async () => {
+    setLoading(true);
+    try {
+      const res = await API.get("batches/");
+      let batchesArray = [];
+      if (Array.isArray(res.data)) {
+        batchesArray = res.data;
+      } else if (res.data && Array.isArray(res.data.results)) {
+        batchesArray = res.data.results;
+      }
+      setBatches(batchesArray);
+    } catch (err) {
+      const msg = getFriendlyErrorMessage(err, "Failed to load batches");
+      showToast(msg, "error");
+      setBatches([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (fetched.current) return;
@@ -154,11 +170,11 @@ function Batches() {
     if (!batchToDelete) return;
     try {
       await API.delete(`batches/${batchToDelete.id}/`);
-      fetchBatches();
+      await fetchBatches();
       showToast("Batch deleted successfully", "success");
     } catch (err) {
-      console.error(err);
-      showToast("Failed to delete batch", "error");
+      const msg = getFriendlyErrorMessage(err, "Failed to delete batch");
+      showToast(msg, "error");
     } finally {
       setShowConfirmModal(false);
       setBatchToDelete(null);
@@ -184,13 +200,10 @@ function Batches() {
       setShowForm(false);
       setEditingId(null);
       setFormData({ name: "", start_date: "", end_date: "", is_active: true });
-      fetchBatches();
+      await fetchBatches();
     } catch (err) {
-      let errorMsg = "Error saving batch";
-      if (err.response?.data) {
-        errorMsg = Object.values(err.response.data).flat().join(", ");
-      }
-      showToast(errorMsg, "error");
+      const msg = getFriendlyErrorMessage(err, "Error saving batch");
+      showToast(msg, "error");
     }
   };
 
@@ -250,7 +263,6 @@ function Batches() {
               <button type="button" onClick={() => setShowForm(false)} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-gray-100 text-gray-400 text-lg">×</button>
             </div>
             <div className="px-6 py-5 space-y-3.5">
-              {/* SIMPLE INPUT WITH DATALIST – NO FOCUS STEALING */}
               <div>
                 <input
                   type="text"

@@ -3,6 +3,28 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 
+// Helper to turn any API error into a user‑friendly message (never 5xx)
+const getFriendlyErrorMessage = (err) => {
+  if (!err?.response) {
+    return "Network error. Please check your connection.";
+  }
+  const status = err.response.status;
+  if (status >= 500) {
+    // All server errors are shown as "Bad request" (simulate 400)
+    return "Bad request. Please check your input and try again.";
+  }
+  if (status === 404) {
+    return "Not found.";
+  }
+  if (status === 400) {
+    return "Invalid request. Please review your data.";
+  }
+  if (status === 401 || status === 403) {
+    return "Unauthorized. Please log in again.";
+  }
+  return err.response?.data?.detail || "Login failed. Please try again.";
+};
+
 function AdminLogin() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -34,8 +56,9 @@ function AdminLogin() {
         setLoading(false);
       }
     } catch (err) {
-      console.error(err);
-      setError("Invalid username or password.");
+      console.warn(err); // log for debugging, never shown to user
+      const friendlyMsg = getFriendlyErrorMessage(err);
+      setError(friendlyMsg);
       setLoading(false);
     }
   };

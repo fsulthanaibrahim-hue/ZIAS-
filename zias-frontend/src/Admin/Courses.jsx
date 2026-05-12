@@ -2,6 +2,28 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../api/api";
+import { toast } from "react-hot-toast";
+
+// Helper to turn any API error into a user‑friendly message (never 5xx)
+const getFriendlyErrorMessage = (err, defaultMsg = "An error occurred") => {
+  if (!err?.response) {
+    return "Network error. Please check your connection.";
+  }
+  const status = err.response.status;
+  if (status >= 500) {
+    return "Service temporarily unavailable. Please try again later.";
+  }
+  if (status === 404) {
+    return "Course not found.";
+  }
+  if (status === 400) {
+    return "Invalid request. Please check your data.";
+  }
+  if (status === 401 || status === 403) {
+    return "You are not authorized. Please log in again.";
+  }
+  return err.response?.data?.detail || err.response?.data?.message || defaultMsg;
+};
 
 function Toast({ message, type, onClose }) {
   useEffect(() => {
@@ -126,12 +148,9 @@ function CourseFormModal({ isOpen, onClose, editingCourse, onSave }) {
       onSave(); // refresh parent list
       onClose();
     } catch (err) {
-      let errorMsg = "Error saving course";
-      if (err.response?.data) {
-        errorMsg = Object.values(err.response.data).flat().join(", ");
-      }
-      console.error(errorMsg);
-      // you can add toast here if needed
+      const friendlyMsg = getFriendlyErrorMessage(err, "Error saving course");
+      toast.error(friendlyMsg);
+      console.warn(err);
     } finally {
       setSubmitting(false);
     }
@@ -209,9 +228,9 @@ function Courses() {
 
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [courseToDelete, setCourseToDelete] = useState(null);
-  const [toast, setToast] = useState(null);
-  const showToast = (msg, type = "success") => setToast({ message: msg, type });
-  const hideToast = () => setToast(null);
+  const [toastMsg, setToastMsg] = useState(null);
+  const showToast = (msg, type = "success") => setToastMsg({ message: msg, type });
+  const hideToast = () => setToastMsg(null);
 
   const fetched = useRef(false);
   const searchInputRef = useRef(null);
@@ -222,19 +241,18 @@ function Courses() {
         setCourses(extractCoursesArray(res));
       })
       .catch(err => {
-        console.error(err);
+        const friendlyMsg = getFriendlyErrorMessage(err, "Failed to load courses");
+        showToast(friendlyMsg, "error");
+        console.warn(err);
         if (err.response?.status === 401) {
-          showToast("Session expired. Please log in again.", "error");
           setTimeout(() => {
             localStorage.clear();
             window.location.href = "/login";
           }, 1500);
-        } else {
-          showToast("Failed to load courses", "error");
         }
       })
       .finally(() => setLoading(false));
-  }, [showToast]);
+  }, []);
 
   useEffect(() => {
     if (fetched.current) return;
@@ -290,11 +308,12 @@ function Courses() {
     if (!courseToDelete) return;
     try {
       await API.delete(`courses/${courseToDelete.id}/`);
-      fetchCourses();
+      await fetchCourses();
       showToast("Course deleted successfully", "success");
     } catch (err) {
-      console.error(err);
-      showToast("Failed to delete course", "error");
+      const friendlyMsg = getFriendlyErrorMessage(err, "Failed to delete course");
+      showToast(friendlyMsg, "error");
+      console.warn(err);
     } finally {
       setShowConfirmModal(false);
       setCourseToDelete(null);
@@ -345,7 +364,7 @@ function Courses() {
         .duration-pill { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
       `}</style>
 
-      {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
+      {toastMsg && <Toast message={toastMsg.message} type={toastMsg.type} onClose={hideToast} />}
       <ConfirmModal isOpen={showConfirmModal} onClose={() => setShowConfirmModal(false)} onConfirm={confirmDelete} courseName={courseToDelete?.name} />
 
       {/* Separate modal component – no focus loss */}
