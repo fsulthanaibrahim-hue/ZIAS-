@@ -709,6 +709,14 @@ function MentorReviewFolders() {
                         <div className="flex gap-2 justify-center">
                           <button onClick={() => startEdit(entry)} className="text-blue-600 hover:text-blue-800"><Icons.Edit /></button>
                           <button onClick={() => deleteEntry(entry.id)} className="text-red-600 hover:text-red-800"><Icons.Delete /></button>
+                          <button
+                            onClick={() => refreshWorkDoc(entry.id, entry.student, entry.week)}
+                            disabled={refreshingDocId === entry.id}
+                            className="text-purple-600 hover:text-purple-800"
+                            title="Refresh work document from student module"
+                          >
+                            {refreshingDocId === entry.id ? <div className="w-4 h-4 border-2 border-purple-600 border-t-transparent rounded-full animate-spin" /> : <Icons.Refresh />}
+                          </button>
                         </div>
                       )}
                     </td>
@@ -732,5 +740,6 @@ function MentorReviewFolders() {
     </div>
   );
 }
+
 
 export default MentorReviewFolders;

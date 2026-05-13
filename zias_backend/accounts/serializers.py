@@ -3,6 +3,7 @@ import string
 import re
 from django.core.mail import send_mail
 from django.utils import timezone
+from django.db import transaction
 from django.conf import settings
 from django.db import IntegrityError
 from django.template.loader import render_to_string
@@ -147,44 +148,71 @@ class StudentSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("Phone number must be exactly 10 digits.")
         return value
 
-    def create(self, validated_data):
-        # Do NOT remove course – keep it for creation
-        # validated_data.pop('course', None)   # <-- removed
+    def _generate_username(self, full_name, email):
+        """Generate a unique username from full_name or email prefix."""
+        base = full_name.lower().replace(' ', '').replace('-', '') if full_name else ''
+        if not base and email:
+            base = email.split('@')[0]
+        if not base:
+            base = 'student'
+        username = base[:30]
+        counter = 1
+        while User.objects.filter(username=username).exists():
+            username = f"{base[:27]}{counter}"
+            counter += 1
+        return username
 
+    def create(self, validated_data):
+        # Do NOT pop 'course' – it will be saved with the student
         username = validated_data.pop('username', None)
         email = validated_data.pop('email', None)
+        full_name = validated_data.get('full_name', '')
 
-        if not username or not email:
-            raise serializers.ValidationError({"detail": "Username and email are required for new students."})
+        if not email:
+            raise serializers.ValidationError({"email": "Email is required."})
+
+        if not username:
+            username = self._generate_username(full_name, email)
 
         random_password = generate_random_password()
-        try:
-            user = User.objects.create_user(username=username, email=email, password=random_password)
-        except IntegrityError:
-            raise serializers.ValidationError({"username": "A user with this username already exists."})
-        user.is_student = True
-        user.password_changed_at = timezone.now()
-        user.save()
 
-        request = self.context.get('request')
-        if request and request.user.is_mentor:
+        # Use transaction to ensure atomicity: if anything fails, no user is created and no email sent
+        with transaction.atomic():
             try:
-                mentor = Mentor.objects.get(user=request.user)
-                validated_data['mentor'] = mentor
-                validated_data['student_batch'] = mentor.batch
-            except Mentor.DoesNotExist:
-                pass
+                user = User.objects.create_user(username=username, email=email, password=random_password)
+            except IntegrityError:
+                username = self._generate_username(full_name + str(User.objects.count()), email)
+                user = User.objects.create_user(username=username, email=email, password=random_password)
 
-        student = Student.objects.create(user=user, **validated_data)
+            user.is_student = True
+            user.password_changed_at = timezone.now()
+            user.save()
 
-        if student.batch and not student.student_batch:
-            try:
-                batch_obj = Batch.objects.get(name=student.batch)
-                student.student_batch = batch_obj
-                student.save(update_fields=['student_batch'])
-            except Batch.DoesNotExist:
-                pass
+            # Mentor assignment (if any)
+            request = self.context.get('request')
+            mentor_id = self.initial_data.get('mentor') if hasattr(self, 'initial_data') else None
+            mentor_obj = None
+            if mentor_id:
+                try:
+                    mentor_obj = Mentor.objects.get(id=mentor_id)
+                except Mentor.DoesNotExist:
+                    pass
+            if not mentor_obj and request and request.user.is_mentor:
+                try:
+                    mentor_obj = Mentor.objects.get(user=request.user)
+                except Mentor.DoesNotExist:
+                    pass
+            if mentor_obj:
+                validated_data['mentor'] = mentor_obj
+                validated_data['student_batch'] = mentor_obj.batch
 
+            # Create student (course is still in validated_data)
+            student = Student.objects.create(user=user, **validated_data)
+
+            # If any exception occurs before this point, the transaction will roll back
+            # and no email will be sent.
+
+        # Send email only after the transaction is successfully committed
         expiry_days = settings.PASSWORD_EXPIRY_DAYS
         domain = getattr(settings, 'SITE_DOMAIN', 'YOUR_DOMAIN.com')
         context = {'username': username, 'password': random_password, 'expiry_days': expiry_days, 'domain': domain}
