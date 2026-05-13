@@ -7,6 +7,7 @@ import { useAuth } from "../../context/AuthContext";
 const DEFAULT_REVIEW_SHEET_URL = "";
 
 // --------------------------------------------------------------
+// Modal for adding week folder (same as admin side)
 // Modal for adding week folder (unchanged)
 // --------------------------------------------------------------
 function AddWeekModal({ isOpen, onClose, batchStudents, batchName, onCreate, creating }) {
@@ -134,6 +135,7 @@ function AddWeekModal({ isOpen, onClose, batchStudents, batchName, onCreate, cre
 }
 
 // --------------------------------------------------------------
+// Main component
 // Main component - optimized
 // --------------------------------------------------------------
 function MentorReviewFolders() {
@@ -156,7 +158,7 @@ function MentorReviewFolders() {
   const [creatingWeek, setCreatingWeek] = useState(false);
   const [refreshingDocId, setRefreshingDocId] = useState(null);
 
-  // Refs to prevent duplicate API calls
+ 
   const initialDataFetched = useRef(false);
   const reviewersFetched = useRef(false);
   const mentorDataFetched = useRef(false);
@@ -176,7 +178,7 @@ function MentorReviewFolders() {
     }
   }, []);
 
-  // ----- Fetch mentor's students and folders together (once) -----
+
   const fetchMentorData = useCallback(async () => {
     if (mentorDataFetched.current) return;
     mentorDataFetched.current = true;
@@ -196,6 +198,7 @@ function MentorReviewFolders() {
       }));
       setStudentsList(mappedStudents);
 
+
       if (mappedStudents.length === 0) {
         setAllFolders([]);
         setError("No students assigned to you. Please contact the admin.");
@@ -214,6 +217,7 @@ function MentorReviewFolders() {
     } finally {
       setLoading(false);
     }
+    
   }, []);
 
   // ----- Combined initial fetch -----
@@ -298,6 +302,7 @@ function MentorReviewFolders() {
     }
   };
 
+  // ----- Refresh work document for an existing entry -----
   // ----- Refresh work doc for an existing entry -----
   const refreshWorkDoc = async (entryId, studentId, weekNumber) => {
     setRefreshingDocId(entryId);
@@ -308,6 +313,7 @@ function MentorReviewFolders() {
         return;
       }
       await API.patch(`/review-folders/${entryId}/`, { work_documents: newUrl });
+      await fetchMentorFolders();
       await refreshData();
       alert("Work document refreshed successfully.");
     } catch (err) {
@@ -333,6 +339,7 @@ function MentorReviewFolders() {
         await API.patch(`/review-folders/${entry.id}/`, { week_folder: newName.trim() });
       }
       if (selectedFolder === oldName) setSelectedFolder(newName.trim());
+      await fetchMentorFolders();
       await refreshData();
       alert(`Folder renamed to "${newName}"`);
     } catch (err) {
@@ -350,6 +357,7 @@ function MentorReviewFolders() {
         await API.delete(`/review-folders/${entry.id}/`);
       }
       if (selectedFolder === folderName) setSelectedFolder(null);
+      await fetchMentorFolders();
       await refreshData();
       alert(`Folder "${folderName}" deleted.`);
     } catch (err) {
@@ -447,10 +455,12 @@ function MentorReviewFolders() {
     }
     alert(`Created ${successCount} entries for "${folderName}" (${errorCount} failed)`);
     setShowAddWeekModal(false);
+    await fetchMentorFolders();
     await refreshData();
     setCreatingWeek(false);
   };
 
+  // ----- Entry actions (edit/delete/toggle) -----
   // ----- Entry actions -----
   const startEdit = (entry) => {
     setEditingId(entry.id);
@@ -496,6 +506,7 @@ function MentorReviewFolders() {
     }
     try {
       await API.patch(`/review-folders/${id}/`, payload);
+      await fetchMentorFolders();
       await refreshData();
       cancelEdit();
     } catch (err) {
@@ -507,6 +518,7 @@ function MentorReviewFolders() {
     if (window.confirm("Delete this entry?")) {
       try {
         await API.delete(`/review-folders/${id}/`);
+        await fetchMentorFolders();
         await refreshData();
         alert("Entry deleted successfully.");
       } catch (err) {
@@ -518,6 +530,7 @@ function MentorReviewFolders() {
   const toggleDone = async (id, newValue) => {
     try {
       await API.patch(`/review-folders/${id}/`, { is_done: newValue });
+      await fetchMentorFolders();
       await refreshData();
     } catch (err) {
       alert("Failed to update status");
@@ -709,6 +722,7 @@ function MentorReviewFolders() {
                         <div className="flex gap-2 justify-center">
                           <button onClick={() => startEdit(entry)} className="text-blue-600 hover:text-blue-800"><Icons.Edit /></button>
                           <button onClick={() => deleteEntry(entry.id)} className="text-red-600 hover:text-red-800"><Icons.Delete /></button>
+
                           <button
                             onClick={() => refreshWorkDoc(entry.id, entry.student, entry.week)}
                             disabled={refreshingDocId === entry.id}
