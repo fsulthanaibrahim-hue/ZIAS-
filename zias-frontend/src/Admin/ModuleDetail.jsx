@@ -1,8 +1,9 @@
-// src/Admin/ModuleDetail.jsx
+// src/Admin/ModuleDetail.jsx – with icon buttons for edit/delete
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import API from "../api/api";
 
+// ---------- Toast & Modal components (unchanged) ----------
 function Toast({ message, type, onClose }) {
   useEffect(() => {
     const timer = setTimeout(onClose, 3000);
@@ -137,6 +138,7 @@ function TaskModal({ isOpen, onClose, initialTask, onSave }) {
   );
 }
 
+// ---------- Main component with icon buttons ----------
 function ModuleDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -349,18 +351,26 @@ function ModuleDetail() {
                         <p className="font-medium">Day {idx + 1}: {day.title}</p>
                         {day.content && <p className="text-gray-500 text-sm mt-1">{day.content}</p>}
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-3">
+                        {/* Edit icon */}
                         <button
                           onClick={(e) => { e.stopPropagation(); setDayModal({ isOpen: true, initialDay: day }); }}
-                          className="text-blue-500 text-sm"
+                          className="text-blue-500 hover:text-blue-700 transition-colors"
+                          title="Edit day"
                         >
-                          Edit
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
                         </button>
+                        {/* Delete icon */}
                         <button
                           onClick={(e) => { e.stopPropagation(); setDayToDelete(day); setShowDayConfirm(true); }}
-                          className="text-red-500 text-sm"
+                          className="text-red-500 hover:text-red-700 transition-colors"
+                          title="Delete day"
                         >
-                          Delete
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
                         </button>
                       </div>
                     </div>
@@ -386,18 +396,26 @@ function ModuleDetail() {
                                   {task.description && <p className="text-gray-500 text-xs mt-0.5">{task.description}</p>}
                                   <p className="text-gray-400 text-xs mt-0.5">Order: {task.order}</p>
                                 </div>
-                                <div className="flex gap-2">
+                                <div className="flex gap-3">
+                                  {/* Edit icon for task */}
                                   <button
                                     onClick={() => setTaskModal({ isOpen: true, initialTask: task, dayId: day.id })}
-                                    className="text-blue-500 text-xs"
+                                    className="text-blue-500 hover:text-blue-700 transition-colors"
+                                    title="Edit task"
                                   >
-                                    Edit
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                    </svg>
                                   </button>
+                                  {/* Delete icon for task */}
                                   <button
                                     onClick={() => { setTaskToDelete(task); setShowTaskConfirm(true); }}
-                                    className="text-red-500 text-xs"
+                                    className="text-red-500 hover:text-red-700 transition-colors"
+                                    title="Delete task"
                                   >
-                                    Delete
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
                                   </button>
                                 </div>
                               </div>
