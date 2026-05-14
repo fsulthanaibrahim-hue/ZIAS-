@@ -1,4 +1,4 @@
-// src/pages/student/InOutRegister.jsx – optimized (no duplicate API calls)
+// src/pages/student/InOutRegister.jsx – fully optimized & error‑handled
 import React, { useState, useEffect, useRef } from 'react';
 import API from '../../api/api';
 import { toast } from 'react-hot-toast';
@@ -12,7 +12,7 @@ const InOutRegister = ({ showHistory = true }) => {
   const [breakMinutes, setBreakMinutes] = useState(0);
   const [checkOutReason, setCheckOutReason] = useState('');
   const [liveTime, setLiveTime] = useState(new Date());
-  const fetchedRef = useRef(false);  // ✅ prevent duplicate fetch
+  const fetchedRef = useRef(false);
 
   // Live clock
   useEffect(() => {
@@ -20,19 +20,17 @@ const InOutRegister = ({ showHistory = true }) => {
     return () => clearInterval(timer);
   }, []);
 
-  // Single function to fetch attendance data (both active record and history)
+  // Fetch attendance data (active record + history)
   const fetchAttendanceData = async () => {
     try {
       const res = await API.get('attendance/history/');
       let records = Array.isArray(res.data) ? res.data : (res.data.results || []);
-      // Sort descending by check-in time
       records.sort((a, b) => new Date(b.check_in) - new Date(a.check_in));
-      // Find open record (no check-out)
       const openRecord = records.find(r => r.check_out === null);
       setActiveRecord(openRecord || null);
       if (showHistory) setHistory(records);
     } catch (err) {
-      console.error(err);
+      console.error('Fetch error:', err);
       toast.error('Failed to load attendance data');
     } finally {
       setLoading(false);
@@ -46,7 +44,7 @@ const InOutRegister = ({ showHistory = true }) => {
     fetchAttendanceData();
   }, []);
 
-  // Refresh after check-in / check-out (reuse same fetch)
+  // Refresh after check‑in/out
   const refreshData = async () => {
     setLoading(true);
     await fetchAttendanceData();
@@ -61,6 +59,7 @@ const InOutRegister = ({ showHistory = true }) => {
     } catch (err) {
       const msg = err.response?.data?.detail || err.response?.data?.message || 'Check-in failed';
       toast.error(msg);
+      console.error(err.response?.data);
     } finally {
       setChecking(false);
     }
@@ -69,18 +68,36 @@ const InOutRegister = ({ showHistory = true }) => {
   const handleCheckOutSubmit = async () => {
     setChecking(true);
     try {
-      await API.patch('attendance/check-out/', {
-        break_minutes: breakMinutes,
-        check_out_reason: checkOutReason,
-      });
+      // Force integer, default 0
+      const minutes = parseInt(breakMinutes, 10) || 0;
+      const payload = {
+        break_minutes: minutes,
+        check_out_reason: checkOutReason || ''
+      };
+      console.log('Check-out payload:', payload);
+
+      // Use PUT (the view supports both, but PUT is standard for full update)
+      await API.put('attendance/check-out/', payload);
       toast.success('Checked out successfully');
       setShowCheckOutModal(false);
       setBreakMinutes(0);
       setCheckOutReason('');
       await refreshData();
     } catch (err) {
-      const msg = err.response?.data?.detail || err.response?.data?.message || 'Check-out failed';
-      toast.error(msg);
+      console.error('Check-out error details:', err.response?.data);
+      let errorMsg = 'Check-out failed';
+      if (err.response?.data) {
+        // DRF often returns { "break_minutes": ["Enter a whole number."] } etc.
+        const data = err.response.data;
+        if (typeof data === 'object') {
+          errorMsg = Object.values(data).flat().join(', ');
+        } else if (data.detail) {
+          errorMsg = data.detail;
+        } else if (data.message) {
+          errorMsg = data.message;
+        }
+      }
+      toast.error(errorMsg);
     } finally {
       setChecking(false);
     }
@@ -115,7 +132,9 @@ const InOutRegister = ({ showHistory = true }) => {
             </button>
           )}
         </div>
-        <p className="text-sm text-gray-500">{isCheckedIn ? 'You are currently checked in' : 'You are currently checked out'}</p>
+        <p className="text-sm text-gray-500">
+          {isCheckedIn ? 'You are currently checked in' : 'You are currently checked out'}
+        </p>
       </div>
 
       {/* Check-out Modal */}
@@ -129,7 +148,7 @@ const InOutRegister = ({ showHistory = true }) => {
                 type="number"
                 min="0"
                 value={breakMinutes}
-                onChange={(e) => setBreakMinutes(parseInt(e.target.value) || 0)}
+                onChange={(e) => setBreakMinutes(e.target.value === '' ? 0 : parseInt(e.target.value, 10))}
                 className="w-full border rounded px-3 py-2"
                 placeholder="e.g., 30"
               />
@@ -145,14 +164,25 @@ const InOutRegister = ({ showHistory = true }) => {
               />
             </div>
             <div className="flex justify-end gap-2">
-              <button onClick={() => setShowCheckOutModal(false)} className="px-4 py-2 bg-gray-200 rounded">Cancel</button>
-              <button onClick={handleCheckOutSubmit} className="px-4 py-2 bg-green-600 text-white rounded">Confirm Check Out</button>
+              <button
+                onClick={() => setShowCheckOutModal(false)}
+                className="px-4 py-2 bg-gray-200 rounded"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCheckOutSubmit}
+                disabled={checking}
+                className="px-4 py-2 bg-green-600 text-white rounded disabled:opacity-50"
+              >
+                Confirm Check Out
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* History table – only shown if showHistory === true */}
+      {/* History Table */}
       {showHistory && history.length > 0 && (
         <div className="mt-6">
           <h3 className="text-lg font-medium text-gray-700 mb-2">Recent Activity</h3>
@@ -169,7 +199,7 @@ const InOutRegister = ({ showHistory = true }) => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {history.map(record => {
+                {history.map((record) => {
                   const checkIn = new Date(record.check_in);
                   const checkOut = record.check_out ? new Date(record.check_out) : null;
                   return (
@@ -177,7 +207,7 @@ const InOutRegister = ({ showHistory = true }) => {
                       <td className="px-4 py-2 text-sm">{checkIn.toLocaleDateString()}</td>
                       <td className="px-4 py-2 text-sm">{checkIn.toLocaleTimeString()}</td>
                       <td className="px-4 py-2 text-sm">{checkOut ? checkOut.toLocaleTimeString() : '—'}</td>
-                      <td className="px-4 py-2 text-sm">{record.break_minutes || 0}</td>
+                      <td className="px-4 py-2 text-sm">{record.break_minutes ?? 0}</td>
                       <td className="px-4 py-2 text-sm">{(record.net_work_hours || 0).toFixed(2)} hrs</td>
                       <td className="px-4 py-2 text-sm">{record.check_out_reason || '—'}</td>
                     </tr>

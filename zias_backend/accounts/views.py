@@ -1575,14 +1575,23 @@ class CheckOutView(SafeAPIView, generics.UpdateAPIView):
         return record
 
     def perform_update(self, serializer):
-        break_minutes = int(self.request.data.get('break_minutes', 0))
+        # Safe conversion for break_minutes
+        raw_break = self.request.data.get('break_minutes', 0)
+        try:
+            break_minutes = int(raw_break)
+        except (TypeError, ValueError):
+            break_minutes = 0
+        # Ensure non-negative
+        break_minutes = max(0, break_minutes)
+
         check_out_reason = self.request.data.get('check_out_reason', '')
+
         serializer.save(
             check_out=timezone.now(),
             break_minutes=break_minutes,
             check_out_reason=check_out_reason
         )
-
+        
 
 class AttendanceHistoryView(SafeAPIView, generics.ListAPIView):
     serializer_class = AttendanceRecordSerializer

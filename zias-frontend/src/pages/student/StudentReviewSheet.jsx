@@ -1,4 +1,4 @@
-// src/pages/student/StudentReviewSheet.jsx – optimized (no duplicate calls)
+// src/pages/student/StudentReviewSheet.jsx – only current week (based on progress) is editable
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import API from "../../api/api";
@@ -69,13 +69,13 @@ function StudentReviewSheet() {
   const [editingVideoWeek, setEditingVideoWeek] = useState(null);
   const [tempVideoUrl, setTempVideoUrl] = useState("");
   const [savingVideo, setSavingVideo] = useState(false);
+  const [currentWeekNumber, setCurrentWeekNumber] = useState(null); // Only editable week for students
 
-  // Refs to prevent duplicate API calls
   const roleFetched = useRef(false);
   const studentsFetched = useRef(false);
   const dataFetched = useRef(false);
 
-  // Fetch user role once
+  // Fetch user role
   useEffect(() => {
     if (roleFetched.current) return;
     roleFetched.current = true;
@@ -94,9 +94,9 @@ function StudentReviewSheet() {
     fetchUser();
   }, []);
 
-  // For admin/reviewer: fetch students list once
+  // For admin/reviewer/mentor: fetch students list once
   useEffect(() => {
-    const isReviewer = userRole === "admin" || userRole === "reviewer";
+    const isReviewer = userRole === "admin" || userRole === "reviewer" || userRole === "mentor";
     if (!isReviewer || studentsFetched.current) return;
     if (studentIdFromUrl) {
       setSelectedStudentId(parseInt(studentIdFromUrl));
@@ -114,7 +114,7 @@ function StudentReviewSheet() {
     fetchStudents();
   }, [userRole, studentIdFromUrl]);
 
-  // Fetch weeks and reviews (only once per student)
+  // Fetch weeks and reviews
   const fetchData = useCallback(async () => {
     if (!userRole) return;
     const isReviewer = userRole === "admin" || userRole === "mentor" || userRole === "reviewer";
@@ -123,15 +123,16 @@ function StudentReviewSheet() {
     setLoading(true);
     setError(null);
     try {
-      // Get weeks
       let modulesUrl = "modules/student-modules/";
       if (isReviewer && selectedStudentId) modulesUrl += `?student_id=${selectedStudentId}`;
       const modulesRes = await API.get(modulesUrl);
       let allWeeks = modulesRes.data;
+      // If response is paginated
+      if (allWeeks.results) allWeeks = allWeeks.results;
       allWeeks.sort((a, b) => extractWeekNumber(a.title) - extractWeekNumber(b.title));
       setWeeks(allWeeks);
 
-      // Get reviews for each week (sequential, but only once)
+      // Fetch reviews for each week
       const reviewsData = {};
       for (const week of allWeeks) {
         let reviewUrl = `week-review/${week.id}/`;
@@ -144,6 +145,22 @@ function StudentReviewSheet() {
         }
       }
       setReviews(reviewsData);
+
+      // Compute current week for student (only if role is student)
+      if (userRole === "student") {
+        let lastCompleted = 0;
+        for (const week of allWeeks) {
+          const weekNum = extractWeekNumber(week.title);
+          const review = reviewsData[week.id];
+          if (review && review.task_status === "Task Completed") {
+            if (weekNum > lastCompleted) lastCompleted = weekNum;
+          }
+        }
+        const current = lastCompleted + 1;
+        // Only set if current week exists within the weeks list
+        const maxWeek = allWeeks.length ? Math.max(...allWeeks.map(w => extractWeekNumber(w.title))) : 0;
+        setCurrentWeekNumber(current <= maxWeek ? current : null);
+      }
     } catch (err) {
       console.error(err);
       setError("Failed to load review data.");
@@ -154,9 +171,8 @@ function StudentReviewSheet() {
 
   useEffect(() => {
     if (!userRole) return;
-    if (dataFetched.current && (!(userRole === "admin" || userRole === "reviewer") || selectedStudentId)) return;
-    // Only reset dataFetched when student ID changes (for reviewer)
-    if (userRole === "admin" || userRole === "reviewer") {
+    // Reset dataFetched when student changes for reviewer
+    if (userRole !== "student") {
       dataFetched.current = false;
     }
     if (!dataFetched.current) {
@@ -166,7 +182,7 @@ function StudentReviewSheet() {
   }, [userRole, selectedStudentId, fetchData]);
 
   const isStudent = userRole === "student";
-  const isAdminOrReviewer = userRole === "admin" || userRole === "reviewer";
+  const isAdminOrReviewer = userRole === "admin" || userRole === "reviewer" || userRole === "mentor";
   const showDropdown = isAdminOrReviewer && !studentIdFromUrl && students.length > 0;
 
   const rows = [
@@ -204,8 +220,19 @@ function StudentReviewSheet() {
     }
   };
 
+  // Determine if a week is editable: for students, only the week matching currentWeekNumber
+  const isWeekEditable = (weekId) => {
+    if (!isStudent) return true; // Admin/mentor/reviewer can edit all
+    if (!currentWeekNumber) return false;
+    const week = weeks.find(w => w.id === weekId);
+    if (!week) return false;
+    const weekNum = extractWeekNumber(week.title);
+    return weekNum === currentWeekNumber;
+  };
+
   const renderCell = (weekId, row) => {
     const value = reviews[weekId]?.[row.field] ?? "";
+    const editable = isWeekEditable(weekId);
 
     if (isStudent && row.field === "progress_video") {
       if (editingVideoWeek === weekId) {
@@ -244,21 +271,23 @@ function StudentReviewSheet() {
           ) : (
             <span className="text-gray-400">—</span>
           )}
-          <button
-            onClick={() => {
-              setEditingVideoWeek(weekId);
-              setTempVideoUrl(value);
-            }}
-            className="text-gray-500 hover:text-green-600 transition-colors p-1 rounded-full hover:bg-gray-100"
-            title="Edit video link"
-          >
-            <EditIcon />
-          </button>
+          {editable && (
+            <button
+              onClick={() => {
+                setEditingVideoWeek(weekId);
+                setTempVideoUrl(value);
+              }}
+              className="text-gray-500 hover:text-green-600 transition-colors p-1 rounded-full hover:bg-gray-100"
+              title="Edit video link"
+            >
+              <EditIcon />
+            </button>
+          )}
         </div>
       );
     }
 
-    if (row.field === "progress_video" && value) {
+    if (row.field === "progress_video" && value && !isStudent) {
       return <a href={value} target="_blank" rel="noopener noreferrer" className="text-green-600 underline break-all">Link</a>;
     }
     return <div className="whitespace-pre-wrap break-words px-2 py-1">{value || "—"}</div>;
@@ -343,11 +372,18 @@ function StudentReviewSheet() {
                 <thead className="bg-gray-50 border-b">
                   <tr>
                     <th className="sticky left-0 bg-gray-50 z-10 px-4 py-3 text-left text-gray-500 text-xs font-semibold uppercase w-48">FIELD / WEEK</th>
-                    {weeks.map(week => (
-                      <th key={week.id} className="px-3 py-3 text-left text-gray-800 text-sm font-medium min-w-[200px] border-l border-gray-200">
-                        {cleanTitle(week.title)}
-                      </th>
-                    ))}
+                    {weeks.map(week => {
+                      const weekNum = extractWeekNumber(week.title);
+                      const isCurrent = isStudent && weekNum === currentWeekNumber;
+                      return (
+                        <th key={week.id} className="px-3 py-3 text-left text-gray-800 text-sm font-medium min-w-[200px] border-l border-gray-200">
+                          {cleanTitle(week.title)}
+                          {isStudent && isCurrent && (
+                            <span className="ml-2 text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">Current</span>
+                          )}
+                        </th>
+                      );
+                    })}
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-100">
@@ -393,7 +429,7 @@ function StudentReviewSheet() {
           {isStudent && (
             <>
               <div className="mt-6 bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-                <h3 className="text-sm font-semibold text-gray-800 mb-2">Personal Details</h3>
+                <h3 className="text-sm font-semibold text-gray-800 mb-2">Week Range Links</h3>
                 <div className="flex flex-wrap gap-4 text-xs">
                   {[
                     { label: "Week 0 - 12", start: 1, end: 12 },
@@ -414,7 +450,10 @@ function StudentReviewSheet() {
                 </div>
               </div>
               <div className="mt-4 text-right text-gray-400 text-xs">
-                💡 Your weekly progress report. Click the edit icon next to the video link to update it.
+                💡 Your weekly progress report. <strong>Only the current week (Week {currentWeekNumber || "—"}) is editable.</strong> Click the edit icon next to the video link to update it.
+                {currentWeekNumber === null && weeks.length > 0 && (
+                  <div className="mt-1 text-amber-600">⚠️ No active week available – all weeks are completed or not started yet.</div>
+                )}
                 {weeks.length < 44 && (
                   <div className="mt-1 text-amber-600">⚠️ Only {weeks.length} weeks available. Please create weeks 1‑44 in the admin panel.</div>
                 )}

@@ -1,5 +1,6 @@
 // src/pages/reviewer/ReviewerAssignments.jsx
 import { useEffect, useState, useRef } from "react";
+import { Link } from "react-router-dom";
 import API from "../../api/api";
 
 function ReviewerAssignments() {
@@ -73,6 +74,7 @@ function ReviewerAssignments() {
                 <th className="px-4 py-2 text-left">Course</th>
                 <th className="px-4 py-2 text-left">Review Date</th>
                 <th className="px-4 py-2 text-left">Proposed Time</th>
+                <th className="px-4 py-2 text-left">Review Sheet</th>
                 <th className="px-4 py-2 text-left">Status</th>
                 <th className="px-4 py-2 text-left">Actions</th>
               </tr>
@@ -82,6 +84,7 @@ function ReviewerAssignments() {
                 const existingTime = getSuggestedTime(ass.comments);
                 const isAssigned = ass.status === "assigned";
                 const showSuggest = isAssigned && suggestTimeForId === ass.id;
+                const studentId = ass.student_id || ass.student;
                 return (
                   <tr key={ass.id} className="border-t hover:bg-gray-50">
                     <td className="px-4 py-2">{ass.student_full_name || "—"}</td>
@@ -100,6 +103,19 @@ function ReviewerAssignments() {
                         />
                       ) : (existingTime || "—")}
                     </td>
+                    {/* Dedicated Review Sheet column */}
+                    <td className="px-4 py-2">
+                      {studentId ? (
+                        <Link
+                          to={`/reviewer/review-sheet?student_id=${studentId}`}
+                          className="text-indigo-600 hover:text-indigo-800 underline"
+                        >
+                          View Sheet
+                        </Link>
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
+                    </td>
                     <td className="px-4 py-2">
                       <span className={`px-2 py-1 rounded-full text-xs ${
                         ass.status === "assigned" ? "bg-blue-100 text-blue-800" :
@@ -110,6 +126,8 @@ function ReviewerAssignments() {
                         {ass.status === "pending approval" ? "Pending Approval" : ass.status}
                       </span>
                     </td>
+                    
+                    {/* Actions column */}
                     <td className="px-4 py-2">
                       {isAssigned && (
                         showSuggest ? (

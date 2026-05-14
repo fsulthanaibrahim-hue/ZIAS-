@@ -1,4 +1,6 @@
-// src/pages/reviewer/ReviewerReviewSheet.jsx – working save (no bulk endpoint)
+// src/pages/reviewer/ReviewerReviewSheet.jsx
+// ✅ Only weeks up to and including the student's current week are editable.
+//    Future weeks are read‑only (plain text).
 import { useEffect, useState, useRef, useMemo } from "react";
 import { useSearchParams, Link, useNavigate, useLocation } from "react-router-dom";
 import toast from "react-hot-toast";
@@ -48,9 +50,10 @@ function ReviewerReviewSheet() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [currentWeekNumber, setCurrentWeekNumber] = useState(null);
   const dataFetched = useRef(false);
 
-  // Only editable fields for reviewers
+  // Editable fields for reviewers (only when week is ≤ currentWeekNumber)
   const rows = useMemo(() => [
     { label: "Status", field: "task_status", type: "select", options: ["Task Completed", "Task Need Improvement", "Task Critical", "Task Not Completed"], editable: true },
     { label: "Project Updates", field: "feedback", type: "textarea", editable: true },
@@ -68,6 +71,30 @@ function ReviewerReviewSheet() {
 
   const editableFields = rows.filter(r => r.editable).map(r => r.field);
 
+  // Compute current week (same logic as mentor/student side)
+  const computeCurrentWeek = (weeksList, reviewsMap) => {
+    let lastCompleted = 0;
+    for (const week of weeksList) {
+      const weekNum = extractWeekNumber(week.title);
+      const review = reviewsMap[week.id];
+      if (review && review.task_status === "Task Completed") {
+        if (weekNum > lastCompleted) lastCompleted = weekNum;
+      }
+    }
+    const current = lastCompleted + 1;
+    const maxWeek = weeksList.length ? Math.max(...weeksList.map(w => extractWeekNumber(w.title))) : 0;
+    if (lastCompleted === 0 && weeksList.length > 0) return 1;
+    return current <= maxWeek ? current : null;
+  };
+
+  const isWeekEditable = (weekId) => {
+    if (!currentWeekNumber) return false;
+    const week = weeks.find(w => w.id === weekId);
+    if (!week) return false;
+    const weekNum = extractWeekNumber(week.title);
+    return weekNum <= currentWeekNumber;
+  };
+
   const getWeekComputed = (weekId) => {
     const data = reviews[weekId] || {};
     const review = data.review_score || 0;
@@ -78,6 +105,9 @@ function ReviewerReviewSheet() {
   };
 
   const handleChange = (weekId, field, value) => {
+    // Only allow change if the week is editable (≤ currentWeekNumber)
+    if (!isWeekEditable(weekId)) return;
+
     const row = rows.find(r => r.field === field);
     if (!row?.editable) return;
     let processed = value;
@@ -104,6 +134,9 @@ function ReviewerReviewSheet() {
 
     for (const week of weeks) {
       const weekId = week.id;
+      // Only save changes for weeks that are editable (≤ currentWeekNumber)
+      if (!isWeekEditable(weekId)) continue;
+
       const original = originalReviews[weekId] || {};
       const current = reviews[weekId] || {};
       const changedFields = {};
@@ -121,7 +154,6 @@ function ReviewerReviewSheet() {
       try {
         await API.patch(`week-review/${weekId}/?student_id=${studentId}`, changedFields);
         anySuccess = true;
-        // Update originalReviews with the new values to avoid re-saving unchanged later
         setOriginalReviews(prev => ({
           ...prev,
           [weekId]: { ...prev[weekId], ...changedFields }
@@ -141,7 +173,8 @@ function ReviewerReviewSheet() {
       toast("No changes to save.", { icon: "ℹ️" });
     }
     setSaving(false);
-    // Refresh all reviews to keep consistency
+
+    // Refresh all reviews
     const freshReviews = {};
     for (const week of weeks) {
       try {
@@ -153,6 +186,9 @@ function ReviewerReviewSheet() {
     }
     setReviews(freshReviews);
     setOriginalReviews(JSON.parse(JSON.stringify(freshReviews)));
+    // Recompute current week (in case task_status changed)
+    const newCurrent = computeCurrentWeek(weeks, freshReviews);
+    setCurrentWeekNumber(newCurrent);
   };
 
   // Load weeks and reviews
@@ -168,6 +204,7 @@ function ReviewerReviewSheet() {
         try {
           const modulesRes = await API.get(`modules/student-modules/?student_id=${studentId}`);
           let allWeeks = modulesRes.data;
+          if (allWeeks.results) allWeeks = allWeeks.results;
           allWeeks.sort((a, b) => extractWeekNumber(a.title) - extractWeekNumber(b.title));
           setWeeks(allWeeks);
           const reviewsData = {};
@@ -181,6 +218,8 @@ function ReviewerReviewSheet() {
           }
           setReviews(reviewsData);
           setOriginalReviews(JSON.parse(JSON.stringify(reviewsData)));
+          const current = computeCurrentWeek(allWeeks, reviewsData);
+          setCurrentWeekNumber(current);
         } catch (err) {
           toast.error("Failed to load review data.");
           setError("Failed to load review data.");
@@ -198,10 +237,12 @@ function ReviewerReviewSheet() {
     let value = reviews[weekId]?.[row.field] ?? "";
     if (row.type === "number" && (value === null || value === undefined || value === "")) value = "";
     if (row.type === "number" && typeof value === "number") value = value.toString();
-    const isEditable = row.editable === true;
+
+    const isEditable = row.editable && isWeekEditable(weekId);
     const onChange = (val) => handleChange(weekId, row.field, val);
     const inputClass = "w-full bg-white border border-gray-300 rounded px-2 py-1 text-sm text-gray-800 focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none";
 
+    // Non-editable or week not allowed → show plain text or link
     if (!isEditable) {
       let displayValue = value;
       if (row.type === "number" && displayValue === "") displayValue = "—";
@@ -214,6 +255,7 @@ function ReviewerReviewSheet() {
       return <div className="text-gray-800 text-sm py-1 px-1 whitespace-pre-wrap break-words">{displayValue === "" ? "—" : displayValue}</div>;
     }
 
+    // Editable controls (only for weeks ≤ currentWeekNumber)
     if (row.type === "select") {
       return (
         <select value={value} onChange={e => onChange(e.target.value)} className={inputClass}>
@@ -262,7 +304,9 @@ function ReviewerReviewSheet() {
             <p className="text-gray-500 text-sm mt-1">
               {studentName} • {studentCourse} • {studentBatch}
             </p>
-            <p className="text-xs text-amber-600 mt-1">✏️ Editable: Status, Project Updates, Review Score, Reviewer Name</p>
+            <p className="text-xs text-amber-600 mt-1">
+              ✏️ Editable only for weeks ≤ current week (Week {currentWeekNumber || "—"}). Future weeks are read‑only.
+            </p>
           </div>
           <div className="flex gap-2">
             <button onClick={() => navigate("/reviewer/assignments")} className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium">← Back to Assignments</button>
@@ -276,9 +320,16 @@ function ReviewerReviewSheet() {
             <thead className="bg-gray-50 border-b">
               <tr>
                 <th className="sticky left-0 bg-gray-50 z-10 px-4 py-3 text-left text-gray-500 text-xs font-semibold uppercase w-48">FIELD / WEEK</th>
-                {weeks.map(week => (
-                  <th key={week.id} className="px-3 py-3 text-left text-gray-800 text-sm font-medium min-w-[200px] border-l border-gray-200">{cleanTitle(week.title)}</th>
-                ))}
+                {weeks.map(week => {
+                  const weekNum = extractWeekNumber(week.title);
+                  const isEditable = weekNum <= currentWeekNumber;
+                  return (
+                    <th key={week.id} className="px-3 py-3 text-left text-gray-800 text-sm font-medium min-w-[200px] border-l border-gray-200">
+                      {cleanTitle(week.title)}
+                      {!isEditable && <span className="ml-2 text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">Future</span>}
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-100">
@@ -329,10 +380,16 @@ function ReviewerReviewSheet() {
         {/* Mobile Cards */}
         <div className="md:hidden space-y-6">
           {weeks.map(week => {
+            const weekNum = extractWeekNumber(week.title);
+            const isEditable = weekNum <= currentWeekNumber;
             const { total, stars } = getWeekComputed(week.id);
             return (
               <div key={week.id} className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-                <h2 className="text-lg font-semibold text-gray-800 mb-3 border-b pb-2">{cleanTitle(week.title)}</h2>
+                <h2 className="text-lg font-semibold text-gray-800 mb-3 border-b pb-2">
+                  {cleanTitle(week.title)}
+                  {!isEditable && <span className="ml-2 text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">Future (read‑only)</span>}
+                  {isEditable && <span className="ml-2 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Editable</span>}
+                </h2>
                 <div className="space-y-3">
                   {rows.map(row => (
                     <div key={row.field} className="flex flex-col gap-1">
@@ -372,7 +429,8 @@ function ReviewerReviewSheet() {
           </div>
         </div>
         <div className="mt-4 text-right text-gray-400 text-xs">
-          💡 Total Score = Review Score (0‑20) + Extra Workouts Mark (0‑5) + English Score (0‑5) + Progress Video Mark (0‑5) → max 35. Star rating updates automatically.
+          💡 Total Score = Review Score (0‑20) + Extra Workouts Mark (0‑5) + English Score (0‑5) + Progress Video Mark (0‑5) → max 35. Star rating updates automatically.<br />
+          ✏️ <strong>Only weeks up to and including the student's current week (Week {currentWeekNumber || "—"}) are editable.</strong> Future weeks are read‑only.
         </div>
       </div>
     </div>
