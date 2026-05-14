@@ -1015,19 +1015,12 @@ class ReviewFolderViewSet(SafeViewSet, viewsets.ModelViewSet):
             defaults={
                 'course': course,
                 'review_sheet': review_folder.review_sheet or "",
-                'status': 'pending approval',
+                'status': 'assigned',
             }
         )
         if not created:
-            updated = False
-            if assignment.course != course:
-                assignment.course = course
-                updated = True
-            if assignment.review_sheet != (review_folder.review_sheet or ""):
-                assignment.review_sheet = review_folder.review_sheet or ""
-                updated = True
-            if updated:
-                assignment.save()
+            pass 
+
 
         if created:
             Notification.objects.create(
@@ -1292,7 +1285,7 @@ class MentorDocumentDeleteView(SafeAPIView):
 
 
 # ----------------------------
-# REVIEW ASSIGNMENT VIEWSET
+# REVIEW ASSIGNMENT VIEWSET (UPDATED)
 # ----------------------------
 class ReviewAssignmentViewSet(SafeViewSet, viewsets.ModelViewSet):
     queryset = ReviewAssignment.objects.all()
@@ -1310,16 +1303,22 @@ class ReviewAssignmentViewSet(SafeViewSet, viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        print(f"User: {user.username}, is_mentor: {user.is_mentor}, is_reviewer: {user.is_reviewer}")
         try:
             if user.is_mentor:
                 mentor = Mentor.objects.get(user=user)
-                return ReviewAssignment.objects.filter(mentor=mentor)
+                qs = ReviewAssignment.objects.filter(mentor=mentor)
+                print(f"Mentor {mentor} found: {qs.count()} assignments")
+                return qs
             elif user.is_reviewer:
                 reviewer = Reviewer.objects.get(user=user)
-                return ReviewAssignment.objects.filter(reviewer=reviewer)
+                qs = ReviewAssignment.objects.filter(reviewer=reviewer)
+                print(f"Reviewer {reviewer} found: {qs.count()} assignments")
+                return qs
             elif user.is_admin:
                 return ReviewAssignment.objects.all()
-        except (Mentor.DoesNotExist, Reviewer.DoesNotExist):
+        except (Mentor.DoesNotExist, Reviewer.DoesNotExist) as e:
+            print(f"Profile missing: {e}")
             return ReviewAssignment.objects.none()
         return ReviewAssignment.objects.none()
 
@@ -1338,11 +1337,12 @@ class ReviewAssignmentViewSet(SafeViewSet, viewsets.ModelViewSet):
         assignment = serializer.save(
             mentor=mentor,
             reviewer=reviewer,
-            status='pending approval',
+            status='assigned',
             work_documents=work_documents or None,
             week=week or None
         )
 
+        # Notify reviewer
         Notification.objects.create(
             user=reviewer.user,
             message=f"New review assignment from {mentor.full_name or mentor.user.username} for student {assignment.student.full_name or assignment.student.user.username} (Course: {assignment.course or assignment.student.course})",
@@ -1420,11 +1420,11 @@ class ReviewAssignmentViewSet(SafeViewSet, viewsets.ModelViewSet):
         assignment = self.get_object()
         user = request.user
 
-        is_reviewer = user.is_reviewer and assignment.reviewer.user == user
-        is_mentor_creator = user.is_mentor and assignment.mentor.user == user
+        if not (user.is_reviewer and assignment.reviewer.user == user):
+            return Response({"error": "Only the assigned reviewer can suggest a time"}, status=status.HTTP_403_FORBIDDEN)
 
-        if not (is_reviewer or is_mentor_creator):
-            return Response({"error": "Not allowed"}, status=status.HTTP_403_FORBIDDEN)
+        if assignment.status != 'assigned':
+            return Response({"error": f"Cannot suggest time when status is {assignment.status}"}, status=status.HTTP_400_BAD_REQUEST)
 
         proposed_time = request.data.get('proposed_time', '')
         if not proposed_time:
@@ -1434,7 +1434,15 @@ class ReviewAssignmentViewSet(SafeViewSet, viewsets.ModelViewSet):
         cleaned = re.sub(r'Suggested time:.*?(\n|$)', '', current_comments).strip()
         new_comments = f"{cleaned}\nSuggested time: {proposed_time}".strip()
         assignment.comments = new_comments
-        assignment.save(update_fields=['comments'])
+        assignment.status = 'pending approval'
+        assignment.save(update_fields=['comments', 'status'])
+
+        Notification.objects.create(
+            user=assignment.mentor.user,
+            message=f"Reviewer {assignment.reviewer.full_name or assignment.reviewer.user.username} suggested a time ({proposed_time}) for {assignment.student.full_name or assignment.student.user.username}.",
+            link="/mentor/assignments",
+            is_read=False
+        )
 
         return Response({"status": "time suggested", "comments": new_comments})
 
