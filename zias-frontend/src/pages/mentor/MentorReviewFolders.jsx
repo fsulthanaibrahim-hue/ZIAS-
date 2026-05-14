@@ -638,14 +638,6 @@ function MentorReviewFolders() {
                 onChange={(e) => setEntriesSearchTerm(e.target.value)}
                 className="w-48 border border-gray-300 rounded-lg px-3 py-1 text-sm"
               />
-              <select
-                value={selectedWeek}
-                onChange={(e) => setSelectedWeek(e.target.value)}
-                className="border border-gray-300 rounded-lg px-3 py-1 text-sm"
-              >
-                <option value="">All Weeks</option>
-                {[...new Set(rawEntries.map(e => e.week))].filter(w => w != null).sort().map(w => <option key={w} value={w}>Week {w}</option>)}
-              </select>
             </div>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-x-auto">
