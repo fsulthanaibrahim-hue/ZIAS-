@@ -1,4 +1,4 @@
-// src/Admin/Students.jsx – Elegant Light Green Theme
+// src/Admin/Students.jsx – first letter only in profile circles
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import API from "../api/api";
@@ -356,6 +356,13 @@ function Students() {
     setViewerDocuments(docs);
   };
 
+  // Helper: get first letter of name (or username)
+  const getFirstLetter = (name) => {
+    if (!name) return "?";
+    const first = name.trim().charAt(0);
+    return first.toUpperCase();
+  };
+
   const filteredStudents = students.filter(s => {
     const term = searchTerm.toLowerCase();
     const matchesSearch =
@@ -383,9 +390,6 @@ function Students() {
     else { pages.push(1); pages.push("..."); for (let i = currentPage - 1; i <= currentPage + 1; i++) pages.push(i); pages.push("..."); pages.push(totalPages); }
     return pages;
   };
-
-  const getInitials = (name) =>
-    (name || "?").split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
 
   // ─── Shared styles ───────────────────────────────────────────────────────
   const inputCls =
@@ -650,7 +654,7 @@ function Students() {
           </div>
         )}
 
-        {/* ── View Student Modal ──────────────────────────────────────────── */}
+        {/* ── View Student Modal (first letter in circle) ──────────────────── */}
         {viewingStudent && (
           <div
             className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4"
@@ -662,8 +666,9 @@ function Students() {
             >
               <div className="sticky top-0 bg-white px-6 py-4 border-b border-green-100 rounded-t-2xl flex justify-between items-center">
                 <div className="flex items-center gap-3">
+                  {/* First letter circle */}
                   <div className="w-10 h-10 rounded-full bg-green-600 flex items-center justify-center text-white font-semibold text-sm shadow-sm">
-                    {getInitials(viewingStudent.full_name || viewingStudent.username)}
+                    {getFirstLetter(viewingStudent.full_name || viewingStudent.username)}
                   </div>
                   <div>
                     <h3 className="font-semibold text-gray-800 text-sm">{viewingStudent.full_name || viewingStudent.username}</h3>
@@ -770,9 +775,8 @@ function Students() {
           </div>
         )}
 
-        {/* ── Students Table ─────────────────────────────────────────────── */}
+        {/* ── Students Table (first letter in circle) ─────────────────────── */}
         <div className="bg-white rounded-2xl border border-green-100 overflow-hidden shadow-sm">
-          {/* Table top stripe */}
           <div className="h-1 bg-gradient-to-r from-green-500 to-green-300" />
 
           <table className="student-table min-w-full">
@@ -801,8 +805,9 @@ function Students() {
                 <tr key={s.id} className="row-hover transition-colors">
                   <td data-label="Student" className="px-4 py-3.5">
                     <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-full bg-green-600 flex items-center justify-center text-white text-xs font-semibold shrink-0 shadow-sm">
-                        {getInitials(s.full_name || s.username)}
+                      {/* First letter circle */}
+                      <div className="w-9 h-9 rounded-full bg-green-600 flex items-center justify-center text-white text-sm font-semibold shadow-sm">
+                        {getFirstLetter(s.full_name || s.username)}
                       </div>
                       <button
                         onClick={() => openViewModal(s)}
