@@ -4,7 +4,7 @@ import API from '../../api/api';
 import { toast } from 'react-hot-toast';
 import StudentSidebar from '../../components/StudentSidebar';
 
-// ---------- Helper: get today's local date in YYYY-MM-DD ----------
+// ---------- Helper functions ----------
 const getLocalDateYYYYMMDD = () => {
   const now = new Date();
   const year = now.getFullYear();
@@ -13,14 +13,12 @@ const getLocalDateYYYYMMDD = () => {
   return `${year}-${month}-${day}`;
 };
 
-// Format YYYY-MM-DD to DD/MM/YYYY for display
 const formatDateDMY = (dateStr) => {
   if (!dateStr) return '';
   const [year, month, day] = dateStr.split('-');
   return `${day}/${month}/${year}`;
 };
 
-// Format datetime to HH:MM:SS (24h)
 const formatTimeHHMMSS = (datetimeStr) => {
   if (!datetimeStr) return '—';
   const date = new Date(datetimeStr);
@@ -30,7 +28,6 @@ const formatTimeHHMMSS = (datetimeStr) => {
   return `${hours}:${minutes}:${seconds}`;
 };
 
-// Get local date (YYYY-MM-DD) from any timestamp – timezone safe
 const getLocalDateKey = (datetimeStr) => {
   if (!datetimeStr) return '';
   const date = new Date(datetimeStr);
@@ -40,7 +37,6 @@ const getLocalDateKey = (datetimeStr) => {
   return `${year}-${month}-${day}`;
 };
 
-// Format decimal hours to "X hr Y min Z sec" (no decimals)
 const formatDuration = (decimalHours) => {
   if (decimalHours === undefined || decimalHours === null) return '0 sec';
   const totalSeconds = Math.round(decimalHours * 3600);
@@ -55,7 +51,6 @@ const formatDuration = (decimalHours) => {
   return parts.join(' ');
 };
 
-// Format seconds directly (for gross duration) – rounds to whole seconds
 const formatDurationFromSeconds = (totalSeconds) => {
   const rounded = Math.round(totalSeconds);
   if (rounded <= 0) return '0 sec';
@@ -75,12 +70,17 @@ const StudentAttendance = () => {
   const [allRecords, setAllRecords] = useState([]);
   const [filteredRecords, setFilteredRecords] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [totalGrossHours, setTotalGrossHours] = useState(0);
-  const [totalBreakHours, setTotalBreakHours] = useState(0);
-  const [totalNetHours, setTotalNetHours] = useState(0);
+  const [dayStats, setDayStats] = useState({
+    firstCheckIn: null,
+    lastCheckOut: null,
+    totalDaySpanSec: 0,
+    totalBreakSec: 0,
+    netSec: 0,
+    checkInCount: 0,
+    breakCount: 0,
+  });
   const initialFetchDone = useRef(false);
 
-  // Fetch all attendance records
   const fetchAllAttendance = async () => {
     setLoading(true);
     try {
@@ -102,75 +102,97 @@ const StudentAttendance = () => {
     }
   };
 
-  // Process records for a given day: sort by check_in, compute gaps as break minutes
+  // Process day records: compute day span, total break (gaps), net, and enrich each record with break before it
   const processDayRecords = (records) => {
     const dayRecords = records.filter(rec => {
       if (!rec.check_in) return false;
       return getLocalDateKey(rec.check_in) === selectedLocalDate;
     });
 
-    if (dayRecords.length === 0) return { processed: [], grossSec: 0, breakSec: 0, netSec: 0 };
+    if (dayRecords.length === 0) {
+      return {
+        processed: [],
+        firstCheckIn: null,
+        lastCheckOut: null,
+        totalDaySpanSec: 0,
+        totalBreakSec: 0,
+        netSec: 0,
+        checkInCount: 0,
+        breakCount: 0,
+      };
+    }
 
-    // Sort by check_in time
+    // Sort by check‑in time ascending
     const sorted = [...dayRecords].sort((a, b) => new Date(a.check_in) - new Date(b.check_in));
 
-    let totalGrossSec = 0;
     let totalBreakSec = 0;
+    let breakCount = 0;
+    const enriched = [];
 
-    const enriched = sorted.map((rec, idx) => {
+    for (let i = 0; i < sorted.length; i++) {
+      const rec = sorted[i];
       let breakSec = 0;
-      if (idx > 0) {
-        const prev = sorted[idx - 1];
+      if (i > 0) {
+        const prev = sorted[i - 1];
         if (prev.check_out) {
-          const prevCheckout = new Date(prev.check_out);
-          const currCheckin = new Date(rec.check_in);
-          if (currCheckin > prevCheckout) {
-            breakSec = (currCheckin - prevCheckout) / 1000;
+          const prevOut = new Date(prev.check_out);
+          const currIn = new Date(rec.check_in);
+          if (currIn > prevOut) {
+            breakSec = (currIn - prevOut) / 1000;
             totalBreakSec += breakSec;
+            breakCount++;
           }
         }
       }
-
-      let grossSec = 0;
-      if (rec.check_in && rec.check_out) {
-        const start = new Date(rec.check_in);
-        const end = new Date(rec.check_out);
-        if (end > start) {
-          grossSec = (end - start) / 1000;
-          totalGrossSec += grossSec;
-        }
-      }
-
-      return {
+      enriched.push({
         ...rec,
-        computedBreakMinutes: Math.round(breakSec / 60),
-        grossDurationSec: grossSec,
-      };
-    });
+        breakSeconds: breakSec,
+      });
+    }
 
-    const netSec = totalGrossSec - totalBreakSec;
-    return { processed: enriched, grossSec: totalGrossSec, breakSec: totalBreakSec, netSec };
+    // Day span: from first check‑in to last check‑out
+    const firstCheckIn = sorted[0]?.check_in ? new Date(sorted[0].check_in) : null;
+    const lastCheckOut = sorted[sorted.length - 1]?.check_out ? new Date(sorted[sorted.length - 1].check_out) : null;
+    let daySpanSec = 0;
+    if (firstCheckIn && lastCheckOut && lastCheckOut > firstCheckIn) {
+      daySpanSec = (lastCheckOut - firstCheckIn) / 1000;
+    }
+
+    const netSec = daySpanSec - totalBreakSec;
+
+    return {
+      processed: enriched,
+      firstCheckIn,
+      lastCheckOut,
+      totalDaySpanSec: daySpanSec,
+      totalBreakSec,
+      netSec,
+      checkInCount: sorted.length,
+      breakCount,
+    };
   };
 
-  // Recalculate whenever selected date or all records change
   useEffect(() => {
-    const { processed, grossSec, breakSec, netSec } = processDayRecords(allRecords);
-    setFilteredRecords(processed);
-    setTotalGrossHours(grossSec / 3600);
-    setTotalBreakHours(breakSec / 3600);
-    setTotalNetHours(netSec / 3600);
+    const stats = processDayRecords(allRecords);
+    setFilteredRecords(stats.processed);
+    setDayStats({
+      firstCheckIn: stats.firstCheckIn,
+      lastCheckOut: stats.lastCheckOut,
+      totalDaySpanSec: stats.totalDaySpanSec,
+      totalBreakSec: stats.totalBreakSec,
+      netSec: stats.netSec,
+      checkInCount: stats.checkInCount,
+      breakCount: stats.breakCount,
+    });
   }, [selectedLocalDate, allRecords]);
 
-  // Fetch once on mount
   useEffect(() => {
     if (initialFetchDone.current) return;
     initialFetchDone.current = true;
     fetchAllAttendance();
   }, []);
 
-  const handleDateChange = (e) => {
-    setSelectedLocalDate(e.target.value);
-  };
+  const handleDateChange = (e) => setSelectedLocalDate(e.target.value);
 
   if (loading && allRecords.length === 0) {
     return (
@@ -183,36 +205,49 @@ const StudentAttendance = () => {
     );
   }
 
+  const daySpanHours = dayStats.totalDaySpanSec / 3600;
+  const breakHours = dayStats.totalBreakSec / 3600;
+  const netHours = dayStats.netSec / 3600;
+
   return (
     <div className="flex min-h-screen bg-gray-50">
       <StudentSidebar />
       <main className="flex-1 p-8 overflow-y-auto">
         <div className="max-w-6xl mx-auto">
-          {/* Header Card */}
+          {/* Header Card – Day Summary */}
           <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div>
-                <h1 className="text-2xl font-bold text-gray-800">My Attendance</h1>
-                <div className="mt-2 space-y-1">
-                  <p className="text-gray-600">
-                    ⏱️ Gross work time (including gaps) on <span className="font-medium">{formatDateDMY(selectedLocalDate)}</span>:
-                    <span className="ml-1 font-semibold text-blue-600">{totalGrossHours.toFixed(2)} hrs</span>
-                    <span className="text-sm text-gray-400 ml-2">({formatDuration(totalGrossHours)})</span>
+                <h1 className="text-2xl font-bold text-gray-800 mb-2">My Attendance</h1>
+                <div className="space-y-1 text-gray-600">
+                  <p className="text-sm">
+                    📅 Date: <span className="font-medium">{formatDateDMY(selectedLocalDate)}</span><br />
+                    🕐 First check‑in: <span className="font-mono">{dayStats.firstCheckIn ? formatTimeHHMMSS(dayStats.firstCheckIn) : '—'}</span> &nbsp;|&nbsp;
+                    Last check‑out: <span className="font-mono">{dayStats.lastCheckOut ? formatTimeHHMMSS(dayStats.lastCheckOut) : '—'}</span>
                   </p>
-                  <p className="text-gray-600">
-                    ☕ Total break time (gaps between sessions) on <span className="font-medium">{formatDateDMY(selectedLocalDate)}</span>:
-                    <span className="ml-1 font-semibold text-orange-600">{totalBreakHours.toFixed(2)} hrs</span>
-                    <span className="text-sm text-gray-400 ml-2">({formatDuration(totalBreakHours)})</span>
+                  <p>
+                    🚪 Total check‑ins: <span className="font-semibold">{dayStats.checkInCount}</span> &nbsp;|&nbsp;
+                    ☕ Break periods: <span className="font-semibold">{dayStats.breakCount}</span>
                   </p>
-                  <p className="text-gray-600">
-                    📅 Net work hours (gross − breaks) on <span className="font-medium">{formatDateDMY(selectedLocalDate)}</span>:
-                    <span className="ml-1 font-semibold text-green-600">{totalNetHours.toFixed(2)} hrs</span>
-                    <span className="text-sm text-gray-400 ml-2">({formatDuration(totalNetHours)})</span>
+                  <p>
+                    ⏱️ Total day span (first in → last out): 
+                    <span className="ml-1 font-semibold text-blue-600">{daySpanHours.toFixed(2)} hrs</span>
+                    <span className="text-sm text-gray-400 ml-2">({formatDuration(daySpanHours)})</span>
+                  </p>
+                  <p>
+                    ☕ Total break time (gaps between sessions): 
+                    <span className="ml-1 font-semibold text-orange-600">{breakHours.toFixed(2)} hrs</span>
+                    <span className="text-sm text-gray-400 ml-2">({formatDuration(breakHours)})</span>
+                  </p>
+                  <p>
+                    📅 Net work hours (day span − breaks): 
+                    <span className="ml-1 font-semibold text-green-600">{netHours.toFixed(2)} hrs</span>
+                    <span className="text-sm text-gray-400 ml-2">({formatDuration(netHours)})</span>
                   </p>
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Select Date (Calendar)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Select Date</label>
                 <input
                   type="date"
                   value={selectedLocalDate}
@@ -223,7 +258,7 @@ const StudentAttendance = () => {
             </div>
           </div>
 
-          {/* Attendance Table */}
+          {/* Attendance Table – each row with break before it and session duration */}
           {filteredRecords.length === 0 ? (
             <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-500">
               No attendance record for {formatDateDMY(selectedLocalDate)}.
@@ -234,37 +269,46 @@ const StudentAttendance = () => {
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">DATE</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">CHECK IN</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">CHECK OUT</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">BREAK (min) *</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">GROSS DURATION</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">DESCRIPTION</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">DATE</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">CHECK IN</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">CHECK OUT</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">BREAK BEFORE (min)</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">SESSION DURATION</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">REASON</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-100">
-                    {filteredRecords.map((rec, idx) => (
-                      <tr key={rec.id} className={`hover:bg-gray-50 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                        <td className="px-6 py-3 text-sm text-gray-900">
-                          {formatDateDMY(getLocalDateKey(rec.check_in))}
-                        </td>
-                        <td className="px-6 py-3 text-sm text-gray-700 font-mono">{formatTimeHHMMSS(rec.check_in)}</td>
-                        <td className="px-6 py-3 text-sm text-gray-700 font-mono">{formatTimeHHMMSS(rec.check_out)}</td>
-                        <td className="px-6 py-3 text-sm text-gray-700">
-                          {rec.computedBreakMinutes > 0 ? `${rec.computedBreakMinutes} min` : '—'}
-                        </td>
-                        <td className="px-6 py-3 text-sm font-medium text-blue-700">
-                          {formatDurationFromSeconds(rec.grossDurationSec)}
-                        </td>
-                        <td className="px-6 py-3 text-sm text-gray-500">{rec.check_out_reason || '—'}</td>
-                      </tr>
-                    ))}
+                    {filteredRecords.map((rec, idx) => {
+                      // Calculate session duration (check_out - check_in)
+                      let sessionSec = 0;
+                      if (rec.check_in && rec.check_out) {
+                        const start = new Date(rec.check_in);
+                        const end = new Date(rec.check_out);
+                        if (end > start) sessionSec = (end - start) / 1000;
+                      }
+                      return (
+                        <tr key={rec.id} className={`hover:bg-gray-50 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+                          <td className="px-6 py-3 text-sm text-gray-900">
+                            {formatDateDMY(getLocalDateKey(rec.check_in))}
+                          </td>
+                          <td className="px-6 py-3 text-sm text-gray-700 font-mono">{formatTimeHHMMSS(rec.check_in)}</td>
+                          <td className="px-6 py-3 text-sm text-gray-700 font-mono">{formatTimeHHMMSS(rec.check_out)}</td>
+                          <td className="px-6 py-3 text-sm text-gray-700">
+                            {rec.breakSeconds > 0 ? `${Math.round(rec.breakSeconds / 60)} min` : '—'}
+                          </td>
+                          <td className="px-6 py-3 text-sm font-medium text-blue-700">
+                            {formatDurationFromSeconds(sessionSec)}
+                          </td>
+                          <td className="px-6 py-3 text-sm text-gray-500">{rec.check_out_reason || '—'}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
               <div className="px-6 py-3 bg-gray-50 text-xs text-gray-400 border-t">
-                * Break minutes shown are the gap between this record's check‑in and the previous record's check‑out.
-                For the first record of the day, break is 0.
+                * “Break before” is the gap from previous check‑out to this check‑in. First record has no break.<br />
+                Day span = first check‑in to last check‑out. Net work = day span − total break time.
               </div>
             </div>
           )}
