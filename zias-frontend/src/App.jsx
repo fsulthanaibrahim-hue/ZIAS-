@@ -73,6 +73,7 @@ import NotificationPage from "./components/NotificationPage";
 import StudentSidebar from "./components/StudentSidebar";
 import MentorSidebar from "./components/MentorSidebar";
 import ReviewerSidebar from "./components/ReviewerSidebar";
+import MentorModuleDetail from "./pages/mentor/MentorModuleDetail";
 
 
 
@@ -312,6 +313,14 @@ function App() {
             <div style={{ display: "flex" }}>
               <MentorSidebar />
               <MentorAssignments />
+            </div>
+          </PrivateRoute>
+        } />
+        <Route path="/mentor/module/:moduleId" element={
+          <PrivateRoute>
+            <div style={{ display: "flex" }}>
+              <MentorSidebar />
+              <MentorModuleDetail />
             </div>
           </PrivateRoute>
         } />

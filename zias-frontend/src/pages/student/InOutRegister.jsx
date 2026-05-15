@@ -9,7 +9,6 @@ const InOutRegister = ({ showHistory = true }) => {
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
   const [showCheckOutModal, setShowCheckOutModal] = useState(false);
-  const [breakMinutes, setBreakMinutes] = useState(0);
   const [checkOutReason, setCheckOutReason] = useState('');
   const [liveTime, setLiveTime] = useState(new Date());
   const fetchedRef = useRef(false);
@@ -68,26 +67,21 @@ const InOutRegister = ({ showHistory = true }) => {
   const handleCheckOutSubmit = async () => {
     setChecking(true);
     try {
-      // Force integer, default 0
-      const minutes = parseInt(breakMinutes, 10) || 0;
+      // Send break_minutes as 0 (since field removed from UI)
       const payload = {
-        break_minutes: minutes,
+        break_minutes: 0,
         check_out_reason: checkOutReason || ''
       };
       console.log('Check-out payload:', payload);
-
-      // Use PUT (the view supports both, but PUT is standard for full update)
       await API.put('attendance/check-out/', payload);
       toast.success('Checked out successfully');
       setShowCheckOutModal(false);
-      setBreakMinutes(0);
       setCheckOutReason('');
       await refreshData();
     } catch (err) {
       console.error('Check-out error details:', err.response?.data);
       let errorMsg = 'Check-out failed';
       if (err.response?.data) {
-        // DRF often returns { "break_minutes": ["Enter a whole number."] } etc.
         const data = err.response.data;
         if (typeof data === 'object') {
           errorMsg = Object.values(data).flat().join(', ');
@@ -137,22 +131,11 @@ const InOutRegister = ({ showHistory = true }) => {
         </p>
       </div>
 
-      {/* Check-out Modal */}
+      {/* Check-out Modal – without break minutes field */}
       {showCheckOutModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-96 max-w-full">
             <h3 className="text-lg font-semibold mb-4">Check Out</h3>
-            <div className="mb-4">
-              <label className="block text-sm font-medium mb-1">Total Break Time (minutes)</label>
-              <input
-                type="number"
-                min="0"
-                value={breakMinutes}
-                onChange={(e) => setBreakMinutes(e.target.value === '' ? 0 : parseInt(e.target.value, 10))}
-                className="w-full border rounded px-3 py-2"
-                placeholder="e.g., 30"
-              />
-            </div>
             <div className="mb-4">
               <label className="block text-sm font-medium mb-1">Reason for Check‑Out (optional)</label>
               <textarea
@@ -160,7 +143,10 @@ const InOutRegister = ({ showHistory = true }) => {
                 onChange={(e) => setCheckOutReason(e.target.value)}
                 className="w-full border rounded px-3 py-2"
                 rows="2"
-                placeholder="Early leaving, medical, etc."
+                placeholder="e.g., Early leaving, medical appointment"
+                autoComplete="off"
+                autoCapitalize="none"
+                spellCheck="false"
               />
             </div>
             <div className="flex justify-end gap-2">

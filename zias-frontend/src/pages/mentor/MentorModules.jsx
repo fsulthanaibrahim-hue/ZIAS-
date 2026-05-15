@@ -6,6 +6,7 @@ import API from "../../api/api";
 let mentorPromise = null;
 let studentsPromise = null;
 let modulesPromises = {};
+let coursesPromise = null; // cache courses
 
 function MentorModules() {
   const [modules, setModules] = useState([]);
@@ -15,12 +16,29 @@ function MentorModules() {
   const [loading, setLoading] = useState(true);
   const [mentor, setMentor] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [courses, setCourses] = useState([]);
+  const [selectedCourseId, setSelectedCourseId] = useState("");
   const mountedRef = useRef(true);
 
-  // Helper: extract array from paginated response
   const extractArray = (response) => {
     const data = response.data.results || response.data;
     return Array.isArray(data) ? data : [];
+  };
+
+  // Fetch courses (once)
+  const fetchCourses = async () => {
+    if (!coursesPromise) {
+      coursesPromise = API.get("courses/")
+        .then(res => {
+          const data = res.data.results || res.data;
+          return Array.isArray(data) ? data : [];
+        })
+        .catch(err => {
+          console.error("Failed to fetch courses", err);
+          return [];
+        });
+    }
+    return coursesPromise;
   };
 
   useEffect(() => {
@@ -49,6 +67,10 @@ function MentorModules() {
             setSelectedStudentName(firstStudent.full_name || firstStudent.username);
           }
         }
+
+        // Load courses for filter dropdown
+        const coursesData = await fetchCourses();
+        if (mountedRef.current) setCourses(coursesData);
       } catch (err) {
         console.error(err);
       } finally {
@@ -96,12 +118,16 @@ function MentorModules() {
     setSelectedStudentId(studentId);
     setSelectedStudentName(student ? (student.full_name || student.username) : "");
     setSearchTerm("");
+    setSelectedCourseId(""); // reset course filter when student changes
   };
 
-  const filteredModules = modules.filter(mod =>
-    mod.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    mod.content?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Filter modules by search term and course
+  const filteredModules = modules.filter(mod => {
+    const matchesSearch = mod.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          mod.content?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCourse = !selectedCourseId || mod.course === parseInt(selectedCourseId) || mod.course_name === selectedCourseId;
+    return matchesSearch && matchesCourse;
+  });
 
   if (loading) {
     return (
@@ -125,7 +151,6 @@ function MentorModules() {
   return (
     <main className="flex-1 p-8 overflow-y-auto bg-gray-50">
       <div className="max-w-7xl mx-auto">
-        {/* Header with student selector */}
         <div className="mb-8">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
@@ -151,25 +176,28 @@ function MentorModules() {
           </div>
         </div>
 
-        {/* Search bar */}
-        <div className="mb-6 relative max-w-md">
-          <input
-            type="text"
-            placeholder="Search modules by title or content..."
-            className="w-full border border-gray-300 rounded-lg py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          <svg className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
+        {/* Filters: Search bar + Course dropdown */}
+        <div className="mb-6 flex flex-wrap gap-4">
+          <div className="relative flex-1 max-w-md">
+            <input
+              type="text"
+              placeholder="Search modules by title or content..."
+              className="w-full border border-gray-300 rounded-lg py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            <svg className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+          <div className="w-64">
+          </div>
         </div>
 
-        {/* Modules grid – no lock badges, always unlocked */}
         {filteredModules.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-xl border border-gray-200 shadow-sm">
             <p className="text-gray-500">
-              {searchTerm ? "No modules match your search." : "No modules available for this student."}
+              {searchTerm || selectedCourseId ? "No modules match your filters." : "No modules available for this student."}
             </p>
           </div>
         ) : (
@@ -198,23 +226,17 @@ function MentorModules() {
                         </p>
                       )}
                     </div>
-                    {/* ❌ No lock badge – removed */}
                   </div>
                   <p className="text-sm text-gray-600 mt-2 line-clamp-2">
                     {mod.content || "No description available."}
                   </p>
                   <div className="mt-4 flex items-center justify-between">
                     <Link
-                      to={`/student/module/${mod.id}`}
+                      to={`/mentor/module/${mod.id}?student_id=${selectedStudentId}`}
                       className="text-sm font-medium px-4 py-1.5 rounded-full bg-green-600 hover:bg-green-700 text-white shadow-sm transition"
                     >
                       View Module →
                     </Link>
-                    {mod.completion_percentage !== undefined && (
-                      <span className="text-xs text-gray-400">
-                        Progress: {mod.completion_percentage}%
-                      </span>
-                    )}
                   </div>
                 </div>
               </div>

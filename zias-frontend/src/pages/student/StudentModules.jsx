@@ -154,11 +154,6 @@ function StudentModules() {
                         >
                           {!isLocked ? "View Module →" : "Locked"}
                         </Link>
-                        {mod.completion_percentage !== undefined && !isLocked && (
-                          <span className="text-xs text-gray-400">
-                            Progress: {mod.completion_percentage}%
-                          </span>
-                        )}
                       </div>
                     </div>
                   </div>
