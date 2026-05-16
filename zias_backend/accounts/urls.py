@@ -16,6 +16,8 @@ from .views import (
     MentorDocumentDeleteView, RespondToMessageView, ReviewAssignmentViewSet, 
     UnreadNotificationCountView, StudentReviewStatusView, StudentSubmissionListCreateView,
     SubmissionBulkUpdateView, CheckInView, CheckOutView, AttendanceHistoryView,
+    AccountsViewSet, RegisterUserView, FeePaymentViewSet, AccountsDashboardView, 
+    AccountsStudentListView, AccountsProfileView, StudentFeeSummaryView
 )
 
 router = DefaultRouter()
@@ -27,17 +29,19 @@ router.register('modules', ModuleViewSet, basename='module')
 router.register('days', DayViewSet, basename='day')
 router.register('tasks', TaskViewSet)
 router.register('batches', BatchViewSet)
+router.register('accounts', AccountsViewSet, basename='accounts')
 router.register('student-modules', StudentModuleViewSet, basename='student-module')
 router.register('week-updates', WeekUpdateViewSet, basename='week-update')
 router.register('review-folders', ReviewFolderViewSet, basename='review-folder')
 router.register('notifications', NotificationViewSet, basename='notification')
 router.register('review-assignments', ReviewAssignmentViewSet, basename='review-assignment')
+router.register('fee-payments', FeePaymentViewSet, basename='fee-payment')
 
 urlpatterns = [
-    # 👇 SPECIFIC PATHS MUST COME BEFORE THE ROUTER 👇
     path('api/notifications/unread-count/', UnreadNotificationCountView.as_view(), name='unread-count'),
     path('api/students/list/', StudentListView.as_view(), name='student-list'),
-    path('api/', include(router.urls)),   # Router handles all other /api/... endpoints
+    path('api/register/', RegisterUserView.as_view(), name='register'),
+
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/users/me/', CurrentUserView.as_view(), name='current_user'),
@@ -75,4 +79,11 @@ urlpatterns = [
     path('api/attendance/check-in/', CheckInView.as_view(), name='check-in'),
     path('api/attendance/check-out/', CheckOutView.as_view(), name='check-out'),
     path('api/attendance/history/', AttendanceHistoryView.as_view(), name='attendance-history'),
+
+    path('api/accounts/dashboard/', AccountsDashboardView.as_view(), name='accounts-dashboard'),
+    path('api/accounts/students/', AccountsStudentListView.as_view(), name='accounts-students'),
+    path('api/accounts/profile/', AccountsProfileView.as_view(), name='accounts-profile'),
+    path('api/student/fee-summary/', StudentFeeSummaryView.as_view(), name='student-fee-summary'),
+
+    path('api/', include(router.urls)),
 ]

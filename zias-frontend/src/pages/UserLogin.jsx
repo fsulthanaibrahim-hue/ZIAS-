@@ -35,6 +35,8 @@ function UserLogin() {
         navigate("/mentor/dashboard");
       } else if (user.is_reviewer) {
         navigate("/reviewer/dashboard");
+      } else if (user.is_accounts) {
+        navigate("/accounts/dashboard");
       } else {
         navigate("/");
       }

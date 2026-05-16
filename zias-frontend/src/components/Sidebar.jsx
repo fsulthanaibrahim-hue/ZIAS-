@@ -54,6 +54,16 @@ function getIcon(label) {
       return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}>
         <path d="M8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13zm0 1a5.5 5.5 0 110 11 5.5 5.5 0 010-11zm.5 2H7v5.5l4 2.5.5-1-3.5-2V4.5z"/>
       </svg>;
+    case "Accounts":
+return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}>
+        <path d="M8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13zm0 1a5.5 5.5 0 110 11 5.5 5.5 0 010-11zm.5 2H7v5.5l4 2.5.5-1-3.5-2V4.5z"/>
+      </svg>;
+    case "Accounts":
+      return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}>
+        <path d="M8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13zm0 1a5.5 5.5 0 110 11 5.5 5.5 0 010-11zm.5 2H7v5.5l4 2.5.5-1-3.5-2V4.5z"/>
+      </svg>;
+      case "Fee Analytics":
+  return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}><path d="M8 1a6 6 0 00-6 6 6 6 0 1012 0 6 6 0 00-6-6zm0 1a5 5 0 015 5c0 2.5-2 5-5 5-2.5 0-5-2.5-5-5 0-3 2-5 5-5z"/></svg>;
     case "Profile":
       return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}><path d="M8 8a3 3 0 100-6 3 3 0 000 6zm-2 1a5 5 0 00-5 5h14a5 5 0 00-5-5H6z" /></svg>;
     default:
@@ -90,6 +100,8 @@ function Sidebar() {
     { path: "/admin/batches", label: "Batches" },
     { path: "/admin/review-folders", label: "Review Folders" },
     { path: "/admin/attendance", label: "Attendance" },
+    { path: "/admin/accounts", label: "Accounts" },
+    { path: "/admin/fee-analytics", label: "Fee Analytics" },
     { path: "/admin/messages", label: "Messages" },
     { path: "/admin/review-sheets", label: "Review Sheets" },
     { path: "/admin/profile", label: "Profile" },

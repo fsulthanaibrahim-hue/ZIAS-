@@ -1,0 +1,23 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<h1>Create Accounts User</h1>
+<form method="post">
+    {% csrf_token %}
+    <div>
+        <label>Username:</label><br>
+        <input type="text" name="username" required>
+    </div>
+    <div style="margin-top: 10px;">
+        <label>Email:</label><br>
+        <input type="email" name="email" required>
+    </div>
+    <div style="margin-top: 10px;">
+        <label>Full Name (optional):</label><br>
+        <input type="text" name="full_name">
+    </div>
+    <div style="margin-top: 20px;">
+        <input type="submit" value="Create User">
+        <a href=".." class="button">Cancel</a>
+    </div>
+</form>
+{% endblock %}

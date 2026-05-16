@@ -55,6 +55,9 @@ import ContactMessageDetail from "./Admin/ContactMessageDetail";
 import ReviewFoldersAdmin from "./Admin/ReviewFoldersAdmin";
 import AdminAttendance from "./Admin/AdminAttendance";
 import ModuleDetail from "./Admin/ModuleDetail";
+import Accounts from "./Admin/Accounts";
+import FeeAnalytics from "./Admin/FeeAnalytics";
+
 
 
 // Common pages
@@ -75,8 +78,18 @@ import MentorSidebar from "./components/MentorSidebar";
 import ReviewerSidebar from "./components/ReviewerSidebar";
 import MentorModuleDetail from "./pages/mentor/MentorModuleDetail";
 
+// Accounts Pages
+import AccountsSidebar from "./components/AccountsSidebar";
+import AccountsDashboard from "./pages/accounts/AccountsDashboard";
+import AccountsPayments from "./pages/accounts/AccountsPayments";
+import AccountsStudents from "./pages/accounts/AccountsStudents";
+import AccountsProfile from "./pages/accounts/AccountsProfile";
+import AccountsInvoices from "./pages/accounts/AccountsInvoices";
+import StudentFees from "./pages/student/StudentFees";
 
 
+
+// ========== ROUTE GUARDS ==========
 function PrivateRoute({ children }) {
   const token = localStorage.getItem("access_token");
   return token ? children : <Navigate to="/login" replace />;
@@ -92,6 +105,18 @@ function AdminRoute({ children }) {
     user = null;
   }
   return token && user?.is_admin ? children : <Navigate to="/admin/login" replace />;
+}
+
+function AccountsRoute({ children }) {
+  const token = localStorage.getItem("access_token");
+  const userStr = localStorage.getItem("user");
+  let user = null;
+  try {
+    user = userStr ? JSON.parse(userStr) : null;
+  } catch (e) {
+    user = null;
+  }
+  return token && user?.is_accounts ? children : <Navigate to="/login" replace />;
 }
 
 function App() {
@@ -112,7 +137,6 @@ function App() {
       return;
     }
 
-    // Fix: correctly detect reset‑password routes (path starts with /reset-password/)
     const isForgotPassword = location.pathname === "/forgot-password";
     const isResetPassword = location.pathname.startsWith("/reset-password/");
     const isResetPath = isForgotPassword || isResetPassword;
@@ -122,6 +146,7 @@ function App() {
       else if (user.is_student) navigate("/student/dashboard", { replace: true });
       else if (user.is_mentor) navigate("/mentor/dashboard", { replace: true });
       else if (user.is_reviewer) navigate("/reviewer/dashboard", { replace: true });
+      else if (user.is_accounts) navigate("/accounts/dashboard", { replace: true });
     }
   }, [location.pathname, navigate]);
 
@@ -139,13 +164,11 @@ function App() {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password/:token" element={<ResetPassword />} />
 
-        {/* Redirect old /user/* paths to new /student/* */}
+        {/* Redirects */}
         <Route path="/user/dashboard" element={<Navigate to="/student/dashboard" replace />} />
         <Route path="/user/profile" element={<Navigate to="/student/profile" replace />} />
         <Route path="/user/review-sheet" element={<Navigate to="/student/review-sheet" replace />} />
         <Route path="/user/change-password" element={<Navigate to="/change-password" replace />} />
-
-        {/* Redirect /student/detailed-review to review sheet */}
         <Route path="/student/detailed-review" element={<Navigate to="/student/review-sheet" replace />} />
 
         {/* Student routes */}
@@ -161,6 +184,7 @@ function App() {
         <Route path="/student/modules" element={<PrivateRoute><StudentModules /></PrivateRoute>} />
         <Route path="/student/review-folders" element={<PrivateRoute><StudentReviewFolders /></PrivateRoute>} />
         <Route path="/student/in-out-register" element={<PrivateRoute><InOutRegister /></PrivateRoute>} />
+        <Route path="/student/fees" element={<PrivateRoute><StudentFees /></PrivateRoute>} />
         <Route path="/student/attendance" element={<PrivateRoute><StudentAttendance /></PrivateRoute>} />
         <Route path="/student/notifications" element={
           <PrivateRoute>
@@ -223,9 +247,6 @@ function App() {
             </div>
           </PrivateRoute>
         } />
-
-
-
 
         {/* Mentor routes */}
         <Route path="/mentor/dashboard" element={
@@ -342,6 +363,50 @@ function App() {
         <Route path="/admin/review-folders" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><ReviewFoldersAdmin /></div></AdminRoute>} />
         <Route path="/admin/attendance" element={<AdminRoute><div style={{display:"flex"}}><AdminAttendance /></div></AdminRoute>} />
         <Route path="/admin/module/:id" element={<AdminRoute><div style={{ display: "flex" }}><Sidebar /><ModuleDetail /></div></AdminRoute>} />
+        <Route path="/admin/accounts" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Accounts /></div></AdminRoute>} />
+        <Route path="/admin/fee-analytics" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><FeeAnalytics /></div></AdminRoute>} />
+
+        {/* Accounts routes – protected by AccountsRoute */}
+        <Route path="/accounts/dashboard" element={
+          <AccountsRoute>
+            <div style={{ display: "flex" }}>
+              <AccountsSidebar />
+              <AccountsDashboard />
+            </div>
+          </AccountsRoute>
+        } />
+        <Route path="/accounts/payments" element={
+          <AccountsRoute>
+            <div style={{ display: "flex" }}>
+              <AccountsSidebar />
+              <AccountsPayments />
+            </div>
+          </AccountsRoute>
+        } />
+        <Route path="/accounts/students" element={
+          <AccountsRoute>
+            <div style={{ display: "flex" }}>
+              <AccountsSidebar />
+              <AccountsStudents />
+            </div>
+          </AccountsRoute>
+        } />
+        <Route path="/accounts/profile" element={
+          <AccountsRoute>
+            <div style={{ display: "flex" }}>
+              <AccountsSidebar />
+              <AccountsProfile />
+            </div>
+          </AccountsRoute>
+        } />
+        <Route path="/accounts/invoices" element={
+          <AccountsRoute>
+            <div style={{ display: "flex" }}>
+              <AccountsSidebar />
+              <AccountsInvoices />
+            </div>
+          </AccountsRoute>
+        } />
 
         {/* 404 page */}
         <Route path="*" element={

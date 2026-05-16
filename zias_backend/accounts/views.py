@@ -11,24 +11,26 @@ from rest_framework.filters import BaseFilterBackend
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.exceptions import ValidationError, NotFound, PermissionDenied
 from django.utils import timezone
-from django.db.models import Q
+from django.db.models import Q, Sum
 from django.db import models
 from django.shortcuts import get_object_or_404
 from django.utils.crypto import get_random_string
-from datetime import timedelta
+from datetime import timedelta, datetime
 from django.core.mail import send_mail
 from django.core.exceptions import ObjectDoesNotExist
 from django.conf import settings
 from django.contrib.auth import authenticate
+from .utils import generate_random_password, send_password_email
 from rest_framework_simplejwt.tokens import RefreshToken, TokenError
 from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
 from datetime import datetime
+from django.db.models.functions import TruncMonth, TruncWeek, TruncYear
 
 from .models import (
     User, Student, Mentor, Reviewer, Course, Module, Day, Task, Batch,
     StudentModule, PasswordResetToken, ContactMessage, StudentWeekReview, WeekUpdate, 
     ReviewFolder, ChatRoom, ChatMessage, CourseStatus, Notification, StudentDocument,
-    MentorDocument, ReviewAssignment, WeeklySubmission, AttendanceRecord
+    MentorDocument, ReviewAssignment, WeeklySubmission, AttendanceRecord, FeePayment, Accounts
 )
 
 from .serializers import (
@@ -37,7 +39,8 @@ from .serializers import (
     ContactMessageSerializer, StudentModuleSerializer, StudentWeekReviewSerializer, 
     WeekUpdateSerializer, ReviewFolderSerializer, ChatRoomSerializer, ChatMessageSerializer, 
     CourseStatusSerializer, NotificationSerializer, StudentDocumentSerializer, MentorDocumentSerializer, 
-    ReviewAssignmentSerializer, WeeklySubmissionSerializer, AttendanceRecordSerializer
+    ReviewAssignmentSerializer, WeeklySubmissionSerializer, AttendanceRecordSerializer, FeePaymentSerializer,
+    AccountsSerializer, 
 )
 
 from .permissions import (
@@ -470,13 +473,13 @@ class CurrentUserView(SafeAPIView):
             'is_mentor': getattr(user, 'is_mentor', False),
             'is_reviewer': getattr(user, 'is_reviewer', False),
             'is_student': getattr(user, 'is_student', False),
+            'is_accounts': getattr(user, 'is_accounts', False),   
             'full_name': user.get_full_name() or user.username,
         }
         return Response(user_data)
 
     def patch(self, request):
         return Response({"detail": "PATCH not implemented"}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
-
 
 # ----------------------------
 # CHANGE PASSWORD
@@ -668,6 +671,7 @@ class CustomLoginView(SafeAPIView):
             'is_mentor': getattr(user, 'is_mentor', False),
             'is_reviewer': getattr(user, 'is_reviewer', False),
             'is_student': getattr(user, 'is_student', False),
+            'is_accounts': getattr(user, 'is_accounts', False),
             'full_name': user.get_full_name() or user.username,
         }
 
@@ -1627,5 +1631,308 @@ class AttendanceHistoryView(SafeAPIView, generics.ListAPIView):
                 pass
 
         return qs.order_by('-check_in')
+
+
+
+class FeePaymentViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated]
+    serializer_class = FeePaymentSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_admin or user.is_accounts:
+            return FeePayment.objects.all()
+        return FeePayment.objects.none()   
+
+
+
+
+class AccountsViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing Accounts (finance) users. Only admins can access."""
+    serializer_class = AccountsSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_admin:
+            return Accounts.objects.all()
+        # Non‑admins cannot see accounts list
+        return Accounts.objects.none()
+
+    def perform_destroy(self, instance):
+        # Delete the associated User as well (optional)
+        user = instance.user
+        instance.delete()
+        user.delete()
+
+
+class RegisterUserView(generics.CreateAPIView):
+    permission_classes = [AllowAny]
+    serializer_class = UserSerializer
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        role = request.data.get('role')
+        if role not in ['student', 'mentor', 'reviewer', 'admin', 'accounts']:
+            return Response({"detail": "Invalid role"}, status=status.HTTP_400_BAD_REQUEST)
+
+        validated_data = serializer.validated_data
+        password = validated_data.pop('password', None)
+        if not password:
+            password = generate_random_password()
+
+        user = User(
+            username=validated_data['username'],
+            email=validated_data['email'],
+            is_student=(role == 'student'),
+            is_mentor=(role == 'mentor'),
+            is_reviewer=(role == 'reviewer'),
+            is_admin=(role == 'admin'),
+            is_accounts=(role == 'accounts'),
+        )
+        user.set_password(password)
+        user.save()
+
+        # Try to send email – but never crash the request
+        try:
+            send_password_email(user, password)
+            email_sent = True
+        except Exception as e:
+            print(f"❌ Email sending failed for {user.email}: {e}")
+            email_sent = False
+
+        return Response({
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "role": role,
+            "email_sent": email_sent,
+            "message": f"{role.capitalize()} user created. {'Email sent.' if email_sent else 'Email could not be sent – check console log.'}"
+        }, status=status.HTTP_201_CREATED)
+
+
+
+
+class AccountsDashboardView(SafeAPIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            user = request.user
+            # ✅ Allow both accounts and admin users
+            if not (user.is_accounts or user.is_admin):
+                return Response({"detail": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
+
+            period = request.query_params.get('period', 'monthly')
+            now = timezone.now().date()
+
+            if period == 'weekly':
+                start_date = now - timedelta(days=now.weekday())
+                end_date = start_date + timedelta(days=6)
+            elif period == 'yearly':
+                start_date = now.replace(month=1, day=1)
+                end_date = now.replace(month=12, day=31)
+            else:  # monthly
+                start_date = now.replace(day=1)
+                next_month = start_date.replace(day=28) + timedelta(days=4)
+                end_date = next_month - timedelta(days=next_month.day)
+
+            payments = FeePayment.objects.filter(
+                payment_date__gte=start_date,
+                payment_date__lte=end_date
+            )
+            total_collected = payments.filter(status='paid').aggregate(total=Sum('amount'))['total'] or 0
+            total_pending = payments.filter(status='pending').aggregate(total=Sum('amount'))['total'] or 0
+            total_overdue = payments.filter(status='overdue').aggregate(total=Sum('amount'))['total'] or 0
+
+            monthly_income = []
+            for i in range(11, -1, -1):
+                month_date = now.replace(day=1) - timedelta(days=30*i)
+                month_start = month_date.replace(day=1)
+                if month_start.month == 12:
+                    month_end = month_start.replace(year=month_start.year+1, month=1, day=1) - timedelta(days=1)
+                else:
+                    month_end = month_start.replace(month=month_start.month+1, day=1) - timedelta(days=1)
+                month_payments = FeePayment.objects.filter(
+                    payment_date__gte=month_start,
+                    payment_date__lte=month_end,
+                    status='paid'
+                )
+                total = month_payments.aggregate(total=Sum('amount'))['total'] or 0
+                monthly_income.append({
+                    'month': month_start.strftime('%B %Y'),
+                    'total': float(total)
+                })
+
+            reviewer_wise = {}
+            all_payments = FeePayment.objects.filter(status='paid').select_related('student__reviewer')
+            for p in all_payments:
+                reviewer = p.student.reviewer
+                reviewer_name = reviewer.full_name if reviewer else 'Unassigned'
+                reviewer_wise[reviewer_name] = reviewer_wise.get(reviewer_name, 0) + float(p.amount)
+            reviewer_wise_list = [{'reviewer': k, 'total': v} for k, v in reviewer_wise.items()]
+
+            recent_payments = payments.order_by('-payment_date')[:10]
+            recent_list = []
+            for p in recent_payments:
+                recent_list.append({
+                    'id': p.id,
+                    'student_name': p.student.full_name or p.student.user.username,
+                    'amount': float(p.amount),
+                    'payment_date': p.payment_date.isoformat(),
+                    'status': p.status,
+                })
+
+            return Response({
+                'period': period,
+                'total_collected': float(total_collected),
+                'total_pending': float(total_pending),
+                'total_overdue': float(total_overdue),
+                'monthly_income': monthly_income,
+                'reviewer_wise': reviewer_wise_list,
+                'recent_payments': recent_list,
+            })
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+class AccountsStudentListView(SafeAPIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        if not (user.is_accounts or user.is_admin or user.is_mentor):
+            return Response({"detail": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
+
+        students = Student.objects.all().select_related('user', 'reviewer')
+        result = []
+        for student in students:
+            payments = FeePayment.objects.filter(student=student)
+            total_paid = payments.filter(status='paid').aggregate(total=Sum('amount'))['total'] or 0
+            total_pending = payments.filter(status='pending').aggregate(total=Sum('amount'))['total'] or 0
+            total_overdue = payments.filter(status='overdue').aggregate(total=Sum('amount'))['total'] or 0
+
+            # Compute week‑back status safely
+            week_back_status = "on_track"
+            if total_overdue > 0:
+                week_back_status = "overdue"
+            elif total_pending > 0:
+                oldest_pending = payments.filter(status='pending').order_by('due_date').first()
+                if oldest_pending and oldest_pending.due_date:
+                    if oldest_pending.due_date < timezone.now().date() - timedelta(days=7):
+                        week_back_status = "delayed"
+
+            result.append({
+                'id': student.id,
+                'name': student.full_name or student.user.username,
+                'email': student.user.email,
+                'phone': student.phone,
+                'course': student.course,
+                'batch': student.batch,
+                'reviewer_name': student.reviewer.full_name if student.reviewer else '—',
+                'total_paid': float(total_paid),
+                'total_pending': float(total_pending),
+                'total_overdue': float(total_overdue),
+                'agreement_signed': student.agreement_signed,
+                'escalation_flag': student.escalation_flag,
+                'week_back_fee_status': week_back_status,
+            })
+        return Response(result)
+
+
+# accounts/views.py
+class AccountsProfileView(SafeAPIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        if not user.is_accounts:
+            return Response({"detail": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            profile = user.accounts_profile
+        except Accounts.DoesNotExist:
+            return Response({"detail": "Profile not found"}, status=status.HTTP_404_NOT_FOUND)
+        data = {
+            'id': user.id,
+            'username': user.username,
+            'email': user.email,
+            'full_name': profile.full_name,
+            'phone': profile.phone,
+            'department': profile.department,
+        }
+        return Response(data)
+
+    def patch(self, request):
+        user = request.user
+        if not user.is_accounts:
+            return Response({"detail": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            profile = user.accounts_profile
+        except Accounts.DoesNotExist:
+            return Response({"detail": "Profile not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        # Update only allowed fields
+        full_name = request.data.get('full_name')
+        phone = request.data.get('phone')
+        department = request.data.get('department')
+
+        if full_name is not None:
+            profile.full_name = full_name
+        if phone is not None:
+            profile.phone = phone
+        if department is not None:
+            profile.department = department
+        profile.save()
+
+        # Also update user's first/last name if needed? Not required, but we can keep sync optional.
+        return Response({'detail': 'Profile updated successfully'})
+
+
+class StudentFeeSummaryView(SafeAPIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        if not user.is_student:
+            return Response({"detail": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            student = user.student_profile
+        except Student.DoesNotExist:
+            return Response({"detail": "Student profile not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        payments = FeePayment.objects.filter(student=student)
+        total_paid = payments.filter(status='paid').aggregate(Sum('amount'))['total'] or 0
+        total_pending = payments.filter(status='pending').aggregate(Sum('amount'))['total'] or 0
+        total_overdue = payments.filter(status='overdue').aggregate(Sum('amount'))['total'] or 0
+
+        # Find earliest pending due date
+        pending_payments = payments.filter(status='pending')
+        due_date = pending_payments.order_by('due_date').first().due_date if pending_payments.exists() else None
+
+        required_action = "No action needed"
+        if total_overdue > 0:
+            required_action = "⚠️ Immediate payment required (overdue)"
+        elif total_pending > 0 and due_date:
+            required_action = f"📅 Pay by {due_date}"
+        elif not student.agreement_signed:
+            required_action = "✍️ Please sign the fee agreement"
+
+        # Check if any payment was received in the last 30 days
+        payment_received = payments.filter(status='paid', payment_date__gte=timezone.now() - timedelta(days=30)).exists()
+
+        return Response({
+            'total_paid': float(total_paid),
+            'total_pending': float(total_pending),
+            'total_overdue': float(total_overdue),
+            'due_date': due_date,
+            'required_action': required_action,
+            'payment_received': payment_received,
+            'agreement_signed': student.agreement_signed,
+            'escalation_flag': student.escalation_flag,
+        })
     
     

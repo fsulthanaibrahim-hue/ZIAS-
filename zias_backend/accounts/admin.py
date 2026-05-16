@@ -1,7 +1,9 @@
 from django.contrib import admin
 from django.contrib import messages
+from django.urls import path
 from django.utils import timezone
-from .models import User, Student, Mentor, Reviewer, ContactMessage, CourseStatus, ReviewFolder
+from django.shortcuts import render, redirect
+from .models import User, Student, Mentor, Reviewer, ContactMessage, CourseStatus, ReviewFolder, Accounts
 from .utils import generate_random_password, send_password_email  
 
 # Admin action to reset password and email the user
@@ -16,14 +18,48 @@ def reset_password_and_email(modeladmin, request, queryset):
 reset_password_and_email.short_description = "Reset password and email user"
 
 class UserAdmin(admin.ModelAdmin):
-    list_display = ['id', 'username', 'email', 'is_student', 'is_mentor', 'is_reviewer', 'password_changed_at']
-    list_filter = ['is_student', 'is_mentor', 'is_reviewer']
+    list_display = ['id', 'username', 'email', 'is_student', 'is_mentor', 'is_reviewer', 'is_admin', 'is_accounts', 'password_changed_at']
+    list_filter = ['is_student', 'is_mentor', 'is_reviewer', 'is_admin', 'is_accounts']  
     search_fields = ['username', 'email']
     actions = [reset_password_and_email]
 
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path('create-accounts-user/', self.admin_site.admin_view(self.create_accounts_user), name='create-accounts-user'),
+        ]
+        return custom_urls + urls
+
+    def create_accounts_user(self, request):
+        if request.method == 'POST':
+            username = request.POST.get('username')
+            email = request.POST.get('email')
+            full_name = request.POST.get('full_name', '')
+            if not username or not email:
+                messages.error(request, "Username and email are required.")
+                return redirect('..')
+            if User.objects.filter(username=username).exists():
+                messages.error(request, "Username already exists.")
+                return redirect('..')
+            # Generate random password
+            password = generate_random_password()
+            user = User.objects.create_user(
+                username=username,
+                email=email,
+                password=password,
+                is_accounts=True,
+                first_name=full_name.split()[0] if full_name else '',
+                last_name=' '.join(full_name.split()[1:]) if full_name else '',
+            )
+            # Create Accounts profile (signal already does it, but ensure)
+            Accounts.objects.get_or_create(user=user, defaults={'full_name': full_name})
+            send_password_email(user, password)
+            messages.success(request, f"Accounts user {username} created. Password emailed to {email}.")
+            return redirect('..')
+        return render(request, 'admin/create_accounts_user.html', {})
+
 admin.site.register(User, UserAdmin)
 
-# Register Student, Mentor, Reviewer with simple displays
 @admin.register(Student)
 class StudentAdmin(admin.ModelAdmin):
     list_display = ['id', 'user', 'course', 'batch', 'phone']
@@ -48,7 +84,6 @@ class ContactMessageAdmin(admin.ModelAdmin):
     def mark_as_read(self, request, queryset):
         queryset.update(is_read=True)
     mark_as_read.short_description = "Mark selected messages as read"
-    
 
 @admin.register(CourseStatus)
 class CourseStatusAdmin(admin.ModelAdmin):
@@ -56,10 +91,15 @@ class CourseStatusAdmin(admin.ModelAdmin):
     list_filter = ['course_name', 'started_at', 'ended_at']
     search_fields = ['student__user__username', 'course_name']
 
-
 @admin.register(ReviewFolder)
 class ReviewFolderAdmin(admin.ModelAdmin):
     list_display = ['id', 'student', 'week_folder', 'is_done', 'created_at']
     list_filter = ['is_done', 'created_at']
     search_fields = ['student__full_name', 'student__user__username', 'week_folder']
     raw_id_fields = ['student', 'created_by', 'updated_by']
+
+@admin.register(Accounts)
+class AccountsAdmin(admin.ModelAdmin):
+    list_display = ['id', 'user', 'full_name', 'phone', 'department']
+    search_fields = ['user__username', 'full_name']
+    

@@ -8,6 +8,7 @@ class User(AbstractUser):
     is_student = models.BooleanField(default=False)
     is_mentor = models.BooleanField(default=False)
     is_reviewer = models.BooleanField(default=False)
+    is_accounts = models.BooleanField(default=False)
     password_changed_at = models.DateTimeField(default=timezone.now, null=True, blank=True)
     last_dashboard_access = models.DateTimeField(default=timezone.now, null=True, blank=True)
 
@@ -26,6 +27,8 @@ class User(AbstractUser):
             return 'mentor'
         if self.is_reviewer:
             return 'reviewer'
+        if self.is_accounts:
+            return 'accounts'
         return 'unknown'
 
     def __str__(self):
@@ -78,6 +81,8 @@ class Student(models.Model):
     emergency_contact = models.CharField(max_length=15, blank=True, null=True)
     reviewer = models.ForeignKey('Reviewer', on_delete=models.SET_NULL, null=True, blank=True, related_name='students')
     documents = models.ManyToManyField(Document, blank=True, related_name='students')
+    agreement_signed = models.BooleanField(default=False)
+    escalation_flag = models.BooleanField(default=False)
 
     def __str__(self):
         return self.user.username
@@ -95,7 +100,7 @@ class Mentor(models.Model):
 
 
 class Reviewer(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='reviewer_profile')
     department = models.CharField(max_length=100, blank=True)
     qualification = models.CharField(max_length=100, blank=True)
     experience = models.IntegerField(null=True, blank=True)
@@ -104,6 +109,16 @@ class Reviewer(models.Model):
     available_from = models.TimeField(null=True, blank=True, help_text="Start time (e.g. 09:00)")
     available_to = models.TimeField(null=True, blank=True, help_text="End time (e.g. 17:00)")
     available_days = models.JSONField(default=list, blank=True, help_text="List of weekdays (0=Monday, 6=Sunday)")
+    full_name = models.CharField(max_length=255, blank=True, null=True)
+
+    def __str__(self):
+        return self.full_name or self.user.username
+
+
+class Accounts(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='accounts_profile')
+    phone = models.CharField(max_length=20, blank=True, null=True)
+    department = models.CharField(max_length=100, blank=True)
     full_name = models.CharField(max_length=255, blank=True, null=True)
 
     def __str__(self):
@@ -221,7 +236,6 @@ class StudentWeekReview(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='week_reviews')
     module = models.ForeignKey(Module, on_delete=models.CASCADE, related_name='student_reviews')
     
-    # Existing fields
     reviewer_name = models.CharField(max_length=100, blank=True)
     advisor_name = models.CharField(max_length=100, blank=True)
     review_date = models.DateField(null=True, blank=True)
@@ -238,17 +252,15 @@ class StudentWeekReview(models.Model):
         ('Not Completed', 'Not Completed'),
     ])
     english_review = models.TextField(blank=True)
-    english_score = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Score out of 5")  # changed from 20 to 5
+    english_score = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Score out of 5")
     
-    # New fields (added)
     review_score = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Review score out of 20")
     extra_workouts_mark = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Extra workouts mark out of 5")
     progress_video = models.URLField(max_length=500, blank=True, null=True, help_text="Progress video link")
     progress_video_mark = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Progress video mark out of 5")
     
-    # Auto‑calculated fields (kept for reference, but you may not need to store them)
     star_rating = models.PositiveSmallIntegerField(null=True, blank=True, choices=[(i, i) for i in range(1, 6)])
-    total_score = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Total score out of 35")  # changed to 35
+    total_score = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Total score out of 35")
     
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -258,7 +270,6 @@ class StudentWeekReview(models.Model):
     def generate_english_review(self):
         if self.english_score is None:
             return ""
-        # Scale 0‑5 to 0‑20 for wording
         score = self.english_score * 4
         if score >= 18:
             return "Excellent English skills. Very fluent and accurate."
@@ -271,24 +282,19 @@ class StudentWeekReview(models.Model):
         return "Poor English. Strongly needs basic English training."
 
     def save(self, *args, **kwargs):
-        # Auto‑generate english_review from english_score (0‑5 scaled)
         if self.english_score is not None:
             self.english_review = self.generate_english_review()
         
-        # Optionally auto‑calculate total_score and star_rating from the three marks
         extra = self.extra_workouts_mark or 0
         english = self.english_score or 0
         video = self.progress_video_mark or 0
-        # Ensure each is 0‑5
         extra = max(0, min(5, extra))
         english = max(0, min(5, english))
         video = max(0, min(5, video))
-        sum_marks = extra + english + video  # max 15
-        # Scale to 35: (sum / 15) * 35 = sum * (35/15) = sum * 2.3333
+        sum_marks = extra + english + video
         total = round((sum_marks * 35) / 15)
         self.total_score = max(0, min(35, total))
         
-        # Star rating based on new total out of 35
         t = self.total_score
         if t >= 30:
             self.star_rating = 5
@@ -409,19 +415,17 @@ class CourseStatus(models.Model):
     current_week = models.PositiveIntegerField(default=0)   
 
     class Meta:
-        unique_together = ['student', 'course_name']   # one active status per course per student
+        unique_together = ['student', 'course_name']
         ordering = ['-started_at']
 
     def __str__(self):
         return f"{self.student.user.username} - {self.course_name} (week {self.current_week})"
 
     def advance_week(self):
-        """Increment current_week by 1. Only called when a week is completed."""
         self.current_week += 1
         self.save(update_fields=['current_week'])
 
     def end_course(self):
-        """Mark the course as ended."""
         self.ended_at = timezone.now()
         self.save(update_fields=['ended_at'])
 
@@ -448,7 +452,6 @@ class MentorDocument(models.Model):
         if not self.file_name:
             self.file_name = self.file.name
         super().save(*args, **kwargs)
-
 
 
 class ReviewAssignment(models.Model):
@@ -494,7 +497,6 @@ class WeeklySubmission(models.Model):
     notes = models.TextField(blank=True)
     submitted_at = models.DateTimeField(auto_now_add=True)
 
-    # Mentor review fields
     reviewed = models.BooleanField(default=False)
     marks = models.PositiveSmallIntegerField(null=True, blank=True, help_text="0-5")
     mentor_feedback = models.TextField(blank=True)
@@ -506,7 +508,6 @@ class WeeklySubmission(models.Model):
 
     def __str__(self):
         return f"{self.student.user.username} - Week {self.week.id} - {self.get_submission_type_display()}"
-
 
 
 class AttendanceRecord(models.Model):
@@ -535,5 +536,40 @@ class AttendanceRecord(models.Model):
     def __str__(self):
         return f"{self.student.user.username} - {self.check_in.strftime('%Y-%m-%d %H:%M')}"
 
-    
-        
+
+class FeePayment(models.Model):
+    STATUS_CHOICES = [
+        ('paid', 'Paid'),
+        ('pending', 'Pending'),
+        ('overdue', 'Overdue'),
+    ]
+    student = models.ForeignKey('Student', on_delete=models.CASCADE)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    payment_date = models.DateField(null=True, blank=True)
+    due_date = models.DateField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    transaction_id = models.CharField(max_length=100, blank=True)
+    notes = models.TextField(blank=True)
+
+    def __str__(self):
+        return f"{self.student.user.username} - {self.amount}"
+
+
+# ========== POST-SAVE SIGNAL: AUTO-CREATE PROFILES ==========
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+
+@receiver(post_save, sender=User)
+def create_user_profile(sender, instance, created, **kwargs):
+    if created:
+        if instance.is_student:
+            Student.objects.get_or_create(user=instance)
+        elif instance.is_mentor:
+            Mentor.objects.get_or_create(user=instance, defaults={'expertise': 'General'})
+        elif instance.is_reviewer:
+            Reviewer.objects.get_or_create(user=instance)
+        elif instance.is_accounts:
+            Accounts.objects.get_or_create(user=instance)
+
+
+            

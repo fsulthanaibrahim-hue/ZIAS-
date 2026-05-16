@@ -12,8 +12,8 @@ from rest_framework import serializers
 from .models import (
     User, Student, Mentor, Reviewer, Course, Module, Day, Task, Batch,
     StudentModule, ContactMessage, StudentWeekReview, WeekUpdate, ReviewFolder,
-    ChatRoom, ChatMessage, CourseStatus, Notification, StudentDocument, MentorDocument, 
-    ReviewAssignment, WeeklySubmission, AttendanceRecord
+    ChatRoom, ChatMessage, CourseStatus, Notification, StudentDocument, MentorDocument,
+    ReviewAssignment, WeeklySubmission, AttendanceRecord, Accounts, FeePayment
 )
 
 
@@ -26,21 +26,49 @@ def generate_random_password(length=10):
 # USER SERIALIZER
 # ----------------------------
 class UserSerializer(serializers.ModelSerializer):
-    is_admin = serializers.BooleanField(source='is_admin', read_only=True)
-    is_mentor = serializers.BooleanField(source='is_mentor', read_only=True)
-    is_reviewer = serializers.BooleanField(source='is_reviewer', read_only=True)
-    is_student = serializers.BooleanField(source='is_student', read_only=True)
+    is_admin = serializers.BooleanField(read_only=True)
+    is_mentor = serializers.BooleanField(read_only=True)
+    is_reviewer = serializers.BooleanField(read_only=True)
+    is_student = serializers.BooleanField(read_only=True)
+    is_accounts = serializers.BooleanField(read_only=True)
     full_name = serializers.SerializerMethodField()
+    role = serializers.ChoiceField(choices=['admin', 'student', 'mentor', 'reviewer', 'accounts'], write_only=True, required=False)
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'is_admin', 'is_mentor', 'is_reviewer', 'is_student', 'full_name']
+        fields = ['id', 'username', 'email', 'is_admin', 'is_mentor', 'is_reviewer', 'is_student', 'is_accounts', 'full_name', 'role']
         extra_kwargs = {'password': {'write_only': True, 'required': False}}
 
     def get_full_name(self, obj):
         return obj.get_full_name() or obj.username
 
+    def create(self, validated_data):
+        role = validated_data.pop('role', None)
+        password = validated_data.pop('password', None)
+        user = super().create(validated_data)
+        if password:
+            user.set_password(password)
+        if role:
+            user.is_admin = False
+            user.is_student = False
+            user.is_mentor = False
+            user.is_reviewer = False
+            user.is_accounts = False
+            if role == 'admin':
+                user.is_admin = True
+            elif role == 'student':
+                user.is_student = True
+            elif role == 'mentor':
+                user.is_mentor = True
+            elif role == 'reviewer':
+                user.is_reviewer = True
+            elif role == 'accounts':
+                user.is_accounts = True
+            user.save()
+        return user
+
     def update(self, instance, validated_data):
+        validated_data.pop('role', None)
         validated_data.pop('password', None)
         return super().update(instance, validated_data)
 
@@ -53,6 +81,18 @@ class BatchSerializer(serializers.ModelSerializer):
     class Meta:
         model = Batch
         fields = ['id', 'name', 'start_date', 'end_date', 'is_active', 'created_at', 'student_count']
+
+
+# ---------------------------
+# ACCOUNTS SERIALIZER
+# ---------------------------
+class AccountsSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source='user.username', read_only=True)
+    email = serializers.EmailField(source='user.email', read_only=True)
+
+    class Meta:
+        model = Accounts
+        fields = ['id', 'user', 'username', 'email', 'full_name', 'phone', 'department']
 
 
 # ----------------------------
@@ -92,9 +132,8 @@ class ModuleSerializer(serializers.ModelSerializer):
         fields = ['id', 'course', 'course_name', 'title', 'order', 'content', 'is_common', 'is_locked', 'unlock_date']
 
 
-
 # ----------------------------- 
-# STUDENT DOCUMENT SERIALIZER 
+# STUDENT DOCUMENT SERIALIZER (single definition)
 # -----------------------------
 class StudentDocumentSerializer(serializers.ModelSerializer):
     url = serializers.SerializerMethodField()
@@ -108,10 +147,10 @@ class StudentDocumentSerializer(serializers.ModelSerializer):
         if request:
             return request.build_absolute_uri(obj.file.url)
         return obj.file.url
-    
+
 
 # ----------------------------
-# STUDENT SERIALIZER – FULLY WORKING 
+# STUDENT SERIALIZER
 # ----------------------------
 class StudentSerializer(serializers.ModelSerializer):
     username = serializers.CharField(write_only=True, required=False)
@@ -149,7 +188,6 @@ class StudentSerializer(serializers.ModelSerializer):
         return value
 
     def _generate_username(self, full_name, email):
-        """Generate a unique username from full_name or email prefix."""
         base = full_name.lower().replace(' ', '').replace('-', '') if full_name else ''
         if not base and email:
             base = email.split('@')[0]
@@ -163,20 +201,16 @@ class StudentSerializer(serializers.ModelSerializer):
         return username
 
     def create(self, validated_data):
-        # Do NOT pop 'course' – it will be saved with the student
         username = validated_data.pop('username', None)
         email = validated_data.pop('email', None)
         full_name = validated_data.get('full_name', '')
-
         if not email:
             raise serializers.ValidationError({"email": "Email is required."})
-
         if not username:
             username = self._generate_username(full_name, email)
 
         random_password = generate_random_password()
 
-        # Use transaction to ensure atomicity: if anything fails, no user is created and no email sent
         with transaction.atomic():
             try:
                 user = User.objects.create_user(username=username, email=email, password=random_password)
@@ -206,13 +240,8 @@ class StudentSerializer(serializers.ModelSerializer):
                 validated_data['mentor'] = mentor_obj
                 validated_data['student_batch'] = mentor_obj.batch
 
-            # Create student (course is still in validated_data)
             student = Student.objects.create(user=user, **validated_data)
 
-            # If any exception occurs before this point, the transaction will roll back
-            # and no email will be sent.
-
-        # Send email only after the transaction is successfully committed
         expiry_days = settings.PASSWORD_EXPIRY_DAYS
         domain = getattr(settings, 'SITE_DOMAIN', 'YOUR_DOMAIN.com')
         context = {'username': username, 'password': random_password, 'expiry_days': expiry_days, 'domain': domain}
@@ -220,7 +249,6 @@ class StudentSerializer(serializers.ModelSerializer):
         plain_message = strip_tags(html_message)
         subject = '🎓 Welcome to ZIAS – Your Account Credentials'
         send_mail(subject, plain_message, settings.DEFAULT_FROM_EMAIL, [email], html_message=html_message, fail_silently=False)
-
         return student
 
     def update(self, instance, validated_data):
@@ -243,7 +271,6 @@ class StudentSerializer(serializers.ModelSerializer):
         instance.emergency_contact = validated_data.get('emergency_contact', instance.emergency_contact)
         instance.mentor = validated_data.get('mentor', instance.mentor)
         instance.save()
-
         username = validated_data.get('username')
         email = validated_data.get('email')
         if username or email:
@@ -253,7 +280,6 @@ class StudentSerializer(serializers.ModelSerializer):
                 instance.user.email = email
             instance.user.save()
         return instance
-    
 
 
 # ----------------------------
@@ -292,12 +318,7 @@ class MentorSerializer(serializers.ModelSerializer):
 
         expiry_days = settings.PASSWORD_EXPIRY_DAYS
         domain = getattr(settings, 'SITE_DOMAIN', 'localhost:5173')
-        context = {
-            'username': username,
-            'password': random_password,
-            'expiry_days': expiry_days,
-            'domain': domain
-        }
+        context = {'username': username, 'password': random_password, 'expiry_days': expiry_days, 'domain': domain}
         try:
             html_message = render_to_string('mail.html', context)
             plain_message = strip_tags(html_message)
@@ -305,7 +326,6 @@ class MentorSerializer(serializers.ModelSerializer):
             send_mail(subject, plain_message, settings.DEFAULT_FROM_EMAIL, [email], html_message=html_message, fail_silently=False)
         except Exception as e:
             print(f"Email sending failed: {e}")
-
         return Mentor.objects.create(user=user, **validated_data)
 
     def update(self, instance, validated_data):
@@ -314,12 +334,11 @@ class MentorSerializer(serializers.ModelSerializer):
         instance.batch = validated_data.get('batch', instance.batch)
         instance.full_name = validated_data.get('full_name', instance.full_name)
         instance.save()
-
         user_data = validated_data.pop('user', None)
         if user_data:
             new_username = user_data.get('username', instance.user.username)
             new_email = user_data.get('email', instance.user.email)
-            if (new_username.lower() != instance.user.username.lower() or new_email.lower() != instance.user.email.lower()):
+            if new_username.lower() != instance.user.username.lower() or new_email.lower() != instance.user.email.lower():
                 instance.user.username = new_username
                 instance.user.email = new_email
                 instance.user.save()
@@ -339,14 +358,11 @@ class ReviewerSerializer(serializers.ModelSerializer):
                   'available_from', 'available_to', 'available_days', 'full_name']
 
     def create(self, validated_data):
-        # Extract user data
         user_data = validated_data.pop('user', {})
         username = validated_data.pop('username', user_data.get('username'))
         email = validated_data.pop('email', user_data.get('email'))
-        
         if not username or not email:
             raise serializers.ValidationError({"detail": "Both username and email are required."})
-        
         random_password = generate_random_password()
         user, created = User.objects.get_or_create(
             username=username,
@@ -360,21 +376,13 @@ class ReviewerSerializer(serializers.ModelSerializer):
             if not user.password_changed_at:
                 user.password_changed_at = timezone.now()
             user.save()
-
         if Reviewer.objects.filter(user=user).exists():
             raise serializers.ValidationError({"username": "A reviewer profile already exists for this user."})
-
         reviewer = Reviewer.objects.create(user=user, **validated_data)
-
         if created:
             expiry_days = getattr(settings, 'PASSWORD_EXPIRY_DAYS', 90)
             domain = getattr(settings, 'SITE_DOMAIN', 'localhost:5173')
-            context = {
-                'username': username,
-                'password': random_password,
-                'expiry_days': expiry_days,
-                'domain': domain
-            }
+            context = {'username': username, 'password': random_password, 'expiry_days': expiry_days, 'domain': domain}
             try:
                 html_message = render_to_string('mail.html', context)
                 plain_message = strip_tags(html_message)
@@ -383,33 +391,26 @@ class ReviewerSerializer(serializers.ModelSerializer):
                           html_message=html_message, fail_silently=False)
             except Exception as e:
                 print(f"Email sending failed for reviewer: {e}")
-
         return reviewer
 
     def update(self, instance, validated_data):
-        # Handle user fields (username and email) separately
         user_data = validated_data.pop('user', {})
         username = validated_data.pop('username', user_data.get('username'))
         email = validated_data.pop('email', user_data.get('email'))
-
-        # Update user if provided
         if username and username != instance.user.username:
             instance.user.username = username
         if email and email != instance.user.email:
             instance.user.email = email
         if username or email:
             instance.user.save()
-
-        # Update reviewer fields
         instance.department = validated_data.get('department', instance.department)
         instance.qualification = validated_data.get('qualification', instance.qualification)
         instance.experience = validated_data.get('experience', instance.experience)
         instance.batch = validated_data.get('batch', instance.batch)
         instance.full_name = validated_data.get('full_name', instance.full_name)
         instance.save()
-
         return instance
-    
+
 
 # ----------------------------
 # STUDENT MODULE SERIALIZER
@@ -486,19 +487,20 @@ class ChatMessageSerializer(serializers.ModelSerializer):
     def get_sender_name(self, obj):
         user = obj.sender
         profile = None
-        if hasattr(user, 'mentor'):
-            profile = user.mentor
-        elif hasattr(user, 'reviewer'):
-            profile = user.reviewer
-        elif hasattr(user, 'student'):
-            profile = user.student
+        # Use the correct related_name: mentor_profile, reviewer_profile, student_profile
+        if hasattr(user, 'mentor_profile'):
+            profile = user.mentor_profile
+        elif hasattr(user, 'reviewer_profile'):
+            profile = user.reviewer_profile
+        elif hasattr(user, 'student_profile'):
+            profile = user.student_profile
         if profile and profile.full_name:
             return profile.full_name
         if user.get_full_name():
             return user.get_full_name()
         cleaned = re.sub(r'\d+$', '', user.username)
         return cleaned if cleaned else user.username
-    
+
 
 class ChatRoomSerializer(serializers.ModelSerializer):
     other_user_name = serializers.SerializerMethodField()
@@ -507,7 +509,6 @@ class ChatRoomSerializer(serializers.ModelSerializer):
     def get_other_user_name(self, obj):
         request = self.context.get('request')
         user = request.user if request else None
-
         other = None
         if obj.reviewer and obj.reviewer.user != user:
             other = obj.reviewer
@@ -515,7 +516,6 @@ class ChatRoomSerializer(serializers.ModelSerializer):
             other = obj.mentor
         elif obj.student and obj.student.user != user:
             other = obj.student
-
         if other:
             full_name = getattr(other, 'full_name', None)
             if full_name and full_name.strip():
@@ -558,20 +558,6 @@ class NotificationSerializer(serializers.ModelSerializer):
         fields = ['id', 'message', 'created_at', 'is_read', 'link']
 
 
-class StudentDocumentSerializer(serializers.ModelSerializer):
-    url = serializers.SerializerMethodField()
-
-    class Meta:
-        model = StudentDocument
-        fields = ['id', 'file', 'file_name', 'uploaded_at', 'url']
-
-    def get_url(self, obj):
-        request = self.context.get('request')
-        if request:
-            return request.build_absolute_uri(obj.file.url)
-        return obj.file.url
-
-
 class MentorDocumentSerializer(serializers.ModelSerializer):
     url = serializers.SerializerMethodField()
 
@@ -584,7 +570,6 @@ class MentorDocumentSerializer(serializers.ModelSerializer):
         if request:
             return request.build_absolute_uri(obj.file.url)
         return obj.file.url
-
 
 
 class ReviewAssignmentSerializer(serializers.ModelSerializer):
@@ -617,7 +602,6 @@ class ReviewAssignmentSerializer(serializers.ModelSerializer):
         return "Unknown Student"
 
 
-
 class WeeklySubmissionSerializer(serializers.ModelSerializer):
     submission_type_display = serializers.CharField(source='get_submission_type_display', read_only=True)
     week_title = serializers.CharField(source='week.title', read_only=True)
@@ -628,12 +612,31 @@ class WeeklySubmissionSerializer(serializers.ModelSerializer):
         read_only_fields = ['student', 'submitted_at', 'reviewed_at']
 
 
-
 class AttendanceRecordSerializer(serializers.ModelSerializer):
     net_work_hours = serializers.ReadOnlyField()
     class Meta:
         model = AttendanceRecord
         fields = '__all__'
         read_only_fields = ['student', 'check_in', 'created_at', 'net_work_hours']
+
+
+class FeePaymentSerializer(serializers.ModelSerializer):
+    student_name = serializers.CharField(source='student.user.username', read_only=True)
+
+    class Meta:
+        model = FeePayment
+        fields = '__all__'
+
+
+class StudentFeeSummarySerializer(serializers.Serializer):
+    total_paid = serializers.DecimalField(max_digits=10, decimal_places=2)
+    total_pending = serializers.DecimalField(max_digits=10, decimal_places=2)
+    total_overdue = serializers.DecimalField(max_digits=10, decimal_places=2)
+    due_date = serializers.DateField(allow_null=True)
+    required_action = serializers.CharField()
+    payment_received = serializers.BooleanField()
+    agreement_signed = serializers.BooleanField()
+    escalation_flag = serializers.BooleanField()
+    week_back_fee_status = serializers.CharField()
 
 
