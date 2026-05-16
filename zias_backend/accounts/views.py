@@ -1633,18 +1633,20 @@ class AttendanceHistoryView(SafeAPIView, generics.ListAPIView):
         return qs.order_by('-check_in')
 
 
-
 class FeePaymentViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     serializer_class = FeePaymentSerializer
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_admin or user.is_accounts:
-            return FeePayment.objects.all()
-        return FeePayment.objects.none()   
-
-
+        # ✅ Allow mentors to view fee payments (for mentor fee overview)
+        if user.is_admin or user.is_accounts or user.is_mentor:
+            qs = FeePayment.objects.all()
+            student_id = self.request.query_params.get('student')
+            if student_id:
+                qs = qs.filter(student_id=student_id)
+            return qs
+        return FeePayment.objects.none()
 
 
 class AccountsViewSet(viewsets.ModelViewSet):
@@ -1710,8 +1712,6 @@ class RegisterUserView(generics.CreateAPIView):
             "email_sent": email_sent,
             "message": f"{role.capitalize()} user created. {'Email sent.' if email_sent else 'Email could not be sent – check console log.'}"
         }, status=status.HTTP_201_CREATED)
-
-
 
 
 class AccountsDashboardView(SafeAPIView):
@@ -1799,7 +1799,6 @@ class AccountsDashboardView(SafeAPIView):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
-
 class AccountsStudentListView(SafeAPIView):
     permission_classes = [IsAuthenticated]
 
@@ -1844,7 +1843,6 @@ class AccountsStudentListView(SafeAPIView):
         return Response(result)
 
 
-# accounts/views.py
 class AccountsProfileView(SafeAPIView):
     permission_classes = [IsAuthenticated]
 
@@ -1904,12 +1902,11 @@ class StudentFeeSummaryView(SafeAPIView):
         except Student.DoesNotExist:
             return Response({"detail": "Student profile not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        payments = FeePayment.objects.filter(student=student)
-        total_paid = payments.filter(status='paid').aggregate(Sum('amount'))['total'] or 0
-        total_pending = payments.filter(status='pending').aggregate(Sum('amount'))['total'] or 0
-        total_overdue = payments.filter(status='overdue').aggregate(Sum('amount'))['total'] or 0
+        payments = FeePayment.objects.filter(student=student).order_by('-due_date')
+        total_paid = payments.filter(status='paid').aggregate(total=Sum('amount'))['total'] or 0
+        total_pending = payments.filter(status='pending').aggregate(total=Sum('amount'))['total'] or 0
+        total_overdue = payments.filter(status='overdue').aggregate(total=Sum('amount'))['total'] or 0
 
-        # Find earliest pending due date
         pending_payments = payments.filter(status='pending')
         due_date = pending_payments.order_by('due_date').first().due_date if pending_payments.exists() else None
 
@@ -1921,8 +1918,18 @@ class StudentFeeSummaryView(SafeAPIView):
         elif not student.agreement_signed:
             required_action = "✍️ Please sign the fee agreement"
 
-        # Check if any payment was received in the last 30 days
         payment_received = payments.filter(status='paid', payment_date__gte=timezone.now() - timedelta(days=30)).exists()
+
+        payments_list = []
+        for p in payments:
+            payments_list.append({
+                'id': p.id,
+                'amount': float(p.amount),
+                'due_date': p.due_date,
+                'payment_date': p.payment_date,
+                'status': p.status,
+                'notes': p.notes or '',
+            })
 
         return Response({
             'total_paid': float(total_paid),
@@ -1933,6 +1940,7 @@ class StudentFeeSummaryView(SafeAPIView):
             'payment_received': payment_received,
             'agreement_signed': student.agreement_signed,
             'escalation_flag': student.escalation_flag,
+            'payments': payments_list,
         })
     
     

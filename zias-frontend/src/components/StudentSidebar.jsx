@@ -33,6 +33,9 @@ function getIcon(label) {
       return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}><path d="M2 2h12v12H2V2zm1 1v10h10V3H3zm2 2h6v1H5V5zm0 2h6v1H5V7zm0 2h6v1H5V9z" /></svg>;
     case "My Attendance":
       return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}><path d="M5 2h6v2H5V2zm10 3H1v10h14V5zM3 7h10v6H3V7z" /></svg>;
+    case "Fee Status":
+      // Money / rupee icon
+      return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}><path d="M8 2a6 6 0 00-6 6 6 6 0 1012 0 6 6 0 00-6-6zm0 1a5 5 0 015 5c0 2.5-2 5-5 5-2.5 0-5-2.5-5-5 0-3 2-5 5-5zM7 5v1H6v1h1v1H6v1h1v1h1v-1h1V8H8V7h1V6H8V5H7z"/></svg>;
     case "Profile":
       return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}><path d="M8 8a3 3 0 100-6 3 3 0 000 6zm-2 1a5 5 0 00-5 5h14a5 5 0 00-5-5H6z" /></svg>;
     default:
@@ -71,6 +74,7 @@ function StudentSidebar() {
     { path: "/student/review-sheet", label: "Review Sheet" },
     { path: "/student/modules", label: "Modules" },
     { path: "/student/attendance", label: "My Attendance" },
+    { path: "/student/fees", label: "Fee Status" },        // ✅ NEW LINK
     { path: "/student/profile", label: "Profile" },
   ];
 

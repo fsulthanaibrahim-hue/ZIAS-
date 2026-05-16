@@ -37,6 +37,8 @@ import ReviewTracker from "./pages/mentor/ReviewTracker";
 import MentorReviewFolders from "./pages/mentor/MentorReviewFolders";
 import AttendanceMonitor from "./pages/mentor/AttendanceMonitor";
 import MentorAssignments from "./pages/mentor/MentorAssignments";
+import MentorFeeOverview from "./pages/mentor/MentorFeeOverview";
+
 
 // Admin pages
 import Sidebar from "./components/Sidebar";
@@ -86,6 +88,7 @@ import AccountsStudents from "./pages/accounts/AccountsStudents";
 import AccountsProfile from "./pages/accounts/AccountsProfile";
 import AccountsInvoices from "./pages/accounts/AccountsInvoices";
 import StudentFees from "./pages/student/StudentFees";
+import FeeOverview from "./Admin/FeeOverview";
 
 
 
@@ -345,6 +348,14 @@ function App() {
             </div>
           </PrivateRoute>
         } />
+        <Route path="/mentor/fee-overview" element={
+          <PrivateRoute>
+            <div style={{ display: "flex" }}>
+              <MentorSidebar />
+              <MentorFeeOverview />
+            </div>
+          </PrivateRoute>
+        } />
 
         {/* Admin routes */}
         <Route path="/admin/dashboard" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Dashboard /></div></AdminRoute>} />
@@ -365,6 +376,7 @@ function App() {
         <Route path="/admin/module/:id" element={<AdminRoute><div style={{ display: "flex" }}><Sidebar /><ModuleDetail /></div></AdminRoute>} />
         <Route path="/admin/accounts" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Accounts /></div></AdminRoute>} />
         <Route path="/admin/fee-analytics" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><FeeAnalytics /></div></AdminRoute>} />
+        <Route path="/admin/fee-overview" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><FeeOverview /></div></AdminRoute>} />
 
         {/* Accounts routes – protected by AccountsRoute */}
         <Route path="/accounts/dashboard" element={
