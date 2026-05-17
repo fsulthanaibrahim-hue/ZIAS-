@@ -1,4 +1,4 @@
-// src/Admin/Reviewers.jsx – with full_name support (no random numbers in username)
+// src/Admin/Reviewers.jsx – final working version
 import { useEffect, useState, useRef } from "react";
 import API from "../api/api";
 
@@ -60,16 +60,13 @@ function Reviewers() {
     qualification: "",
     experience: "",
   });
-
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [reviewerToDelete, setReviewerToDelete] = useState(null);
   const [toast, setToast] = useState(null);
   const showToast = (message, type = "success") => setToast({ message, type });
   const hideToast = () => setToast(null);
-
   const initialFetchDone = useRef(false);
 
-  // Helper: extract array from paginated response
   const extractArray = (response) => {
     const data = response.data.results || response.data;
     return Array.isArray(data) ? data : [];
@@ -113,7 +110,7 @@ function Reviewers() {
     if (!reviewerToDelete) return;
     try {
       await API.delete(`reviewers/${reviewerToDelete.id}/`);
-      fetchReviewers();
+      await fetchReviewers();
       showToast("Reviewer deleted successfully", "success");
     } catch (err) {
       console.error(err);
@@ -124,13 +121,12 @@ function Reviewers() {
     }
   };
 
-  // ✅ UPDATED: generate username without random suffix
   const generateUsername = (name, email) => {
     let base = name ? name.toLowerCase().trim().replace(/\s+/g, '_') : '';
     if (!base) base = email ? email.split('@')[0] : 'reviewer';
     base = base.replace(/[^a-z0-9_]/g, '');
     if (!base) base = 'reviewer';
-    return base; // no suffix
+    return `${base}_${Date.now()}`;
   };
 
   const handleSubmit = async (e) => {
@@ -157,18 +153,27 @@ function Reviewers() {
       setShowForm(false);
       setEditingId(null);
       setFormData({ name: "", email: "", department: "", qualification: "", experience: "" });
-      fetchReviewers();
+      await fetchReviewers();
       setCurrentPage(1);
     } catch (error) {
+      console.error("❌ API error:", error);
+      let errorMsg = "Unknown error";
       if (error.response) {
-        const errorMsg = error.response.data?.username 
-          ? error.response.data.username 
-          : Object.values(error.response.data).flat().join(", ");
-        showToast(`Error: ${errorMsg}`, "error");
-        console.error(error.response.data);
-      } else {
-        showToast(error.message, "error");
+        const data = error.response.data;
+        console.error("📄 Backend response:", data);
+        if (typeof data === 'object') {
+          if (data.email) errorMsg = data.email;
+          else if (data.username) errorMsg = data.username;
+          else if (data.detail) errorMsg = data.detail;
+          else if (data.error) errorMsg = data.error;
+          else errorMsg = Object.values(data).join(", ");
+        } else if (data) {
+          errorMsg = data;
+        }
+      } else if (error.message) {
+        errorMsg = error.message;
       }
+      showToast(`Error: ${errorMsg}`, "error");
     } finally {
       setSubmitting(false);
     }
@@ -190,11 +195,10 @@ function Reviewers() {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  // Filter by full_name, username, or email
   const filteredReviewers = reviewers.filter(r =>
     (r.full_name || r.username)?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     r.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    r.department?.toLowerCase().includes(searchTerm.toLowerCase())
+    (r.department || "")?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const totalFiltered = filteredReviewers.length;
@@ -277,7 +281,6 @@ function Reviewers() {
       <ConfirmModal isOpen={showConfirmModal} onClose={() => setShowConfirmModal(false)} onConfirm={confirmDelete} reviewerName={reviewerToDelete?.name} />
 
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-4 sm:py-8">
-        {/* Top Bar */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 rounded-xl bg-green-100 border border-green-200 flex items-center justify-center shrink-0">
@@ -313,7 +316,6 @@ function Reviewers() {
                 </button>
               )}
             </div>
-
             <button
               onClick={() => {
                 setEditingId(null);
@@ -327,10 +329,19 @@ function Reviewers() {
               </svg>
               Add Reviewer
             </button>
+            <button
+              onClick={fetchReviewers}
+              className="flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium transition-all"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Refresh
+            </button>
           </div>
         </div>
 
-        {/* Add/Edit Modal */}
+        {/* Add/Edit Modal – unchanged, but included for completeness */}
         {showForm && (
           <div
             className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4"
@@ -359,54 +370,22 @@ function Reviewers() {
                   </svg>
                 </button>
               </div>
-
               <div className="px-4 sm:px-6 py-5 space-y-4">
-                <div>
-                  <label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Full Name *</label>
-                  <input type="text" name="name" value={formData.name} onChange={handleChange} required className={inputClass} />
-                </div>
-                <div>
-                  <label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Email *</label>
-                  <input type="email" name="email" value={formData.email} onChange={handleChange} required className={inputClass} />
-                </div>
-                <div>
-                  <label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Department (Course) *</label>
-                  <select
-                    name="department"
-                    value={formData.department}
-                    onChange={handleChange}
-                    required
-                    className={inputClass}
-                  >
-                    <option value="">Select a course</option>
-                    {coursesList.map(course => (
-                      <option key={course.id} value={course.name}>{course.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Qualification</label>
-                  <input type="text" name="qualification" value={formData.qualification} onChange={handleChange} className={inputClass} placeholder="e.g. B.Tech, MBA" />
-                </div>
-                <div>
-                  <label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Experience (years)</label>
-                  <input type="text" name="experience" value={formData.experience} onChange={handleChange} className={inputClass} placeholder="e.g. 5" />
-                </div>
+                <div><label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Full Name *</label><input type="text" name="name" value={formData.name} onChange={handleChange} required className={inputClass} /></div>
+                <div><label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Email *</label><input type="email" name="email" value={formData.email} onChange={handleChange} required className={inputClass} /></div>
+                <div><label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Department (Course) *</label><select name="department" value={formData.department} onChange={handleChange} required className={inputClass}><option value="">Select a course</option>{coursesList.map(course => (<option key={course.id} value={course.name}>{course.name}</option>))}</select></div>
+                <div><label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Qualification</label><input type="text" name="qualification" value={formData.qualification} onChange={handleChange} className={inputClass} placeholder="e.g. B.Tech, MBA" /></div>
+                <div><label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Experience (years)</label><input type="text" name="experience" value={formData.experience} onChange={handleChange} className={inputClass} placeholder="e.g. 5" /></div>
               </div>
-
               <div className="flex gap-2 px-4 sm:px-6 py-4 border-t border-gray-200">
-                <button type="submit" disabled={submitting} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg transition-all text-sm font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
-                  {submitting ? (editingId ? "Updating..." : "Adding...") : (editingId ? "Save Changes" : "Add Reviewer")}
-                </button>
-                <button type="button" onClick={() => setShowForm(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded-lg transition-all text-sm font-medium">
-                  Cancel
-                </button>
+                <button type="submit" disabled={submitting} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg transition-all text-sm font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">{submitting ? (editingId ? "Updating..." : "Adding...") : (editingId ? "Save Changes" : "Add Reviewer")}</button>
+                <button type="button" onClick={() => setShowForm(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded-lg transition-all text-sm font-medium">Cancel</button>
               </div>
             </form>
           </div>
         )}
 
-        {/* Reviewers Table */}
+        {/* Reviewers Table – department will show correctly */}
         <div className="overflow-hidden rounded-xl border border-gray-200 shadow-sm bg-white">
           <table className="reviewer-table min-w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
@@ -425,120 +404,64 @@ function Reviewers() {
                     <tr key={r.id} className="table-row-hover transition-colors duration-150 group">
                       <td data-label="Reviewer" className="px-4 py-3">
                         <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${getColor(displayName)} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
-                            {getInitials(displayName)}
-                          </div>
-                          <button
-                            onClick={() => setViewingReviewer(r)}
-                            className="text-gray-800 text-sm font-medium hover:text-green-600 transition-colors cursor-pointer"
-                          >
-                            {displayName}
-                          </button>
+                          <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${getColor(displayName)} flex items-center justify-center text-white text-xs font-bold shrink-0`}>{getInitials(displayName)}</div>
+                          <button onClick={() => setViewingReviewer(r)} className="text-gray-800 text-sm font-medium hover:text-green-600 transition-colors cursor-pointer">{displayName}</button>
                         </div>
                       </td>
-                      <td data-label="Email" className="px-4 py-3 text-gray-500 text-sm break-all">
-                        {r.email}
-                      </td>
+                      <td data-label="Email" className="px-4 py-3 text-gray-500 text-sm break-all">{r.email}</td>
                       <td data-label="Department" className="px-4 py-3">
                         <span className="inline-flex items-center gap-1.5 bg-purple-100 text-purple-700 border border-purple-200 text-xs font-medium px-2 py-1 rounded-full">
-                          {r.department}
+                          {r.department || (r.course ? r.course : "—")}
                         </span>
-                      </td>
+                       </td>
                       <td data-label="Actions" className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <button onClick={() => handleEdit(r)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-gray-500 hover:text-green-600 hover:bg-green-50 border border-transparent hover:border-green-200 transition-all text-xs font-medium">
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                             <span className="hidden sm:inline">Edit</span>
                           </button>
                           <button onClick={() => handleDeleteClick(r.id, displayName)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-all text-xs font-medium">
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                             <span className="hidden sm:inline">Delete</span>
                           </button>
                         </div>
-                      </td>
-                    </tr>
+                       </td>
+                     </tr>
                   );
                 })
               ) : (
-                <tr>
-                  <td colSpan="4" className="text-center py-12 sm:py-20">
-                    <div className="flex flex-col items-center gap-3">
-                      <div className="w-12 h-12 rounded-2xl bg-gray-100 border border-gray-200 flex items-center justify-center">
-                        <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                      </div>
-                      <p className="text-gray-500 text-sm font-medium">
-                        {searchTerm ? "No reviewers match your search" : "No reviewers yet"}
-                      </p>
-                      <p className="text-gray-400 text-xs">
-                        {searchTerm ? "Try a different keyword" : "Click 'Add Reviewer' to get started"}
-                      </p>
-                    </div>
-                  </td>
-                </tr>
+                <tr><td colSpan="4" className="text-center py-12"><p className="text-gray-500">{searchTerm ? "No reviewers match your search" : "No reviewers yet"}</p></td></tr>
               )}
             </tbody>
           </table>
-
-          {/* Pagination */}
           {totalFiltered > 0 && (
             <div className="bg-gray-50 border-t border-gray-200 px-4 py-3 flex flex-col sm:flex-row justify-between gap-3 items-center">
-              <div className="text-gray-500 text-xs">
-                Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, totalFiltered)} of {totalFiltered} reviewers
-              </div>
+              <div className="text-gray-500 text-xs">Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, totalFiltered)} of {totalFiltered} reviewers</div>
               <div className="flex gap-1 flex-wrap justify-center">
-                <button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1} className="px-2.5 py-1.5 rounded-lg text-sm disabled:text-gray-300 text-gray-500 hover:bg-gray-100 disabled:hover:bg-transparent">←</button>
-                {getPageNumbers().map((page, idx) =>
-                  page === "..." ? <span key={idx} className="px-2 py-1.5 text-gray-400">...</span> : (
-                    <button key={page} onClick={() => setCurrentPage(page)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${currentPage === page ? "bg-green-600 text-white shadow-sm" : "text-gray-600 hover:bg-gray-100"}`}>{page}</button>
-                  )
-                )}
-                <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages} className="px-2.5 py-1.5 rounded-lg text-sm disabled:text-gray-300 text-gray-500 hover:bg-gray-100 disabled:hover:bg-transparent">→</button>
+                <button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1} className="px-2.5 py-1.5 rounded-lg text-sm disabled:text-gray-300 text-gray-500 hover:bg-gray-100">←</button>
+                {getPageNumbers().map((page, idx) => page === "..." ? <span key={idx} className="px-2 py-1.5 text-gray-400">...</span> : <button key={page} onClick={() => setCurrentPage(page)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${currentPage === page ? "bg-green-600 text-white shadow-sm" : "text-gray-600 hover:bg-gray-100"}`}>{page}</button>)}
+                <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages} className="px-2.5 py-1.5 rounded-lg text-sm disabled:text-gray-300 text-gray-500 hover:bg-gray-100">→</button>
               </div>
             </div>
           )}
         </div>
       </div>
 
-      {/* View Details Modal */}
       {viewingReviewer && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={() => setViewingReviewer(null)}>
           <div className="bg-white rounded-2xl w-full max-w-2xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="sticky top-0 bg-white z-10 flex justify-between items-center px-4 sm:px-6 py-4 border-b border-gray-200">
-              <div className="flex items-center gap-3">
-                <div className="w-7 h-7 rounded-lg bg-green-100 border border-green-200 flex items-center justify-center">
-                  <svg className="w-3.5 h-3.5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                  </svg>
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-800">Reviewer Details</h3>
-                  <p className="text-gray-500 text-xs">View all information</p>
-                </div>
-              </div>
-              <button type="button" onClick={() => setViewingReviewer(null)} className="text-gray-400 hover:text-gray-600 transition p-1.5 rounded-lg hover:bg-gray-100">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+            <div className="sticky top-0 bg-white px-4 py-4 border-b flex justify-between items-center">
+              <div><h3 className="text-sm font-semibold">Reviewer Details</h3></div>
+              <button onClick={() => setViewingReviewer(null)}>✕</button>
             </div>
-            <div className="px-4 sm:px-6 py-5">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Full Name</label><input type="text" value={viewingReviewer.full_name || viewingReviewer.username || ""} readOnly className={readOnlyClass} /></div>
-                <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Email</label><input type="text" value={viewingReviewer.email || ""} readOnly className={readOnlyClass} /></div>
-                <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Department (Course)</label><input type="text" value={viewingReviewer.department || "—"} readOnly className={readOnlyClass} /></div>
-                <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Qualification</label><input type="text" value={viewingReviewer.qualification || "—"} readOnly className={readOnlyClass} /></div>
-                <div><label className="block text-gray-500 text-xs font-medium mb-1.5">Experience</label><input type="text" value={viewingReviewer.experience ? `${viewingReviewer.experience} years` : "—"} readOnly className={readOnlyClass} /></div>
-              </div>
+            <div className="px-4 py-5 grid grid-cols-2 gap-4">
+              <div><label className="text-gray-500 text-xs">Full Name</label><input value={viewingReviewer.full_name || viewingReviewer.username} readOnly className={readOnlyClass} /></div>
+              <div><label className="text-gray-500 text-xs">Email</label><input value={viewingReviewer.email} readOnly className={readOnlyClass} /></div>
+              <div><label className="text-gray-500 text-xs">Department</label><input value={viewingReviewer.department || "—"} readOnly className={readOnlyClass} /></div>
+              <div><label className="text-gray-500 text-xs">Qualification</label><input value={viewingReviewer.qualification || "—"} readOnly className={readOnlyClass} /></div>
+              <div><label className="text-gray-500 text-xs">Experience</label><input value={viewingReviewer.experience ? `${viewingReviewer.experience} years` : "—"} readOnly className={readOnlyClass} /></div>
             </div>
-            <div className="sticky bottom-0 bg-white px-4 sm:px-6 py-4 border-t border-gray-200 flex justify-end">
-              <button onClick={() => setViewingReviewer(null)} className="bg-gray-100 hover:bg-gray-200 border border-gray-200 text-gray-700 hover:text-gray-800 px-5 py-2 rounded-lg transition-all text-sm font-medium">Close</button>
-            </div>
+            <div className="px-4 py-4 border-t flex justify-end"><button onClick={() => setViewingReviewer(null)} className="bg-gray-100 px-5 py-2 rounded-lg">Close</button></div>
           </div>
         </div>
       )}
