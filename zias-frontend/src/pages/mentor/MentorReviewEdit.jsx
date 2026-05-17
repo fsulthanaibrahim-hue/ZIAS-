@@ -1,7 +1,3 @@
-// src/pages/mentor/MentorReviewEdit.jsx
-// ✅ Past and current weeks are editable; future weeks are read‑only.
-// ✅ Mentors can now edit: Mentor Name, Extra Workouts Review, Review Date, English Score,
-//    Extra Workouts Mark (0-5), Progress Video Mark (0-5).
 import { useEffect, useState, useRef, useMemo } from "react";
 import { useSearchParams, Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
@@ -61,7 +57,8 @@ function MentorReviewEdit() {
 
   const editableFields = [
     "advisor_name", "extra_workouts", "review_date", "english_score",
-    "extra_workouts_mark", "progress_video_mark"   // added these two
+    "extra_workouts_mark", "progress_video_mark",
+    "week_back_status", "week_back_from", "week_back_remarks"
   ];
 
   const rows = useMemo(() => [
@@ -77,6 +74,16 @@ function MentorReviewEdit() {
     { label: "Progress Video Mark (0-5)", field: "progress_video_mark", type: "number", min: 0, max: 5, step: 1, editable: true },
     { label: "English Score (0-5)", field: "english_score", type: "number", min: 0, max: 5, step: 1, editable: true },
     { label: "English Review", field: "english_review", type: "textarea", editable: false },
+    { 
+      label: "Week Back Status",
+      field: "week_back_status",
+      type: "select",
+      options: ["repeated", "completed"],
+      editable: true,
+      displayMap: { no: "No", repeated: "Yes – Repeated", completed: "Yes – Already Completed" }
+    },
+    { label: "Week Back From", field: "week_back_from", type: "text", editable: true },
+    { label: "Remarks", field: "week_back_remarks", type: "textarea", editable: true },
   ], []);
 
   const computeCurrentWeek = (weeksList, reviewsMap) => {
@@ -131,8 +138,19 @@ function MentorReviewEdit() {
       const current = reviews[weekId] || {};
       const changedFields = {};
       for (const field of editableFields) {
-        if (current[field] !== original[field]) {
-          changedFields[field] = current[field] ?? "";
+        let newVal = current[field] ?? "";
+        let oldVal = original[field] ?? "";
+        
+        if (field === "week_back_status") {
+          if (newVal === "" || newVal === "no") newVal = null;
+          if (oldVal === "no") oldVal = null;
+        }
+        if (["extra_workouts_mark", "progress_video_mark", "english_score"].includes(field)) {
+          if (newVal === "") newVal = null;
+          else if (newVal !== null && !isNaN(newVal)) newVal = Number(newVal);
+        }
+        if (newVal !== oldVal) {
+          changedFields[field] = newVal;
         }
       }
       if (Object.keys(changedFields).length > 0) {
@@ -239,6 +257,11 @@ function MentorReviewEdit() {
     }
 
     if (!editable) {
+      if (row.field === "week_back_status") {
+        const displayMap = row.displayMap || { repeated: "Yes – Repeated", completed: "Yes – Already Completed" };
+        if (!value || value === "" || value === "no") return <div className="text-gray-800 text-sm">—</div>;
+        return <div className="text-gray-800 text-sm">{displayMap[value] || value}</div>;
+      }
       if (row.type === "textarea") return <div className="whitespace-pre-wrap text-gray-800 text-sm">{value || "—"}</div>;
       if (row.type === "select") return <div className="text-gray-800 text-sm">{value || "—"}</div>;
       return <div className="text-gray-800 text-sm">{value || "—"}</div>;
@@ -246,10 +269,14 @@ function MentorReviewEdit() {
 
     const onChange = (val) => handleChange(weekId, row.field, val);
     if (row.type === "select") {
+      const isWeekBack = row.field === "week_back_status";
+      let selectValue = (value === "no" || !value) ? "" : value;
       return (
-        <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full border rounded px-2 py-1 text-sm bg-blue-50">
-          <option value="">—</option>
-          {row.options.map(opt => <option key={opt}>{opt}</option>)}
+        <select value={selectValue} onChange={(e) => onChange(e.target.value)} className="w-full border rounded px-2 py-1 text-sm bg-blue-50">
+          {isWeekBack && <option value="">—</option>}
+          <option value="no">No</option>
+          <option value="repeated">Yes – Repeated</option>
+          <option value="completed">Yes – Already Completed</option>
         </select>
       );
     }
@@ -313,7 +340,6 @@ function MentorReviewEdit() {
           </div>
         </div>
 
-        {/* Desktop table */}
         <div className="hidden md:block overflow-x-auto bg-white rounded-xl border shadow-sm">
           <table className="min-w-full">
             <thead className="bg-gray-50 border-b">
@@ -351,7 +377,6 @@ function MentorReviewEdit() {
           </table>
         </div>
 
-        {/* Mobile cards */}
         <div className="md:hidden space-y-4">
           {weeks.map(week => {
             const isEditable = isWeekEditable(week.id);
@@ -402,7 +427,9 @@ function MentorReviewEdit() {
           ⭐ Star rating updates automatically.<br />
           🔗 Video links open in new tab.<br />
           ✏️ <strong>Past and current weeks are editable.</strong> Future weeks are read‑only.<br />
-          💡 Now mentors can edit Extra Workouts Mark and Progress Video Mark as well.
+          💡 Mentors can now edit: Mentor Name, Extra Workouts Review, Review Date, English Score,
+          Extra Workouts Mark (0-5), Progress Video Mark (0-5), Week Back Status, Week Back From, Remarks.<br />
+          📝 Week Back Status is empty by default – choose from dropdown only when needed.
         </div>
       </div>
     </div>

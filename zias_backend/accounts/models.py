@@ -233,6 +233,11 @@ class Notification(models.Model):
 
 
 class StudentWeekReview(models.Model):
+    WEEK_BACK_CHOICES = (
+        ('no', 'No'),
+        ('repeated', 'Yes - Repeated'),
+        ('completed', 'Yes - Completed'),
+    )
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='week_reviews')
     module = models.ForeignKey(Module, on_delete=models.CASCADE, related_name='student_reviews')
     
@@ -263,6 +268,10 @@ class StudentWeekReview(models.Model):
     total_score = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Total score out of 35")
     
     updated_at = models.DateTimeField(auto_now=True)
+
+    week_back_status = models.CharField(max_length=20, choices=WEEK_BACK_CHOICES, default='no')
+    week_back_from = models.CharField(max_length=10, blank=True, null=True)
+    week_back_remarks = models.TextField(blank=True, null=True)
 
     class Meta:
         unique_together = ['student', 'module']
