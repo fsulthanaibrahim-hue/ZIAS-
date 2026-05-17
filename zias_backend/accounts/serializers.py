@@ -1,4 +1,5 @@
 import secrets
+import random
 import string
 import re
 from django.core.mail import send_mail
@@ -348,9 +349,12 @@ class MentorSerializer(serializers.ModelSerializer):
 # ----------------------------
 # REVIEWER SERIALIZER
 # ----------------------------
-# ----------------------------
-# REVIEWER SERIALIZER – FIXED
-# ----------------------------
+
+def generate_random_password(length=10):
+    """Generate a random password for new users."""
+    chars = string.ascii_letters + string.digits
+    return ''.join(random.choice(chars) for _ in range(length))
+
 class ReviewerSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username', required=False, write_only=True)
     email = serializers.EmailField(source='user.email', required=True)
@@ -364,7 +368,7 @@ class ReviewerSerializer(serializers.ModelSerializer):
         user_data = validated_data.pop('user', {})
         email = validated_data.pop('email', user_data.get('email'))
         username = validated_data.pop('username', user_data.get('username'))
-        
+
         # 1. Find or create user by email
         user, user_created = User.objects.get_or_create(
             email=email,
@@ -373,39 +377,61 @@ class ReviewerSerializer(serializers.ModelSerializer):
                 'is_reviewer': True
             }
         )
-        
+
         # If user existed but not reviewer, update flag
         if not user_created and not user.is_reviewer:
             user.is_reviewer = True
             user.save()
-        
-        # 2. Find or create reviewer profile
+
+        # 2. Create or update reviewer profile
         reviewer, reviewer_created = Reviewer.objects.get_or_create(
             user=user,
             defaults=validated_data
         )
-        
+
         # If reviewer already existed, update its fields
         if not reviewer_created:
             for attr, value in validated_data.items():
                 setattr(reviewer, attr, value)
             reviewer.save()
-        
-        # 3. If new user was created, generate password and send email
+
+        # 3. If new user was created, generate password and send welcome email
         if user_created:
             random_password = generate_random_password()
             user.set_password(random_password)
             user.save()
-            # Send email logic (copy your existing email sending code here)
-            # ...
-        
+
+            # Send welcome email
+            expiry_days = getattr(settings, 'PASSWORD_EXPIRY_DAYS', 90)
+            domain = getattr(settings, 'SITE_DOMAIN', 'localhost:5173')
+            context = {
+                'username': user.username,
+                'password': random_password,
+                'expiry_days': expiry_days,
+                'domain': domain
+            }
+            try:
+                html_message = render_to_string('mail.html', context)
+                plain_message = strip_tags(html_message)
+                subject = '🎓 Welcome to ZIAS – Your Reviewer Account Credentials'
+                send_mail(
+                    subject,
+                    plain_message,
+                    settings.DEFAULT_FROM_EMAIL,
+                    [email],
+                    html_message=html_message,
+                    fail_silently=False
+                )
+            except Exception as e:
+                print(f"Email sending failed for reviewer {email}: {e}")
+
         return reviewer
 
     def update(self, instance, validated_data):
         user_data = validated_data.pop('user', {})
         new_username = validated_data.pop('username', user_data.get('username'))
         new_email = validated_data.pop('email', user_data.get('email'))
-        
+
         user = instance.user
         if new_username and new_username != user.username:
             if User.objects.filter(username=new_username).exists():
@@ -417,7 +443,7 @@ class ReviewerSerializer(serializers.ModelSerializer):
             user.email = new_email
         if new_username or new_email:
             user.save()
-        
+
         # Update reviewer fields
         instance.department = validated_data.get('department', instance.department)
         instance.qualification = validated_data.get('qualification', instance.qualification)
@@ -427,7 +453,8 @@ class ReviewerSerializer(serializers.ModelSerializer):
         instance.save()
         return instance
     
-    
+
+
 
 # ----------------------------
 # STUDENT MODULE SERIALIZER
