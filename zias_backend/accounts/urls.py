@@ -1,3 +1,4 @@
+# zias_backend/urls.py
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
@@ -13,11 +14,12 @@ from .views import (
     ChatMessageListCreateView, ClearChatMessagesView, MarkMessagesReadView,
     UploadStudentDocumentView, NotificationViewSet, StudentDocumentListView,
     StudentDocumentDeleteView, MentorDocumentListView, UploadMentorDocumentView,
-    MentorDocumentDeleteView, RespondToMessageView, ReviewAssignmentViewSet, 
+    MentorDocumentDeleteView, RespondToMessageView, ReviewAssignmentViewSet,
     UnreadNotificationCountView, StudentReviewStatusView, StudentSubmissionListCreateView,
     SubmissionBulkUpdateView, CheckInView, CheckOutView, AttendanceHistoryView,
-    AccountsViewSet, RegisterUserView, FeePaymentViewSet, AccountsDashboardView, 
-    AccountsStudentListView, AccountsProfileView, StudentFeeSummaryView
+    AccountsViewSet, RegisterUserView, FeePaymentViewSet, AccountsDashboardView,
+    AccountsStudentListView, AccountsProfileView, StudentFeeSummaryView,
+    FeeStructureViewSet, StudentFeeViewSet, InstallmentScheduleViewSet   # ✅ added missing imports
 )
 
 router = DefaultRouter()
@@ -36,6 +38,9 @@ router.register('review-folders', ReviewFolderViewSet, basename='review-folder')
 router.register('notifications', NotificationViewSet, basename='notification')
 router.register('review-assignments', ReviewAssignmentViewSet, basename='review-assignment')
 router.register('fee-payments', FeePaymentViewSet, basename='fee-payment')
+router.register('fee-structures', FeeStructureViewSet, basename='fee-structure')
+router.register('student-fees', StudentFeeViewSet, basename='student-fees')
+router.register('installments', InstallmentScheduleViewSet, basename='installments')
 
 urlpatterns = [
     path('api/notifications/unread-count/', UnreadNotificationCountView.as_view(), name='unread-count'),

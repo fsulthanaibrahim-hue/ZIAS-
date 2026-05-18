@@ -1,4 +1,4 @@
-// src/components/Sidebar.jsx – added Review Folders navigation + Attendance icon + Fee Overview
+// src/components/Sidebar.jsx – added Student Fee Management link
 import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import NotificationBell from "./NotificationBell";
@@ -64,6 +64,14 @@ function getIcon(label) {
       return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}>
         <path d="M3 2h10v12H3V2zm1 1v10h8V3H4zm2 2h4v1H6V5zm0 2h4v1H6V7zm0 2h2v1H6V9z"/>
       </svg>;
+    case "Fee Structure":
+      return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}>
+        <path d="M2 1h12v3H2V1zm1 1v1h10V2H3zm-1 4h12v3H2V6zm1 1v1h10V7H3zm-1 4h12v3H2v-3zm1 1v1h10v-1H3z"/>
+      </svg>;
+    case "Student Fee Management":
+      return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}>
+        <path d="M8 8a3 3 0 100-6 3 3 0 000 6zm-5 6a5 5 0 0110 0H3zm6.5-7a2.5 2.5 0 110 5 2.5 2.5 0 010-5zm0 1a1.5 1.5 0 100 3 1.5 1.5 0 000-3zM2 2.5a.5.5 0 01.5-.5h3a.5.5 0 010 1h-3a.5.5 0 01-.5-.5zm0 2a.5.5 0 01.5-.5h3a.5.5 0 010 1h-3a.5.5 0 01-.5-.5z"/>
+      </svg>;
     case "Profile":
       return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}><path d="M8 8a3 3 0 100-6 3 3 0 000 6zm-2 1a5 5 0 00-5 5h14a5 5 0 00-5-5H6z" /></svg>;
     default:
@@ -101,8 +109,10 @@ function Sidebar() {
     { path: "/admin/review-folders", label: "Review Folders" },
     { path: "/admin/attendance", label: "Attendance" },
     { path: "/admin/accounts", label: "Accounts" },
+    { path: "/admin/fee-structure", label: "Fee Structure" },
     { path: "/admin/fee-analytics", label: "Fee Analytics" },
-    { path: "/admin/fee-overview", label: "Fee Overview" },   // ✅ New menu item
+    { path: "/admin/fee-overview", label: "Fee Overview" },
+    { path: "/admin/student-fee-management", label: "Student Fee Management" }, // ← new link
     { path: "/admin/messages", label: "Messages" },
     { path: "/admin/review-sheets", label: "Review Sheets" },
     { path: "/admin/profile", label: "Profile" },
@@ -110,11 +120,11 @@ function Sidebar() {
 
   return (
     <aside
-      className={`bg-white border-r border-gray-200 flex flex-col h-screen sticky top-0 font-sans transition-all duration-300 ${
+      className={`bg-white border-r border-gray-200 flex-col h-screen sticky top-0 font-sans transition-all duration-300 ${
         isCollapsed ? "w-20" : "w-64"
       }`}
+      style={{ display: "flex" }}
     >
-      {/* Header: clickable logo (left) and notification bell (right) */}
       <div className="p-3 border-b border-gray-200 flex items-center justify-between gap-2">
         <button
           onClick={toggleSidebar}
@@ -140,8 +150,6 @@ function Sidebar() {
             </div>
           )}
         </button>
-
-        {/* Notification bell – only visible when sidebar is expanded */}
         {!isCollapsed && <NotificationBell />}
       </div>
 

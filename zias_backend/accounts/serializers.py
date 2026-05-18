@@ -14,7 +14,8 @@ from .models import (
     User, Student, Mentor, Reviewer, Course, Module, Day, Task, Batch,
     StudentModule, ContactMessage, StudentWeekReview, WeekUpdate, ReviewFolder,
     ChatRoom, ChatMessage, CourseStatus, Notification, StudentDocument, MentorDocument,
-    ReviewAssignment, WeeklySubmission, AttendanceRecord, Accounts, FeePayment
+    ReviewAssignment, WeeklySubmission, AttendanceRecord, Accounts, FeePayment, FeeStructure,
+    InstallmentSchedule, StudentFee, StudentFeePayment,
 )
 
 
@@ -682,5 +683,38 @@ class StudentFeeSummarySerializer(serializers.Serializer):
     agreement_signed = serializers.BooleanField()
     escalation_flag = serializers.BooleanField()
     week_back_fee_status = serializers.CharField()
+
+
+
+class FeeStructureSerializer(serializers.ModelSerializer):
+    installments = serializers.SerializerMethodField()
+
+    class Meta:
+        model = FeeStructure
+        fields = '__all__'
+
+    def get_installments(self, obj):
+        return InstallmentScheduleSerializer(obj.installments.all(), many=True).data
+
+class InstallmentScheduleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = InstallmentSchedule
+        fields = '__all__'
+
+class StudentFeeSerializer(serializers.ModelSerializer):
+    student_name = serializers.CharField(source='student.full_name', read_only=True)
+    course_name = serializers.CharField(source='student.course', read_only=True)
+    pending_amount = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = StudentFee
+        fields = '__all__'
+
+class StudentFeePaymentSerializer(serializers.ModelSerializer):
+    student_name = serializers.CharField(source='student_fee.student.full_name', read_only=True)
+
+    class Meta:
+        model = StudentFeePayment
+        fields = '__all__'
 
 

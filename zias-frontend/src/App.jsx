@@ -59,6 +59,7 @@ import AdminAttendance from "./Admin/AdminAttendance";
 import ModuleDetail from "./Admin/ModuleDetail";
 import Accounts from "./Admin/Accounts";
 import FeeAnalytics from "./Admin/FeeAnalytics";
+import AdminFeeStructure from "./Admin/AdminFeeStructure";
 
 
 
@@ -89,6 +90,7 @@ import AccountsProfile from "./pages/accounts/AccountsProfile";
 import AccountsInvoices from "./pages/accounts/AccountsInvoices";
 import StudentFees from "./pages/student/StudentFees";
 import FeeOverview from "./Admin/FeeOverview";
+import AdminStudentFeeManagement from "./Admin/AdminStudentFeeManagement";
 
 
 
@@ -377,6 +379,8 @@ function App() {
         <Route path="/admin/accounts" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Accounts /></div></AdminRoute>} />
         <Route path="/admin/fee-analytics" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><FeeAnalytics /></div></AdminRoute>} />
         <Route path="/admin/fee-overview" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><FeeOverview /></div></AdminRoute>} />
+        <Route path="/admin/fee-structure" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><AdminFeeStructure /></div></AdminRoute>} />
+        <Route path="/admin/student-fee-management" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><AdminStudentFeeManagement /></div></AdminRoute>} />
 
         {/* Accounts routes – protected by AccountsRoute */}
         <Route path="/accounts/dashboard" element={
@@ -432,4 +436,3 @@ function App() {
 }
 
 export default App;
-

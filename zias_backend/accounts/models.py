@@ -564,6 +564,117 @@ class FeePayment(models.Model):
         return f"{self.student.user.username} - {self.amount}"
 
 
+# Fee Structure models
+class FeeStructure(models.Model):
+    name = models.CharField(max_length=200)
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='fee_structures', null=True, blank=True)
+    batch = models.ForeignKey(Batch, on_delete=models.CASCADE, related_name='fee_structures', null=True, blank=True)
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    number_of_installments = models.PositiveSmallIntegerField(default=1)
+    late_fee_per_day = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    discount_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.name} - {self.course.name if self.course else 'General'}"
+
+    def get_installments(self):
+        """Generate installment schedule based on number_of_installments"""
+        if self.number_of_installments <= 1:
+            return [{
+                'installment_number': 1,
+                'amount': self.total_amount * (1 - self.discount_percentage / 100),
+                'due_date': None,
+                'late_fee': 0
+            }]
+        # Simple equal installments
+        installment_amount = self.total_amount / self.number_of_installments
+        installments = []
+        for i in range(self.number_of_installments):
+            installments.append({
+                'installment_number': i + 1,
+                'amount': installment_amount * (1 - self.discount_percentage / 100),
+                'due_date': None,  # can be set via separate schedule
+                'late_fee': 0
+            })
+        return installments
+
+class InstallmentSchedule(models.Model):
+    fee_structure = models.ForeignKey(FeeStructure, on_delete=models.CASCADE, related_name='installments')
+    installment_number = models.PositiveSmallIntegerField()
+    due_date = models.DateField()
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    late_fee_after_due = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    class Meta:
+        ordering = ['installment_number']
+        unique_together = ['fee_structure', 'installment_number']
+
+    def __str__(self):
+        return f"{self.fee_structure.name} - Instalment {self.installment_number}"
+
+class StudentFee(models.Model):
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='fees')
+    fee_structure = models.ForeignKey(FeeStructure, on_delete=models.SET_NULL, null=True)
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    paid_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    discount_applied = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    status = models.CharField(max_length=20, choices=[
+        ('pending', 'Pending'),
+        ('partial', 'Partial'),
+        ('paid', 'Paid'),
+        ('overdue', 'Overdue')
+    ], default='pending')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    @property
+    def pending_amount(self):
+        return self.total_amount - self.paid_amount - self.discount_applied
+
+    def update_status(self):
+        pending = self.pending_amount
+        if pending <= 0:
+            self.status = 'paid'
+        elif self.paid_amount > 0:
+            self.status = 'partial'
+        else:
+            # check overdue based on installments
+            today = timezone.now().date()
+            overdue_installments = self.installment_payments.filter(due_date__lt=today, paid=False)
+            if overdue_installments.exists():
+                self.status = 'overdue'
+            else:
+                self.status = 'pending'
+        self.save()
+
+class StudentFeePayment(models.Model):
+    student_fee = models.ForeignKey(StudentFee, on_delete=models.CASCADE, related_name='payments')
+    installment = models.ForeignKey(InstallmentSchedule, on_delete=models.SET_NULL, null=True, blank=True)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    payment_date = models.DateField(auto_now_add=True)
+    receipt_number = models.CharField(max_length=50, unique=True, blank=True)
+    payment_method = models.CharField(max_length=50, choices=[
+        ('cash', 'Cash'),
+        ('card', 'Card'),
+        ('bank_transfer', 'Bank Transfer'),
+        ('online', 'Online')
+    ])
+    notes = models.TextField(blank=True)
+
+    def save(self, *args, **kwargs):
+        if not self.receipt_number:
+            self.receipt_number = f"REC-{timezone.now().strftime('%Y%m%d%H%M%S')}-{self.student_fee.id}"
+        super().save(*args, **kwargs)
+        # Update student fee totals
+        student_fee = self.student_fee
+        student_fee.paid_amount += self.amount
+        student_fee.save()
+        student_fee.update_status()
+
+
+
 # ========== POST-SAVE SIGNAL: AUTO-CREATE PROFILES ==========
 from django.db.models.signals import post_save
 from django.dispatch import receiver

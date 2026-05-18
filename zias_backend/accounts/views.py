@@ -30,7 +30,8 @@ from .models import (
     User, Student, Mentor, Reviewer, Course, Module, Day, Task, Batch,
     StudentModule, PasswordResetToken, ContactMessage, StudentWeekReview, WeekUpdate, 
     ReviewFolder, ChatRoom, ChatMessage, CourseStatus, Notification, StudentDocument,
-    MentorDocument, ReviewAssignment, WeeklySubmission, AttendanceRecord, FeePayment, Accounts
+    MentorDocument, ReviewAssignment, WeeklySubmission, AttendanceRecord, FeePayment, 
+    Accounts, FeeStructure, InstallmentSchedule, StudentFee, StudentFeePayment,
 )
 
 from .serializers import (
@@ -40,7 +41,8 @@ from .serializers import (
     WeekUpdateSerializer, ReviewFolderSerializer, ChatRoomSerializer, ChatMessageSerializer, 
     CourseStatusSerializer, NotificationSerializer, StudentDocumentSerializer, MentorDocumentSerializer, 
     ReviewAssignmentSerializer, WeeklySubmissionSerializer, AttendanceRecordSerializer, FeePaymentSerializer,
-    AccountsSerializer, 
+    AccountsSerializer, FeeStructureSerializer, InstallmentScheduleSerializer, StudentFeePaymentSerializer, 
+    StudentFeeSerializer,
 )
 
 from .permissions import (
@@ -1890,8 +1892,11 @@ class AccountsProfileView(SafeAPIView):
         return Response({'detail': 'Profile updated successfully'})
 
 
-class StudentFeeSummaryView(SafeAPIView):
-    permission_classes = [IsAuthenticated]
+# ----------------------------
+# STUDENT FEE SUMMARY VIEW (for students)
+# ----------------------------
+class StudentFeeSummaryView(APIView):   # replaced SafeAPIView with APIView
+    permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         user = request.user
@@ -1902,6 +1907,8 @@ class StudentFeeSummaryView(SafeAPIView):
         except Student.DoesNotExist:
             return Response({"detail": "Student profile not found"}, status=status.HTTP_404_NOT_FOUND)
 
+        # Use your actual payment model – adjust field names as needed
+        # Example using FeePayment model (replace with StudentFeePayment if different)
         payments = FeePayment.objects.filter(student=student).order_by('-due_date')
         total_paid = payments.filter(status='paid').aggregate(total=Sum('amount'))['total'] or 0
         total_pending = payments.filter(status='pending').aggregate(total=Sum('amount'))['total'] or 0
@@ -1942,5 +1949,71 @@ class StudentFeeSummaryView(SafeAPIView):
             'escalation_flag': student.escalation_flag,
             'payments': payments_list,
         })
-    
+
+
+
+# ----------------------------
+# FEE STRUCTURE VIEWSET
+# ----------------------------
+class FeeStructureViewSet(viewsets.ModelViewSet):
+    queryset = FeeStructure.objects.all()
+    serializer_class = FeeStructureSerializer
+    permission_classes = [permissions.IsAdminUser]
+
+    @action(detail=True, methods=['post'])
+    def apply_to_students(self, request, pk=None):
+        fee_structure = self.get_object()
+        students = Student.objects.all()
+        if fee_structure.course:
+            students = students.filter(course=fee_structure.course)
+        if fee_structure.batch:
+            students = students.filter(batch=fee_structure.batch)
+
+        created_count = 0
+        for student in students:
+            if not StudentFee.objects.filter(student=student, fee_structure=fee_structure).exists():
+                StudentFee.objects.create(
+                    student=student,
+                    fee_structure=fee_structure,
+                    total_amount=fee_structure.total_amount * (1 - fee_structure.discount_percentage / 100),
+                    discount_applied=fee_structure.total_amount * fee_structure.discount_percentage / 100
+                )
+                created_count += 1
+        return Response({"message": f"Fee structure applied to {created_count} students."})
+
+
+
+
+# ----------------------------
+# STUDENT FEE VIEWSET (admin)
+# ----------------------------
+class StudentFeeViewSet(viewsets.ModelViewSet):
+    queryset = StudentFee.objects.all()
+    serializer_class = StudentFeeSerializer
+    permission_classes = [permissions.IsAdminUser]
+
+    @action(detail=True, methods=['post'])
+    def add_payment(self, request, pk=None):
+        student_fee = self.get_object()
+        amount = request.data.get('amount')
+        if not amount:
+            return Response({"error": "Amount required"}, status=status.HTTP_400_BAD_REQUEST)
+        payment = StudentFeePayment.objects.create(
+            student_fee=student_fee,
+            amount=amount,
+            payment_method=request.data.get('payment_method', 'cash'),
+            notes=request.data.get('notes', '')
+        )
+        return Response(StudentFeePaymentSerializer(payment).data)
+
+
+# ----------------------------
+# INSTALLMENT SCHEDULE VIEWSET (admin)
+# ----------------------------
+class InstallmentScheduleViewSet(viewsets.ModelViewSet):
+    queryset = InstallmentSchedule.objects.all()
+    serializer_class = InstallmentScheduleSerializer
+    permission_classes = [permissions.IsAdminUser]
+
+
     
