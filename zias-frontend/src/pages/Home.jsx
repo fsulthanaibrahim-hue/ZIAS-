@@ -336,7 +336,7 @@ const Home = () => {
                 <img src={coursesImg} alt="BCA" className="w-32 h-32 md:w-40 md:h-40 object-cover rounded-xl shadow-md" />
               </div>
               <h3 className="text-3xl font-black text-gray-900 mb-1" style={{ fontFamily: "'Georgia', serif" }}>BCA</h3>
-              <span className="text-xs font-bold px-3 py-1 rounded-full bg-green-100 text-green-700 mb-4 inline-block">Bachelor of Computer Applications</span>
+              <span className="text-xs font-bold px-3 py-1 rounded-full bg-green-100 text-green-700 mb-4 inline-block">FullStack Development</span>
               <div className="mt-2 mb-6 w-full text-left">
                 <p className="text-sm font-semibold text-gray-700 mb-3">Integrated with</p>
                 <ul className="space-y-2">
@@ -366,7 +366,7 @@ const Home = () => {
               <div className="flex justify-center mb-4">
                 <img src={pythonImg} alt="BBA" className="w-32 h-32 md:w-40 md:h-40 object-cover rounded-xl shadow-md" />
               </div>
-              <h3 className="text-3xl font-black text-gray-900 mb-1" style={{ fontFamily: "'Georgia', serif" }}>BBA</h3>
+              <h3 className="text-3xl font-black text-gray-900 mb-1" style={{ fontFamily: "'Georgia', serif" }}>Python Development</h3>
               <span className="text-xs font-bold px-3 py-1 rounded-full bg-green-100 text-green-700 mb-4 inline-block">Bachelor of Business Administration</span>
               <div className="mt-2 mb-6 w-full text-left">
                 <p className="text-sm font-semibold text-gray-700 mb-3">Integrated with</p>
@@ -395,7 +395,7 @@ const Home = () => {
               <div className="flex justify-center mb-4">
                 <img src={mernImg} alt="MCA" className="w-32 h-32 md:w-40 md:h-40 object-cover rounded-xl shadow-md" />
               </div>
-              <h3 className="text-3xl font-black text-gray-900 mb-1" style={{ fontFamily: "'Georgia', serif" }}>MCA</h3>
+              <h3 className="text-3xl font-black text-gray-900 mb-1" style={{ fontFamily: "'Georgia', serif" }}>MERN Stack Development</h3>
               <span className="text-xs font-bold px-3 py-1 rounded-full bg-green-100 text-green-700 mb-4 inline-block">Master of Computer Applications</span>
               <div className="mt-2 mb-6 w-full text-left">
                 <p className="text-sm font-semibold text-gray-700 mb-3">Integrated with</p>
