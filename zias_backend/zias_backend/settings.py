@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 import os
+from decouple import config 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -21,12 +22,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-&tg+%kt4brbkxx1k9qx8xf+m#@wfxwch6=q6(w=^a61h)5u%_^'
+SECRET_KEY = config('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG =  config('DEBUG', default=False, cast=bool)
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='').split(',')
 
 
 # Application definition
@@ -52,11 +53,11 @@ MIDDLEWARE = [
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',   # ← Must be BEFORE custom middleware
+    'django.contrib.auth.middleware.AuthenticationMiddleware',  
     'accounts.middleware.WeeklyDashboardLockMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'accounts.middleware.PasswordExpiryMiddleware',              # ← Now after AuthenticationMiddleware
+    'accounts.middleware.PasswordExpiryMiddleware',              
 ]
 
 
@@ -88,11 +89,11 @@ WSGI_APPLICATION = 'zias_backend.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'zias_db',
-        'USER': 'postgres',
-        'PASSWORD': 'fullstack',
-        'HOST': 'localhost',
-        'PORT': '5432',
+        'NAME': config('DB_NAME'),
+        'USER': config('DB_USER'),
+        'PASSWORD': config('DB_PASSWORD'),
+        'HOST': config('DB_HOST'),
+        'PORT': config('DB_PORT'),
     }
 }
 
@@ -145,20 +146,22 @@ AUTH_USER_MODEL = 'accounts.User'
 ASGI_APPLICATION = 'zias_backend.asgi.application'
 
 
+# Redis / Channels
+REDIS_HOST = config('REDIS_HOST', default='127.0.0.1')
+REDIS_PORT = config('REDIS_PORT', default=6379, cast=int)
+
 CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
-        'CONFIG': {
-            'hosts': [('127.0.0.1', 6379)],
-        },
+        'CONFIG': {'hosts': [(REDIS_HOST, REDIS_PORT)]},
     },
 }
 
 
 
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-]
+CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:5173').split(',')
+
+
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -187,10 +190,11 @@ EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'fsulthanaibrahim@gmail.com'
-EMAIL_HOST_PASSWORD = 'mrujggtxgaugbzec'      
-DEFAULT_FROM_EMAIL = 'ZIAS <fsulthanaibrahim@gmail.com>'
-ADMIN_EMAIL = 'admin@gmail.com'
+EMAIL_HOST_USER = config('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD')     
+DEFAULT_FROM_EMAIL =  f'ZIAS <{EMAIL_HOST_USER}>'
+ADMIN_EMAIL = config('ADMIN_EMAIL', default='admin@example.com')
+
 
 
 
@@ -207,8 +211,8 @@ PASSWORD_EXPIRY_DAYS = 3
 
 
 # Celery settings
-CELERY_BROKER_URL = 'redis://172.19.64.246:6379/0'
-CELERY_RESULT_BACKEND = 'redis://172.19.64.246:6379/0'
+CELERY_BROKER_URL = config('REDIS_URL', default='redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = config('REDIS_URL', default='redis://localhost:6379/0')
 
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
