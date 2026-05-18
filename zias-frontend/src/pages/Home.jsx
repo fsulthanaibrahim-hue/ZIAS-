@@ -319,25 +319,24 @@ const Home = () => {
             className="text-2xl md:text-4xl font-extrabold text-center mb-12 text-gray-900"
             style={{ fontFamily: "'Georgia', serif" }}
           >
-            Skill-Integrated Degree Programs
+            Skill-Integrated Programs
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {/* BCA Card */}
+
+            {/* fullstack Card */}
             <div
               className="rounded-2xl p-6 transition-all duration-300 flex flex-col items-center text-center relative"
               style={styles.cardGlow}
               onMouseEnter={(e) => Object.assign(e.currentTarget.style, styles.cardHoverGlow)}
               onMouseLeave={(e) => Object.assign(e.currentTarget.style, styles.cardGlow)}
             >
-              <div className="absolute top-4 left-4 bg-green-500 text-white text-xs font-bold w-8 h-8 rounded-full flex items-center justify-center shadow-md">
-                01
-              </div>
               <div className="flex justify-center mb-4">
                 <img src={coursesImg} alt="BCA" className="w-32 h-32 md:w-40 md:h-40 object-cover rounded-xl shadow-md" />
               </div>
-              <h3 className="text-3xl font-black text-gray-900 mb-1" style={{ fontFamily: "'Georgia', serif" }}>BCA</h3>
-              <span className="text-xs font-bold px-3 py-1 rounded-full bg-green-100 text-green-700 mb-4 inline-block">FullStack Development</span>
+              <br/>
+              <h3 className="text-3xl font-black text-gray-900 mb-1" style={{ fontFamily: "'Georgia', serif" }}>FullStack Development</h3>
               <div className="mt-2 mb-6 w-full text-left">
+                <br/>
                 <p className="text-sm font-semibold text-gray-700 mb-3">Integrated with</p>
                 <ul className="space-y-2">
                   <li className="flex items-center gap-2 text-sm text-gray-600"><FaCheckCircle className="text-green-500 text-xs" /> Full Stack Development</li>
@@ -353,26 +352,24 @@ const Home = () => {
               </div>
             </div>
 
-            {/* BBA Card */}
+            {/* Python Card */}
             <div
               className="rounded-2xl p-6 transition-all duration-300 flex flex-col items-center text-center relative"
               style={styles.cardGlow}
               onMouseEnter={(e) => Object.assign(e.currentTarget.style, styles.cardHoverGlow)}
               onMouseLeave={(e) => Object.assign(e.currentTarget.style, styles.cardGlow)}
             >
-              <div className="absolute top-4 left-4 bg-green-500 text-white text-xs font-bold w-8 h-8 rounded-full flex items-center justify-center shadow-md">
-                02
-              </div>
               <div className="flex justify-center mb-4">
                 <img src={pythonImg} alt="BBA" className="w-32 h-32 md:w-40 md:h-40 object-cover rounded-xl shadow-md" />
               </div>
+              <br/>
               <h3 className="text-3xl font-black text-gray-900 mb-1" style={{ fontFamily: "'Georgia', serif" }}>Python Development</h3>
-              <span className="text-xs font-bold px-3 py-1 rounded-full bg-green-100 text-green-700 mb-4 inline-block">Bachelor of Business Administration</span>
               <div className="mt-2 mb-6 w-full text-left">
+                <br/>
                 <p className="text-sm font-semibold text-gray-700 mb-3">Integrated with</p>
                 <ul className="space-y-2">
-                  <li className="flex items-center gap-2 text-sm text-gray-600"><FaCheckCircle className="text-green-500 text-xs" /> Digital Marketing</li>
-                  <li className="flex items-center gap-2 text-sm text-gray-600"><FaCheckCircle className="text-green-500 text-xs" /> Creative Visual Media</li>
+                  <li className="flex items-center gap-2 text-sm text-gray-600"><FaCheckCircle className="text-green-500 text-xs" /> Python & Django</li>
+                  <li className="flex items-center gap-2 text-sm text-gray-600"><FaCheckCircle className="text-green-500 text-xs" /> Postgresql</li>
                 </ul>
               </div>
               <div className="mt-auto pt-6">
@@ -382,22 +379,20 @@ const Home = () => {
               </div>
             </div>
 
-            {/* MCA Card */}
+            {/* MERN Card */}
             <div
               className="rounded-2xl p-6 transition-all duration-300 flex flex-col items-center text-center relative"
               style={styles.cardGlow}
               onMouseEnter={(e) => Object.assign(e.currentTarget.style, styles.cardHoverGlow)}
               onMouseLeave={(e) => Object.assign(e.currentTarget.style, styles.cardGlow)}
             >
-              <div className="absolute top-4 left-4 bg-green-500 text-white text-xs font-bold w-8 h-8 rounded-full flex items-center justify-center shadow-md">
-                03
-              </div>
               <div className="flex justify-center mb-4">
                 <img src={mernImg} alt="MCA" className="w-32 h-32 md:w-40 md:h-40 object-cover rounded-xl shadow-md" />
               </div>
-              <h3 className="text-3xl font-black text-gray-900 mb-1" style={{ fontFamily: "'Georgia', serif" }}>MERNStack Development</h3>
-              <span className="text-xs font-bold px-3 py-1 rounded-full bg-green-100 text-green-700 mb-4 inline-block">Master of Computer Applications</span>
+              <br/>
+              <h3 className="text-3xl font-black text-gray-900 mb-1" style={{ fontFamily: "'Georgia', serif" }}>MERN Stack Development</h3>
               <div className="mt-2 mb-6 w-full text-left">
+                <br/>
                 <p className="text-sm font-semibold text-gray-700 mb-3">Integrated with</p>
                 <ul className="space-y-2">
                   <li className="flex items-center gap-2 text-sm text-gray-600"><FaCheckCircle className="text-green-500 text-xs" /> Full Stack Development</li>
