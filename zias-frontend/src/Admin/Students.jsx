@@ -95,6 +95,7 @@ function Students() {
   const [loadingEditDocs, setLoadingEditDocs] = useState(false);
   const [progressStudent, setProgressStudent] = useState(null);
   const [showProgressModal, setShowProgressModal] = useState(false);
+  const [emailError, setEmailError] = useState("");
 
   const [formData, setFormData] = useState({
     full_name: "", email: "", course_id: "", batch_id: "", mentor_id: "",
@@ -190,6 +191,7 @@ function Students() {
     if (['phone', 'fathers_contact', 'mothers_contact', 'parent_phone', 'emergency_contact'].includes(name))
       handlePhoneChange(name, value);
     else setFormData(prev => ({ ...prev, [name]: value }));
+    if (name === 'email') setEmailError("");
   };
 
   const generateUsername = (email, fullName) => {
@@ -253,12 +255,22 @@ function Students() {
       parent_name: "", parent_phone: "", emergency_contact: "",
     });
     setPhoneError(""); setFathersContactError(""); setMothersContactError("");
-    setParentPhoneError(""); setEmergencyContactError("");
+    setParentPhoneError(""); setEmergencyContactError(""); setEmailError("");
     setSelectedFiles([]); setEditDocuments([]);
   };
 
+  // ================= FIXED handleSubmit =================
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Email is required
+    if (!formData.email.trim()) {
+      setEmailError("Email is required");
+      showToast("Email is required", "error");
+      return;
+    }
+
+    // Phone validations
     const checks = [
       { field: 'phone', setErr: setPhoneError, label: 'Student phone' },
       { field: 'fathers_contact', setErr: setFathersContactError, label: "Father's contact" },
@@ -269,16 +281,20 @@ function Students() {
     let hasError = false;
     for (const { field, setErr, label } of checks) {
       const val = formData[field];
-      if (val && !/^\d{10}$/.test(val)) { setErr('Must be 10 digits'); showToast(`${label} must be 10 digits`, "error"); hasError = true; }
-      else setErr('');
+      if (val && !/^\d{10}$/.test(val)) {
+        setErr('Must be 10 digits');
+        showToast(`${label} must be 10 digits`, "error");
+        hasError = true;
+      } else setErr('');
     }
     if (hasError) return;
 
     const courseObj = coursesList.find(c => c.id === parseInt(formData.course_id));
     const batchObj = batchesList.find(b => b.id === parseInt(formData.batch_id));
+
     const payload = {
       full_name: formData.full_name?.trim() || null,
-      email: formData.email,
+      email: formData.email.trim(),
       course: courseObj?.name || null,
       batch: batchObj?.name || null,
       mentor: formData.mentor_id ? parseInt(formData.mentor_id) : null,
@@ -316,16 +332,19 @@ function Students() {
       const data = error.response?.data;
       let msg = "An unexpected error occurred.";
       if (data) {
-        const messages = [];
-        if (data.username) messages.push(`Username: ${data.username.join(', ')}`);
-        if (data.email) messages.push(`Email: ${data.email.join(', ')}`);
-        if (data.detail) messages.push(data.detail);
-        if (messages.length) msg = messages.join('; ');
-        else msg = "Validation error. Please check the data.";
+        const firstKey = Object.keys(data)[0];
+        if (firstKey && data[firstKey] && data[firstKey][0]) {
+          msg = `${firstKey}: ${data[firstKey][0]}`;
+        } else if (data.detail) {
+          msg = data.detail;
+        }
       }
       showToast(msg, "error");
-    } finally { setSubmitting(false); }
+    } finally {
+      setSubmitting(false);
+    }
   };
+  // ================= end of fixed handleSubmit =================
 
   const handleEdit = async (student) => {
     setEditingId(student.id);
@@ -356,7 +375,6 @@ function Students() {
     setViewerDocuments(docs);
   };
 
-  // Helper: get first letter of name (or username)
   const getFirstLetter = (name) => {
     if (!name) return "?";
     const first = name.trim().charAt(0);
@@ -391,7 +409,6 @@ function Students() {
     return pages;
   };
 
-  // ─── Shared styles ───────────────────────────────────────────────────────
   const inputCls =
     "w-full bg-white border border-green-200 rounded-xl px-4 py-2.5 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 text-sm transition-all";
   const readOnlyCls =
@@ -443,7 +460,6 @@ function Students() {
           </div>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            {/* Search */}
             <div className="relative w-full sm:w-64">
               <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -527,7 +543,11 @@ function Students() {
                   <p className={`${sectionTitleCls} text-green-600`}>Basic Information</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div><label className={labelCls}>Full Name</label><input type="text" name="full_name" value={formData.full_name} onChange={handleChange} className={inputCls} /></div>
-                    <div><label className={labelCls}>Email *</label><input type="email" name="email" value={formData.email} onChange={handleChange} required className={inputCls} /></div>
+                    <div>
+                      <label className={labelCls}>Email *</label>
+                      <input type="email" name="email" value={formData.email} onChange={handleChange} required className={inputCls} />
+                      {emailError && <p className="text-red-500 text-xs mt-1">{emailError}</p>}
+                    </div>
                     <div>
                       <label className={labelCls}>Course *</label>
                       <select name="course_id" value={formData.course_id} onChange={handleChange} required className={inputCls}>
@@ -654,7 +674,7 @@ function Students() {
           </div>
         )}
 
-        {/* ── View Student Modal (first letter in circle) ──────────────────── */}
+        {/* ── View Student Modal ────────────────────────────────────────────── */}
         {viewingStudent && (
           <div
             className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4"
@@ -666,7 +686,6 @@ function Students() {
             >
               <div className="sticky top-0 bg-white px-6 py-4 border-b border-green-100 rounded-t-2xl flex justify-between items-center">
                 <div className="flex items-center gap-3">
-                  {/* First letter circle */}
                   <div className="w-10 h-10 rounded-full bg-green-600 flex items-center justify-center text-white font-semibold text-sm shadow-sm">
                     {getFirstLetter(viewingStudent.full_name || viewingStudent.username)}
                   </div>
@@ -775,7 +794,7 @@ function Students() {
           </div>
         )}
 
-        {/* ── Students Table (first letter in circle) ─────────────────────── */}
+        {/* ── Students Table ────────────────────────────────────────────── */}
         <div className="bg-white rounded-2xl border border-green-100 overflow-hidden shadow-sm">
           <div className="h-1 bg-gradient-to-r from-green-500 to-green-300" />
 
@@ -805,7 +824,6 @@ function Students() {
                 <tr key={s.id} className="row-hover transition-colors">
                   <td data-label="Student" className="px-4 py-3.5">
                     <div className="flex items-center gap-3">
-                      {/* First letter circle */}
                       <div className="w-9 h-9 rounded-full bg-green-600 flex items-center justify-center text-white text-sm font-semibold shadow-sm">
                         {getFirstLetter(s.full_name || s.username)}
                       </div>

@@ -1,40 +1,73 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.utils import timezone
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from django.db.models import Sum   # ✅ added for fee aggregation
 
-
+# ========== USER MODEL ==========
 class User(AbstractUser):
-    is_admin = models.BooleanField(default=False)
-    is_student = models.BooleanField(default=False)
-    is_mentor = models.BooleanField(default=False)
-    is_reviewer = models.BooleanField(default=False)
-    is_accounts = models.BooleanField(default=False)
-    password_changed_at = models.DateTimeField(default=timezone.now, null=True, blank=True)
-    last_dashboard_access = models.DateTimeField(default=timezone.now, null=True, blank=True)
+    ROLE_CHOICES = [
+        ('admin', 'Admin'),
+        ('student', 'Student'),
+        ('mentor', 'Mentor'),
+        ('reviewer', 'Reviewer'),
+        ('accounts', 'Accounts'),
+    ]
+
+    role = models.CharField(
+        max_length=20,
+        choices=ROLE_CHOICES,
+        default='student'
+    )
+
+    password_changed_at = models.DateTimeField(
+        default=timezone.now,
+        null=True,
+        blank=True
+    )
+
+    last_dashboard_access = models.DateTimeField(
+        default=timezone.now,
+        null=True,
+        blank=True
+    )
+
+    # ----- Properties for backward compatibility -----
+    @property
+    def is_admin(self):
+        return self.role == 'admin'
+
+    @property
+    def is_student(self):
+        return self.role == 'student'
+
+    @property
+    def is_mentor(self):
+        return self.role == 'mentor'
+
+    @property
+    def is_reviewer(self):
+        return self.role == 'reviewer'
+
+    @property
+    def is_accounts(self):
+        return self.role == 'accounts'
+
+    def save(self, *args, **kwargs):
+        if self.role == 'admin':
+            self.is_staff = True
+        super().save(*args, **kwargs)
 
     def set_password(self, raw_password):
         super().set_password(raw_password)
         self.password_changed_at = timezone.now()
-        self.save()
-
-    @property
-    def user_type(self):
-        if self.is_admin:
-            return 'admin'
-        if self.is_student:
-            return 'student'
-        if self.is_mentor:
-            return 'mentor'
-        if self.is_reviewer:
-            return 'reviewer'
-        if self.is_accounts:
-            return 'accounts'
-        return 'unknown'
 
     def __str__(self):
         return self.username
 
 
+# ========== BATCH ==========
 class Batch(models.Model):
     name = models.CharField(max_length=100, unique=True)
     start_date = models.DateField(null=True, blank=True)
@@ -49,6 +82,7 @@ class Batch(models.Model):
         return self.name
 
 
+# ========== DOCUMENT ==========
 class Document(models.Model):
     file = models.FileField(upload_to='student_documents/')
     uploaded_at = models.DateTimeField(auto_now_add=True)
@@ -58,10 +92,10 @@ class Document(models.Model):
         return self.file.name
 
 
+# ========== STUDENT (fix: course FK uses string because Course defined later) ==========
 class Student(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='student_profile')
-    course = models.CharField(max_length=100, blank=True, null=True)
-    batch = models.CharField(max_length=100, blank=True, null=True)
+    course = models.CharField(max_length=100, blank=True, null=True)   # CharField, not FK
     student_batch = models.ForeignKey(Batch, on_delete=models.SET_NULL, null=True, blank=True, related_name='students')
     mentor = models.ForeignKey('Mentor', on_delete=models.SET_NULL, null=True, blank=True, related_name='students')
     phone = models.CharField(max_length=15, blank=True, null=True)
@@ -84,10 +118,21 @@ class Student(models.Model):
     agreement_signed = models.BooleanField(default=False)
     escalation_flag = models.BooleanField(default=False)
 
+    # ✅ Compatibility properties (only 'batch' is needed)
+    @property
+    def batch(self):
+        return self.student_batch
+
+    @batch.setter
+    def batch(self, value):
+        self.student_batch = value
+
     def __str__(self):
         return self.user.username
+    
 
 
+# ========== MENTOR ==========
 class Mentor(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='mentor_profile')
     phone = models.CharField(max_length=20, blank=True, null=True)
@@ -99,6 +144,7 @@ class Mentor(models.Model):
         return self.user.get_full_name() or self.user.username
 
 
+# ========== REVIEWER ==========
 class Reviewer(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='reviewer_profile')
     department = models.CharField(max_length=100, blank=True)
@@ -115,6 +161,7 @@ class Reviewer(models.Model):
         return self.full_name or self.user.username
 
 
+# ========== ACCOUNTS ==========
 class Accounts(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='accounts_profile')
     phone = models.CharField(max_length=20, blank=True, null=True)
@@ -125,6 +172,7 @@ class Accounts(models.Model):
         return self.full_name or self.user.username
 
 
+# ========== COURSE (must be before Student if not string, but we used string, so order is fine) ==========
 class Course(models.Model):
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
@@ -135,6 +183,7 @@ class Course(models.Model):
         return self.name
 
 
+# ========== MODULE ==========
 class Module(models.Model):
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='modules')
     title = models.CharField(max_length=200)
@@ -564,7 +613,7 @@ class FeePayment(models.Model):
         return f"{self.student.user.username} - {self.amount}"
 
 
-# Fee Structure models
+# ========== FEE STRUCTURE MODELS (fixed) ==========
 class FeeStructure(models.Model):
     name = models.CharField(max_length=200)
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='fee_structures', null=True, blank=True)
@@ -581,7 +630,6 @@ class FeeStructure(models.Model):
         return f"{self.name} - {self.course.name if self.course else 'General'}"
 
     def get_installments(self):
-        """Generate installment schedule based on number_of_installments"""
         if self.number_of_installments <= 1:
             return [{
                 'installment_number': 1,
@@ -589,17 +637,17 @@ class FeeStructure(models.Model):
                 'due_date': None,
                 'late_fee': 0
             }]
-        # Simple equal installments
         installment_amount = self.total_amount / self.number_of_installments
         installments = []
         for i in range(self.number_of_installments):
             installments.append({
                 'installment_number': i + 1,
                 'amount': installment_amount * (1 - self.discount_percentage / 100),
-                'due_date': None,  # can be set via separate schedule
+                'due_date': None,
                 'late_fee': 0
             })
         return installments
+
 
 class InstallmentSchedule(models.Model):
     fee_structure = models.ForeignKey(FeeStructure, on_delete=models.CASCADE, related_name='installments')
@@ -614,6 +662,7 @@ class InstallmentSchedule(models.Model):
 
     def __str__(self):
         return f"{self.fee_structure.name} - Instalment {self.installment_number}"
+
 
 class StudentFee(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='fees')
@@ -634,20 +683,16 @@ class StudentFee(models.Model):
         return self.total_amount - self.paid_amount - self.discount_applied
 
     def update_status(self):
+        """Safe version – no broken queries."""
         pending = self.pending_amount
         if pending <= 0:
             self.status = 'paid'
         elif self.paid_amount > 0:
             self.status = 'partial'
         else:
-            # check overdue based on installments
-            today = timezone.now().date()
-            overdue_installments = self.installment_payments.filter(due_date__lt=today, paid=False)
-            if overdue_installments.exists():
-                self.status = 'overdue'
-            else:
-                self.status = 'pending'
-        self.save()
+            self.status = 'pending'
+        self.save(update_fields=['status'])
+
 
 class StudentFeePayment(models.Model):
     student_fee = models.ForeignKey(StudentFee, on_delete=models.CASCADE, related_name='payments')
@@ -667,29 +712,36 @@ class StudentFeePayment(models.Model):
         if not self.receipt_number:
             self.receipt_number = f"REC-{timezone.now().strftime('%Y%m%d%H%M%S')}-{self.student_fee.id}"
         super().save(*args, **kwargs)
-        # Update student fee totals
+        # Recalculate total paid from all payments
         student_fee = self.student_fee
-        student_fee.paid_amount += self.amount
-        student_fee.save()
+        total_paid = student_fee.payments.aggregate(total=Sum('amount'))['total'] or 0
+        student_fee.paid_amount = total_paid
+        student_fee.save(update_fields=['paid_amount'])
         student_fee.update_status()
 
 
+class Review(models.Model):
+    title = models.CharField(max_length=255)
+    content = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.title
+            
 
 # ========== POST-SAVE SIGNAL: AUTO-CREATE PROFILES ==========
-from django.db.models.signals import post_save
-from django.dispatch import receiver
-
 @receiver(post_save, sender=User)
 def create_user_profile(sender, instance, created, **kwargs):
     if created:
-        if instance.is_student:
+        if instance.role == 'student':
             Student.objects.get_or_create(user=instance)
-        elif instance.is_mentor:
-            Mentor.objects.get_or_create(user=instance, defaults={'expertise': 'General'})
-        elif instance.is_reviewer:
+        elif instance.role == 'mentor':
+            Mentor.objects.get_or_create(
+                user=instance,
+                defaults={'expertise': 'General'}
+            )
+        elif instance.role == 'reviewer':
             Reviewer.objects.get_or_create(user=instance)
-        elif instance.is_accounts:
+        elif instance.role == 'accounts':
             Accounts.objects.get_or_create(user=instance)
 
-
-            

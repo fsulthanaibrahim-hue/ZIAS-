@@ -1,28 +1,26 @@
-// src/Admin/Login.jsx
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 
-// Helper to turn any API error into a user‑friendly message (never 5xx)
+// Helper to turn any API error into a user‑friendly message
 const getFriendlyErrorMessage = (err) => {
   if (!err?.response) {
     return "Network error. Please check your connection.";
   }
   const status = err.response.status;
   if (status >= 500) {
-    // All server errors are shown as "Bad request" (simulate 400)
-    return "Bad request. Please check your input and try again.";
+    return "Server error. Please try again later.";
   }
   if (status === 404) {
-    return "Not found.";
+    return "Service not found. Please contact support.";
   }
   if (status === 400) {
     return "Invalid request. Please review your data.";
   }
   if (status === 401 || status === 403) {
-    return "Unauthorized. Please log in again.";
+    return "Invalid username or password. Please try again.";
   }
-  return err.response?.data?.detail || "Login failed. Please try again.";
+  return err.response?.data?.error || err.response?.data?.detail || "Login failed. Please try again.";
 };
 
 function AdminLogin() {
@@ -32,33 +30,78 @@ function AdminLogin() {
   const [error, setError] = useState("");
   const navigate = useNavigate();
 
+  // Check if already logged in
+  useEffect(() => {
+    const token = localStorage.getItem("access_token");
+    const user = localStorage.getItem("user");
+    if (token && user) {
+      try {
+        const userData = JSON.parse(user);
+        if (userData.is_admin === true) {
+          navigate("/admin/dashboard");
+        } else {
+          // Clear non‑admin user data
+          localStorage.clear();
+        }
+      } catch (e) {
+        localStorage.clear();
+      }
+    }
+  }, [navigate]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    const trimmedUsername = username.trim();
+    const trimmedPassword = password.trim();
+    
+    if (!trimmedUsername || !trimmedPassword) {
+      setError("Please enter both username and password");
+      return;
+    }
+    
     setLoading(true);
     setError("");
 
     try {
-      const tokenRes = await axios.post("http://127.0.0.1:8000/api/token/", { username, password });
-      const accessToken = tokenRes.data.access;
-      localStorage.setItem("access_token", accessToken);
-      localStorage.setItem("refresh_token", tokenRes.data.refresh);
-
-      const userRes = await axios.get("http://127.0.0.1:8000/api/users/me/", {
-        headers: { Authorization: `Bearer ${accessToken}` }
+      // ✅ Use your custom login endpoint (which returns user data)
+      const response = await axios.post("http://127.0.0.1:8000/api/login/", {
+        username: trimmedUsername,
+        password: trimmedPassword
       });
-      const user = userRes.data;
+      
+      // The custom login view returns { refresh, access, user }
+      const { access, refresh, user } = response.data;
+      
+      // Safety check: ensure user object exists
+      if (!user) {
+        throw new Error("Invalid server response: missing user data");
+      }
+      
+      // Store tokens and user data
+      localStorage.setItem("access_token", access);
+      localStorage.setItem("refresh_token", refresh);
       localStorage.setItem("user", JSON.stringify(user));
-
-      if (user.is_admin) {
+      
+      // Set default axios header for future requests
+      axios.defaults.headers.common['Authorization'] = `Bearer ${access}`;
+      
+      // Check admin privilege
+      if (user.is_admin === true) {
         navigate("/admin/dashboard");
       } else {
-        setError("You are not authorized as admin.");
-        setLoading(false);
+        setError("You are not authorized as admin. Please contact system administrator.");
+        // Clear stored data since user is not admin
+        localStorage.removeItem("access_token");
+        localStorage.removeItem("refresh_token");
+        localStorage.removeItem("user");
+        delete axios.defaults.headers.common['Authorization'];
       }
     } catch (err) {
-      console.warn(err); // log for debugging, never shown to user
+      console.error("Login error:", err);
       const friendlyMsg = getFriendlyErrorMessage(err);
       setError(friendlyMsg);
+    } finally {
       setLoading(false);
     }
   };
@@ -67,6 +110,7 @@ function AdminLogin() {
     <div className="min-h-screen bg-gray-50 flex items-center justify-center font-sans p-5 relative overflow-hidden">
       {/* Background grid pattern */}
       <div className="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.02)_1px,transparent_1px)] bg-[size:40px_40px] pointer-events-none" />
+      
       {/* Glowing radial gradient */}
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-gradient-to-r from-green-200/30 via-transparent to-transparent rounded-full blur-3xl pointer-events-none" />
 
@@ -104,6 +148,7 @@ function AdminLogin() {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               required
+              autoFocus
               className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/30 transition-all text-sm"
             />
           </div>
@@ -126,7 +171,7 @@ function AdminLogin() {
             {loading ? (
               <>
                 <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                  <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" strokeLinecap="round"/>
                 </svg>
                 Authenticating...
               </>

@@ -6,6 +6,7 @@ import { AuthProvider } from "./context/AuthContext";
 // import { ChatProvider } from "./context/ChatContext";
 import App from "./App";
 import "./index.css";
+import './utils/axiosConfig';
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
