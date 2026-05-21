@@ -1,4 +1,4 @@
-// src/Admin/Mentors.jsx – fully working with batch dropdown & graceful error handling
+// src/Admin/Mentors.jsx – Email is now editable during edit
 import { useEffect, useState, useRef, useCallback } from "react";
 import API from "../api/api";
 import { toast } from "react-hot-toast";
@@ -10,26 +10,12 @@ const getFriendlyErrorMessage = (err, defaultMsg = "Request failed") => {
   }
   const status = err.response.status;
   if (status >= 500) {
-    // Treat all server errors as "Bad request" (simulate 400)
     return "Bad request. Please check your input and try again.";
   }
   if (status === 404) {
     return "Not found.";
   }
   if (status === 400) {
-    // Try to get the actual error message from response
-    if (err.response?.data?.details) {
-      const details = err.response.data.details;
-      if (typeof details === 'object') {
-        const firstKey = Object.keys(details)[0];
-        if (firstKey && details[firstKey]) {
-          return `${firstKey}: ${Array.isArray(details[firstKey]) ? details[firstKey][0] : details[firstKey]}`;
-        }
-      }
-    }
-    if (err.response?.data?.error) {
-      return err.response.data.error;
-    }
     return "Invalid request. Please review your data.";
   }
   if (status === 401 || status === 403) {
@@ -98,6 +84,7 @@ function Mentors() {
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [viewerDocuments, setViewerDocuments] = useState([]);
   const [uploadingDocs, setUploadingDocs] = useState(false);
+  const [newDocs, setNewDocs] = useState([]);
   const [editDocuments, setEditDocuments] = useState([]);
   const [loadingEditDocs, setLoadingEditDocs] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -114,55 +101,29 @@ function Mentors() {
   const getDocumentUrl = (url) => {
     if (!url || typeof url !== 'string') return '#';
     if (url.startsWith('http')) return url;
-    
-    let cleanUrl = url;
-    if (cleanUrl.startsWith('/media/media/')) {
-      cleanUrl = cleanUrl.replace('/media/media/', '/media/');
-    }
-    if (!cleanUrl.startsWith('/media/') && !cleanUrl.startsWith('media/')) {
-      cleanUrl = `/media/${cleanUrl}`;
-    } else if (cleanUrl.startsWith('media/')) {
-      cleanUrl = `/${cleanUrl}`;
-    }
-    cleanUrl = cleanUrl.replace(/\/\//g, '/');
-    
-    return `http://127.0.0.1:8000${cleanUrl}`;
+    return `http://127.0.0.1:8000${url}`;
   };
 
   const fetchMentors = useCallback(async () => {
-  try {
-    const res = await API.get("mentors/");
-    console.log("Full API Response:", res.data);
-    
-    let mentorsArray = [];
-    
-    // Handle paginated response (Django REST framework default)
-    if (res.data && res.data.results && Array.isArray(res.data.results)) {
-      mentorsArray = res.data.results;
-      console.log("Extracted from results:", mentorsArray);
-    } 
-    // Handle non-paginated response
-    else if (Array.isArray(res.data)) {
-      mentorsArray = res.data;
-      console.log("Direct array:", mentorsArray);
+    try {
+      const res = await API.get("mentors/");
+      let mentorsArray = [];
+      if (Array.isArray(res.data)) {
+        mentorsArray = res.data;
+      } else if (res.data && typeof res.data === 'object') {
+        if (Array.isArray(res.data.results)) {
+          mentorsArray = res.data.results;
+        } else if (res.data.id) {
+          mentorsArray = [res.data];
+        }
+      }
+      setMentors(mentorsArray);
+    } catch (err) {
+      const msg = getFriendlyErrorMessage(err, "Failed to load mentors");
+      showToast(msg, "error");
+      setMentors([]);
     }
-    // Handle single object response
-    else if (res.data && typeof res.data === 'object' && res.data.id) {
-      mentorsArray = [res.data];
-      console.log("Single object:", mentorsArray);
-    }
-    
-    console.log("Final mentors array:", mentorsArray);
-    setMentors(mentorsArray);
-  } catch (err) {
-    console.error("Fetch mentors error:", err);
-    const msg = getFriendlyErrorMessage(err, "Failed to load mentors");
-    showToast(msg, "error");
-    setMentors([]);
-  }
-}, [showToast]); 
-
-
+  }, [showToast]);
 
   const fetchBatches = useCallback(async () => {
     if (batchesFetched.current) return;
@@ -215,6 +176,15 @@ function Mentors() {
     }
   };
 
+  const generateUsername = (fullName, email) => {
+    let base = fullName ? fullName.toLowerCase().trim().replace(/\s+/g, '_') : '';
+    if (!base) base = email ? email.split('@')[0] : 'mentor';
+    base = base.replace(/[^a-z0-9_]/g, '');
+    if (!base) base = 'mentor';
+    const suffix = Math.floor(Math.random() * 10000);
+    return `${base}${suffix}`;
+  };
+
   const fetchMentorDocuments = useCallback(async (mentorId) => {
     try {
       const res = await API.get(`mentors/${mentorId}/documents/`);
@@ -236,7 +206,6 @@ function Mentors() {
         await API.post('upload-mentor-document/', fd, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
-        showToast(`Uploaded ${file.name}`, "success");
       } catch (err) {
         const msg = getFriendlyErrorMessage(err, `Failed to upload ${file.name}`);
         showToast(msg, "error");
@@ -256,35 +225,20 @@ function Mentors() {
   };
 
   const handleSubmit = async (e) => {
-  e.preventDefault();
-  if (submitting) return;
+    e.preventDefault();
+    if (submitting) return;
 
-  // Validate required fields
-  if (!formData.full_name.trim()) {
-    showToast("Full name is required", "error");
-    return;
-  }
-  if (!formData.expertise.trim()) {
-    showToast("Expertise is required", "error");
-    return;
-  }
+    // Validate required fields
+    if (!formData.full_name.trim()) {
+      showToast("Full name is required", "error");
+      return;
+    }
+    if (!formData.expertise.trim()) {
+      showToast("Expertise is required", "error");
+      return;
+    }
 
-  // Phone validation
-  if (formData.phone && !/^\d{10}$/.test(formData.phone)) {
-    showToast("Phone number must be exactly 10 digits", "error");
-    return;
-  }
-
-  // Prepare payload - email only for create
-  const payload = {
-    full_name: formData.full_name.trim(),
-    expertise: formData.expertise.trim(),
-    phone: formData.phone || "",
-    batch: formData.batch ? parseInt(formData.batch) : null,
-  };
-  
-  // Only add email for CREATE (new mentor)
-  if (!editingId) {
+    // Email validation for both create and edit
     if (!formData.email.trim()) {
       showToast("Email is required", "error");
       return;
@@ -293,66 +247,95 @@ function Mentors() {
       showToast("Enter a valid email address", "error");
       return;
     }
-    payload.email = formData.email.trim();
-  }
-  
-  console.log("Sending payload:", payload);
-  
-  setSubmitting(true);
-  
-  try {
-    if (editingId) {
-      // UPDATE - no email in payload
-      const updateRes = await API.patch(`mentors/${editingId}/`, payload);
-      console.log("Update response:", updateRes.data);
-      showToast("Mentor updated successfully", "success");
-      
-      if (selectedFiles.length) {
-        await uploadDocumentsForMentor(editingId, selectedFiles);
-      }
-      
-      setShowForm(false);
-      setEditingId(null);
-      resetForm();
-      
-      // Force refresh - wait for it to complete
-      await fetchMentors();
-      
-      // Force page refresh to show updated data
-      setCurrentPage(1);
-      
-    } else {
-      // CREATE - includes email
-      const createRes = await API.post("mentors/", payload);
-      console.log("Create response:", createRes.data);
-      showToast("Mentor added successfully", "success");
-      
-      if (selectedFiles.length) {
-        await uploadDocumentsForMentor(createRes.data.id, selectedFiles);
-      }
-      
-      setShowForm(false);
-      resetForm();
-      await fetchMentors();
-      setCurrentPage(1);
+
+    // Phone validation
+    if (formData.phone && !/^\d{10}$/.test(formData.phone)) {
+      showToast("Phone number must be exactly 10 digits", "error");
+      setPhoneError("Phone number must be exactly 10 digits");
+      return;
     }
-  } catch (error) {
-    console.error("Error:", error);
-    let msg = "Error saving mentor";
-    if (error.response?.data?.details) {
-      const details = error.response.data.details;
-      const firstKey = Object.keys(details)[0];
-      if (firstKey && details[firstKey]) {
-        msg = `${firstKey}: ${details[firstKey]}`;
+    setPhoneError("");
+
+    setSubmitting(true);
+    
+    try {
+      if (editingId) {
+        // UPDATE - Include email in payload
+        const updatePayload = {
+          full_name: formData.full_name.trim(),
+          email: formData.email.trim(),
+          expertise: formData.expertise.trim(),
+          phone: formData.phone || "",
+          batch: formData.batch ? parseInt(formData.batch) : null,
+        };
+        
+        console.log("Updating mentor with payload:", updatePayload);
+        
+        const updateRes = await API.patch(`mentors/${editingId}/`, updatePayload);
+        console.log("Update response:", updateRes.data);
+        showToast("Mentor updated successfully", "success");
+        
+        if (selectedFiles.length) {
+          await uploadDocumentsForMentor(editingId, selectedFiles);
+        }
+        
+        setShowForm(false);
+        setEditingId(null);
+        resetForm();
+        
+        // Refresh the mentors list
+        await fetchMentors();
+        
+      } else {
+        // CREATE - includes email and username
+        const generatedUsername = generateUsername(formData.full_name, formData.email);
+        const createPayload = {
+          full_name: formData.full_name.trim(),
+          email: formData.email.trim(),
+          username: generatedUsername,
+          expertise: formData.expertise.trim(),
+          phone: formData.phone || "",
+          batch: formData.batch ? parseInt(formData.batch) : null,
+        };
+        
+        console.log("Creating mentor with payload:", createPayload);
+        
+        const createRes = await API.post("mentors/", createPayload);
+        showToast("Mentor added successfully", "success");
+        
+        if (selectedFiles.length) {
+          await uploadDocumentsForMentor(createRes.data.id, selectedFiles);
+        }
+        
+        setShowForm(false);
+        resetForm();
+        await fetchMentors();
+        setCurrentPage(1);
       }
-    } else if (error.response?.data?.error) {
-      msg = error.response.data.error;
+    } catch (error) {
+      console.error("Error:", error);
+      let msg = "Error saving mentor";
+      
+      // Check for duplicate email error
+      if (error.response?.status === 400) {
+        if (error.response?.data?.email && error.response.data.email[0]?.includes("already exists")) {
+          msg = "This email is already registered. Please use a different email.";
+          setEmailError("Email already exists");
+        } else if (error.response?.data?.details?.email) {
+          msg = `Email: ${error.response.data.details.email}`;
+          setEmailError(error.response.data.details.email);
+        } else if (error.response?.data?.error) {
+          msg = error.response.data.error;
+        } else if (error.response?.data?.detail) {
+          msg = error.response.data.detail;
+        }
+      }
+      
+      showToast(msg, "error");
+    } finally {
+      setSubmitting(false);
     }
-    showToast(msg, "error");
-  } finally {
-    setSubmitting(false);
-  }
-};
+  };
 
   const handleEdit = async (mentor) => {
     console.log("Editing mentor:", mentor);
@@ -395,15 +378,40 @@ function Mentors() {
       } else {
         setPhoneError("");
       }
+    } else if (name === "email") {
+      setFormData(prev => ({ ...prev, [name]: value }));
+      setEmailError(""); // Clear email error when user types
     } else {
       setFormData(prev => ({ ...prev, [name]: value }));
     }
+  };
+
+  const uploadDocsToCurrentMentor = async () => {
+    if (!viewingMentor || newDocs.length === 0) return;
+    setUploadingDocs(true);
+    for (const file of newDocs) {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('mentor', viewingMentor.id);
+      try {
+        await API.post('upload-mentor-document/', fd);
+        showToast(`Uploaded ${file.name}`, "success");
+      } catch (err) {
+        const msg = getFriendlyErrorMessage(err, `Failed to upload ${file.name}`);
+        showToast(msg, "error");
+      }
+    }
+    const updatedDocs = await fetchMentorDocuments(viewingMentor.id);
+    setViewerDocuments(updatedDocs);
+    setNewDocs([]);
+    setUploadingDocs(false);
   };
 
   const openViewModal = async (mentor) => {
     setViewingMentor(mentor);
     const docs = await fetchMentorDocuments(mentor.id);
     setViewerDocuments(docs);
+    setNewDocs([]);
   };
 
   const filteredMentors = Array.isArray(mentors)
@@ -450,8 +458,7 @@ function Mentors() {
   }, [searchTerm]);
 
   const inputClass = `w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/30 transition-all duration-200 text-sm`;
-  const readOnlyClass = `w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 text-gray-600 cursor-not-allowed text-sm`;
-
+  
   const getInitials = (name) => (name || "?")[0].toUpperCase();
   const avatarColors = [
     "from-blue-500 to-blue-700", "from-violet-500 to-violet-700",
@@ -562,15 +569,33 @@ function Mentors() {
                 <div>
                   <h4 className="text-xs font-semibold text-green-600 uppercase tracking-wider mb-3">Basic Information</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Full Name *</label><input type="text" name="full_name" value={formData.full_name} onChange={handleChange} required className={inputClass} /></div>
+                    <div>
+                      <label className="block text-gray-600 text-xs font-medium mb-1.5">Full Name *</label>
+                      <input type="text" name="full_name" value={formData.full_name} onChange={handleChange} required className={inputClass} />
+                    </div>
                     <div>
                       <label className="block text-gray-600 text-xs font-medium mb-1.5">Email *</label>
-                      <input type="email" name="email" value={formData.email} onChange={handleChange} required className={inputClass} />
+                      <input 
+                        type="email" 
+                        name="email" 
+                        value={formData.email} 
+                        onChange={handleChange} 
+                        required 
+                        className={`${inputClass} ${emailError ? "border-red-500" : ""}`}
+                      />
                       {emailError && <p className="text-red-500 text-xs mt-1">{emailError}</p>}
                     </div>
-                    <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Phone</label><input type="tel" name="phone" value={formData.phone} onChange={handleChange} className={`${inputClass} ${phoneError ? "border-red-500" : ""}`} placeholder="10-digit mobile" />{phoneError && <p className="text-red-500 text-xs mt-1">{phoneError}</p>}</div>
-                    <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Expertise *</label><input type="text" name="expertise" value={formData.expertise} onChange={handleChange} required className={inputClass} /></div>
-                    <div><label className="block text-gray-600 text-xs font-medium mb-1.5">Batch</label>
+                    <div>
+                      <label className="block text-gray-600 text-xs font-medium mb-1.5">Phone</label>
+                      <input type="tel" name="phone" value={formData.phone} onChange={handleChange} className={`${inputClass} ${phoneError ? "border-red-500" : ""}`} placeholder="10-digit mobile" />
+                      {phoneError && <p className="text-red-500 text-xs mt-1">{phoneError}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-gray-600 text-xs font-medium mb-1.5">Expertise *</label>
+                      <input type="text" name="expertise" value={formData.expertise} onChange={handleChange} required className={inputClass} />
+                    </div>
+                    <div>
+                      <label className="block text-gray-600 text-xs font-medium mb-1.5">Batch</label>
                       <select name="batch" value={formData.batch} onChange={handleChange} className={inputClass}>
                         <option value="">Select a batch</option>
                         {batchesList.map(batch => <option key={batch.id} value={batch.id}>{batch.name}</option>)}
@@ -646,7 +671,11 @@ function Mentors() {
               </div>
 
               <div className="sticky bottom-0 bg-white px-4 sm:px-6 py-4 border-t border-gray-200">
-                <button type="submit" disabled={submitting} className="w-full bg-green-600 hover:bg-green-700 text-white py-2.5 rounded-lg transition-all text-sm font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                <button 
+                  type="submit" 
+                  disabled={submitting} 
+                  className="w-full bg-green-600 hover:bg-green-700 text-white py-2.5 rounded-lg transition-all text-sm font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                >
                   {submitting ? (editingId ? "Saving..." : "Adding...") : (editingId ? "Save Changes" : "Add Mentor")}
                 </button>
               </div>

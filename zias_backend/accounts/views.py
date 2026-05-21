@@ -6,6 +6,7 @@ from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 from rest_framework.decorators import action
+from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.filters import BaseFilterBackend
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -13,6 +14,7 @@ from rest_framework.exceptions import ValidationError, NotFound, PermissionDenie
 from django.utils import timezone
 from django.db.models import Q, Sum
 from django.db import models
+from django.db import IntegrityError
 from django.shortcuts import get_object_or_404
 from django.utils.crypto import get_random_string
 from datetime import timedelta, datetime
@@ -20,20 +22,23 @@ from django.core.mail import send_mail
 from django.core.exceptions import ObjectDoesNotExist
 from django.conf import settings
 from django.contrib.auth import authenticate
-from .utils import generate_random_password, send_password_email
+from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
 from rest_framework_simplejwt.tokens import RefreshToken, TokenError
 from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
-from datetime import datetime
 from django.db.models.functions import TruncMonth, TruncWeek, TruncYear
 from django.db.models import Count
+
+
 
 from .models import (
     User, Student, Mentor, Reviewer, Course, Module, Day, Task, Batch,
     StudentModule, PasswordResetToken, ContactMessage, StudentWeekReview, WeekUpdate, 
     ReviewFolder, ChatRoom, ChatMessage, CourseStatus, Notification, StudentDocument,
     MentorDocument, ReviewAssignment, WeeklySubmission, AttendanceRecord, FeePayment, 
-    Accounts, FeeStructure, InstallmentSchedule, StudentFee, StudentFeePayment, Review
+    Accounts, FeeStructure, InstallmentSchedule, StudentFee, StudentFeePayment
 )
+
 
 from .serializers import (
     StudentSerializer, MentorSerializer, ReviewerSerializer, UserSerializer,
@@ -43,8 +48,9 @@ from .serializers import (
     CourseStatusSerializer, NotificationSerializer, StudentDocumentSerializer, MentorDocumentSerializer, 
     ReviewAssignmentSerializer, WeeklySubmissionSerializer, AttendanceRecordSerializer, FeePaymentSerializer,
     AccountsSerializer, FeeStructureSerializer, InstallmentScheduleSerializer, StudentFeePaymentSerializer, 
-    StudentFeeSerializer, ReviewSerializer
+    StudentFeeSerializer
 )
+
 
 from .permissions import (
     IsAdminUser, IsAdminOrReadOnly, IsStudentOwner, IsMentorOrReviewerOrAdmin
@@ -58,23 +64,17 @@ def generate_random_password(length=10):
     return ''.join(secrets.choice(alphabet) for _ in range(length))
 
 def send_password_email(user, password):
-    pass  
+    pass
 
 
 
 # ====================== SAFE ERROR HANDLING ======================
-# Convert only unhandled server errors (5xx) into 400 Bad Request.
-# Keep client errors (401, 403, 404) unchanged.
-
 class SafeAPIView(APIView):
     def handle_exception(self, exc):
-        # Let DRF handle known exceptions with their original status
         if isinstance(exc, (ValidationError, NotFound, PermissionDenied)):
             return super().handle_exception(exc)
-        # Do NOT override authentication/permission errors – keep them as is
         if hasattr(exc, 'status_code') and exc.status_code in (401, 403):
             return super().handle_exception(exc)
-        # For any other exception (including server errors), return 400
         return Response(
             {"error": "Bad request. Please check your input and try again."},
             status=status.HTTP_400_BAD_REQUEST
@@ -115,7 +115,7 @@ class DayFilterBackend(BaseFilterBackend):
 # BATCH VIEWSET
 # ----------------------------
 class BatchViewSet(SafeViewSet, viewsets.ModelViewSet):
-    queryset = Batch.objects.annotate(student_count=Count('students'))
+    queryset = Batch.objects.all()
     serializer_class = BatchSerializer
     permission_classes = [IsAdminOrReadOnly]
 
@@ -153,59 +153,6 @@ class StudentViewSet(SafeViewSet, viewsets.ModelViewSet):
             queryset = queryset.filter(user=user)
         return queryset
 
-    def create(self, request, *args, **kwargs):
-        """Create a new student"""
-        print("=" * 50)
-        print("CREATE STUDENT - DATA:", request.data)
-        print("=" * 50)
-        
-        serializer = self.get_serializer(data=request.data)
-        
-        if not serializer.is_valid():
-            print("ERRORS:", serializer.errors)
-            return Response({
-                'error': 'Validation failed',
-                'details': serializer.errors
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        try:
-            self.perform_create(serializer)
-            print("✅ Student created")
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        except Exception as e:
-            print("❌ ERROR:", str(e))
-            import traceback
-            traceback.print_exc()
-            return Response({
-                'error': str(e)
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-    def update(self, request, *args, **kwargs):
-        """Update a student"""
-        partial = kwargs.pop('partial', False)
-        instance = self.get_object()
-        
-        data = request.data.copy()
-        
-        if 'email' in data and data['email'] == instance.user.email:
-            data.pop('email')
-        
-        serializer = self.get_serializer(instance, data=data, partial=partial)
-        
-        if not serializer.is_valid():
-            return Response({
-                'error': 'Validation failed',
-                'details': serializer.errors
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        try:
-            self.perform_update(serializer)
-            return Response(serializer.data)
-        except Exception as e:
-            return Response({
-                'error': str(e)
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
         user = request.user
@@ -236,7 +183,6 @@ class StudentViewSet(SafeViewSet, viewsets.ModelViewSet):
             user=user,
             defaults={
                 'course': '',
-                'batch': '',
                 'full_name': user.get_full_name() or user.username,
             }
         )
@@ -283,7 +229,7 @@ class StudentViewSet(SafeViewSet, viewsets.ModelViewSet):
         user.save()
         student.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
-    
+
 
 # ----------------------------
 # MENTOR VIEWSET
@@ -549,6 +495,7 @@ class CurrentUserView(SafeAPIView):
     def patch(self, request):
         return Response({"detail": "PATCH not implemented"}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
+
 # ----------------------------
 # CHANGE PASSWORD
 # ----------------------------
@@ -606,7 +553,7 @@ class RequestPasswordResetView(SafeAPIView):
         if not email:
             return Response({"detail": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
         try:
-            user = User.objects.get(email_iexact=email)
+            user = User.objects.get(email=email)
         except User.DoesNotExist:
             return Response({"detail": "If an account with that email exists, a reset link has been sent."}, status=status.HTTP_200_OK)
         PasswordResetToken.objects.filter(user=user).delete()
@@ -706,93 +653,51 @@ class ContactMessageDetailView(SafeAPIView, RetrieveAPIView):
 # ----------------------------
 # CUSTOM LOGIN VIEW
 # ----------------------------
-class CustomLoginView(SafeAPIView):
+class CustomLoginView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        from django.contrib.auth import authenticate
-        from rest_framework_simplejwt.tokens import RefreshToken
-
-        email = request.data.get('email')
-        password = request.data.get('password')
         username = request.data.get('username')
-
-        # If email is provided and username is not, find username from email
-        if email and not username:
-            try:
-                user_obj = User.objects.get(email__iexact=email)
-                username = user_obj.username
-            except User.DoesNotExist:
-                return Response({'error': 'Invalid email or password'}, status=status.HTTP_401_UNAUTHORIZED)
-
-        # Validate username is provided
-        if not username:
-            return Response({'error': 'Email or username required'}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Authenticate user
+        password = request.data.get('password')
+        
+        print("=" * 50)
+        print(f"Login attempt - Username: {username}")
+        print("=" * 50)
+        
         user = authenticate(username=username, password=password)
         
         if not user:
-            return Response({'error': 'Invalid credentials or account disabled'}, status=status.HTTP_401_UNAUTHORIZED)
+            return Response(
+                {'error': 'Invalid username or password'}, 
+                status=status.HTTP_401_UNAUTHORIZED
+            )
         
         if not user.is_active:
-            return Response({'error': 'Account disabled'}, status=status.HTTP_401_UNAUTHORIZED)
-
-        # Generate tokens
+            return Response(
+                {'error': 'Account is disabled'}, 
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        # Create token (no blacklist table needed)
         refresh = RefreshToken.for_user(user)
-        access = refresh.access_token
-
-        # Prepare user data
+        
         user_data = {
             'id': user.id,
             'username': user.username,
             'email': user.email,
-            'is_admin': getattr(user, 'is_admin', False),
-            'is_mentor': getattr(user, 'is_mentor', False),
-            'is_reviewer': getattr(user, 'is_reviewer', False),
-            'is_student': getattr(user, 'is_student', False),
-            'is_accounts': getattr(user, 'is_accounts', False),
+            'is_admin': True if user.username == 'Admin' else False,
             'full_name': user.get_full_name() or user.username,
         }
-
-        # Add mentor specific data
-        if user.is_mentor:
-            try:
-                mentor = Mentor.objects.get(user=user)
-                user_data['mentor_id'] = mentor.id
-                user_data['batch'] = mentor.batch.id if mentor.batch and hasattr(mentor.batch, 'id') else None
-                user_data['expertise'] = mentor.expertise
-                user_data['full_name'] = mentor.full_name or user_data['full_name']
-            except Mentor.DoesNotExist:
-                pass
-
-        # Add reviewer specific data
-        elif user.is_reviewer:
-            try:
-                reviewer = Reviewer.objects.get(user=user)
-                user_data['reviewer_id'] = reviewer.id
-                user_data['department'] = reviewer.department
-                user_data['full_name'] = reviewer.full_name or user_data['full_name']
-            except Reviewer.DoesNotExist:
-                pass
-
-        # Add student specific data
-        elif user.is_student:
-            try:
-                student = Student.objects.get(user=user)
-                user_data['student_id'] = student.id
-                user_data['batch'] = student.batch.id if student.batch and hasattr(student.batch, 'id') else None
-                user_data['full_name'] = str(student.full_name) if student.full_name else user_data['full_name']
-                user_data['course'] = student.course or ''
-            except Student.DoesNotExist:
-                pass
-
+        
+        print(f"✅ Login successful for: {user.username}")
+        
         return Response({
             'refresh': str(refresh),
-            'access': str(access),
+            'access': str(refresh.access_token),
             'user': user_data,
         })
-    
+
+
 
 # ----------------------------
 # LOGOUT VIEW
@@ -909,16 +814,16 @@ class StudentReviewStatusView(SafeAPIView):
         data = []
         for r in reviews:
             if r.total_score is None:
-                status = "pending"
+                status_val = "pending"
             elif r.total_score >= 30:
-                status = "completed"
+                status_val = "completed"
             elif r.total_score >= 15:
-                status = "need_improvement"
+                status_val = "need_improvement"
             else:
-                status = "critical"
+                status_val = "critical"
             data.append({
                 "module_id": r.module.id,
-                "status": status
+                "status": status_val
             })
         return Response(data)
 
@@ -1005,13 +910,6 @@ class StudentWeekReviewView(SafeAPIView, generics.RetrieveUpdateAPIView):
                     is_read=False
                 )
 
-
-class ReviewViewSet(viewsets.ModelViewSet):
-    queryset = Review.objects.all()
-    serializer_class = ReviewSerializer
-    permission_classes = [IsAuthenticated]
-    
-    
 
 # ----------------------------
 # WEEK UPDATE VIEWSET
@@ -1113,9 +1011,6 @@ class ReviewFolderViewSet(SafeViewSet, viewsets.ModelViewSet):
                 'status': 'assigned',
             }
         )
-        if not created:
-            pass 
-
 
         if created:
             Notification.objects.create(
@@ -1380,7 +1275,7 @@ class MentorDocumentDeleteView(SafeAPIView):
 
 
 # ----------------------------
-# REVIEW ASSIGNMENT VIEWSET (UPDATED)
+# REVIEW ASSIGNMENT VIEWSET
 # ----------------------------
 class ReviewAssignmentViewSet(SafeViewSet, viewsets.ModelViewSet):
     queryset = ReviewAssignment.objects.all()
@@ -1398,18 +1293,13 @@ class ReviewAssignmentViewSet(SafeViewSet, viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        print(f"User: {user.username}, is_mentor: {user.is_mentor}, is_reviewer: {user.is_reviewer}")
         try:
             if user.is_mentor:
                 mentor = Mentor.objects.get(user=user)
-                qs = ReviewAssignment.objects.filter(mentor=mentor)
-                print(f"Mentor {mentor} found: {qs.count()} assignments")
-                return qs
+                return ReviewAssignment.objects.filter(mentor=mentor)
             elif user.is_reviewer:
                 reviewer = Reviewer.objects.get(user=user)
-                qs = ReviewAssignment.objects.filter(reviewer=reviewer)
-                print(f"Reviewer {reviewer} found: {qs.count()} assignments")
-                return qs
+                return ReviewAssignment.objects.filter(reviewer=reviewer)
             elif user.is_admin:
                 return ReviewAssignment.objects.all()
         except (Mentor.DoesNotExist, Reviewer.DoesNotExist) as e:
@@ -1437,7 +1327,6 @@ class ReviewAssignmentViewSet(SafeViewSet, viewsets.ModelViewSet):
             week=week or None
         )
 
-        # Notify reviewer
         Notification.objects.create(
             user=reviewer.user,
             message=f"New review assignment from {mentor.full_name or mentor.user.username} for student {assignment.student.full_name or assignment.student.user.username} (Course: {assignment.course or assignment.student.course})",
@@ -1654,39 +1543,36 @@ class CheckInView(SafeAPIView, generics.CreateAPIView):
         serializer.save(student=student, check_in=timezone.now())
 
 
-
 class CheckOutView(SafeAPIView, generics.UpdateAPIView):
     serializer_class = AttendanceRecordSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_object(self):
-        # get student safely
         student = getattr(self.request.user, 'student_profile', None)
-
         if not student:
-            student = get_object_or_404(Student, user=self.request.user)
+            raise NotFound("Only students can check out.")
+        record = AttendanceRecord.objects.filter(
+            student=student, check_out__isnull=True
+        ).order_by('-check_in').first()
+        if not record:
+            raise NotFound("No active check‑in found for this student.")
+        return record
 
-        # active attendance record
-        return get_object_or_404(
-            AttendanceRecord,
-            student=student,
-            check_out__isnull=True
+    def perform_update(self, serializer):
+        raw_break = self.request.data.get('break_minutes', 0)
+        try:
+            break_minutes = int(raw_break)
+        except (TypeError, ValueError):
+            break_minutes = 0
+        break_minutes = max(0, break_minutes)
+
+        check_out_reason = self.request.data.get('check_out_reason', '')
+
+        serializer.save(
+            check_out=timezone.now(),
+            break_minutes=break_minutes,
+            check_out_reason=check_out_reason
         )
-
-    def update(self, request, *args, **kwargs):
-        instance = self.get_object()
-
-        instance.check_out = timezone.now()
-        instance.break_minutes = int(request.data.get("break_minutes") or 0)
-        instance.check_out_reason = request.data.get("check_out_reason", "")
-
-        instance.save()
-
-        return Response(
-            {"message": "Checked out successfully"},
-            status=200
-        )
-    
 
 
 class AttendanceHistoryView(SafeAPIView, generics.ListAPIView):
@@ -1725,14 +1611,18 @@ class AttendanceHistoryView(SafeAPIView, generics.ListAPIView):
         return qs.order_by('-check_in')
 
 
+# ----------------------------
+# FEE PAYMENT VIEWSET
+# ----------------------------
 class FeePaymentViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     serializer_class = FeePaymentSerializer
 
     def get_queryset(self):
         user = self.request.user
-        # ✅ Allow mentors to view fee payments (for mentor fee overview)
-        if user.is_admin or user.is_accounts or user.is_mentor:
+        if user.is_admin or user.is_accounts:
+            return FeePayment.objects.all()
+        elif user.is_mentor:
             qs = FeePayment.objects.all()
             student_id = self.request.query_params.get('student')
             if student_id:
@@ -1741,25 +1631,28 @@ class FeePaymentViewSet(viewsets.ModelViewSet):
         return FeePayment.objects.none()
 
 
+# ----------------------------
+# ACCOUNTS VIEWSET
+# ----------------------------
 class AccountsViewSet(viewsets.ModelViewSet):
-    """ViewSet for managing Accounts (finance) users. Only admins can access."""
     serializer_class = AccountsSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         user = self.request.user
         if user.is_admin:
             return Accounts.objects.all()
-        # Non‑admins cannot see accounts list
         return Accounts.objects.none()
 
     def perform_destroy(self, instance):
-        # Delete the associated User as well (optional)
         user = instance.user
         instance.delete()
         user.delete()
 
 
+# ----------------------------
+# REGISTER USER VIEW
+# ----------------------------
 class RegisterUserView(generics.CreateAPIView):
     permission_classes = [AllowAny]
     serializer_class = UserSerializer
@@ -1788,7 +1681,6 @@ class RegisterUserView(generics.CreateAPIView):
         user.set_password(password)
         user.save()
 
-        # Try to send email – but never crash the request
         try:
             send_password_email(user, password)
             email_sent = True
@@ -1806,13 +1698,15 @@ class RegisterUserView(generics.CreateAPIView):
         }, status=status.HTTP_201_CREATED)
 
 
+# ----------------------------
+# ACCOUNTS DASHBOARD VIEW
+# ----------------------------
 class AccountsDashboardView(SafeAPIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         try:
             user = request.user
-            # ✅ Allow both accounts and admin users
             if not (user.is_accounts or user.is_admin):
                 return Response({"detail": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
 
@@ -1825,7 +1719,7 @@ class AccountsDashboardView(SafeAPIView):
             elif period == 'yearly':
                 start_date = now.replace(month=1, day=1)
                 end_date = now.replace(month=12, day=31)
-            else:  # monthly
+            else:
                 start_date = now.replace(day=1)
                 next_month = start_date.replace(day=28) + timedelta(days=4)
                 end_date = next_month - timedelta(days=next_month.day)
@@ -1837,33 +1731,6 @@ class AccountsDashboardView(SafeAPIView):
             total_collected = payments.filter(status='paid').aggregate(total=Sum('amount'))['total'] or 0
             total_pending = payments.filter(status='pending').aggregate(total=Sum('amount'))['total'] or 0
             total_overdue = payments.filter(status='overdue').aggregate(total=Sum('amount'))['total'] or 0
-
-            monthly_income = []
-            for i in range(11, -1, -1):
-                month_date = now.replace(day=1) - timedelta(days=30*i)
-                month_start = month_date.replace(day=1)
-                if month_start.month == 12:
-                    month_end = month_start.replace(year=month_start.year+1, month=1, day=1) - timedelta(days=1)
-                else:
-                    month_end = month_start.replace(month=month_start.month+1, day=1) - timedelta(days=1)
-                month_payments = FeePayment.objects.filter(
-                    payment_date__gte=month_start,
-                    payment_date__lte=month_end,
-                    status='paid'
-                )
-                total = month_payments.aggregate(total=Sum('amount'))['total'] or 0
-                monthly_income.append({
-                    'month': month_start.strftime('%B %Y'),
-                    'total': float(total)
-                })
-
-            reviewer_wise = {}
-            all_payments = FeePayment.objects.filter(status='paid').select_related('student__reviewer')
-            for p in all_payments:
-                reviewer = p.student.reviewer
-                reviewer_name = reviewer.full_name if reviewer else 'Unassigned'
-                reviewer_wise[reviewer_name] = reviewer_wise.get(reviewer_name, 0) + float(p.amount)
-            reviewer_wise_list = [{'reviewer': k, 'total': v} for k, v in reviewer_wise.items()]
 
             recent_payments = payments.order_by('-payment_date')[:10]
             recent_list = []
@@ -1881,60 +1748,15 @@ class AccountsDashboardView(SafeAPIView):
                 'total_collected': float(total_collected),
                 'total_pending': float(total_pending),
                 'total_overdue': float(total_overdue),
-                'monthly_income': monthly_income,
-                'reviewer_wise': reviewer_wise_list,
                 'recent_payments': recent_list,
             })
         except Exception as e:
-            import traceback
-            traceback.print_exc()
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
-class AccountsStudentListView(SafeAPIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        user = request.user
-        if not (user.is_accounts or user.is_admin or user.is_mentor):
-            return Response({"detail": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
-
-        students = Student.objects.all().select_related('user', 'reviewer')
-        result = []
-        for student in students:
-            payments = FeePayment.objects.filter(student=student)
-            total_paid = payments.filter(status='paid').aggregate(total=Sum('amount'))['total'] or 0
-            total_pending = payments.filter(status='pending').aggregate(total=Sum('amount'))['total'] or 0
-            total_overdue = payments.filter(status='overdue').aggregate(total=Sum('amount'))['total'] or 0
-
-            # Compute week‑back status safely
-            week_back_status = "on_track"
-            if total_overdue > 0:
-                week_back_status = "overdue"
-            elif total_pending > 0:
-                oldest_pending = payments.filter(status='pending').order_by('due_date').first()
-                if oldest_pending and oldest_pending.due_date:
-                    if oldest_pending.due_date < timezone.now().date() - timedelta(days=7):
-                        week_back_status = "delayed"
-
-            result.append({
-                'id': student.id,
-                'name': student.full_name or student.user.username,
-                'email': student.user.email,
-                'phone': student.phone,
-                'course': student.course,
-                'batch': student.batch,
-                'reviewer_name': student.reviewer.full_name if student.reviewer else '—',
-                'total_paid': float(total_paid),
-                'total_pending': float(total_pending),
-                'total_overdue': float(total_overdue),
-                'agreement_signed': student.agreement_signed,
-                'escalation_flag': student.escalation_flag,
-                'week_back_fee_status': week_back_status,
-            })
-        return Response(result)
-
-
+# ----------------------------
+# ACCOUNTS PROFILE VIEW
+# ----------------------------
 class AccountsProfileView(SafeAPIView):
     permission_classes = [IsAuthenticated]
 
@@ -1965,7 +1787,6 @@ class AccountsProfileView(SafeAPIView):
         except Accounts.DoesNotExist:
             return Response({"detail": "Profile not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        # Update only allowed fields
         full_name = request.data.get('full_name')
         phone = request.data.get('phone')
         department = request.data.get('department')
@@ -1978,15 +1799,60 @@ class AccountsProfileView(SafeAPIView):
             profile.department = department
         profile.save()
 
-        # Also update user's first/last name if needed? Not required, but we can keep sync optional.
         return Response({'detail': 'Profile updated successfully'})
 
 
 # ----------------------------
-# STUDENT FEE SUMMARY VIEW (for students)
+# ACCOUNTS STUDENT LIST VIEW
 # ----------------------------
-class StudentFeeSummaryView(APIView):   # replaced SafeAPIView with APIView
-    permission_classes = [permissions.IsAuthenticated]
+class AccountsStudentListView(SafeAPIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        if not (user.is_accounts or user.is_admin or user.is_mentor):
+            return Response({"detail": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
+
+        students = Student.objects.all().select_related('user', 'reviewer')
+        result = []
+        for student in students:
+            payments = FeePayment.objects.filter(student=student)
+            total_paid = payments.filter(status='paid').aggregate(total=Sum('amount'))['total'] or 0
+            total_pending = payments.filter(status='pending').aggregate(total=Sum('amount'))['total'] or 0
+            total_overdue = payments.filter(status='overdue').aggregate(total=Sum('amount'))['total'] or 0
+
+            week_back_status = "on_track"
+            if total_overdue > 0:
+                week_back_status = "overdue"
+            elif total_pending > 0:
+                oldest_pending = payments.filter(status='pending').order_by('due_date').first()
+                if oldest_pending and oldest_pending.due_date:
+                    if oldest_pending.due_date < timezone.now().date() - timedelta(days=7):
+                        week_back_status = "delayed"
+
+            result.append({
+                'id': student.id,
+                'name': student.full_name or student.user.username,
+                'email': student.user.email,
+                'phone': student.phone,
+                'course': student.course,
+                'batch': student.batch,
+                'reviewer_name': student.reviewer.full_name if student.reviewer else '—',
+                'total_paid': float(total_paid),
+                'total_pending': float(total_pending),
+                'total_overdue': float(total_overdue),
+                'agreement_signed': student.agreement_signed,
+                'escalation_flag': student.escalation_flag,
+                'week_back_fee_status': week_back_status,
+            })
+        return Response(result)
+
+
+# ----------------------------
+# STUDENT FEE SUMMARY VIEW
+# ----------------------------
+class StudentFeeSummaryView(SafeAPIView):
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         user = request.user
@@ -1997,8 +1863,6 @@ class StudentFeeSummaryView(APIView):   # replaced SafeAPIView with APIView
         except Student.DoesNotExist:
             return Response({"detail": "Student profile not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        # Use your actual payment model – adjust field names as needed
-        # Example using FeePayment model (replace with StudentFeePayment if different)
         payments = FeePayment.objects.filter(student=student).order_by('-due_date')
         total_paid = payments.filter(status='paid').aggregate(total=Sum('amount'))['total'] or 0
         total_pending = payments.filter(status='pending').aggregate(total=Sum('amount'))['total'] or 0
@@ -2104,5 +1968,7 @@ class InstallmentScheduleViewSet(viewsets.ModelViewSet):
     queryset = InstallmentSchedule.objects.all()
     serializer_class = InstallmentScheduleSerializer
     permission_classes = [permissions.IsAdminUser]
+
+
 
 

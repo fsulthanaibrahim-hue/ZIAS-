@@ -1,39 +1,19 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.utils import timezone
-from django.db.models.signals import post_save
-from django.dispatch import receiver
-from django.db.models import Sum   # ✅ added for fee aggregation
 
-# ========== USER MODEL ==========
+
 class User(AbstractUser):
-    ROLE_CHOICES = [
+    role = models.CharField(max_length=20, default='student', choices=[
         ('admin', 'Admin'),
         ('student', 'Student'),
         ('mentor', 'Mentor'),
         ('reviewer', 'Reviewer'),
         ('accounts', 'Accounts'),
-    ]
+    ])
+    password_changed_at = models.DateTimeField(default=timezone.now, null=True, blank=True)
+    last_dashboard_access = models.DateTimeField(default=timezone.now, null=True, blank=True)
 
-    role = models.CharField(
-        max_length=20,
-        choices=ROLE_CHOICES,
-        default='student'
-    )
-
-    password_changed_at = models.DateTimeField(
-        default=timezone.now,
-        null=True,
-        blank=True
-    )
-
-    last_dashboard_access = models.DateTimeField(
-        default=timezone.now,
-        null=True,
-        blank=True
-    )
-
-    # ----- Properties for backward compatibility -----
     @property
     def is_admin(self):
         return self.role == 'admin'
@@ -54,20 +34,7 @@ class User(AbstractUser):
     def is_accounts(self):
         return self.role == 'accounts'
 
-    def save(self, *args, **kwargs):
-        if self.role == 'admin':
-            self.is_staff = True
-        super().save(*args, **kwargs)
 
-    def set_password(self, raw_password):
-        super().set_password(raw_password)
-        self.password_changed_at = timezone.now()
-
-    def __str__(self):
-        return self.username
-
-
-# ========== BATCH ==========
 class Batch(models.Model):
     name = models.CharField(max_length=100, unique=True)
     start_date = models.DateField(null=True, blank=True)
@@ -82,7 +49,6 @@ class Batch(models.Model):
         return self.name
 
 
-# ========== DOCUMENT ==========
 class Document(models.Model):
     file = models.FileField(upload_to='student_documents/')
     uploaded_at = models.DateTimeField(auto_now_add=True)
@@ -92,89 +58,89 @@ class Document(models.Model):
         return self.file.name
 
 
-# ========== STUDENT (fix: course FK uses string because Course defined later) ==========
 class Student(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='student_profile')
-    course = models.CharField(max_length=100, blank=True, null=True)  
+    
+    # ✅ ADDED - Required fields
+    email = models.EmailField(unique=True, default='temp@example.com')
+    full_name = models.CharField(max_length=255, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    # Existing fields with updated max_length
+    course = models.CharField(max_length=255, blank=True, null=True)
+    batch = models.CharField(max_length=255, blank=True, null=True)
     student_batch = models.ForeignKey(Batch, on_delete=models.SET_NULL, null=True, blank=True, related_name='students')
     mentor = models.ForeignKey('Mentor', on_delete=models.SET_NULL, null=True, blank=True, related_name='students')
-    phone = models.CharField(max_length=15, blank=True, null=True)
+    phone = models.CharField(max_length=20, blank=True, null=True)
     date_of_birth = models.DateField(null=True, blank=True)
-    full_name = models.CharField(max_length=150, blank=True, null=True)
     age = models.PositiveIntegerField(blank=True, null=True)
     gender = models.CharField(max_length=10, blank=True, null=True, choices=[('Male','Male'),('Female','Female'),('Other','Other')])
-    fathers_name = models.CharField(max_length=150, blank=True, null=True)
-    fathers_contact = models.CharField(max_length=15, blank=True, null=True)
-    mothers_name = models.CharField(max_length=150, blank=True, null=True)
-    mothers_contact = models.CharField(max_length=15, blank=True, null=True)
+    fathers_name = models.CharField(max_length=255, blank=True, null=True)
+    fathers_contact = models.CharField(max_length=20, blank=True, null=True)
+    mothers_name = models.CharField(max_length=255, blank=True, null=True)
+    mothers_contact = models.CharField(max_length=20, blank=True, null=True)
     address = models.TextField(blank=True, null=True)
-    educational_qualification = models.CharField(max_length=200, blank=True, null=True)
-    college_school = models.CharField(max_length=200, blank=True, null=True)
-    parent_name = models.CharField(max_length=100, blank=True, null=True)
-    parent_phone = models.CharField(max_length=15, blank=True, null=True)
-    emergency_contact = models.CharField(max_length=15, blank=True, null=True)
+    educational_qualification = models.CharField(max_length=255, blank=True, null=True)
+    college_school = models.CharField(max_length=255, blank=True, null=True)
+    parent_name = models.CharField(max_length=255, blank=True, null=True)
+    parent_phone = models.CharField(max_length=20, blank=True, null=True)
+    emergency_contact = models.CharField(max_length=20, blank=True, null=True)
     reviewer = models.ForeignKey('Reviewer', on_delete=models.SET_NULL, null=True, blank=True, related_name='students')
     documents = models.ManyToManyField(Document, blank=True, related_name='students')
     agreement_signed = models.BooleanField(default=False)
     escalation_flag = models.BooleanField(default=False)
 
-    # ✅ Compatibility properties (only 'batch' is needed)
-    @property
-    def batch(self):
-        return self.student_batch
-
-    @batch.setter
-    def batch(self, value):
-        self.student_batch = value
-
     def __str__(self):
-        return self.user.username
-    
+        return self.full_name or self.email or self.user.username
 
 
-# ========== MENTOR ==========
 class Mentor(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='mentor_profile')
     phone = models.CharField(max_length=20, blank=True, null=True)
-    expertise = models.CharField(max_length=100)
+    expertise = models.CharField(max_length=255)
     batch = models.ForeignKey(Batch, on_delete=models.SET_NULL, null=True, blank=True, related_name='mentors')
     full_name = models.CharField(max_length=255, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return self.user.get_full_name() or self.user.username
+        return self.full_name or self.user.get_full_name() or self.user.username
 
 
-# ========== REVIEWER ==========
 class Reviewer(models.Model):
+    # ✅ FIXED - Removed duplicate user field
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='reviewer_profile')
-    department = models.CharField(max_length=100, blank=True)
-    qualification = models.CharField(max_length=100, blank=True)
+    department = models.CharField(max_length=255, blank=True)
+    qualification = models.CharField(max_length=255, blank=True)
     experience = models.IntegerField(null=True, blank=True)
     batch = models.ForeignKey(Batch, on_delete=models.SET_NULL, null=True, blank=True)
-    course = models.CharField(max_length=100, blank=True, null=True)
+    course = models.CharField(max_length=255, blank=True, null=True)
     available_from = models.TimeField(null=True, blank=True, help_text="Start time (e.g. 09:00)")
     available_to = models.TimeField(null=True, blank=True, help_text="End time (e.g. 17:00)")
     available_days = models.JSONField(default=list, blank=True, help_text="List of weekdays (0=Monday, 6=Sunday)")
     full_name = models.CharField(max_length=255, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return self.full_name or self.user.username
 
 
-# ========== ACCOUNTS ==========
 class Accounts(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='accounts_profile')
     phone = models.CharField(max_length=20, blank=True, null=True)
-    department = models.CharField(max_length=100, blank=True)
+    department = models.CharField(max_length=255, blank=True)
     full_name = models.CharField(max_length=255, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return self.full_name or self.user.username
 
 
-# ========== COURSE (must be before Student if not string, but we used string, so order is fine) ==========
 class Course(models.Model):
-    name = models.CharField(max_length=100)
+    name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
     duration = models.CharField(max_length=50, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -183,7 +149,6 @@ class Course(models.Model):
         return self.name
 
 
-# ========== MODULE ==========
 class Module(models.Model):
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='modules')
     title = models.CharField(max_length=200)
@@ -217,7 +182,7 @@ class StudentModule(models.Model):
 
 class Day(models.Model):
     module = models.ForeignKey(Module, on_delete=models.CASCADE, related_name='days')
-    title = models.CharField(max_length=100)
+    title = models.CharField(max_length=255)
     content = models.TextField(help_text="HTML content for the day")
     order = models.IntegerField(default=0)
     is_completed = models.BooleanField(default=False)
@@ -282,16 +247,12 @@ class Notification(models.Model):
 
 
 class StudentWeekReview(models.Model):
-    WEEK_BACK_CHOICES = (
-        ('no', 'No'),
-        ('repeated', 'Yes - Repeated'),
-        ('completed', 'Yes - Completed'),
-    )
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='week_reviews')
     module = models.ForeignKey(Module, on_delete=models.CASCADE, related_name='student_reviews')
-    
-    reviewer_name = models.CharField(max_length=100, blank=True)
-    advisor_name = models.CharField(max_length=100, blank=True)
+
+    # Existing fields
+    reviewer_name = models.CharField(max_length=255, blank=True)
+    advisor_name = models.CharField(max_length=255, blank=True)
     review_date = models.DateField(null=True, blank=True)
     task_status = models.CharField(max_length=50, blank=True, choices=[
         ('Task Completed', 'Task Completed'),
@@ -306,21 +267,21 @@ class StudentWeekReview(models.Model):
         ('Not Completed', 'Not Completed'),
     ])
     english_review = models.TextField(blank=True)
-    english_score = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Score out of 5")
     
+    # ✅ FIXED - Only one english_score field
+    english_score = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Score out of 5")
+
+    # New fields
     review_score = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Review score out of 20")
     extra_workouts_mark = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Extra workouts mark out of 5")
     progress_video = models.URLField(max_length=500, blank=True, null=True, help_text="Progress video link")
     progress_video_mark = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Progress video mark out of 5")
-    
+
+    # ✅ FIXED - Only one total_score field
     star_rating = models.PositiveSmallIntegerField(null=True, blank=True, choices=[(i, i) for i in range(1, 6)])
     total_score = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Total score out of 35")
-    
-    updated_at = models.DateTimeField(auto_now=True)
 
-    week_back_status = models.CharField(max_length=20, choices=WEEK_BACK_CHOICES, default='no')
-    week_back_from = models.CharField(max_length=10, blank=True, null=True)
-    week_back_remarks = models.TextField(blank=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         unique_together = ['student', 'module']
@@ -340,19 +301,24 @@ class StudentWeekReview(models.Model):
         return "Poor English. Strongly needs basic English training."
 
     def save(self, *args, **kwargs):
+        # Auto‑generate english_review from english_score (0‑5 scaled)
         if self.english_score is not None:
             self.english_review = self.generate_english_review()
-        
+
+        # Auto‑calculate total_score and star_rating
         extra = self.extra_workouts_mark or 0
         english = self.english_score or 0
         video = self.progress_video_mark or 0
+        
         extra = max(0, min(5, extra))
         english = max(0, min(5, english))
         video = max(0, min(5, video))
+        
         sum_marks = extra + english + video
         total = round((sum_marks * 35) / 15)
         self.total_score = max(0, min(35, total))
-        
+
+        # Star rating based on total out of 35
         t = self.total_score
         if t >= 30:
             self.star_rating = 5
@@ -364,13 +330,13 @@ class StudentWeekReview(models.Model):
             self.star_rating = 2
         else:
             self.star_rating = 1 
-        
+
         super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.student.user.username} - {self.module.title}"
-    
-    
+
+
 class WeekUpdate(models.Model):
     week_review = models.ForeignKey(StudentWeekReview, on_delete=models.CASCADE, related_name='updates')
     update_date = models.DateField(auto_now_add=True)
@@ -384,11 +350,11 @@ class WeekUpdate(models.Model):
 
 class ReviewFolder(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='review_folders')
-    week_folder = models.CharField(max_length=100, blank=True, null=True)
-    week = models.CharField(max_length=100, blank=True)
+    week_folder = models.CharField(max_length=255, blank=True, null=True)
+    week = models.CharField(max_length=255, blank=True)
     review_date = models.DateField()
     work_documents = models.URLField(blank=True, null=True)
-    industry_expert = models.CharField(max_length=200, blank=True, null=True)
+    industry_expert = models.CharField(max_length=255, blank=True, null=True)
     meeting_link = models.CharField(max_length=500, blank=True, null=True)
     review_sheet = models.URLField(blank=True, null=True)
     time_started = models.DateTimeField(blank=True, null=True)
@@ -396,9 +362,9 @@ class ReviewFolder(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     is_done = models.BooleanField(default=False)
-    reviewer_name = models.CharField(max_length=100, blank=True)
+    reviewer_name = models.CharField(max_length=255, blank=True)
     next_review_date = models.DateField(null=True, blank=True)
-    course = models.CharField(max_length=100, blank=True, null=True)
+    course = models.CharField(max_length=255, blank=True, null=True)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='created_review_folders')
     updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='updated_review_folders')
 
@@ -467,12 +433,13 @@ class ChatMessage(models.Model):
 
 class CourseStatus(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='course_statuses')
-    course_name = models.CharField(max_length=100, null=True, blank=True)  
+    course_name = models.CharField(max_length=255, null=True, blank=True)  
     started_at = models.DateTimeField(auto_now_add=True)
     ended_at = models.DateTimeField(null=True, blank=True)
     current_week = models.PositiveIntegerField(default=0)   
 
     class Meta:
+        # ✅ FIXED - Only one unique_together
         unique_together = ['student', 'course_name']
         ordering = ['-started_at']
 
@@ -489,7 +456,7 @@ class CourseStatus(models.Model):
 
 
 class StudentDocument(models.Model):
-    student = models.ForeignKey(Student,     on_delete=models.CASCADE, related_name='student_documents')
+    student = models.ForeignKey('Student', on_delete=models.CASCADE, related_name='student_documents')
     file = models.FileField(upload_to='student_documents/')
     file_name = models.CharField(max_length=255, blank=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
@@ -526,7 +493,7 @@ class ReviewAssignment(models.Model):
     review_sheet = models.URLField(max_length=500, blank=True, null=True)
     work_documents = models.URLField(max_length=500, blank=True, null=True)   
     week = models.CharField(max_length=10, blank=True, null=True)              
-    course = models.CharField(max_length=100, blank=True)
+    course = models.CharField(max_length=255, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending approval')
     comments = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -537,8 +504,7 @@ class ReviewAssignment(models.Model):
 
     def __str__(self):
         return f"{self.reviewer.user.username} – {self.student.user.username} ({self.status})"
-    
-    
+
 
 class WeeklySubmission(models.Model):
     SUBMISSION_TYPES = [
@@ -555,6 +521,7 @@ class WeeklySubmission(models.Model):
     notes = models.TextField(blank=True)
     submitted_at = models.DateTimeField(auto_now_add=True)
 
+    # Mentor review fields
     reviewed = models.BooleanField(default=False)
     marks = models.PositiveSmallIntegerField(null=True, blank=True, help_text="0-5")
     mentor_feedback = models.TextField(blank=True)
@@ -613,135 +580,86 @@ class FeePayment(models.Model):
         return f"{self.student.user.username} - {self.amount}"
 
 
-# ========== FEE STRUCTURE MODELS (fixed) ==========
+# Fee Structure Models (if needed - add if missing)
 class FeeStructure(models.Model):
-    name = models.CharField(max_length=200)
-    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='fee_structures', null=True, blank=True)
-    batch = models.ForeignKey(Batch, on_delete=models.CASCADE, related_name='fee_structures', null=True, blank=True)
+    name = models.CharField(max_length=255)
+    course = models.CharField(max_length=255, blank=True, null=True)
+    batch = models.ForeignKey(Batch, on_delete=models.SET_NULL, null=True, blank=True)
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
-    number_of_installments = models.PositiveSmallIntegerField(default=1)
-    late_fee_per_day = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     discount_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)
-    is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"{self.name} - {self.course.name if self.course else 'General'}"
-
-    def get_installments(self):
-        if self.number_of_installments <= 1:
-            return [{
-                'installment_number': 1,
-                'amount': self.total_amount * (1 - self.discount_percentage / 100),
-                'due_date': None,
-                'late_fee': 0
-            }]
-        installment_amount = self.total_amount / self.number_of_installments
-        installments = []
-        for i in range(self.number_of_installments):
-            installments.append({
-                'installment_number': i + 1,
-                'amount': installment_amount * (1 - self.discount_percentage / 100),
-                'due_date': None,
-                'late_fee': 0
-            })
-        return installments
+        return self.name
 
 
 class InstallmentSchedule(models.Model):
     fee_structure = models.ForeignKey(FeeStructure, on_delete=models.CASCADE, related_name='installments')
-    installment_number = models.PositiveSmallIntegerField()
+    installment_number = models.PositiveIntegerField()
     due_date = models.DateField()
     amount = models.DecimalField(max_digits=10, decimal_places=2)
-    late_fee_after_due = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
     class Meta:
         ordering = ['installment_number']
-        unique_together = ['fee_structure', 'installment_number']
 
     def __str__(self):
-        return f"{self.fee_structure.name} - Instalment {self.installment_number}"
+        return f"{self.fee_structure.name} - Installment {self.installment_number}"
 
 
 class StudentFee(models.Model):
-    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='fees')
-    fee_structure = models.ForeignKey(FeeStructure, on_delete=models.SET_NULL, null=True)
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='student_fees')
+    fee_structure = models.ForeignKey(FeeStructure, on_delete=models.CASCADE)
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
-    paid_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     discount_applied = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    status = models.CharField(max_length=20, choices=[
-        ('pending', 'Pending'),
-        ('partial', 'Partial'),
-        ('paid', 'Paid'),
-        ('overdue', 'Overdue')
-    ], default='pending')
+    paid_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
     @property
     def pending_amount(self):
-        return self.total_amount - self.paid_amount - self.discount_applied
+        return self.total_amount - self.paid_amount
 
-    def update_status(self):
-        """Safe version – no broken queries."""
-        pending = self.pending_amount
-        if pending <= 0:
-            self.status = 'paid'
-        elif self.paid_amount > 0:
-            self.status = 'partial'
-        else:
-            self.status = 'pending'
-        self.save(update_fields=['status'])
+    def __str__(self):
+        return f"{self.student.full_name or self.student.user.username} - {self.fee_structure.name}"
 
 
 class StudentFeePayment(models.Model):
     student_fee = models.ForeignKey(StudentFee, on_delete=models.CASCADE, related_name='payments')
-    installment = models.ForeignKey(InstallmentSchedule, on_delete=models.SET_NULL, null=True, blank=True)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
-    payment_date = models.DateField(auto_now_add=True)
-    receipt_number = models.CharField(max_length=50, unique=True, blank=True)
+    payment_date = models.DateTimeField(auto_now_add=True)
     payment_method = models.CharField(max_length=50, choices=[
         ('cash', 'Cash'),
         ('card', 'Card'),
         ('bank_transfer', 'Bank Transfer'),
-        ('online', 'Online')
-    ])
+        ('online', 'Online'),
+    ], default='cash')
+    transaction_id = models.CharField(max_length=100, blank=True)
     notes = models.TextField(blank=True)
 
     def save(self, *args, **kwargs):
-        if not self.receipt_number:
-            self.receipt_number = f"REC-{timezone.now().strftime('%Y%m%d%H%M%S')}-{self.student_fee.id}"
         super().save(*args, **kwargs)
-        # Recalculate total paid from all payments
-        student_fee = self.student_fee
-        total_paid = student_fee.payments.aggregate(total=Sum('amount'))['total'] or 0
-        student_fee.paid_amount = total_paid
-        student_fee.save(update_fields=['paid_amount'])
-        student_fee.update_status()
-
-
-class Review(models.Model):
-    title = models.CharField(max_length=255)
-    content = models.TextField()
-    created_at = models.DateTimeField(auto_now_add=True)
+        # Update the total paid amount in StudentFee
+        self.student_fee.paid_amount = self.student_fee.payments.aggregate(
+            total=models.Sum('amount')
+        )['total'] or 0
+        self.student_fee.save()
 
     def __str__(self):
-        return self.title
-            
+        return f"Payment of {self.amount} for {self.student_fee}"
+
 
 # ========== POST-SAVE SIGNAL: AUTO-CREATE PROFILES ==========
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+
 @receiver(post_save, sender=User)
 def create_user_profile(sender, instance, created, **kwargs):
     if created:
-        if instance.role == 'student':
-            Student.objects.get_or_create(user=instance)
-        elif instance.role == 'mentor':
-            Mentor.objects.get_or_create(
-                user=instance,
-                defaults={'expertise': 'General'}
-            )
-        elif instance.role == 'reviewer':
+        if instance.is_student:
+            Student.objects.get_or_create(user=instance, defaults={'email': instance.email, 'full_name': instance.get_full_name() or instance.username})
+        elif instance.is_mentor:
+            Mentor.objects.get_or_create(user=instance, defaults={'expertise': 'General'})
+        elif instance.is_reviewer:
             Reviewer.objects.get_or_create(user=instance)
-        elif instance.role == 'accounts':
+        elif instance.is_accounts:
             Accounts.objects.get_or_create(user=instance)
 

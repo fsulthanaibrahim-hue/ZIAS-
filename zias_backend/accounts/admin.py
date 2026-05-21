@@ -22,7 +22,8 @@ def reset_password_and_email(modeladmin, request, queryset):
         user.password_changed_at = timezone.now()
         user.save()
 
-        send_password_email(user, new_password)
+        # Send email to user
+        send_password_email(user.email, new_password, user.role)
 
     messages.success(request, "Password reset and email sent successfully.")
 
@@ -39,14 +40,12 @@ class UserAdmin(admin.ModelAdmin):
         'id',
         'username',
         'email',
-        'role',
         'is_staff',
         'is_active',
         'password_changed_at'
     ]
 
     list_filter = [
-        'role',
         'is_staff',
         'is_active'
     ]
@@ -92,7 +91,7 @@ class UserAdmin(admin.ModelAdmin):
                 username=username,
                 email=email,
                 password=password,
-                role='accounts',   # ✅ FIXED (no boolean anymore)
+                role='accounts',
                 first_name=full_name.split()[0] if full_name else '',
                 last_name=' '.join(full_name.split()[1:]) if full_name else '',
             )
@@ -102,7 +101,7 @@ class UserAdmin(admin.ModelAdmin):
                 defaults={'full_name': full_name}
             )
 
-            send_password_email(user, password)
+            send_password_email(email, password, 'accounts')
 
             messages.success(
                 request,
@@ -124,17 +123,31 @@ admin.site.register(User, UserAdmin)
 class StudentAdmin(admin.ModelAdmin):
     list_display = [
         'id',
-        'user',
+        'get_username',
+        'full_name',
+        'get_email',
         'course',
-        'student_batch',  # ✅ FIXED
+        'student_batch',
         'phone'
     ]
 
     search_fields = [
         'user__username',
+        'full_name',
+        'email',
         'course',
         'student_batch__name'
     ]
+    
+    readonly_fields = ['created_at', 'updated_at']
+    
+    def get_username(self, obj):
+        return obj.user.username if obj.user else '-'
+    get_username.short_description = 'Username'
+    
+    def get_email(self, obj):
+        return obj.user.email if obj.user else '-'
+    get_email.short_description = 'Email'
 
 
 # ==============================
@@ -142,8 +155,30 @@ class StudentAdmin(admin.ModelAdmin):
 # ==============================
 @admin.register(Mentor)
 class MentorAdmin(admin.ModelAdmin):
-    list_display = ['id', 'user', 'phone', 'expertise']
-    search_fields = ['user__username', 'expertise']
+    list_display = [
+        'id', 
+        'get_username',
+        'full_name', 
+        'get_email', 
+        'phone', 
+        'expertise',
+        'batch'
+    ]
+    
+    search_fields = [
+        'user__username', 
+        'full_name', 
+        'email', 
+        'expertise'
+    ]
+    
+    def get_username(self, obj):
+        return obj.user.username if obj.user else '-'
+    get_username.short_description = 'Username'
+    
+    def get_email(self, obj):
+        return obj.user.email if obj.user else '-'
+    get_email.short_description = 'Email'
 
 
 # ==============================
@@ -151,8 +186,28 @@ class MentorAdmin(admin.ModelAdmin):
 # ==============================
 @admin.register(Reviewer)
 class ReviewerAdmin(admin.ModelAdmin):
-    list_display = ['id', 'user', 'department']
-    search_fields = ['user__username', 'department']
+    list_display = [
+        'id', 
+        'get_username',
+        'full_name', 
+        'get_email', 
+        'department'
+    ]
+    
+    search_fields = [
+        'user__username', 
+        'full_name', 
+        'email', 
+        'department'
+    ]
+    
+    def get_username(self, obj):
+        return obj.user.username if obj.user else '-'
+    get_username.short_description = 'Username'
+    
+    def get_email(self, obj):
+        return obj.user.email if obj.user else '-'
+    get_email.short_description = 'Email'
 
 
 # ==============================

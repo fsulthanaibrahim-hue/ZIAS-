@@ -69,36 +69,40 @@ function AdminLogin() {
         username: trimmedUsername,
         password: trimmedPassword
       });
+
+      console.log("Login response:", response.data);
       
-      // The custom login view returns { refresh, access, user }
       const { access, refresh, user } = response.data;
       
-      // Safety check: ensure user object exists
       if (!user) {
+        console.error("No user data in response");
         throw new Error("Invalid server response: missing user data");
       }
+
+      console.log("User role - is_admin:", user.is_admin); 
       
-      // Store tokens and user data
       localStorage.setItem("access_token", access);
       localStorage.setItem("refresh_token", refresh);
       localStorage.setItem("user", JSON.stringify(user));
       
-      // Set default axios header for future requests
       axios.defaults.headers.common['Authorization'] = `Bearer ${access}`;
       
-      // Check admin privilege
       if (user.is_admin === true) {
-        navigate("/admin/dashboard");
+        console.log("Admin login success, redirecting to dashboard...");
+        window.location.href = "/admin/dashboard";
+        // navigate("/admin/dashboard");
       } else {
+        console.log("User is not admin. User data:", user);
         setError("You are not authorized as admin. Please contact system administrator.");
-        // Clear stored data since user is not admin
-        localStorage.removeItem("access_token");
-        localStorage.removeItem("refresh_token");
-        localStorage.removeItem("user");
+        localStorage.clear();
+        // localStorage.removeItem("access_token");
+        // localStorage.removeItem("refresh_token");
+        // localStorage.removeItem("user");
         delete axios.defaults.headers.common['Authorization'];
       }
     } catch (err) {
       console.error("Login error:", err);
+      console.error("Error response:", err.response?.data);
       const friendlyMsg = getFriendlyErrorMessage(err);
       setError(friendlyMsg);
     } finally {
