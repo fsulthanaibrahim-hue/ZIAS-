@@ -95,7 +95,7 @@ class Document(models.Model):
 # ========== STUDENT (fix: course FK uses string because Course defined later) ==========
 class Student(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='student_profile')
-    course = models.CharField(max_length=100, blank=True, null=True)   # CharField, not FK
+    course = models.CharField(max_length=100, blank=True, null=True)  
     student_batch = models.ForeignKey(Batch, on_delete=models.SET_NULL, null=True, blank=True, related_name='students')
     mentor = models.ForeignKey('Mentor', on_delete=models.SET_NULL, null=True, blank=True, related_name='students')
     phone = models.CharField(max_length=15, blank=True, null=True)
@@ -489,7 +489,7 @@ class CourseStatus(models.Model):
 
 
 class StudentDocument(models.Model):
-    student = models.ForeignKey('Student', on_delete=models.CASCADE, related_name='student_documents')
+    student = models.ForeignKey(Student,     on_delete=models.CASCADE, related_name='student_documents')
     file = models.FileField(upload_to='student_documents/')
     file_name = models.CharField(max_length=255, blank=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)

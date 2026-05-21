@@ -27,6 +27,7 @@ SECRET_KEY = config('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=False, cast=bool)
 
+DEBUG = True
 
 ALLOWED_HOSTS = config(
     'ALLOWED_HOSTS',
@@ -178,6 +179,9 @@ REST_FRAMEWORK = {
     ),
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.LimitOffsetPagination',
     'PAGE_SIZE': 20,
+    
+    'EXCEPTION_HANDLER': 'accounts.exception_handler.custom_exception_handler', 
+    'NON_FIELD_ERRORS_KEY': 'error',
 }
 
 
