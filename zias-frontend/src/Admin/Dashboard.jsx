@@ -1,4 +1,4 @@
-// src/Admin/Dashboard.jsx – without Monthly Registrations & Cumulative Trends
+// src/Admin/Dashboard.jsx – with improved error handling and auto-refresh
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../api/api";
@@ -181,6 +181,16 @@ const LoadingBox = ({ height = 280 }) => (
   </div>
 );
 
+const NoDataState = ({ message = "No data available yet" }) => (
+  <div className="flex flex-col items-center justify-center h-64 text-gray-400">
+    <svg className="w-12 h-12 mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    </svg>
+    <p className="text-sm">{message}</p>
+    <p className="text-xs mt-1">Add some data to get started</p>
+  </div>
+);
+
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
 function Dashboard() {
@@ -192,30 +202,51 @@ function Dashboard() {
   const [lastUpdated, setLastUpdated] = useState(null);
   const [apiOk, setApiOk] = useState(true);
   const [loading, setLoading] = useState(true);
+  const [autoRefresh, setAutoRefresh] = useState(false);
 
   const fetched = useRef(false);
+  const autoRefreshInterval = useRef(null);
   const adminName = user?.first_name || user?.username || "Admin";
 
   const fetchData = async (showToast = false) => {
     try {
       setLoading(true);
-      const [studentsRes, mentorsRes, reviewersRes, coursesRes, batchesRes] = await Promise.all([
+      
+      // Use allSettled to handle individual API failures gracefully
+      const results = await Promise.allSettled([
         API.get("students/"),
         API.get("mentors/"),
         API.get("reviewers/"),
         API.get("courses/"),
         API.get("batches/"),
       ]);
-      setStats({
-        students:  getCount(studentsRes),
-        mentors:   getCount(mentorsRes),
-        reviewers: getCount(reviewersRes),
-        courses:   getCount(coursesRes),
-        batches:   getCount(batchesRes),
+      
+      const newStats = { students: 0, mentors: 0, reviewers: 0, courses: 0, batches: 0 };
+      let hasError = false;
+      let errorCount = 0;
+      
+      results.forEach((result, index) => {
+        const endpoints = ['students', 'mentors', 'reviewers', 'courses', 'batches'];
+        if (result.status === 'fulfilled') {
+          newStats[endpoints[index]] = getCount(result.value);
+        } else {
+          console.error(`Failed to fetch ${endpoints[index]}:`, result.reason);
+          hasError = true;
+          errorCount++;
+        }
       });
-      setApiOk(true);
+      
+      setStats(newStats);
+      setApiOk(!hasError);
       setLastUpdated(new Date());
-      if (showToast) toast.success("Dashboard refreshed");
+      
+      if (showToast) {
+        if (hasError) {
+          toast.error(`${errorCount} of 5 data sources failed to load`, { duration: 3000 });
+        } else {
+          toast.success("Dashboard refreshed", { duration: 2000 });
+        }
+      }
     } catch (err) {
       console.warn(err);
       toast.error(getFriendlyErrorMessage(err, "Failed to load dashboard data"));
@@ -225,6 +256,26 @@ function Dashboard() {
     }
   };
 
+  // Auto-refresh setup
+  useEffect(() => {
+    if (autoRefresh) {
+      autoRefreshInterval.current = setInterval(() => {
+        fetchData(false);
+      }, 30000); // Refresh every 30 seconds
+    } else {
+      if (autoRefreshInterval.current) {
+        clearInterval(autoRefreshInterval.current);
+      }
+    }
+    
+    return () => {
+      if (autoRefreshInterval.current) {
+        clearInterval(autoRefreshInterval.current);
+      }
+    };
+  }, [autoRefresh]);
+
+  // Initial data fetch
   useEffect(() => {
     if (fetched.current) return;
     fetched.current = true;
@@ -238,13 +289,13 @@ function Dashboard() {
     return "Good evening";
   };
 
-  // Real chart data
+  // Chart data with safety checks
   const barData = [
-    { name: "Students",  value: stats.students,  fill: "#3b82f6" },
-    { name: "Mentors",   value: stats.mentors,   fill: "#10b981" },
-    { name: "Reviewers", value: stats.reviewers, fill: "#f59e0b" },
-    { name: "Courses",   value: stats.courses,   fill: "#8b5cf6" },
-    { name: "Batches",   value: stats.batches,   fill: "#ec4899" },
+    { name: "Students",  value: stats.students || 0,  fill: "#3b82f6" },
+    { name: "Mentors",   value: stats.mentors || 0,   fill: "#10b981" },
+    { name: "Reviewers", value: stats.reviewers || 0, fill: "#f59e0b" },
+    { name: "Courses",   value: stats.courses || 0,   fill: "#8b5cf6" },
+    { name: "Batches",   value: stats.batches || 0,   fill: "#ec4899" },
   ];
 
   const pieData = [
@@ -252,6 +303,7 @@ function Dashboard() {
     { name: "Mentors",   value: stats.mentors   || 0, fill: "#10b981" },
     { name: "Reviewers", value: stats.reviewers || 0, fill: "#f59e0b" },
   ];
+  
   const pieDataSafe = pieData.every(p => p.value === 0)
     ? pieData.map(p => ({ ...p, value: 1 }))
     : pieData;
@@ -264,6 +316,9 @@ function Dashboard() {
     { subject: "Courses",   A: Math.round((stats.courses   / total) * 100) },
     { subject: "Batches",   A: Math.round((stats.batches   / total) * 100) },
   ];
+
+  const hasNoData = stats.students === 0 && stats.mentors === 0 && stats.reviewers === 0 && 
+                    stats.courses === 0 && stats.batches === 0;
 
   return (
     <div className="min-h-screen w-screen bg-gray-50 text-gray-800 p-4 sm:p-6 md:p-8 overflow-x-hidden">
@@ -278,13 +333,23 @@ function Dashboard() {
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2 text-xs text-gray-500 font-medium">
             <StatusDot ok={apiOk} />
-            {apiOk ? "All systems operational" : "API unreachable"}
+            {apiOk ? "All systems operational" : "Some services unavailable"}
           </div>
           {lastUpdated && (
             <p className="text-gray-400 text-xs font-medium">
               Updated {lastUpdated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
             </p>
           )}
+          <button
+            onClick={() => setAutoRefresh(!autoRefresh)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+              autoRefresh 
+                ? "bg-green-100 text-green-700 border border-green-200" 
+                : "bg-gray-100 text-gray-500 border border-gray-200"
+            }`}
+          >
+            🔄 Auto {autoRefresh ? "ON" : "OFF"}
+          </button>
           <button
             onClick={() => fetchData(true)}
             disabled={loading}
@@ -326,7 +391,11 @@ function Dashboard() {
         <LiveClock sessionStart={sessionStart.current} />
 
         <ChartCard title="Overview" badge="Live">
-          {loading ? <LoadingBox height={280} /> : (
+          {loading ? (
+            <LoadingBox height={280} />
+          ) : hasNoData ? (
+            <NoDataState message="No data available" />
+          ) : (
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={barData} barSize={36} maxBarSize={48}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
@@ -342,10 +411,14 @@ function Dashboard() {
         </ChartCard>
       </div>
 
-      {/* Row 2: Donut + Radar (both full width on smaller screens) */}
+      {/* Row 2: Donut + Radar */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <ChartCard title="User Distribution" badge="Live">
-          {loading ? <LoadingBox height={300} /> : (
+          {loading ? (
+            <LoadingBox height={300} />
+          ) : hasNoData ? (
+            <NoDataState message="No user data available" />
+          ) : (
             <>
               <ResponsiveContainer width="100%" height={280}>
                 <PieChart>
@@ -366,7 +439,11 @@ function Dashboard() {
         </ChartCard>
 
         <ChartCard title="Platform Balance" badge="Live">
-          {loading ? <LoadingBox height={300} /> : (
+          {loading ? (
+            <LoadingBox height={300} />
+          ) : hasNoData ? (
+            <NoDataState message="No data to display" />
+          ) : (
             <>
               <ResponsiveContainer width="100%" height={280}>
                 <RadarChart data={radarData} cx="50%" cy="50%" outerRadius={105}>
@@ -386,6 +463,21 @@ function Dashboard() {
         </ChartCard>
       </div>
 
+      {/* Status message when API has errors but data exists */}
+      {!apiOk && !hasNoData && !loading && (
+        <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
+          <div className="flex items-center gap-3">
+            <span className="text-yellow-600 text-lg">⚠️</span>
+            <div>
+              <p className="text-sm font-medium text-yellow-800">Partial Data Available</p>
+              <p className="text-xs text-yellow-600 mt-0.5">
+                Some data sources are currently unavailable. The dashboard shows available data only.
+                {autoRefresh && " Auto-refresh is enabled. Data will update when available."}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

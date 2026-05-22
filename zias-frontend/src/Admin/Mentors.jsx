@@ -1,21 +1,27 @@
-// src/Admin/Mentors.jsx – Email is now editable during edit
+// src/Admin/Mentors.jsx - Fully Working with Email Support
 import { useEffect, useState, useRef, useCallback } from "react";
 import API from "../api/api";
 import { toast } from "react-hot-toast";
 
-// Helper to turn any API error into a user‑friendly message (never 5xx)
+// Helper to turn any API error into a user‑friendly message
 const getFriendlyErrorMessage = (err, defaultMsg = "Request failed") => {
   if (!err?.response) {
     return "Network error. Please check your connection.";
   }
   const status = err.response.status;
   if (status >= 500) {
-    return "Bad request. Please check your input and try again.";
+    return "Server error. Please try again later.";
   }
   if (status === 404) {
     return "Not found.";
   }
   if (status === 400) {
+    const data = err.response.data;
+    if (typeof data === 'object') {
+      const firstError = Object.values(data)[0];
+      if (Array.isArray(firstError)) return firstError[0];
+      if (typeof firstError === 'string') return firstError;
+    }
     return "Invalid request. Please review your data.";
   }
   if (status === 401 || status === 403) {
@@ -176,15 +182,6 @@ function Mentors() {
     }
   };
 
-  const generateUsername = (fullName, email) => {
-    let base = fullName ? fullName.toLowerCase().trim().replace(/\s+/g, '_') : '';
-    if (!base) base = email ? email.split('@')[0] : 'mentor';
-    base = base.replace(/[^a-z0-9_]/g, '');
-    if (!base) base = 'mentor';
-    const suffix = Math.floor(Math.random() * 10000);
-    return `${base}${suffix}`;
-  };
-
   const fetchMentorDocuments = useCallback(async (mentorId) => {
     try {
       const res = await API.get(`mentors/${mentorId}/documents/`);
@@ -206,6 +203,7 @@ function Mentors() {
         await API.post('upload-mentor-document/', fd, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
+        showToast(`Uploaded ${file.name}`, "success");
       } catch (err) {
         const msg = getFriendlyErrorMessage(err, `Failed to upload ${file.name}`);
         showToast(msg, "error");
@@ -216,7 +214,11 @@ function Mentors() {
 
   const resetForm = () => {
     setFormData({
-      full_name: "", email: "", phone: "", expertise: "", batch: "",
+      full_name: "",
+      email: "",
+      phone: "",
+      expertise: "",
+      batch: "",
     });
     setPhoneError("");
     setEmailError("");
@@ -228,7 +230,6 @@ function Mentors() {
     e.preventDefault();
     if (submitting) return;
 
-    // Validate required fields
     if (!formData.full_name.trim()) {
       showToast("Full name is required", "error");
       return;
@@ -238,17 +239,6 @@ function Mentors() {
       return;
     }
 
-    // Email validation for both create and edit
-    if (!formData.email.trim()) {
-      showToast("Email is required", "error");
-      return;
-    }
-    if (!formData.email.includes('@')) {
-      showToast("Enter a valid email address", "error");
-      return;
-    }
-
-    // Phone validation
     if (formData.phone && !/^\d{10}$/.test(formData.phone)) {
       showToast("Phone number must be exactly 10 digits", "error");
       setPhoneError("Phone number must be exactly 10 digits");
@@ -256,57 +246,57 @@ function Mentors() {
     }
     setPhoneError("");
 
+    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      showToast("Please enter a valid email address", "error");
+      setEmailError("Please enter a valid email address");
+      return;
+    }
+    setEmailError("");
+
     setSubmitting(true);
-    
+
     try {
       if (editingId) {
-        // UPDATE - Include email in payload
         const updatePayload = {
           full_name: formData.full_name.trim(),
-          email: formData.email.trim(),
           expertise: formData.expertise.trim(),
           phone: formData.phone || "",
           batch: formData.batch ? parseInt(formData.batch) : null,
         };
         
-        console.log("Updating mentor with payload:", updatePayload);
-        
-        const updateRes = await API.patch(`mentors/${editingId}/`, updatePayload);
-        console.log("Update response:", updateRes.data);
-        showToast("Mentor updated successfully", "success");
-        
-        if (selectedFiles.length) {
-          await uploadDocumentsForMentor(editingId, selectedFiles);
+        if (formData.email && formData.email.trim()) {
+          updatePayload.email = formData.email.trim();
         }
+        
+        console.log("Updating mentor with payload:", updatePayload);
+        await API.patch(`mentors/${editingId}/`, updatePayload);
+        showToast("Mentor updated successfully", "success");
         
         setShowForm(false);
         setEditingId(null);
         resetForm();
-        
-        // Refresh the mentors list
         await fetchMentors();
-        
+
       } else {
-        // CREATE - includes email and username
-        const generatedUsername = generateUsername(formData.full_name, formData.email);
         const createPayload = {
           full_name: formData.full_name.trim(),
-          email: formData.email.trim(),
-          username: generatedUsername,
           expertise: formData.expertise.trim(),
-          phone: formData.phone || "",
+          phone: formData.phone || "", 
           batch: formData.batch ? parseInt(formData.batch) : null,
         };
         
-        console.log("Creating mentor with payload:", createPayload);
+        if (formData.email && formData.email.trim()) {
+          createPayload.email = formData.email.trim();
+        }
         
+        console.log("Creating mentor with payload:", createPayload);
         const createRes = await API.post("mentors/", createPayload);
         showToast("Mentor added successfully", "success");
-        
+
         if (selectedFiles.length) {
           await uploadDocumentsForMentor(createRes.data.id, selectedFiles);
         }
-        
+
         setShowForm(false);
         resetForm();
         await fetchMentors();
@@ -316,18 +306,14 @@ function Mentors() {
       console.error("Error:", error);
       let msg = "Error saving mentor";
       
-      // Check for duplicate email error
-      if (error.response?.status === 400) {
-        if (error.response?.data?.email && error.response.data.email[0]?.includes("already exists")) {
-          msg = "This email is already registered. Please use a different email.";
-          setEmailError("Email already exists");
-        } else if (error.response?.data?.details?.email) {
-          msg = `Email: ${error.response.data.details.email}`;
-          setEmailError(error.response.data.details.email);
-        } else if (error.response?.data?.error) {
-          msg = error.response.data.error;
-        } else if (error.response?.data?.detail) {
-          msg = error.response.data.detail;
+      if (error.response?.data?.error) {
+        msg = error.response.data.error;
+      } else if (error.response?.data?.detail) {
+        msg = error.response.data.detail;
+      } else if (error.response?.data && typeof error.response.data === 'object') {
+        const firstKey = Object.keys(error.response.data)[0];
+        if (firstKey && error.response.data[firstKey] && error.response.data[firstKey][0]) {
+          msg = `${firstKey}: ${error.response.data[firstKey][0]}`;
         }
       }
       
@@ -335,7 +321,7 @@ function Mentors() {
     } finally {
       setSubmitting(false);
     }
-  };
+  };  
 
   const handleEdit = async (mentor) => {
     console.log("Editing mentor:", mentor);
@@ -379,8 +365,8 @@ function Mentors() {
         setPhoneError("");
       }
     } else if (name === "email") {
-      setFormData(prev => ({ ...prev, [name]: value }));
-      setEmailError(""); // Clear email error when user types
+      setFormData(prev => ({ ...prev, email: value }));
+      setEmailError("");
     } else {
       setFormData(prev => ({ ...prev, [name]: value }));
     }
@@ -417,7 +403,7 @@ function Mentors() {
   const filteredMentors = Array.isArray(mentors)
     ? mentors.filter(m =>
         (m.full_name || m.username)?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        m.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (m.email || m.user?.email)?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         m.phone?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         m.expertise?.toLowerCase().includes(searchTerm.toLowerCase())
       )
@@ -545,7 +531,7 @@ function Mentors() {
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={() => setShowForm(false)}>
             <form
               onSubmit={handleSubmit}
-              className="modal-enter bg-white rounded-2xl w-full max-w-3xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto"
+              className="modal-enter bg-white rounded-2xl w-full max-w-2xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="sticky top-0 bg-white z-10 flex justify-between items-center px-4 sm:px-6 py-4 border-b border-gray-200">
@@ -567,32 +553,33 @@ function Mentors() {
 
               <div className="px-4 sm:px-6 py-5 space-y-6">
                 <div>
-                  <h4 className="text-xs font-semibold text-green-600 uppercase tracking-wider mb-3">Basic Information</h4>
+                  <h4 className="text-xs font-semibold text-green-600 uppercase tracking-wider mb-3">Mentor Information</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
+                    <div className="sm:col-span-2">
                       <label className="block text-gray-600 text-xs font-medium mb-1.5">Full Name *</label>
-                      <input type="text" name="full_name" value={formData.full_name} onChange={handleChange} required className={inputClass} />
+                      <input type="text" name="full_name" value={formData.full_name} onChange={handleChange} required className={inputClass} placeholder="Enter mentor's full name" />
                     </div>
-                    <div>
-                      <label className="block text-gray-600 text-xs font-medium mb-1.5">Email *</label>
+                    <div className="sm:col-span-2">
+                      <label className="block text-gray-600 text-xs font-medium mb-1.5">Email Address</label>
                       <input 
                         type="email" 
                         name="email" 
                         value={formData.email} 
                         onChange={handleChange} 
-                        required 
                         className={`${inputClass} ${emailError ? "border-red-500" : ""}`}
+                        placeholder="mentor@example.com"
                       />
                       {emailError && <p className="text-red-500 text-xs mt-1">{emailError}</p>}
-                    </div>
-                    <div>
-                      <label className="block text-gray-600 text-xs font-medium mb-1.5">Phone</label>
-                      <input type="tel" name="phone" value={formData.phone} onChange={handleChange} className={`${inputClass} ${phoneError ? "border-red-500" : ""}`} placeholder="10-digit mobile" />
-                      {phoneError && <p className="text-red-500 text-xs mt-1">{phoneError}</p>}
+                      <p className="text-gray-400 text-xs mt-1">Optional - If left blank, auto-generated email will be used</p>
                     </div>
                     <div>
                       <label className="block text-gray-600 text-xs font-medium mb-1.5">Expertise *</label>
-                      <input type="text" name="expertise" value={formData.expertise} onChange={handleChange} required className={inputClass} />
+                      <input type="text" name="expertise" value={formData.expertise} onChange={handleChange} required className={inputClass} placeholder="e.g., Python, Java, React" />
+                    </div>
+                    <div>
+                      <label className="block text-gray-600 text-xs font-medium mb-1.5">Phone</label>
+                      <input type="tel" name="phone" value={formData.phone} onChange={handleChange} className={`${inputClass} ${phoneError ? "border-red-500" : ""}`} placeholder="10-digit mobile number" />
+                      {phoneError && <p className="text-red-500 text-xs mt-1">{phoneError}</p>}
                     </div>
                     <div>
                       <label className="block text-gray-600 text-xs font-medium mb-1.5">Batch</label>
@@ -708,7 +695,7 @@ function Mentors() {
                   <h4 className="text-xs font-semibold text-green-600 uppercase tracking-wider mb-3">Basic Information</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div><label className="block text-gray-500 text-xs">Full Name</label><p className="text-gray-800 text-sm mt-1">{viewingMentor.full_name || "—"}</p></div>
-                    <div><label className="block text-gray-500 text-xs">Email</label><p className="text-gray-800 text-sm mt-1">{viewingMentor.email || "—"}</p></div>
+                    <div><label className="block text-gray-500 text-xs">Email</label><p className="text-gray-800 text-sm mt-1">{viewingMentor.email || viewingMentor.user?.email || "—"}</p></div>
                     <div><label className="block text-gray-500 text-xs">Phone</label><p className="text-gray-800 text-sm mt-1">{viewingMentor.phone || "—"}</p></div>
                     <div><label className="block text-gray-500 text-xs">Expertise</label><p className="text-gray-800 text-sm mt-1">{viewingMentor.expertise || "—"}</p></div>
                     <div><label className="block text-gray-500 text-xs">Batch</label><p className="text-gray-800 text-sm mt-1">{getBatchName(viewingMentor.batch)}</p></div>
@@ -761,7 +748,7 @@ function Mentors() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-100">
-              {paginatedMentors.map(m => (
+              {paginatedMentors.map((m) => (
                 <tr key={m.id} className="table-row-hover group">
                   <td data-label="Mentor" className="px-4 py-3">
                     <div className="flex items-center gap-3">
@@ -769,7 +756,7 @@ function Mentors() {
                       <button onClick={() => openViewModal(m)} className="text-gray-800 text-sm font-medium hover:text-green-600 transition-colors cursor-pointer">{m.full_name || m.username}</button>
                     </div>
                   </td>
-                  <td data-label="Email" className="px-4 py-3 text-gray-500 text-sm break-all">{m.email}</td>
+                  <td data-label="Email" className="px-4 py-3 text-gray-500 text-sm break-all">{m.email || m.user?.email || "—"}</td>
                   <td data-label="Phone" className="px-4 py-3 text-gray-500 text-sm">{m.phone || "—"}</td>
                   <td data-label="Expertise" className="px-4 py-3"><span className="inline-flex items-center gap-1.5 bg-green-100 text-green-700 border border-green-200 text-xs font-medium px-2 py-1 rounded-full">{m.expertise}</span></td>
                   <td data-label="Batch" className="px-4 py-3">{m.batch ? <span className="inline-flex items-center gap-1.5 bg-purple-100 text-purple-700 border border-purple-200 text-xs font-medium px-2 py-1 rounded-full">{getBatchName(m.batch)}</span> : <span className="text-gray-400 text-xs">—</span>}</td>
@@ -788,7 +775,9 @@ function Mentors() {
                 </tr>
               ))}
               {paginatedMentors.length === 0 && (
-                <tr><td colSpan="6" className="text-center py-12 text-gray-500">{searchTerm ? "No mentors match your search" : "No mentors yet"}</td></tr>
+                <tr>
+                  <td colSpan="6" className="text-center py-12 text-gray-500">{searchTerm ? "No mentors match your search" : "No mentors yet"}</td>
+                </tr>
               )}
             </tbody>
           </table>

@@ -16,7 +16,7 @@ class User(AbstractUser):
 
     @property
     def is_admin(self):
-        return self.role == 'admin'
+        return self.role == 'admin' or self.is_superuser
 
     @property
     def is_student(self):
@@ -60,16 +60,12 @@ class Document(models.Model):
 
 class Student(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='student_profile')
-    
-    # ✅ ADDED - Required fields
-    email = models.EmailField(unique=True, default='temp@example.com')
-    full_name = models.CharField(max_length=255, default='')
+    email = models.EmailField(unique=True)
+    full_name = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
-    # Existing fields with updated max_length
     course = models.CharField(max_length=255, blank=True, null=True)
-    batch = models.CharField(max_length=255, blank=True, null=True)
+    batch = models.CharField(max_length=100, blank=True, null=True)
     student_batch = models.ForeignKey(Batch, on_delete=models.SET_NULL, null=True, blank=True, related_name='students')
     mentor = models.ForeignKey('Mentor', on_delete=models.SET_NULL, null=True, blank=True, related_name='students')
     phone = models.CharField(max_length=20, blank=True, null=True)
@@ -90,6 +86,7 @@ class Student(models.Model):
     documents = models.ManyToManyField(Document, blank=True, related_name='students')
     agreement_signed = models.BooleanField(default=False)
     escalation_flag = models.BooleanField(default=False)
+    # role = models.CharField(max_length=20, default='student')  # ← REMOVE THIS LINE
 
     def __str__(self):
         return self.full_name or self.email or self.user.username

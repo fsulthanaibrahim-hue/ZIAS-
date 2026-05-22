@@ -21,8 +21,9 @@ from .models import (
 
 
 def generate_random_password(length=10):
-    alphabet = string.ascii_letters + string.digits
-    return ''.join(secrets.choice(alphabet) for _ in range(length))
+    """Generate a random password"""
+    characters = string.ascii_letters + string.digits
+    return ''.join(random.choice(characters) for _ in range(length))
 
 
 # ----------------------------
@@ -325,74 +326,82 @@ class StudentSerializer(serializers.ModelSerializer):
         return instance
 
 
+
 # ----------------------------
-# MENTOR SERIALIZER
+# MENTOR SERIALIZER - WITH EMAIL
 # ----------------------------
 class MentorSerializer(serializers.ModelSerializer):
-    username = serializers.CharField(source='user.username')
-    email = serializers.EmailField(source='user.email')
-
+    email = serializers.EmailField(source='user.email', read_only=True)
+    
     class Meta:
         model = Mentor
-        fields = ['id', 'username', 'email', 'phone', 'expertise', 'batch', 'full_name']
+        fields = ['id', 'full_name', 'expertise', 'phone', 'batch', 'email']
 
     def create(self, validated_data):
-        user_data = validated_data.pop('user')
-        username = user_data['username']
-        email = user_data['email']
+        full_name = validated_data.get('full_name', '')
+        email = validated_data.pop('email', None)
+        
+        if not full_name:
+            raise serializers.ValidationError({"full_name": "Full name is required"})
+        
+        # Handle batch
+        batch = validated_data.get('batch')
+        if batch == "" or batch is None:
+            validated_data['batch'] = None
+        
+        username = full_name.lower().replace(' ', '_')
+        
+        counter = 1
+        original_username = username
+        while User.objects.filter(username=username).exists():
+            username = f"{original_username}{counter}"
+            counter += 1
+        
+        # Use provided email or generate one
+        if email:
+            user_email = email
+        else:
+            user_email = f"{username}@example.com"
+        
         random_password = generate_random_password()
-        try:
-            user = User.objects.get(username=username)
-            if user.email != email:
-                user.email = email
-            if not user.is_mentor:
-                user.is_mentor = True
-            if not user.password_changed_at:
-                user.password_changed_at = timezone.now()
-            user.save()
-        except User.DoesNotExist:
-            user = User.objects.create_user(username=username, email=email, password=random_password)
-            user.is_mentor = True
-            user.password_changed_at = timezone.now()
-            user.save()
-
-        if Mentor.objects.filter(user=user).exists():
-            raise serializers.ValidationError({"username": "This user already has a mentor profile."})
-
-        # Send welcome email
-        try:
-            expiry_days = getattr(settings, 'PASSWORD_EXPIRY_DAYS', 90)
-            domain = getattr(settings, 'SITE_DOMAIN', 'localhost:5173')
-            context = {'username': username, 'password': random_password, 'expiry_days': expiry_days, 'domain': domain}
-            try:
-                html_message = render_to_string('mail.html', context)
-                plain_message = strip_tags(html_message)
-            except Exception:
-                plain_message = f"Welcome! Your mentor account has been created.\nUsername: {username}\nPassword: {random_password}"
-                html_message = plain_message
-            subject = '🎓 Welcome to ZIAS – Your Mentor Account Credentials'
-            send_mail(subject, plain_message, settings.DEFAULT_FROM_EMAIL, [email], html_message=html_message, fail_silently=False)
-        except Exception as e:
-            print(f"Email sending failed: {e}")
-            
-        return Mentor.objects.create(user=user, **validated_data)
+        
+        # Create user
+        user = User.objects.create_user(
+            username=username,
+            email=user_email,
+            password=random_password
+        )
+        user.role = 'mentor'
+        user.save()
+        
+        # Create mentor
+        mentor = Mentor.objects.create(user=user, **validated_data)
+        
+        return mentor
 
     def update(self, instance, validated_data):
-        instance.phone = validated_data.get('phone', instance.phone)
-        instance.expertise = validated_data.get('expertise', instance.expertise)
-        instance.batch = validated_data.get('batch', instance.batch)
+        # Get email if provided for update
+        email = validated_data.pop('email', None)
+        
         instance.full_name = validated_data.get('full_name', instance.full_name)
+        instance.expertise = validated_data.get('expertise', instance.expertise)
+        instance.phone = validated_data.get('phone', instance.phone)
+        
+        # Handle batch
+        batch = validated_data.get('batch')
+        if batch == "":
+            instance.batch = None
+        elif batch is not None:
+            instance.batch = batch
+        
         instance.save()
-        user_data = validated_data.pop('user', None)
-        if user_data:
-            new_username = user_data.get('username', instance.user.username)
-            new_email = user_data.get('email', instance.user.email)
-            if new_username.lower() != instance.user.username.lower():
-                instance.user.username = new_username
-            if new_email.lower() != instance.user.email.lower():
-                instance.user.email = new_email
+        
+        if email and instance.user:
+            instance.user.email = email
             instance.user.save()
+        
         return instance
+    
 
 
 # ----------------------------

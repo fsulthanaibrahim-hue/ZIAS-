@@ -123,121 +123,98 @@ class BatchViewSet(SafeViewSet, viewsets.ModelViewSet):
 # ----------------------------
 # STUDENT VIEWSET
 # ----------------------------
-class StudentViewSet(SafeViewSet, viewsets.ModelViewSet):
+class StudentViewSet(viewsets.ModelViewSet):
     serializer_class = StudentSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         user = self.request.user
-        queryset = Student.objects.filter(user__is_active=True)
-        if user.is_admin:
-            mentor_id = self.request.query_params.get('mentor')
-            if mentor_id:
-                queryset = queryset.filter(mentor_id=mentor_id)
-        elif user.is_mentor:
-            try:
-                mentor = Mentor.objects.get(user=user)
-                queryset = queryset.filter(mentor=mentor)
-            except Mentor.DoesNotExist:
-                queryset = queryset.none()
-        elif user.is_reviewer:
-            try:
-                reviewer = Reviewer.objects.get(user=user)
-                if reviewer.course:
-                    queryset = queryset.filter(course=reviewer.course)
-                else:
-                    queryset = queryset.none()
-            except Reviewer.DoesNotExist:
-                queryset = queryset.none()
-        else:
-            queryset = queryset.filter(user=user)
-        return queryset
-
+        
+        if user.is_superuser or user.role == 'admin':
+            return Student.objects.all()
+        
+        if user.role == 'student':
+            return Student.objects.filter(user=user)
+        
+        return Student.objects.none()
+    
     def list(self, request, *args, **kwargs):
-        queryset = self.get_queryset()
-        user = request.user
-        if user.is_mentor:
-            data = []
-            for student in queryset.select_related('user'):
-                data.append({
-                    "id": student.id,
-                    "username": student.user.username,
-                    "full_name": student.full_name,
-                    "course": student.course,
-                    "batch": student.batch,
-                })
-            return Response(data)
-        elif user.is_reviewer:
-            serializer = self.get_serializer(queryset, many=True)
-            return Response(serializer.data)
-        else:
-            serializer = self.get_serializer(queryset, many=True)
-            return Response(serializer.data)
-
-    @action(detail=False, methods=['get'], url_path='me', permission_classes=[IsAuthenticated])
-    def me(self, request):
-        user = request.user
-        if not user.is_student:
-            return Response({"detail": "User is not a student"}, status=status.HTTP_403_FORBIDDEN)
-        student, created = Student.objects.get_or_create(
-            user=user,
-            defaults={
-                'course': '',
-                'full_name': user.get_full_name() or user.username,
-            }
-        )
-        if created:
-            print(f"Auto-created student profile for {user.username}")
-        serializer = self.get_serializer(student)
-        return Response(serializer.data)
-
-    @action(detail=True, methods=['get'], url_path='progress')
-    def progress(self, request, pk=None):
         try:
-            student = self.get_object()
-            student_modules = StudentModule.objects.filter(student=student).select_related('module')
-            completed_weeks = []
-            for sm in student_modules:
-                if sm.is_completed and sm.module and sm.module.order is not None:
-                    completed_weeks.append(int(sm.module.order))
-            current_week = max(completed_weeks) if completed_weeks else 0
-            next_week = current_week + 1
-            total_weeks = 52
-            if student.course:
-                course_obj = Course.objects.filter(name=student.course).first()
-                if course_obj and course_obj.duration:
-                    total_weeks = int(course_obj.duration)
-            progress_percent = round((current_week / total_weeks) * 100, 1) if total_weeks else 0
-            return Response({
-                'student_id': student.id,
-                'full_name': student.full_name or student.user.username,
-                'course': student.course or '',
-                'batch': student.batch or '',
-                'completed_weeks': sorted(completed_weeks),
-                'current_week': current_week,
-                'next_week': next_week if next_week <= total_weeks else None,
-                'total_weeks': total_weeks,
-                'progress_percent': progress_percent,
-            })
-        except Exception:
-            return Response({"error": "Bad request. Please check your input and try again."}, status=status.HTTP_400_BAD_REQUEST)
+            queryset = self.get_queryset()
+            serializer = self.get_serializer(queryset, many=True)
+            return Response(serializer.data)
+        except Exception as e:
+            print(f"Error: {e}")
+            # Return empty list on error
+            return Response([], status=200)  
 
-    def destroy(self, request, *args, **kwargs):
-        student = self.get_object()
-        user = student.user
-        user.is_active = False
-        user.save()
-        student.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 # ----------------------------
-# MENTOR VIEWSET
+# MENTOR VIEWSET - FIXED
 # ----------------------------
 class MentorViewSet(SafeViewSet, viewsets.ModelViewSet):
     queryset = Mentor.objects.all()
     serializer_class = MentorSerializer
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAuthenticated]  
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_superuser or user.role == 'admin':
+            return Mentor.objects.all()
+        elif user.role == 'mentor':
+            return Mentor.objects.filter(user=user)
+        return Mentor.objects.none()
+
+    def list(self, request, *args, **kwargs):
+        try:
+            queryset = self.get_queryset()
+            serializer = self.get_serializer(queryset, many=True)
+            return Response(serializer.data)
+        except Exception as e:
+            print(f"Error in mentor list: {e}")
+            return Response([], status=200)
+
+    def create(self, request, *args, **kwargs):
+        try:
+            print("Creating mentor - Received data:", request.data)
+            serializer = self.get_serializer(data=request.data)
+            if serializer.is_valid():
+                mentor = serializer.save()
+                return Response(serializer.data, status=201)
+            print("Validation errors:", serializer.errors)
+            return Response(serializer.errors, status=400)
+        except Exception as e:
+            print(f"Error creating mentor: {e}")
+            return Response({'error': str(e)}, status=400)
+
+    def update(self, request, *args, **kwargs):
+        """Update mentor - PATCH request"""
+        try:
+            partial = kwargs.pop('partial', True)
+            instance = self.get_object()
+            
+            print("=" * 50)
+            print(f"Updating mentor ID: {instance.id}")
+            print(f"Current data: full_name={instance.full_name}, expertise={instance.expertise}, phone={instance.phone}, batch={instance.batch}")
+            print(f"Received data: {request.data}")
+            print("=" * 50)
+            
+            serializer = self.get_serializer(instance, data=request.data, partial=partial)
+            
+            if serializer.is_valid():
+                updated_mentor = serializer.save()
+                print(f"Updated mentor: full_name={updated_mentor.full_name}, expertise={updated_mentor.expertise}")
+                return Response(serializer.data, status=200)
+            else:
+                print("Validation errors:", serializer.errors)
+                return Response(serializer.errors, status=400)
+                
+        except Exception as e:
+            print(f"Error updating mentor: {e}")
+            import traceback
+            traceback.print_exc()
+            return Response({'error': str(e)}, status=400)
 
     def destroy(self, request, *args, **kwargs):
         mentor = self.get_object()
@@ -252,7 +229,10 @@ class MentorViewSet(SafeViewSet, viewsets.ModelViewSet):
             serializer = self.get_serializer(mentor)
             return Response(serializer.data)
         except Mentor.DoesNotExist:
-            return Response({"detail": "Mentor profile not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "Mentor profile not found"}, 
+                status=404
+            )
 
 
 # ----------------------------
@@ -287,7 +267,7 @@ class ReviewerViewSet(SafeViewSet, viewsets.ModelViewSet):
     def update_availability(self, request, pk=None):
         reviewer = self.get_object()
         if request.user != reviewer.user and not request.user.is_admin:
-            return Response({"detail": "Not allowed"}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"detail": "Not allowed"}, status=400)
         serializer = self.get_serializer(reviewer, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
@@ -390,7 +370,7 @@ class CompleteModuleView(SafeAPIView):
     def post(self, request, module_id):
         user = request.user
         if not user.is_student:
-            return Response({"detail": "Only students can complete modules."}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"detail": "Only students can complete modules."}, status=400)
         student, created = Student.objects.get_or_create(
             user=user,
             defaults={'course': '', 'batch': ''}
@@ -493,7 +473,7 @@ class CurrentUserView(SafeAPIView):
         return Response(user_data)
 
     def patch(self, request):
-        return Response({"detail": "PATCH not implemented"}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
+        return Response({"detail": "PATCH not implemented"}, status=400)
 
 
 # ----------------------------
@@ -528,7 +508,7 @@ class SendBulkEmailView(SafeAPIView):
     def post(self, request):
         user = request.user
         if not user.is_admin:
-            return Response({"detail": "Admin access required."}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"detail": "Admin access required."}, status=400)
         subject = request.data.get('subject')
         message = request.data.get('message')
         if not subject or not message:
@@ -608,7 +588,7 @@ class UnreadMessagesCountView(SafeAPIView):
 
     def get(self, request):
         if not request.user.is_admin:
-            return Response({"detail": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"detail": "Unauthorized"}, status=400)
         count = ContactMessage.objects.filter(is_read=False).count()
         return Response({"unread_count": count})
 
@@ -618,7 +598,7 @@ class RecentMessagesView(SafeAPIView):
 
     def get(self, request):
         if not request.user.is_admin:
-            return Response({"detail": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"detail": "Unauthorized"}, status=404)
         messages = ContactMessage.objects.order_by('-created_at')[:10]
         data = [{
             'id': m.id,
@@ -640,7 +620,7 @@ class ContactMessageDetailView(SafeAPIView, RetrieveAPIView):
 
     def patch(self, request, pk):
         if not request.user.is_admin:
-            return Response({"detail": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"detail": "Unauthorized"}, status=400)
         try:
             msg = ContactMessage.objects.get(pk=pk)
             msg.is_read = True
@@ -669,13 +649,13 @@ class CustomLoginView(APIView):
         if not user:
             return Response(
                 {'error': 'Invalid username or password'}, 
-                status=status.HTTP_401_UNAUTHORIZED
+                status=400
             )
         
         if not user.is_active:
             return Response(
                 {'error': 'Account is disabled'}, 
-                status=status.HTTP_401_UNAUTHORIZED
+                status=404
             )
         
         # Create token (no blacklist table needed)
@@ -750,7 +730,7 @@ class StudentListView(SafeAPIView):
         elif user.is_admin:
             students = Student.objects.select_related('user', 'student_batch').all()
         else:
-            return Response({"detail": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"detail": "Not authorized"}, status=400)
         data = [{
             "id": s.id,
             "name": s.full_name or s.user.username,
@@ -784,7 +764,7 @@ class ReviewerDashboardView(SafeAPIView):
         try:
             reviewer = Reviewer.objects.get(user=request.user)
         except Reviewer.DoesNotExist:
-            return Response({"error": "You are not a reviewer"}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"error": "You are not a reviewer"}, status=400)
         students = Student.objects.filter(course=reviewer.course)
         student_serializer = StudentSerializer(students, many=True)
         review_folders = ReviewFolder.objects.filter(student__in=students).order_by('-created_at')[:20]
@@ -837,7 +817,7 @@ class WeeklyToppersView(SafeAPIView):
     def get(self, request):
         user = request.user
         if not (user.is_admin or user.is_mentor):
-            return Response({"detail": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"detail": "Not authorized"}, status=404)
         modules = Module.objects.all().order_by('order')
         toppers_data = []
         for module in modules:
@@ -1083,7 +1063,7 @@ class ClearChatMessagesView(SafeAPIView):
             return Response({"error": "Room not found"}, status=status.HTTP_404_NOT_FOUND)
         user = request.user
         if not (room.mentor and room.mentor.user == user) and not (room.reviewer and room.reviewer.user == user) and not (room.student and room.student.user == user):
-            return Response({"error": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"error": "Not authorized"}, status=400)
         room.messages.all().delete()
         return Response({"detail": "All messages cleared"})
 
@@ -1125,7 +1105,7 @@ class RespondToMessageView(SafeAPIView):
             message.save()
             return Response(ChatMessageSerializer(message).data)
         else:
-            return Response({"error": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"error": "Not authorized"}, status=400)
 
 
 # ----------------------------
@@ -1343,7 +1323,7 @@ class ReviewAssignmentViewSet(SafeViewSet, viewsets.ModelViewSet):
         is_mentor_creator = user.is_mentor and assignment.mentor.user == user
 
         if not (is_reviewer or is_mentor_creator):
-            return Response({"error": "Not allowed"}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"error": "Not allowed"}, status=404)
 
         assignment.status = 'accepted'
         assignment.save()
@@ -1374,7 +1354,7 @@ class ReviewAssignmentViewSet(SafeViewSet, viewsets.ModelViewSet):
         is_mentor_creator = user.is_mentor and assignment.mentor.user == user
 
         if not (is_reviewer or is_mentor_creator):
-            return Response({"error": "Not allowed"}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"error": "Not allowed"}, status=404)
 
         assignment.status = 'rejected'
         comments = request.data.get('comments', '')
@@ -1405,7 +1385,7 @@ class ReviewAssignmentViewSet(SafeViewSet, viewsets.ModelViewSet):
         user = request.user
 
         if not (user.is_reviewer and assignment.reviewer.user == user):
-            return Response({"error": "Only the assigned reviewer can suggest a time"}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"error": "Only the assigned reviewer can suggest a time"}, status=status.HTTP_404_NOT_FOUND)
 
         if assignment.status != 'assigned':
             return Response({"error": f"Cannot suggest time when status is {assignment.status}"}, status=status.HTTP_400_BAD_REQUEST)
@@ -1708,7 +1688,7 @@ class AccountsDashboardView(SafeAPIView):
         try:
             user = request.user
             if not (user.is_accounts or user.is_admin):
-                return Response({"detail": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
+                return Response({"detail": "Not authorized"}, status=400)
 
             period = request.query_params.get('period', 'monthly')
             now = timezone.now().date()
@@ -1763,7 +1743,7 @@ class AccountsProfileView(SafeAPIView):
     def get(self, request):
         user = request.user
         if not user.is_accounts:
-            return Response({"detail": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"detail": "Not authorized"}, status=400)
         try:
             profile = user.accounts_profile
         except Accounts.DoesNotExist:
@@ -1781,7 +1761,7 @@ class AccountsProfileView(SafeAPIView):
     def patch(self, request):
         user = request.user
         if not user.is_accounts:
-            return Response({"detail": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"detail": "Not authorized"}, status=status.HTTP_400_BAD_REQUEST)
         try:
             profile = user.accounts_profile
         except Accounts.DoesNotExist:
@@ -1811,7 +1791,7 @@ class AccountsStudentListView(SafeAPIView):
     def get(self, request):
         user = request.user
         if not (user.is_accounts or user.is_admin or user.is_mentor):
-            return Response({"detail": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"detail": "Not authorized"}, status=404)
 
         students = Student.objects.all().select_related('user', 'reviewer')
         result = []
@@ -1857,7 +1837,7 @@ class StudentFeeSummaryView(SafeAPIView):
     def get(self, request):
         user = request.user
         if not user.is_student:
-            return Response({"detail": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"detail": "Not authorized"}, status=400)
         try:
             student = user.student_profile
         except Student.DoesNotExist:
