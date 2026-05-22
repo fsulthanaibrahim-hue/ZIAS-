@@ -129,14 +129,33 @@ class StudentViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        
         if user.is_superuser or user.role == 'admin':
             return Student.objects.all()
-        
         if user.role == 'student':
             return Student.objects.filter(user=user)
-        
         return Student.objects.none()
+    
+    def create(self, request, *args, **kwargs):
+        try:
+            print("=" * 50)
+            print("RECIEVED DATA:", request.data)
+            print("=" * 50)
+
+            serializer = self.get_serializer(data=request.data)
+            if serializer.is_valid():
+                student = serializer.save()
+                print("STUDENT CREATED:", student.id)
+                return Response(serializer.data, status=201)
+            else:
+                print("VALIDATION ERRORS:", serializer.errors)
+                return Response(serializer.errors, status=400)
+        except Exception as e:
+            print("EXCEPTION:", str(e))
+            import traceback
+            traceback.print_exc()
+            return Response({'error': str(e)}, status=400)
+
+        
     
     def list(self, request, *args, **kwargs):
         try:
@@ -145,8 +164,8 @@ class StudentViewSet(viewsets.ModelViewSet):
             return Response(serializer.data)
         except Exception as e:
             print(f"Error: {e}")
-            # Return empty list on error
-            return Response([], status=200)  
+            return Response([], status=200)
+        
 
 
 
@@ -630,40 +649,41 @@ class CustomLoginView(APIView):
         password = request.data.get('password')
         
         print("=" * 50)
-        print(f"Login attempt - Username: {username}")
+        print(f"Login attempt: {username}")
         print("=" * 50)
         
-        user = authenticate(username=username, password=password)
+        # Try to get user
+        try:
+            user = User.objects.get(username=username)
+        except User.DoesNotExist:
+            return Response({'error': 'Invalid username or password'}, status=401)
         
-        if not user:
-            return Response(
-                {'error': 'Invalid username or password'}, 
-                status=400
-            )
+        # Check password
+        if not user.check_password(password):
+            return Response({'error': 'Invalid username or password'}, status=401)
         
+        # Check if active
         if not user.is_active:
-            return Response(
-                {'error': 'Account is disabled'}, 
-                status=404
-            )
+            return Response({'error': 'Account disabled'}, status=401)
         
-        # Create token (no blacklist table needed)
+        # Generate token
         refresh = RefreshToken.for_user(user)
         
-        user_data = {
-            'id': user.id,
-            'username': user.username,
-            'email': user.email,
-            'is_admin': True if user.username == 'Admin' else False,
-            'full_name': user.get_full_name() or user.username,
-        }
-        
-        print(f"✅ Login successful for: {user.username}")
-        
+        # Return response
         return Response({
             'refresh': str(refresh),
             'access': str(refresh.access_token),
-            'user': user_data,
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'is_admin': user.role == 'admin',
+                'is_mentor': user.role == 'mentor',
+                'is_reviewer': user.role == 'reviewer',
+                'is_student': user.role == 'student',
+                'is_accounts': user.role == 'accounts',
+                'full_name': user.get_full_name() or user.username,
+            }
         })
 
 

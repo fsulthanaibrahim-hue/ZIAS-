@@ -154,11 +154,11 @@ class StudentDocumentSerializer(serializers.ModelSerializer):
 
 
 # ----------------------------
-# STUDENT SERIALIZER - FIXED
+# STUDENT SERIALIZER - COMPLETE WORKING
 # ----------------------------
 class StudentSerializer(serializers.ModelSerializer):
     username = serializers.CharField(write_only=True, required=False)
-    email = serializers.EmailField(write_only=True, required=False)
+    email = serializers.EmailField(write_only=True, required=True)
     mentor_name = serializers.CharField(source='mentor.username', read_only=True)
     documents = StudentDocumentSerializer(many=True, read_only=True)
     course = serializers.CharField(required=False, allow_blank=True)
@@ -176,13 +176,12 @@ class StudentSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         ret = super().to_representation(instance)
-        ret.pop('username', None)
-        ret.pop('email', None)
-        ret.pop('batch', None)
         ret['username'] = instance.user.username
         ret['email'] = instance.user.email
         if instance.student_batch:
             ret['batch'] = instance.student_batch.name
+        else:
+            ret['batch'] = instance.batch
         return ret
 
     def validate_phone(self, value):
@@ -226,54 +225,35 @@ class StudentSerializer(serializers.ModelSerializer):
             print(f"Email sending failed for {email}: {e}")
 
     def create(self, validated_data):
-        username = validated_data.pop('username', None)
         email = validated_data.pop('email', None)
+        username = validated_data.pop('username', None)
         batch_name = validated_data.pop('batch', None)
         full_name = validated_data.get('full_name', '')
         
         if not email:
             raise serializers.ValidationError({"email": "Email is required."})
+        
         if not username:
             username = self._generate_username(full_name, email)
 
         random_password = generate_random_password()
 
         with transaction.atomic():
-            try:
-                user = User.objects.create_user(username=username, email=email, password=random_password)
-            except IntegrityError:
-                username = self._generate_username(full_name + str(User.objects.count()), email)
-                user = User.objects.create_user(username=username, email=email, password=random_password)
-
-            user.is_student = True
-            user.password_changed_at = timezone.now()
+            user = User.objects.create_user(
+                username=username,
+                email=email,
+                password=random_password
+            )
+            # ✅ FIXED: Use role instead of is_student
+            user.role = 'student'
             user.save()
 
-            # Handle batch
             if batch_name:
                 try:
                     batch_obj = Batch.objects.filter(name__iexact=batch_name).first()
                     if batch_obj:
                         validated_data['student_batch'] = batch_obj
-                except Exception:
-                    pass
-
-            # Mentor assignment
-            request = self.context.get('request')
-            mentor_id = validated_data.pop('mentor', None)
-            if not mentor_id and request and request.user.is_mentor:
-                try:
-                    mentor_obj = Mentor.objects.get(user=request.user)
-                    validated_data['mentor'] = mentor_obj
-                    if 'student_batch' not in validated_data and mentor_obj.batch:
-                        validated_data['student_batch'] = mentor_obj.batch
-                except Mentor.DoesNotExist:
-                    pass
-            elif mentor_id:
-                try:
-                    mentor_obj = Mentor.objects.get(id=mentor_id)
-                    validated_data['mentor'] = mentor_obj
-                except Mentor.DoesNotExist:
+                except:
                     pass
 
             student = Student.objects.create(user=user, **validated_data)
@@ -312,16 +292,11 @@ class StudentSerializer(serializers.ModelSerializer):
         instance.mentor = validated_data.get('mentor', instance.mentor)
         instance.save()
         
-        # Update user fields
-        username = validated_data.get('username')
+        # Update user email if provided
         email = validated_data.get('email')
-        if username and username.lower() != instance.user.username.lower():
-            if not User.objects.filter(username=username).exclude(id=instance.user.id).exists():
-                instance.user.username = username
-        if email and email.lower() != instance.user.email.lower():
-            if not User.objects.filter(email=email).exclude(id=instance.user.id).exists():
-                instance.user.email = email
-        instance.user.save()
+        if email and instance.user:
+            instance.user.email = email
+            instance.user.save()
         
         return instance
 

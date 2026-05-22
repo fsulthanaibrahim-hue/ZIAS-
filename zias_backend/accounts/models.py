@@ -57,10 +57,9 @@ class Document(models.Model):
     def __str__(self):
         return self.file.name
 
-
 class Student(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='student_profile')
-    email = models.EmailField(unique=True)
+    # email = models.EmailField(unique=True)  # ← REMOVE THIS LINE
     full_name = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -86,10 +85,9 @@ class Student(models.Model):
     documents = models.ManyToManyField(Document, blank=True, related_name='students')
     agreement_signed = models.BooleanField(default=False)
     escalation_flag = models.BooleanField(default=False)
-    # role = models.CharField(max_length=20, default='student')  # ← REMOVE THIS LINE
 
     def __str__(self):
-        return self.full_name or self.email or self.user.username
+        return self.full_name or self.user.email or self.user.username
 
 
 
