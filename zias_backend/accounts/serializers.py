@@ -405,98 +405,87 @@ class MentorSerializer(serializers.ModelSerializer):
 
 
 # ----------------------------
-# REVIEWER SERIALIZER - FIXED (removed duplicate generate_random_password)
+# REVIEWER SERIALIZER - FINAL FIX
 # ----------------------------
 class ReviewerSerializer(serializers.ModelSerializer):
-    username = serializers.CharField(source='user.username', required=False, write_only=True)
-    email = serializers.EmailField(source='user.email', required=True)
-
+    email = serializers.EmailField(write_only=True)
+    
     class Meta:
         model = Reviewer
-        fields = ['id', 'username', 'email', 'department', 'qualification', 'experience', 'batch',
-                  'available_from', 'available_to', 'available_days', 'full_name']
+        fields = ['id', 'full_name', 'department', 'qualification', 'experience', 'batch', 'course', 'email']
 
-    def _send_welcome_email(self, email, username, password):
-        """Helper to send welcome email"""
-        try:
-            expiry_days = getattr(settings, 'PASSWORD_EXPIRY_DAYS', 90)
-            domain = getattr(settings, 'SITE_DOMAIN', 'localhost:5173')
-            context = {'username': username, 'password': password, 'expiry_days': expiry_days, 'domain': domain}
-            try:
-                html_message = render_to_string('mail.html', context)
-                plain_message = strip_tags(html_message)
-            except Exception:
-                plain_message = f"Welcome! Your reviewer account has been created.\nUsername: {username}\nPassword: {password}"
-                html_message = plain_message
-            subject = '🎓 Welcome to ZIAS – Your Reviewer Account Credentials'
-            send_mail(subject, plain_message, settings.DEFAULT_FROM_EMAIL, [email], html_message=html_message, fail_silently=False)
-        except Exception as e:
-            print(f"Email sending failed for reviewer {email}: {e}")
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        representation['email'] = instance.user.email if instance.user else None
+        return representation
 
     def create(self, validated_data):
-        user_data = validated_data.pop('user', {})
-        email = validated_data.pop('email', user_data.get('email'))
-        username = validated_data.pop('username', user_data.get('username'))
+        # ✅ Get email from validated_data and REMOVE it
+        email = validated_data.pop('email', None)  # ← IMPORTANT: pop it out
+        
+        # If not found, try from request
+        if not email:
+            email = self.context['request'].data.get('email')
+        
+        if not email:
+            raise serializers.ValidationError({"email": "Email is required"})
+        
+        full_name = validated_data.get('full_name', '')
+        
+        # Check if user already exists
+        user = User.objects.filter(email=email).first()
+        
+        if user:
+            if hasattr(user, 'reviewer_profile'):
+                raise serializers.ValidationError({"email": "This user already has a reviewer profile"})
+            
+            # ✅ Now validated_data has NO email
+            reviewer = Reviewer.objects.create(user=user, **validated_data)
+            return reviewer
+        
+        # Create new user
+        username = email.split('@')[0]
+        counter = 1
+        original_username = username
+        while User.objects.filter(username=username).exists():
+            username = f"{original_username}{counter}"
+            counter += 1
 
-        # Find or create user by email
-        user, user_created = User.objects.get_or_create(
+        user = User.objects.create_user(
+            username=username,
             email=email,
-            defaults={
-                'username': username if username else email.split('@')[0],
-                'is_reviewer': True
-            }
+            password='reviewer123'
         )
-
-        # If user existed but not reviewer, update flag
-        if not user_created and not user.is_reviewer:
-            user.is_reviewer = True
-            user.save()
         
-        # Create or update reviewer profile
-        reviewer, reviewer_created = Reviewer.objects.get_or_create(
-            user=user,
-            defaults=validated_data
-        )
-
-        # If reviewer already existed, update its fields
-        if not reviewer_created:
-            for attr, value in validated_data.items():
-                setattr(reviewer, attr, value)
-            reviewer.save()
-        
-        # If new user was created, generate password and send welcome email
-        if user_created:
-            random_password = generate_random_password()
-            user.set_password(random_password)
-            user.save()
-            self._send_welcome_email(email, user.username, random_password)
-
+        user.role = 'reviewer'
+        user.is_reviewer = True
+        user.is_student = False
+        user.is_mentor = False
+        user.save()
+    
+        # ✅ Now validated_data has NO email
+        reviewer = Reviewer.objects.create(user=user, **validated_data)
+    
         return reviewer
 
     def update(self, instance, validated_data):
-        user_data = validated_data.pop('user', {})
-        new_username = validated_data.pop('username', user_data.get('username'))
-        new_email = validated_data.pop('email', user_data.get('email'))
-
-        user = instance.user
-        if new_username and new_username != user.username:
-            if User.objects.filter(username=new_username).exclude(id=user.id).exists():
-                raise serializers.ValidationError({"username": "Username already taken."})
-            user.username = new_username
-        if new_email and new_email != user.email:
-            if User.objects.filter(email=new_email).exclude(id=user.id).exists():
-                raise serializers.ValidationError({"email": "Email already in use by another account."})
-            user.email = new_email
-        if new_username or new_email:
-            user.save()
-
-        # Update reviewer fields
+        # ✅ Remove email from validated_data
+        email = validated_data.pop('email', None)
+        
+        # Update reviewer fields (NO email here)
+        instance.full_name = validated_data.get('full_name', instance.full_name)
         instance.department = validated_data.get('department', instance.department)
         instance.qualification = validated_data.get('qualification', instance.qualification)
         instance.experience = validated_data.get('experience', instance.experience)
         instance.batch = validated_data.get('batch', instance.batch)
-        instance.full_name = validated_data.get('full_name', instance.full_name)
+        instance.course = validated_data.get('course', instance.course)
         instance.save()
+        
+        # Update user's email separately if provided
+        if email and instance.user:
+            instance.user.email = email
+            instance.user.save()
+        
         return instance
 
 

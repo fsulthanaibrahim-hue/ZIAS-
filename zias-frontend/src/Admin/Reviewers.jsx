@@ -1,4 +1,4 @@
-// src/Admin/Reviewers.jsx – final working version
+// src/Admin/Reviewers.jsx – Complete Working Version
 import { useEffect, useState, useRef } from "react";
 import API from "../api/api";
 
@@ -121,27 +121,23 @@ function Reviewers() {
     }
   };
 
-  const generateUsername = (name, email) => {
-    let base = name ? name.toLowerCase().trim().replace(/\s+/g, '_') : '';
-    if (!base) base = email ? email.split('@')[0] : 'reviewer';
-    base = base.replace(/[^a-z0-9_]/g, '');
-    if (!base) base = 'reviewer';
-    return `${base}_${Date.now()}`;
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
-    const generatedUsername = generateUsername(formData.name, formData.email);
+    
+    // ✅ Payload without username - backend will generate it
     const payload = {
-      username: generatedUsername,
-      email: formData.email,
       full_name: formData.name,
+      email: formData.email,
       department: formData.department,
       qualification: formData.qualification || null,
       experience: formData.experience ? parseInt(formData.experience) : null,
       batch: null,
+      course: formData.department,
     };
+    
+    console.log("Sending payload:", payload);
+    
     try {
       if (editingId) {
         await API.patch(`reviewers/${editingId}/`, payload);
@@ -157,21 +153,14 @@ function Reviewers() {
       setCurrentPage(1);
     } catch (error) {
       console.error("❌ API error:", error);
+      console.error("Response data:", error.response?.data);
       let errorMsg = "Unknown error";
-      if (error.response) {
+      if (error.response?.data) {
         const data = error.response.data;
-        console.error("📄 Backend response:", data);
-        if (typeof data === 'object') {
-          if (data.email) errorMsg = data.email;
-          else if (data.username) errorMsg = data.username;
-          else if (data.detail) errorMsg = data.detail;
-          else if (data.error) errorMsg = data.error;
-          else errorMsg = Object.values(data).join(", ");
-        } else if (data) {
-          errorMsg = data;
-        }
-      } else if (error.message) {
-        errorMsg = error.message;
+        if (data.email) errorMsg = Array.isArray(data.email) ? data.email[0] : data.email;
+        else if (data.detail) errorMsg = data.detail;
+        else if (data.error) errorMsg = data.error;
+        else if (typeof data === 'string') errorMsg = data;
       }
       showToast(`Error: ${errorMsg}`, "error");
     } finally {
@@ -332,7 +321,7 @@ function Reviewers() {
           </div>
         </div>
 
-        {/* Add/Edit Modal – unchanged, but included for completeness */}
+        {/* Add/Edit Modal */}
         {showForm && (
           <div
             className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4"
@@ -362,21 +351,45 @@ function Reviewers() {
                 </button>
               </div>
               <div className="px-4 sm:px-6 py-5 space-y-4">
-                <div><label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Full Name *</label><input type="text" name="name" value={formData.name} onChange={handleChange} required className={inputClass} /></div>
-                <div><label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Email *</label><input type="email" name="email" value={formData.email} onChange={handleChange} required className={inputClass} /></div>
-                <div><label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Department (Course) *</label><select name="department" value={formData.department} onChange={handleChange} required className={inputClass}><option value="">Select a course</option>{coursesList.map(course => (<option key={course.id} value={course.name}>{course.name}</option>))}</select></div>
-                <div><label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Qualification</label><input type="text" name="qualification" value={formData.qualification} onChange={handleChange} className={inputClass} placeholder="e.g. B.Tech, MBA" /></div>
-                <div><label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Experience (years)</label><input type="text" name="experience" value={formData.experience} onChange={handleChange} className={inputClass} placeholder="e.g. 5" /></div>
+                <div>
+                  <label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Full Name *</label>
+                  <input type="text" name="name" value={formData.name} onChange={handleChange} required className={inputClass} />
+                </div>
+                <div>
+                  <label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Email *</label>
+                  <input type="email" name="email" value={formData.email} onChange={handleChange} required className={inputClass} />
+                </div>
+                <div>
+                  <label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Department (Course) *</label>
+                  <select name="department" value={formData.department} onChange={handleChange} required className={inputClass}>
+                    <option value="">Select a course</option>
+                    {coursesList.map(course => (
+                      <option key={course.id} value={course.name}>{course.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Qualification</label>
+                  <input type="text" name="qualification" value={formData.qualification} onChange={handleChange} className={inputClass} placeholder="e.g. B.Tech, MBA" />
+                </div>
+                <div>
+                  <label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Experience (years)</label>
+                  <input type="text" name="experience" value={formData.experience} onChange={handleChange} className={inputClass} placeholder="e.g. 5" />
+                </div>
               </div>
               <div className="flex gap-2 px-4 sm:px-6 py-4 border-t border-gray-200">
-                <button type="submit" disabled={submitting} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg transition-all text-sm font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">{submitting ? (editingId ? "Updating..." : "Adding...") : (editingId ? "Save Changes" : "Add Reviewer")}</button>
-                <button type="button" onClick={() => setShowForm(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded-lg transition-all text-sm font-medium">Cancel</button>
+                <button type="submit" disabled={submitting} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg transition-all text-sm font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                  {submitting ? (editingId ? "Updating..." : "Adding...") : (editingId ? "Save Changes" : "Add Reviewer")}
+                </button>
+                <button type="button" onClick={() => setShowForm(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded-lg transition-all text-sm font-medium">
+                  Cancel
+                </button>
               </div>
             </form>
           </div>
         )}
 
-        {/* Reviewers Table – department will show correctly */}
+        {/* Reviewers Table */}
         <div className="overflow-hidden rounded-xl border border-gray-200 shadow-sm bg-white">
           <table className="reviewer-table min-w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
@@ -395,8 +408,12 @@ function Reviewers() {
                     <tr key={r.id} className="table-row-hover transition-colors duration-150 group">
                       <td data-label="Reviewer" className="px-4 py-3">
                         <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${getColor(displayName)} flex items-center justify-center text-white text-xs font-bold shrink-0`}>{getInitials(displayName)}</div>
-                          <button onClick={() => setViewingReviewer(r)} className="text-gray-800 text-sm font-medium hover:text-green-600 transition-colors cursor-pointer">{displayName}</button>
+                          <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${getColor(displayName)} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
+                            {getInitials(displayName)}
+                          </div>
+                          <button onClick={() => setViewingReviewer(r)} className="text-gray-800 text-sm font-medium hover:text-green-600 transition-colors cursor-pointer">
+                            {displayName}
+                          </button>
                         </div>
                       </td>
                       <td data-label="Email" className="px-4 py-3 text-gray-500 text-sm break-all">{r.email}</td>
@@ -404,24 +421,32 @@ function Reviewers() {
                         <span className="inline-flex items-center gap-1.5 bg-purple-100 text-purple-700 border border-purple-200 text-xs font-medium px-2 py-1 rounded-full">
                           {r.department || (r.course ? r.course : "—")}
                         </span>
-                       </td>
+                      </td>
                       <td data-label="Actions" className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <button onClick={() => handleEdit(r)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-gray-500 hover:text-green-600 hover:bg-green-50 border border-transparent hover:border-green-200 transition-all text-xs font-medium">
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
                             <span className="hidden sm:inline">Edit</span>
                           </button>
                           <button onClick={() => handleDeleteClick(r.id, displayName)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-all text-xs font-medium">
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
                             <span className="hidden sm:inline">Delete</span>
                           </button>
                         </div>
-                       </td>
-                     </tr>
+                      </td>
+                    </tr>
                   );
                 })
               ) : (
-                <tr><td colSpan="4" className="text-center py-12"><p className="text-gray-500">{searchTerm ? "No reviewers match your search" : "No reviewers yet"}</p></td></tr>
+                <tr>
+                  <td colSpan="4" className="text-center py-12">
+                    <p className="text-gray-500">{searchTerm ? "No reviewers match your search" : "No reviewers yet"}</p>
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
@@ -438,12 +463,13 @@ function Reviewers() {
         </div>
       </div>
 
+      {/* View Modal */}
       {viewingReviewer && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={() => setViewingReviewer(null)}>
           <div className="bg-white rounded-2xl w-full max-w-2xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="sticky top-0 bg-white px-4 py-4 border-b flex justify-between items-center">
               <div><h3 className="text-sm font-semibold">Reviewer Details</h3></div>
-              <button onClick={() => setViewingReviewer(null)}>✕</button>
+              <button onClick={() => setViewingReviewer(null)} className="text-gray-400 hover:text-gray-600">✕</button>
             </div>
             <div className="px-4 py-5 grid grid-cols-2 gap-4">
               <div><label className="text-gray-500 text-xs">Full Name</label><input value={viewingReviewer.full_name || viewingReviewer.username} readOnly className={readOnlyClass} /></div>
@@ -452,7 +478,9 @@ function Reviewers() {
               <div><label className="text-gray-500 text-xs">Qualification</label><input value={viewingReviewer.qualification || "—"} readOnly className={readOnlyClass} /></div>
               <div><label className="text-gray-500 text-xs">Experience</label><input value={viewingReviewer.experience ? `${viewingReviewer.experience} years` : "—"} readOnly className={readOnlyClass} /></div>
             </div>
-            <div className="px-4 py-4 border-t flex justify-end"><button onClick={() => setViewingReviewer(null)} className="bg-gray-100 px-5 py-2 rounded-lg">Close</button></div>
+            <div className="px-4 py-4 border-t flex justify-end">
+              <button onClick={() => setViewingReviewer(null)} className="bg-gray-100 px-5 py-2 rounded-lg">Close</button>
+            </div>
           </div>
         </div>
       )}

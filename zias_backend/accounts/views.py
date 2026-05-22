@@ -238,40 +238,29 @@ class MentorViewSet(SafeViewSet, viewsets.ModelViewSet):
 # ----------------------------
 # REVIEWER VIEWSET
 # ----------------------------
-class ReviewerViewSet(SafeViewSet, viewsets.ModelViewSet):
+class ReviewerViewSet(viewsets.ModelViewSet):
     queryset = Reviewer.objects.all()
     serializer_class = ReviewerSerializer
+    permission_classes = [IsAuthenticated]
 
-    def get_permissions(self):
-        if self.action in ['list', 'retrieve', 'me']:
-            return [IsAuthenticated()]
-        else:
-            return [IsAdminUser()]
-
-    def destroy(self, request, *args, **kwargs):
-        reviewer = self.get_object()
-        user = reviewer.user
-        user.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
-    def me(self, request):
+    def create(self, request, *args, **kwargs):
         try:
-            reviewer = Reviewer.objects.get(user=request.user)
-            serializer = self.get_serializer(reviewer)
-            return Response(serializer.data)
-        except Reviewer.DoesNotExist:
-            return Response({"detail": "Reviewer profile not found"}, status=status.HTTP_404_NOT_FOUND)
-
-    @action(detail=True, methods=['patch'], permission_classes=[IsAuthenticated])
-    def update_availability(self, request, pk=None):
-        reviewer = self.get_object()
-        if request.user != reviewer.user and not request.user.is_admin:
-            return Response({"detail": "Not allowed"}, status=400)
-        serializer = self.get_serializer(reviewer, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(serializer.data)
+            print("=" * 50)
+            print("Data received:", request.data)
+            print("=" * 50)
+            
+            serializer = self.get_serializer(data=request.data, context={'request': request})
+            if serializer.is_valid():
+                reviewer = serializer.save()
+                return Response(serializer.data, status=201)
+            print("Errors:", serializer.errors)
+            return Response(serializer.errors, status=400)
+        except Exception as e:
+            print("Exception:", str(e))
+            import traceback
+            traceback.print_exc()
+            return Response({'error': str(e)}, status=400)
+    
 
 
 # ----------------------------

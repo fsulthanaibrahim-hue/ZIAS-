@@ -92,6 +92,7 @@ class Student(models.Model):
         return self.full_name or self.email or self.user.username
 
 
+
 class Mentor(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='mentor_profile')
     phone = models.CharField(max_length=20, blank=True, null=True)
@@ -106,7 +107,6 @@ class Mentor(models.Model):
 
 
 class Reviewer(models.Model):
-    # ✅ FIXED - Removed duplicate user field
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='reviewer_profile')
     department = models.CharField(max_length=255, blank=True)
     qualification = models.CharField(max_length=255, blank=True)
@@ -651,8 +651,8 @@ from django.dispatch import receiver
 @receiver(post_save, sender=User)
 def create_user_profile(sender, instance, created, **kwargs):
     if created:
-        if instance.is_student:
-            Student.objects.get_or_create(user=instance, defaults={'email': instance.email, 'full_name': instance.get_full_name() or instance.username})
+        if instance.is_student and not instance.is_reviewer and not instance.is_mentor:
+            Student.objects.get_or_create(user=instance)
         elif instance.is_mentor:
             Mentor.objects.get_or_create(user=instance, defaults={'expertise': 'General'})
         elif instance.is_reviewer:
