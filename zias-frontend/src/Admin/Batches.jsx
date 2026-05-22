@@ -1,4 +1,4 @@
-// src/Admin/Batches.jsx – NO 500 ERRORS, GRACEFUL FALLBACKS
+// src/Admin/Batches.jsx – WITH DATE VALIDATION
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../api/api";
@@ -49,7 +49,6 @@ function ConfirmModal({ isOpen, onClose, onConfirm, batchName }) {
   );
 }
 
-// Helper to convert any API error into a user‑friendly message (never 5xx)
 const getFriendlyErrorMessage = (err, defaultMsg = "An error occurred") => {
   if (!err?.response) {
     return "Network error. Please check your connection.";
@@ -67,7 +66,6 @@ const getFriendlyErrorMessage = (err, defaultMsg = "An error occurred") => {
   if (status === 401 || status === 403) {
     return "You are not authorized. Please log in again.";
   }
-  // fallback: use server-provided detail
   return err.response?.data?.detail || err.response?.data?.message || defaultMsg;
 };
 
@@ -80,6 +78,7 @@ function Batches() {
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+  const [dateError, setDateError] = useState("");
   const [formData, setFormData] = useState({
     name: "",
     start_date: "",
@@ -120,6 +119,28 @@ function Batches() {
     fetched.current = true;
     fetchBatches();
   }, []);
+
+  // ✅ Validate dates: end date cannot be before start date
+  const validateDates = (startDate, endDate) => {
+    if (startDate && endDate) {
+      if (new Date(endDate) < new Date(startDate)) {
+        setDateError("End date cannot be earlier than start date");
+        return false;
+      }
+    }
+    setDateError("");
+    return true;
+  };
+
+  const handleStartDateChange = (value) => {
+    setFormData({ ...formData, start_date: value });
+    validateDates(value, formData.end_date);
+  };
+
+  const handleEndDateChange = (value) => {
+    setFormData({ ...formData, end_date: value });
+    validateDates(formData.start_date, value);
+  };
 
   const filteredBatches = Array.isArray(batches)
     ? batches.filter(b => b.name?.toLowerCase().includes(searchTerm.toLowerCase()))
@@ -183,6 +204,16 @@ function Batches() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // ✅ Final validation before submit
+    if (formData.start_date && formData.end_date) {
+      if (new Date(formData.end_date) < new Date(formData.start_date)) {
+        setDateError("End date cannot be earlier than start date");
+        showToast("End date cannot be earlier than start date", "error");
+        return;
+      }
+    }
+    
     const payload = {
       name: formData.name,
       start_date: formData.start_date || null,
@@ -200,6 +231,7 @@ function Batches() {
       setShowForm(false);
       setEditingId(null);
       setFormData({ name: "", start_date: "", end_date: "", is_active: true });
+      setDateError("");
       await fetchBatches();
     } catch (err) {
       const msg = getFriendlyErrorMessage(err, "Error saving batch");
@@ -215,10 +247,12 @@ function Batches() {
       end_date: batch.end_date?.split('T')[0] || "",
       is_active: batch.is_active
     });
+    setDateError("");
     setShowForm(true);
   };
 
   const inputClass = "w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 text-sm";
+  const inputErrorClass = "w-full bg-gray-50 border border-red-400 rounded-xl px-4 py-2.5 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20 text-sm";
 
   const ModalWrapper = ({ onClose, children, maxW = "max-w-lg" }) => (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={onClose}>
@@ -240,6 +274,13 @@ function Batches() {
   }
 
   const existingBatchNames = [...new Set(batches.map(b => b.name).filter(Boolean))];
+  // ✅ Get minimum date for end date (today or start date)
+  const getMinEndDate = () => {
+    if (formData.start_date) {
+      return formData.start_date;
+    }
+    return new Date().toISOString().split('T')[0];
+  };
 
   return (
     <div className="min-h-screen w-full bg-gray-50 text-gray-800" style={{ fontFamily: "'DM Sans', 'Geist', system-ui, sans-serif" }}>
@@ -288,7 +329,7 @@ function Batches() {
                   <input
                     type="date"
                     value={formData.start_date}
-                    onChange={e => setFormData({ ...formData, start_date: e.target.value })}
+                    onChange={e => handleStartDateChange(e.target.value)}
                     className={inputClass}
                   />
                 </div>
@@ -297,11 +338,15 @@ function Batches() {
                   <input
                     type="date"
                     value={formData.end_date}
-                    onChange={e => setFormData({ ...formData, end_date: e.target.value })}
-                    className={inputClass}
+                    onChange={e => handleEndDateChange(e.target.value)}
+                    min={getMinEndDate()}
+                    className={dateError ? inputErrorClass : inputClass}
                   />
                 </div>
               </div>
+              {dateError && (
+                <p className="text-red-500 text-xs -mt-2">{dateError}</p>
+              )}
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
@@ -351,6 +396,7 @@ function Batches() {
               onClick={() => {
                 setEditingId(null);
                 setFormData({ name: "", start_date: "", end_date: "", is_active: true });
+                setDateError("");
                 setShowForm(true);
               }}
               className="flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold shadow-md shadow-emerald-500/30 transition-all hover:shadow-lg hover:shadow-emerald-500/40 active:scale-95"
