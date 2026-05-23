@@ -583,38 +583,47 @@ class CustomLoginView(APIView):
         print(f"Login attempt: {username}")
         print("=" * 50)
         
-        # Try to get user
-        try:
-            user = User.objects.get(username=username)
-        except User.DoesNotExist:
+        # Authenticate
+        user = authenticate(username=username, password=password)
+        
+        if not user:
+            print(f"Authentication failed for: {username}")
             return Response({'error': 'Invalid username or password'}, status=401)
         
-        # Check password
-        if not user.check_password(password):
-            return Response({'error': 'Invalid username or password'}, status=401)
-        
-        # Check if active
+        # Check if user is active
         if not user.is_active:
-            return Response({'error': 'Account disabled'}, status=401)
+            return Response({'error': 'Account is disabled'}, status=401)
         
         # Generate token
         refresh = RefreshToken.for_user(user)
         
-        # Return response
+        # Prepare response based on role
+        user_data = {
+            'id': user.id,
+            'username': user.username,
+            'email': user.email,
+            'is_admin': user.role == 'admin',
+            'is_mentor': user.role == 'mentor',
+            'is_reviewer': user.role == 'reviewer',
+            'is_student': user.role == 'student',
+            'is_accounts': user.role == 'accounts',
+            'full_name': user.get_full_name() or user.username,
+        }
+        
+        # Add role-specific IDs
+        if user.role == 'student' and hasattr(user, 'student_profile'):
+            user_data['student_id'] = user.student_profile.id
+        elif user.role == 'mentor' and hasattr(user, 'mentor_profile'):
+            user_data['mentor_id'] = user.mentor_profile.id
+        elif user.role == 'reviewer' and hasattr(user, 'reviewer_profile'):
+            user_data['reviewer_id'] = user.reviewer_profile.id
+        
+        print(f"Login successful: {username} (Role: {user.role})")
+        
         return Response({
             'refresh': str(refresh),
             'access': str(refresh.access_token),
-            'user': {
-                'id': user.id,
-                'username': user.username,
-                'email': user.email,
-                'is_admin': user.role == 'admin',
-                'is_mentor': user.role == 'mentor',
-                'is_reviewer': user.role == 'reviewer',
-                'is_student': user.role == 'student',
-                'is_accounts': user.role == 'accounts',
-                'full_name': user.get_full_name() or user.username,
-            }
+            'user': user_data,
         })
 
 
@@ -1555,19 +1564,27 @@ class FeePaymentViewSet(viewsets.ModelViewSet):
 # ACCOUNTS VIEWSET
 # ----------------------------
 class AccountsViewSet(viewsets.ModelViewSet):
+    queryset = Accounts.objects.all()
     serializer_class = AccountsSerializer
     permission_classes = [IsAuthenticated]
-
+    
     def get_queryset(self):
-        user = self.request.user
-        if user.is_admin:
-            return Accounts.objects.all()
-        return Accounts.objects.none()
+        return Accounts.objects.select_related('user').all()
+    
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            try:
+                self.perform_create(serializer)
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            except Exception as e:
+                return Response(
+                    {'error': str(e)}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        print("Serializer errors:", serializer.errors)  # Debug print
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    def perform_destroy(self, instance):
-        user = instance.user
-        instance.delete()
-        user.delete()
 
 
 # ----------------------------

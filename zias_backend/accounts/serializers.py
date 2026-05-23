@@ -91,12 +91,132 @@ class BatchSerializer(serializers.ModelSerializer):
 # ACCOUNTS SERIALIZER
 # ---------------------------
 class AccountsSerializer(serializers.ModelSerializer):
-    username = serializers.CharField(source='user.username', read_only=True)
-    email = serializers.EmailField(source='user.email', read_only=True)
-
+    email = serializers.EmailField(write_only=True, required=True)
+    username = serializers.CharField(read_only=True)
+    
     class Meta:
         model = Accounts
-        fields = ['id', 'user', 'username', 'email', 'full_name', 'phone', 'department']
+        fields = ['id', 'full_name', 'phone', 'department', 'email', 'username']
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        representation['email'] = instance.user.email
+        representation['username'] = instance.user.username
+        return representation
+
+    def _send_welcome_email(self, email, username, password, full_name):
+        """Send welcome email with credentials"""
+        try:
+            domain = getattr(settings, 'SITE_DOMAIN', 'localhost:5173')
+            expiry_days = getattr(settings, 'PASSWORD_EXPIRY_DAYS', 90)
+            
+            subject = '🎓 Welcome to ZIAS – Your Accounts Account Credentials'
+            
+            message = f"""
+Dear {full_name or username},
+
+Welcome to ZIAS!
+
+Your accounts account has been created successfully.
+
+Login Credentials:
+━━━━━━━━━━━━━━━━━━━
+Username: {username}
+Password: {password}
+Email: {email}
+━━━━━━━━━━━━━━━━━━━
+
+Please change your password within {expiry_days} days for security purposes.
+
+Login URL: http://{domain}/login
+
+Best regards,
+ZIAS Team
+"""
+            
+            send_mail(
+                subject, 
+                message, 
+                settings.DEFAULT_FROM_EMAIL, 
+                [email], 
+                fail_silently=False
+            )
+            print(f"✅ Welcome email sent to accounts user: {email}")
+            return True
+        except Exception as e:
+            print(f"❌ Email sending failed for accounts user {email}: {e}")
+            return False
+
+    def validate_phone(self, value):
+        """Validate phone number - exactly 10 digits if provided"""
+        if value:
+            # Remove any non-digit characters
+            cleaned = ''.join(filter(str.isdigit, value))
+            if len(cleaned) != 10:
+                raise serializers.ValidationError("Phone number must be exactly 10 digits")
+            return cleaned
+        return value
+
+    def create(self, validated_data):
+        email = validated_data.pop('email')
+        full_name = validated_data.get('full_name', '')
+        phone = validated_data.get('phone', '')
+        department = validated_data.get('department', '')
+        
+        # Generate username from email (before @ symbol)
+        username_base = email.split('@')[0]
+        username = username_base
+        counter = 1
+        
+        # Ensure username is unique
+        while User.objects.filter(username=username).exists():
+            username = f"{username_base}{counter}"
+            counter += 1
+        
+        # Generate random password
+        random_password = generate_random_password()
+        
+        # Create user
+        user = User.objects.create_user(
+            username=username,
+            email=email,
+            password=random_password,
+            first_name=full_name.split()[0] if full_name else '',
+            last_name=' '.join(full_name.split()[1:]) if full_name and len(full_name.split()) > 1 else ''
+        )
+        user.save()
+        
+        # Create accounts profile
+        accounts = Accounts.objects.create(
+            user=user,
+            full_name=full_name,
+            phone=phone,
+            department=department
+        )
+        
+        # Send welcome email with credentials
+        self._send_welcome_email(email, username, random_password, full_name)
+        
+        return accounts
+
+    def update(self, instance, validated_data):
+        # Update accounts profile fields
+        instance.full_name = validated_data.get('full_name', instance.full_name)
+        instance.phone = validated_data.get('phone', instance.phone)
+        instance.department = validated_data.get('department', instance.department)
+        instance.save()
+        
+        # Update User's first_name/last_name if needed
+        if 'full_name' in validated_data:
+            full_name = validated_data['full_name']
+            name_parts = full_name.split() if full_name else []
+            instance.user.first_name = name_parts[0] if name_parts else ''
+            instance.user.last_name = ' '.join(name_parts[1:]) if len(name_parts) > 1 else ''
+            instance.user.save()
+        
+        return instance
+
+    
 
 
 # ----------------------------
