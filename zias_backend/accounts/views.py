@@ -157,8 +157,6 @@ class StudentViewSet(viewsets.ModelViewSet):
 # ----------------------------
 # MENTOR VIEWSET - FIXED
 # ----------------------------
-# accounts/views.py - Replace your MentorViewSet with this
-
 class MentorViewSet(viewsets.ModelViewSet):
     queryset = Mentor.objects.all()
     serializer_class = MentorSerializer
@@ -186,9 +184,6 @@ class MentorViewSet(viewsets.ModelViewSet):
 
 
 
-# ----------------------------
-# REVIEWER VIEWSET
-# ----------------------------
 # ----------------------------
 # REVIEWER VIEWSET
 # ----------------------------
