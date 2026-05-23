@@ -138,122 +138,57 @@ class StudentViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         try:
             print("=" * 50)
-            print("RECIEVED DATA:", request.data)
+            print("RECEIVED DATA:", request.data)
             print("=" * 50)
 
             serializer = self.get_serializer(data=request.data)
             if serializer.is_valid():
                 student = serializer.save()
-                print("STUDENT CREATED:", student.id)
                 return Response(serializer.data, status=201)
             else:
                 print("VALIDATION ERRORS:", serializer.errors)
                 return Response(serializer.errors, status=400)
         except Exception as e:
             print("EXCEPTION:", str(e))
-            import traceback
-            traceback.print_exc()
-            return Response({'error': str(e)}, status=400)
-
-        
-    
-    def list(self, request, *args, **kwargs):
-        try:
-            queryset = self.get_queryset()
-            serializer = self.get_serializer(queryset, many=True)
-            return Response(serializer.data)
-        except Exception as e:
-            print(f"Error: {e}")
-            return Response([], status=200)
-        
+            return Response({'error': str(e)}, status=400)        
 
 
 
 # ----------------------------
 # MENTOR VIEWSET - FIXED
 # ----------------------------
-class MentorViewSet(SafeViewSet, viewsets.ModelViewSet):
+# accounts/views.py - Replace your MentorViewSet with this
+
+class MentorViewSet(viewsets.ModelViewSet):
     queryset = Mentor.objects.all()
     serializer_class = MentorSerializer
-    permission_classes = [IsAuthenticated]  
+    permission_classes = [IsAuthenticated]  # Only ONE permission line
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_superuser or user.role == 'admin':
+        if user.is_superuser or getattr(user, 'role', '') == 'admin':
             return Mentor.objects.all()
-        elif user.role == 'mentor':
+        elif getattr(user, 'role', '') == 'mentor':
             return Mentor.objects.filter(user=user)
         return Mentor.objects.none()
 
-    def list(self, request, *args, **kwargs):
-        try:
-            queryset = self.get_queryset()
-            serializer = self.get_serializer(queryset, many=True)
-            return Response(serializer.data)
-        except Exception as e:
-            print(f"Error in mentor list: {e}")
-            return Response([], status=200)
-
     def create(self, request, *args, **kwargs):
-        try:
-            print("Creating mentor - Received data:", request.data)
-            serializer = self.get_serializer(data=request.data)
-            if serializer.is_valid():
-                mentor = serializer.save()
-                return Response(serializer.data, status=201)
-            print("Validation errors:", serializer.errors)
-            return Response(serializer.errors, status=400)
-        except Exception as e:
-            print(f"Error creating mentor: {e}")
-            return Response({'error': str(e)}, status=400)
-
-    def update(self, request, *args, **kwargs):
-        """Update mentor - PATCH request"""
-        try:
-            partial = kwargs.pop('partial', True)
-            instance = self.get_object()
-            
-            print("=" * 50)
-            print(f"Updating mentor ID: {instance.id}")
-            print(f"Current data: full_name={instance.full_name}, expertise={instance.expertise}, phone={instance.phone}, batch={instance.batch}")
-            print(f"Received data: {request.data}")
-            print("=" * 50)
-            
-            serializer = self.get_serializer(instance, data=request.data, partial=partial)
-            
-            if serializer.is_valid():
-                updated_mentor = serializer.save()
-                print(f"Updated mentor: full_name={updated_mentor.full_name}, expertise={updated_mentor.expertise}")
-                return Response(serializer.data, status=200)
-            else:
-                print("Validation errors:", serializer.errors)
-                return Response(serializer.errors, status=400)
-                
-        except Exception as e:
-            print(f"Error updating mentor: {e}")
-            import traceback
-            traceback.print_exc()
-            return Response({'error': str(e)}, status=400)
-
-    def destroy(self, request, *args, **kwargs):
-        mentor = self.get_object()
-        user = mentor.user
-        user.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
-    def me(self, request):
-        try:
-            mentor = Mentor.objects.get(user=request.user)
-            serializer = self.get_serializer(mentor)
-            return Response(serializer.data)
-        except Mentor.DoesNotExist:
-            return Response(
-                {"detail": "Mentor profile not found"}, 
-                status=404
-            )
+        print("=" * 50)
+        print("Received data:", request.data)
+        print("=" * 50)
+        
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            mentor = serializer.save()
+            return Response(serializer.data, status=201)
+        print("Errors:", serializer.errors)
+        return Response(serializer.errors, status=400)
 
 
+
+# ----------------------------
+# REVIEWER VIEWSET
+# ----------------------------
 # ----------------------------
 # REVIEWER VIEWSET
 # ----------------------------
@@ -267,7 +202,7 @@ class ReviewerViewSet(viewsets.ModelViewSet):
             print("=" * 50)
             print("Data received:", request.data)
             print("=" * 50)
-            
+
             serializer = self.get_serializer(data=request.data, context={'request': request})
             if serializer.is_valid():
                 reviewer = serializer.save()
@@ -279,6 +214,7 @@ class ReviewerViewSet(viewsets.ModelViewSet):
             import traceback
             traceback.print_exc()
             return Response({'error': str(e)}, status=400)
+        
     
 
 

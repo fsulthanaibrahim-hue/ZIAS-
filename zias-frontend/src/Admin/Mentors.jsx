@@ -1,4 +1,4 @@
-// src/Admin/Mentors.jsx - Fully Working with Email Support
+// src/Admin/Mentors.jsx - COMPLETE WORKING VERSION
 import { useEffect, useState, useRef, useCallback } from "react";
 import API from "../api/api";
 import { toast } from "react-hot-toast";
@@ -75,13 +75,11 @@ function Mentors() {
   const [editingId, setEditingId] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [phoneError, setPhoneError] = useState("");
-  const [emailError, setEmailError] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   const [viewingMentor, setViewingMentor] = useState(null);
   const [formData, setFormData] = useState({
     full_name: "",
-    email: "",
     phone: "",
     expertise: "",
     batch: "",
@@ -215,13 +213,11 @@ function Mentors() {
   const resetForm = () => {
     setFormData({
       full_name: "",
-      email: "",
       phone: "",
       expertise: "",
       batch: "",
     });
     setPhoneError("");
-    setEmailError("");
     setSelectedFiles([]);
     setEditDocuments([]);
   };
@@ -241,18 +237,8 @@ function Mentors() {
 
     if (formData.phone && !/^\d{10}$/.test(formData.phone)) {
       showToast("Phone number must be exactly 10 digits", "error");
-      setPhoneError("Phone number must be exactly 10 digits");
       return;
     }
-    setPhoneError("");
-
-    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      showToast("Please enter a valid email address", "error");
-      setEmailError("Please enter a valid email address");
-      return;
-    }
-    setEmailError("");
-
     setSubmitting(true);
 
     try {
@@ -264,11 +250,6 @@ function Mentors() {
           batch: formData.batch ? parseInt(formData.batch) : null,
         };
         
-        if (formData.email && formData.email.trim()) {
-          updatePayload.email = formData.email.trim();
-        }
-        
-        console.log("Updating mentor with payload:", updatePayload);
         await API.patch(`mentors/${editingId}/`, updatePayload);
         showToast("Mentor updated successfully", "success");
         
@@ -278,16 +259,13 @@ function Mentors() {
         await fetchMentors();
 
       } else {
+        // ✅ NO EMAIL IN PAYLOAD
         const createPayload = {
           full_name: formData.full_name.trim(),
           expertise: formData.expertise.trim(),
           phone: formData.phone || "", 
           batch: formData.batch ? parseInt(formData.batch) : null,
         };
-        
-        if (formData.email && formData.email.trim()) {
-          createPayload.email = formData.email.trim();
-        }
         
         console.log("Creating mentor with payload:", createPayload);
         const createRes = await API.post("mentors/", createPayload);
@@ -328,13 +306,11 @@ function Mentors() {
     setEditingId(mentor.id);
     setFormData({
       full_name: mentor.full_name || "",
-      email: mentor.email || "",
       phone: mentor.phone || "",
       expertise: mentor.expertise || "",
       batch: mentor.batch || "",
     });
     setPhoneError("");
-    setEmailError("");
     setSelectedFiles([]);
     setLoadingEditDocs(true);
     const docs = await fetchMentorDocuments(mentor.id);
@@ -364,9 +340,6 @@ function Mentors() {
       } else {
         setPhoneError("");
       }
-    } else if (name === "email") {
-      setFormData(prev => ({ ...prev, email: value }));
-      setEmailError("");
     } else {
       setFormData(prev => ({ ...prev, [name]: value }));
     }
@@ -558,19 +531,6 @@ function Mentors() {
                     <div className="sm:col-span-2">
                       <label className="block text-gray-600 text-xs font-medium mb-1.5">Full Name *</label>
                       <input type="text" name="full_name" value={formData.full_name} onChange={handleChange} required className={inputClass} placeholder="Enter mentor's full name" />
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label className="block text-gray-600 text-xs font-medium mb-1.5">Email Address</label>
-                      <input 
-                        type="email" 
-                        name="email" 
-                        value={formData.email} 
-                        onChange={handleChange} 
-                        className={`${inputClass} ${emailError ? "border-red-500" : ""}`}
-                        placeholder="mentor@example.com"
-                      />
-                      {emailError && <p className="text-red-500 text-xs mt-1">{emailError}</p>}
-                      <p className="text-gray-400 text-xs mt-1">Optional - If left blank, auto-generated email will be used</p>
                     </div>
                     <div>
                       <label className="block text-gray-600 text-xs font-medium mb-1.5">Expertise *</label>

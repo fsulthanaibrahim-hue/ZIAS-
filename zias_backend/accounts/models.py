@@ -59,7 +59,7 @@ class Document(models.Model):
 
 class Student(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='student_profile')
-    # email = models.EmailField(unique=True)  # ← REMOVE THIS LINE
+    # ✅ NO email field here - email is in User model
     full_name = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -88,7 +88,7 @@ class Student(models.Model):
 
     def __str__(self):
         return self.full_name or self.user.email or self.user.username
-
+    
 
 
 class Mentor(models.Model):
@@ -643,18 +643,17 @@ class StudentFeePayment(models.Model):
 
 
 # ========== POST-SAVE SIGNAL: AUTO-CREATE PROFILES ==========
-from django.db.models.signals import post_save
-from django.dispatch import receiver
+# from django.db.models.signals import post_save
+# from django.dispatch import receiver
 
-@receiver(post_save, sender=User)
-def create_user_profile(sender, instance, created, **kwargs):
-    if created:
-        if instance.is_student and not instance.is_reviewer and not instance.is_mentor:
-            Student.objects.get_or_create(user=instance)
-        elif instance.is_mentor:
-            Mentor.objects.get_or_create(user=instance, defaults={'expertise': 'General'})
-        elif instance.is_reviewer:
-            Reviewer.objects.get_or_create(user=instance)
-        elif instance.is_accounts:
-            Accounts.objects.get_or_create(user=instance)
-
+# @receiver(post_save, sender=User)
+# def create_user_profile(sender, instance, created, **kwargs):
+#     if created:
+#         if instance.is_student:
+#             Student.objects.get_or_create(user=instance, defaults={'email': instance.email, 'full_name': instance.get_full_name() or instance.username})
+#         elif instance.is_mentor:
+#             Mentor.objects.get_or_create(user=instance, defaults={'expertise': 'General'})
+#         elif instance.is_reviewer:
+#             Reviewer.objects.get_or_create(user=instance)
+#         elif instance.is_accounts:
+#             Accounts.objects.get_or_create(user=instance)
