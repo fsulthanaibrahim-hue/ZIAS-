@@ -380,9 +380,106 @@ class MentorSerializer(serializers.ModelSerializer):
 # ----------------------------
 # REVIEWER SERIALIZER - FINAL FIX
 # ----------------------------
-class ReviewerSerializer(serializers.ModelSerializer):
-    email = serializers.EmailField(write_only=True)
+## accounts/serializers.py - MENTOR AND REVIEWER (SAME STRUCTURE)
 
+# ----------------------------
+# MENTOR SERIALIZER
+# ----------------------------
+class MentorSerializer(serializers.ModelSerializer):
+    email = serializers.EmailField(write_only=True, required=False)
+    
+    class Meta:
+        model = Mentor
+        fields = ['id', 'full_name', 'expertise', 'phone', 'batch', 'email']
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        representation['email'] = instance.user.email if instance.user else None
+        return representation
+
+    def _send_welcome_email(self, email, username, password, full_name):
+        try:
+            domain = getattr(settings, 'SITE_DOMAIN', 'localhost:5173')
+            expiry_days = getattr(settings, 'PASSWORD_EXPIRY_DAYS', 90)
+            subject = '🎓 Welcome to ZIAS – Your Mentor Account'
+            message = f"""
+            Dear {full_name},
+            
+            Welcome to ZIAS!
+            
+            Your mentor account has been created successfully.
+            
+            Login Credentials:
+            Username: {username}
+            Password: {password}
+            Email: {email}
+            
+            Please change your password within {expiry_days} days for security purposes.
+            
+            Login URL: http://{domain}/login
+            
+            Best regards,
+            ZIAS Team
+            """
+            send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [email], fail_silently=False)
+            print(f"✅ Welcome email sent to mentor: {email}")
+        except Exception as e:
+            print(f"❌ Email sending failed for mentor {email}: {e}")
+
+    def create(self, validated_data):
+        full_name = validated_data.get('full_name', '')
+        email = validated_data.pop('email', None)
+        
+        if not full_name:
+            raise serializers.ValidationError({"full_name": "Full name is required"})
+        
+        username = full_name.lower().replace(' ', '_')
+        counter = 1
+        original = username
+        while User.objects.filter(username=username).exists():
+            username = f"{original}{counter}"
+            counter += 1
+        
+        user_email = email if email else f"{username}@example.com"
+        random_password = generate_random_password()
+        
+        user = User.objects.create_user(username=username, email=user_email, password=random_password)
+        user.role = 'mentor'
+        user.save()
+        
+        mentor = Mentor.objects.create(user=user, **validated_data)
+        self._send_welcome_email(user_email, username, random_password, full_name)
+        
+        return mentor
+
+    def update(self, instance, validated_data):
+        email = validated_data.pop('email', None)
+        
+        instance.full_name = validated_data.get('full_name', instance.full_name)
+        instance.expertise = validated_data.get('expertise', instance.expertise)
+        instance.phone = validated_data.get('phone', instance.phone)
+        
+        batch = validated_data.get('batch')
+        if batch == "":
+            instance.batch = None
+        elif batch is not None:
+            instance.batch = batch
+        
+        instance.save()
+        
+        if email and instance.user:
+            instance.user.email = email
+            instance.user.save()
+        
+        return instance
+
+
+# ----------------------------
+# REVIEWER SERIALIZER (SAME AS MENTOR)
+# ----------------------------
+class ReviewerSerializer(serializers.ModelSerializer):
+    email = serializers.EmailField(write_only=True, required=False)
+    
     class Meta:
         model = Reviewer
         fields = ['id', 'full_name', 'department', 'qualification', 'experience', 'batch', 'course', 'email']
@@ -393,15 +490,12 @@ class ReviewerSerializer(serializers.ModelSerializer):
         return representation
 
     def _send_welcome_email(self, email, username, password, full_name):
-        """Send welcome email to reviewer"""
         try:
             domain = getattr(settings, 'SITE_DOMAIN', 'localhost:5173')
             expiry_days = getattr(settings, 'PASSWORD_EXPIRY_DAYS', 90)
-            
             subject = '🎓 Welcome to ZIAS – Your Reviewer Account'
-            
             message = f"""
-            Dear {full_name or username},
+            Dear {full_name},
             
             Welcome to ZIAS!
             
@@ -419,69 +513,40 @@ class ReviewerSerializer(serializers.ModelSerializer):
             Best regards,
             ZIAS Team
             """
-            
-            send_mail(
-                subject, 
-                message, 
-                settings.DEFAULT_FROM_EMAIL, 
-                [email], 
-                fail_silently=False
-            )
+            send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [email], fail_silently=False)
             print(f"✅ Welcome email sent to reviewer: {email}")
         except Exception as e:
             print(f"❌ Email sending failed for reviewer {email}: {e}")
 
     def create(self, validated_data):
-        email = validated_data.pop('email', None)
-
-        if not email:
-            email = self.context['request'].data.get('email')
-
-        if not email:
-            raise serializers.ValidationError({"email": "Email is required"})
-
         full_name = validated_data.get('full_name', '')
-
-        # Check if user already exists
-        user = User.objects.filter(email=email).first()
-
-        if user:
-            if hasattr(user, 'reviewer_profile'):
-                raise serializers.ValidationError({"email": "This user already has a reviewer profile"})
-
-            reviewer = Reviewer.objects.create(user=user, **validated_data)
-            return reviewer
-
-        # Create new user
-        username = email.split('@')[0]
+        email = validated_data.pop('email', None)
+        
+        if not full_name:
+            raise serializers.ValidationError({"full_name": "Full name is required"})
+        
+        username = full_name.lower().replace(' ', '_')
         counter = 1
-        original_username = username
+        original = username
         while User.objects.filter(username=username).exists():
-            username = f"{original_username}{counter}"
+            username = f"{original}{counter}"
             counter += 1
-
+        
+        user_email = email if email else f"{username}@example.com"
         random_password = generate_random_password()
-
-        user = User.objects.create_user(
-            username=username,
-            email=email,
-            password=random_password
-        )
-
+        
+        user = User.objects.create_user(username=username, email=user_email, password=random_password)
         user.role = 'reviewer'
-        user.is_reviewer = True
         user.save()
-
+        
         reviewer = Reviewer.objects.create(user=user, **validated_data)
-
-        # ✅ Send welcome email
-        self._send_welcome_email(email, username, random_password, full_name)
-
+        self._send_welcome_email(user_email, username, random_password, full_name)
+        
         return reviewer
 
     def update(self, instance, validated_data):
         email = validated_data.pop('email', None)
-
+        
         instance.full_name = validated_data.get('full_name', instance.full_name)
         instance.department = validated_data.get('department', instance.department)
         instance.qualification = validated_data.get('qualification', instance.qualification)
@@ -489,12 +554,12 @@ class ReviewerSerializer(serializers.ModelSerializer):
         instance.batch = validated_data.get('batch', instance.batch)
         instance.course = validated_data.get('course', instance.course)
         instance.save()
-
+        
         if email and instance.user:
             instance.user.email = email
             instance.user.save()
-
-        return instance   
+        
+        return instance
 
 
 
