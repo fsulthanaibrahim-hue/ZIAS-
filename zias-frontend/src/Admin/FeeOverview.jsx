@@ -1,5 +1,5 @@
 // src/Admin/FeeOverview.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import API from '../api/api';
 import { toast } from 'react-hot-toast';
 
@@ -11,12 +11,14 @@ function FeeOverview() {
   const [showPaymentHistory, setShowPaymentHistory] = useState(false);
   const [paymentHistory, setPaymentHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-
-  useEffect(() => {
-    fetchStudents();
-  }, []);
+  
+  const initialFetchDone = useRef(false);
+  const studentsFetchedRef = useRef(false);
 
   const fetchStudents = async () => {
+    if (studentsFetchedRef.current) return;
+    studentsFetchedRef.current = true;
+    
     setLoading(true);
     try {
       const res = await API.get('/accounts/students/');
@@ -26,10 +28,17 @@ function FeeOverview() {
     } catch (err) {
       console.error(err);
       toast.error('Failed to load student fee data');
+      studentsFetchedRef.current = false;
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (initialFetchDone.current) return;
+    initialFetchDone.current = true;
+    fetchStudents();
+  }, []);
 
   const viewPaymentHistory = async (student) => {
     setSelectedStudent(student);
@@ -63,7 +72,6 @@ function FeeOverview() {
     <div className="p-4 sm:p-6">
       <h1 className="text-2xl font-bold mb-6">Fee Overview (Admin)</h1>
 
-      {/* Summary Cards – responsive grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-8">
         <div className="bg-green-50 rounded-xl p-4 sm:p-5 border border-green-200">
           <p className="text-gray-500 text-sm">Total Collected</p>
@@ -79,7 +87,6 @@ function FeeOverview() {
         </div>
       </div>
 
-      {/* Search – full width on mobile */}
       <div className="mb-6">
         <input
           type="text"
@@ -90,7 +97,6 @@ function FeeOverview() {
         />
       </div>
 
-      {/* Students Table – horizontal scroll on small screens */}
       <div className="overflow-x-auto bg-white rounded-xl shadow border border-gray-200">
         <table className="min-w-[900px] md:min-w-full w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
@@ -134,21 +140,12 @@ function FeeOverview() {
                 <td className="px-3 sm:px-4 py-3 text-sm font-medium text-yellow-600">₹{s.total_pending?.toLocaleString() || 0}</td>
                 <td className="px-3 sm:px-4 py-3 text-sm font-medium text-red-600">₹{s.total_overdue?.toLocaleString() || 0}</td>
                 <td className="px-3 sm:px-4 py-3 text-sm">
-                  <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
-                    s.week_back_fee_status === 'on_track' ? 'bg-green-100 text-green-800' :
-                    s.week_back_fee_status === 'delayed' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'
-                  }`}>
-                    {s.week_back_fee_status === 'on_track' ? 'On Track' :
-                     s.week_back_fee_status === 'delayed' ? 'Delayed' : 'Overdue'}
+                  <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${s.week_back_fee_status === 'on_track' ? 'bg-green-100 text-green-800' : s.week_back_fee_status === 'delayed' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}`}>
+                    {s.week_back_fee_status === 'on_track' ? 'On Track' : s.week_back_fee_status === 'delayed' ? 'Delayed' : 'Overdue'}
                   </span>
                 </td>
                 <td className="px-3 sm:px-4 py-3 text-sm">
-                  <button
-                    onClick={() => viewPaymentHistory(s)}
-                    className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                  >
-                    View History
-                  </button>
+                  <button onClick={() => viewPaymentHistory(s)} className="text-blue-600 hover:text-blue-800 text-sm font-medium">View History</button>
                 </td>
               </tr>
             ))}
@@ -161,7 +158,6 @@ function FeeOverview() {
         </table>
       </div>
 
-      {/* Payment History Modal – responsive */}
       {showPaymentHistory && selectedStudent && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowPaymentHistory(false)}>
           <div className="bg-white rounded-xl w-full max-w-3xl max-h-[80vh] overflow-hidden flex flex-col shadow-xl" onClick={e => e.stopPropagation()}>
@@ -193,10 +189,7 @@ function FeeOverview() {
                           <td className="py-2 text-sm">{new Date(p.due_date).toLocaleDateString()}</td>
                           <td className="py-2 text-sm">{p.payment_date ? new Date(p.payment_date).toLocaleDateString() : '—'}</td>
                           <td className="py-2 text-sm">
-                            <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
-                              p.status === 'paid' ? 'bg-green-100 text-green-800' :
-                              p.status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'
-                            }`}>
+                            <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${p.status === 'paid' ? 'bg-green-100 text-green-800' : p.status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}`}>
                               {p.status}
                             </span>
                           </td>

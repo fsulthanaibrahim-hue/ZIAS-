@@ -1,52 +1,65 @@
 // src/Admin/AdminStudentFeeManagement.jsx
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import API from "../api/api";
 import toast from "react-hot-toast";
 
 function AdminStudentFeeManagement() {
   const [students, setStudents] = useState([]);
+  const [feeStructuresList, setFeeStructuresList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [showPaymentHistory, setShowPaymentHistory] = useState(false);
   const [paymentHistory, setPaymentHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [feeStructureMap, setFeeStructureMap] = useState({}); // studentId -> fee structure name
-  const [fsLoading, setFsLoading] = useState({});
+  
+  // Refs to prevent duplicate API calls
+  const initialFetchDone = useRef(false);
 
-  const fetchStudents = async () => {
+  // Fetch all students and all fee structures in parallel (only 2 API calls total)
+  const fetchData = async () => {
     setLoading(true);
     try {
-      const res = await API.get("/accounts/students/");
-      let data = res.data;
-      if (data.results) data = data.results;
-      setStudents(Array.isArray(data) ? data : []);
-      // After loading students, fetch each one's assigned fee structure
-      for (const s of data) {
-        fetchStudentFeeStructure(s.id);
-      }
+      const [studentsRes, feeStructuresRes] = await Promise.all([
+        API.get("/accounts/students/"),
+        API.get("/fee-structures/")
+      ]);
+      
+      // Process students data
+      let studentsData = studentsRes.data;
+      if (studentsData.results) studentsData = studentsData.results;
+      setStudents(Array.isArray(studentsData) ? studentsData : []);
+      
+      // Process fee structures data
+      let feeStructuresData = feeStructuresRes.data;
+      if (feeStructuresData.results) feeStructuresData = feeStructuresData.results;
+      setFeeStructuresList(Array.isArray(feeStructuresData) ? feeStructuresData : []);
+      
     } catch (err) {
-      toast.error("Failed to load students");
+      console.error(err);
+      toast.error("Failed to load data");
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchStudentFeeStructure = async (studentId) => {
-    setFsLoading(prev => ({ ...prev, [studentId]: true }));
-    try {
-      // Try to get the fee structure assigned to this student
-      // Adjust the endpoint as per your backend.
-      // Example: GET /students/${studentId}/fee-structure/
-      const res = await API.get(`/students/${studentId}/fee-structure/`);
-      const fsName = res.data.name || `${res.data.total_amount} (${res.data.number_of_installments} installments)`;
-      setFeeStructureMap(prev => ({ ...prev, [studentId]: fsName }));
-    } catch (err) {
-      // If no fee structure assigned, leave as "—"
-      setFeeStructureMap(prev => ({ ...prev, [studentId]: "—" }));
-    } finally {
-      setFsLoading(prev => ({ ...prev, [studentId]: false }));
+  // Get fee structure name for a student (based on student's fee_structure_id)
+  const getStudentFeeStructure = (student) => {
+    // If student has a fee_structure_id, find it in the list
+    if (student.fee_structure_id) {
+      const fs = feeStructuresList.find(f => f.id === student.fee_structure_id);
+      if (fs) {
+        return fs.name || `${fs.total_amount} (${fs.number_of_installments} installments)`;
+      }
     }
+    
+    // If student has fee_structure object directly
+    if (student.fee_structure) {
+      const fs = student.fee_structure;
+      return fs.name || `${fs.total_amount} (${fs.number_of_installments} installments)`;
+    }
+    
+    return "—";
   };
 
   const viewPaymentHistory = async (student) => {
@@ -59,14 +72,18 @@ function AdminStudentFeeManagement() {
       setPaymentHistory(Array.isArray(payments) ? payments : []);
       setShowPaymentHistory(true);
     } catch (err) {
+      console.error(err);
       toast.error("Failed to load payment history");
     } finally {
       setHistoryLoading(false);
     }
   };
 
+  // Initial load - only once
   useEffect(() => {
-    fetchStudents();
+    if (initialFetchDone.current) return;
+    initialFetchDone.current = true;
+    fetchData();
   }, []);
 
   const filteredStudents = students.filter(s =>
@@ -75,7 +92,6 @@ function AdminStudentFeeManagement() {
     s.course?.toLowerCase().includes(search.toLowerCase())
   );
 
-  // Helper to format currency
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(amount || 0);
   };
@@ -86,10 +102,14 @@ function AdminStudentFeeManagement() {
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Student Fee Management</h1>
-        <button onClick={fetchStudents} className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg">⟳ Refresh</button>
+        <button 
+          onClick={fetchData} 
+          className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition"
+        >
+          ⟳ Refresh
+        </button>
       </div>
 
-      {/* Search */}
       <div className="mb-6">
         <input
           type="text"
@@ -100,7 +120,6 @@ function AdminStudentFeeManagement() {
         />
       </div>
 
-      {/* Main Table */}
       <div className="overflow-x-auto bg-white rounded-xl shadow border border-gray-200">
         <table className="min-w-[1000px] w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
@@ -128,11 +147,7 @@ function AdminStudentFeeManagement() {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-sm">
-                    {fsLoading[s.id] ? (
-                      <span className="text-gray-400">Loading...</span>
-                    ) : (
-                      <span className="text-gray-700">{feeStructureMap[s.id]}</span>
-                    )}
+                    <span className="text-gray-700">{getStudentFeeStructure(s)}</span>
                   </td>
                   <td className="px-4 py-3 text-sm">
                     <div>
@@ -142,26 +157,24 @@ function AdminStudentFeeManagement() {
                   </td>
                   <td className="px-4 py-3 text-sm">
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
-                      s.week_back_fee_status === "on_track" ? "bg-green-100 text-green-800" :
-                      s.week_back_fee_status === "delayed" ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"
+                      s.week_back_fee_status === "on_track" 
+                        ? "bg-green-100 text-green-800"
+                        : s.week_back_fee_status === "delayed" 
+                          ? "bg-yellow-100 text-yellow-800" 
+                          : "bg-red-100 text-red-800"
                     }`}>
-                      {s.week_back_fee_status === "on_track" ? "On Track" :
-                       s.week_back_fee_status === "delayed" ? "Delayed" : "Overdue"}
+                      {s.week_back_fee_status === "on_track" 
+                        ? "On Track"
+                        : s.week_back_fee_status === "delayed" 
+                          ? "Delayed" 
+                          : "Overdue"}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-sm">
                     {s.agreement_signed ? (
                       <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">✓ Signed</span>
                     ) : (
-                      <button
-                        onClick={async () => {
-                          // Optional: update agreement status inline
-                          toast("Agreement update feature – implement your own PATCH");
-                        }}
-                        className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 hover:bg-red-200"
-                      >
-                        ✗ Not signed (click to update)
-                      </button>
+                      <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">✗ Not signed</span>
                     )}
                   </td>
                   <td className="px-4 py-3 text-sm font-semibold text-purple-600">
@@ -177,7 +190,7 @@ function AdminStudentFeeManagement() {
                   <td className="px-4 py-3 text-sm text-center">
                     <button
                       onClick={() => viewPaymentHistory(s)}
-                      className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                      className="text-blue-600 hover:text-blue-800 text-sm font-medium transition"
                     >
                       View
                     </button>
@@ -194,7 +207,6 @@ function AdminStudentFeeManagement() {
         </table>
       </div>
 
-      {/* Payment History Modal – same as before */}
       {showPaymentHistory && selectedStudent && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowPaymentHistory(false)}>
           <div className="bg-white rounded-xl w-full max-w-3xl max-h-[80vh] overflow-hidden flex flex-col shadow-xl" onClick={e => e.stopPropagation()}>
@@ -226,8 +238,11 @@ function AdminStudentFeeManagement() {
                         <td className="py-2 text-sm">{p.payment_date ? new Date(p.payment_date).toLocaleDateString() : "—"}</td>
                         <td className="py-2 text-sm">
                           <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
-                            p.status === "paid" ? "bg-green-100 text-green-800" :
-                            p.status === "pending" ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"
+                            p.status === "paid" 
+                              ? "bg-green-100 text-green-800"
+                              : p.status === "pending" 
+                                ? "bg-yellow-100 text-yellow-800" 
+                                : "bg-red-100 text-red-800"
                           }`}>
                             {p.status}
                           </span>

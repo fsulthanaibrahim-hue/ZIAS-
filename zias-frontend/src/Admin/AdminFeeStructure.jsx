@@ -1,5 +1,5 @@
-// src/Admin/AdminFeeStructure.jsx – with Pending fee details & Week-fee status
-import { useEffect, useState } from "react";
+// src/Admin/AdminFeeStructure.jsx – with Pending fee details & Week-fee status (Single API call each)
+import { useEffect, useState, useRef } from "react";
 import API from "../api/api";
 import toast from "react-hot-toast";
 
@@ -18,35 +18,78 @@ function AdminFeeStructure() {
     is_active: true,
   });
 
-  // State for pending amounts and week status (by fee structure id)
-  const [pendingMap, setPendingMap] = useState({});
-  const [weekStatusMap, setWeekStatusMap] = useState({});
-  const [detailsLoading, setDetailsLoading] = useState({});
+  const initialFetchDone = useRef(false);
+  const batchesFetched = useRef(false);
 
   const extractArray = (response) => {
     const data = response.data.results || response.data;
     return Array.isArray(data) ? data : [];
   };
 
-  const fetchData = async () => {
-    setLoading(true);
+  // Calculate pending amount based on payments (if payments data is included in fee structure response)
+  const calculatePendingAmount = (feeStructure) => {
+    if (!feeStructure.total_amount) return 0;
+    const totalPaid = feeStructure.payments?.reduce((sum, payment) => sum + (payment.amount || 0), 0) || 0;
+    return feeStructure.total_amount - totalPaid;
+  };
+
+  // Generate week status based on number of installments
+  const generateWeekStatus = (feeStructure) => {
+    const numberOfInstallments = feeStructure.number_of_installments || 1;
+    const payments = feeStructure.payments || [];
+    
+    const weekStatuses = [];
+    for (let week = 1; week <= numberOfInstallments; week++) {
+      const paymentForWeek = payments.find(p => p.week_number === week);
+      weekStatuses.push({
+        week: week,
+        status: paymentForWeek?.paid_date ? "Paid" : "Pending",
+        amount: paymentForWeek?.amount || 0,
+        due_date: paymentForWeek?.due_date || null,
+        paid_date: paymentForWeek?.paid_date || null,
+      });
+    }
+    return weekStatuses;
+  };
+
+  const fetchBatches = async () => {
+    if (batchesFetched.current) return;
+    batchesFetched.current = true;
     try {
-      const [structuresRes, batchesRes] = await Promise.all([
-        API.get("fee-structures/"),
-        API.get("batches/"),
-      ]);
-      const structures = extractArray(structuresRes);
+      const batchesRes = await API.get("batches/");
       const batchesData = extractArray(batchesRes);
       setBatches(batchesData);
       const map = {};
       batchesData.forEach(b => { map[b.id] = b.name; });
       setBatchMap(map);
-      setFeeStructures(structures);
+    } catch (err) {
+      console.error("Failed to load batches:", err);
+    }
+  };
 
-      // After loading fee structures, fetch pending details & week status for each
-      for (const fs of structures) {
-        fetchPendingAndStatus(fs.id);
-      }
+  const fetchFeeStructures = async () => {
+    try {
+      const structuresRes = await API.get("fee-structures/");
+      const structures = extractArray(structuresRes);
+      
+      // Process fee structures with calculated data
+      const processedStructures = structures.map(fs => ({
+        ...fs,
+        pending_amount: calculatePendingAmount(fs),
+        week_status: generateWeekStatus(fs),
+      }));
+      
+      setFeeStructures(processedStructures);
+    } catch (err) {
+      toast.error("Failed to load fee structures");
+      console.error(err);
+    }
+  };
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      await Promise.all([fetchFeeStructures(), fetchBatches()]);
     } catch (err) {
       toast.error("Failed to load data");
     } finally {
@@ -54,47 +97,9 @@ function AdminFeeStructure() {
     }
   };
 
-  const fetchPendingAndStatus = async (id) => {
-    setDetailsLoading(prev => ({ ...prev, [id]: true }));
-    try {
-      // --- TODO: Replace these with your actual API endpoints ---
-      // Example: GET /fee-structures/${id}/pending/ -> returns { pending_amount }
-      // Example: GET /fee-structures/${id}/week-status/ -> returns [{ week: 1, status: "Paid" }, ...]
-      
-      // Mock data for demonstration (remove when backend ready)
-      const mockPending = { pending_amount: (Math.random() * 5000).toFixed(2) };
-      const mockWeekStatus = [
-        { week: 1, status: "Paid" },
-        { week: 2, status: Math.random() > 0.5 ? "Paid" : "Pending" },
-        { week: 3, status: "Pending" },
-      ];
-
-      // Uncomment below when endpoints are ready:
-      /*
-      const [pendingRes, weekRes] = await Promise.all([
-        API.get(`fee-structures/${id}/pending/`),
-        API.get(`fee-structures/${id}/week-status/`),
-      ]);
-      const pendingAmount = pendingRes.data.pending_amount;
-      const weekStatus = weekRes.data;
-      */
-      
-      // Using mock data:
-      const pendingAmount = mockPending.pending_amount;
-      const weekStatus = mockWeekStatus;
-
-      setPendingMap(prev => ({ ...prev, [id]: pendingAmount }));
-      setWeekStatusMap(prev => ({ ...prev, [id]: weekStatus }));
-    } catch (err) {
-      console.error(`Failed to fetch details for ${id}`, err);
-      setPendingMap(prev => ({ ...prev, [id]: "Error" }));
-      setWeekStatusMap(prev => ({ ...prev, [id]: [] }));
-    } finally {
-      setDetailsLoading(prev => ({ ...prev, [id]: false }));
-    }
-  };
-
   useEffect(() => {
+    if (initialFetchDone.current) return;
+    initialFetchDone.current = true;
     fetchData();
   }, []);
 
@@ -110,17 +115,17 @@ function AdminFeeStructure() {
       };
       if (editingId) {
         await API.patch(`fee-structures/${editingId}/`, payload);
-        toast.success("Updated");
+        toast.success("Updated successfully");
       } else {
         await API.post("fee-structures/", payload);
-        toast.success("Created");
+        toast.success("Created successfully");
       }
       setShowForm(false);
       setEditingId(null);
       setFormData({ name: "", batch: "", total_amount: "", number_of_installments: 1, is_active: true });
-      await fetchData(); // refresh all data, including new pending/status
+      await fetchData();
     } catch (err) {
-      toast.error("Operation failed");
+      toast.error(err.response?.data?.detail || "Operation failed");
     }
   };
 
@@ -128,7 +133,7 @@ function AdminFeeStructure() {
     if (!window.confirm("Delete this fee structure?")) return;
     try {
       await API.delete(`fee-structures/${id}/`);
-      toast.success("Deleted");
+      toast.success("Deleted successfully");
       await fetchData();
     } catch (err) {
       toast.error("Delete failed");
@@ -142,7 +147,6 @@ function AdminFeeStructure() {
     return "—";
   };
 
-  // Helper to render week status as badges
   const renderWeekStatus = (statuses) => {
     if (!statuses || statuses.length === 0) return "—";
     return (
@@ -170,14 +174,21 @@ function AdminFeeStructure() {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Fee Structure</h1>
         <div className="flex gap-2">
-          <button onClick={fetchData} className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg">⟳ Refresh</button>
-          <button onClick={() => setShowForm(true)} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg">+ Add Fee Structure</button>
+          <button onClick={fetchData} className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition">
+            ⟳ Refresh
+          </button>
+          <button 
+            onClick={() => setShowForm(true)} 
+            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition"
+          >
+            + Add Fee Structure
+          </button>
         </div>
       </div>
 
       {showForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowForm(false)}>
-          <form onSubmit={handleSubmit} className="bg-white rounded-2xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
+          <form onSubmit={handleSubmit} className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl" onClick={e => e.stopPropagation()}>
             <h2 className="text-lg font-bold mb-4">{editingId ? "Edit" : "New"} Fee Structure</h2>
             <div className="space-y-3">
               <input
@@ -185,13 +196,13 @@ function AdminFeeStructure() {
                 placeholder="Fee structure name *"
                 value={formData.name}
                 onChange={e => setFormData({ ...formData, name: e.target.value })}
-                className="w-full border rounded-lg px-3 py-2"
+                className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:border-green-500"
                 required
               />
               <select
                 value={formData.batch}
                 onChange={e => setFormData({ ...formData, batch: e.target.value })}
-                className="w-full border rounded-lg px-3 py-2"
+                className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:border-green-500"
               >
                 <option value="">Select Batch (optional)</option>
                 {batches.map(b => (
@@ -204,7 +215,7 @@ function AdminFeeStructure() {
                 placeholder="Total Amount *"
                 value={formData.total_amount}
                 onChange={e => setFormData({ ...formData, total_amount: e.target.value })}
-                className="w-full border rounded-lg px-3 py-2"
+                className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:border-green-500"
                 required
               />
               <input
@@ -212,7 +223,7 @@ function AdminFeeStructure() {
                 placeholder="Number of Installments"
                 value={formData.number_of_installments}
                 onChange={e => setFormData({ ...formData, number_of_installments: e.target.value })}
-                className="w-full border rounded-lg px-3 py-2"
+                className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:border-green-500"
                 min="1"
               />
               <label className="flex items-center gap-2">
@@ -225,8 +236,12 @@ function AdminFeeStructure() {
               </label>
             </div>
             <div className="flex gap-2 mt-6">
-              <button type="submit" className="flex-1 bg-green-600 text-white py-2 rounded-lg">Save</button>
-              <button type="button" onClick={() => setShowForm(false)} className="flex-1 bg-gray-200 py-2 rounded-lg">Cancel</button>
+              <button type="submit" className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg transition">
+                Save
+              </button>
+              <button type="button" onClick={() => setShowForm(false)} className="flex-1 bg-gray-200 hover:bg-gray-300 py-2 rounded-lg transition">
+                Cancel
+              </button>
             </div>
           </form>
         </div>
@@ -236,41 +251,41 @@ function AdminFeeStructure() {
         <table className="min-w-full">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-4 py-3 text-left">Name</th>
-              <th className="px-4 py-3 text-left">Batch</th>
-              <th className="px-4 py-3 text-left">Total Amount</th>
-              <th className="px-4 py-3 text-left">Pending Amount</th>
-              <th className="px-4 py-3 text-left">Installments</th>
-              <th className="px-4 py-3 text-left">Week-fee Status</th>
-              <th className="px-4 py-3 text-left">Status</th>
-              <th className="px-4 py-3 text-center">Actions</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Name</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Batch</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Total Amount</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Pending Amount</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Installments</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Week-fee Status</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+              <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
           <tbody>
             {feeStructures.map(fs => (
-              <tr key={fs.id} className="border-t">
-                <td className="px-4 py-2">{fs.name || "—"}</td>
-                <td className="px-4 py-2">{getBatchName(fs)}</td>
-                <td className="px-4 py-2">₹{fs.total_amount}</td>
-                <td className="px-4 py-2">
-                  {detailsLoading[fs.id] ? (
-                    <span className="text-gray-400 text-sm">Loading...</span>
-                  ) : (
-                    <span className="font-medium text-red-600">
-                      ₹{pendingMap[fs.id] !== undefined ? pendingMap[fs.id] : "—"}
-                    </span>
-                  )}
+              <tr key={fs.id} className="border-t hover:bg-gray-50 transition">
+                <td className="px-4 py-3 text-gray-800">{fs.name || "—"}</td>
+                <td className="px-4 py-3 text-gray-600">{getBatchName(fs)}</td>
+                <td className="px-4 py-3 font-medium text-gray-800">₹{fs.total_amount}</td>
+                <td className="px-4 py-3">
+                  <span className="font-medium text-red-600">
+                    ₹{fs.pending_amount?.toFixed(2) || "0.00"}
+                  </span>
                 </td>
-                <td className="px-4 py-2">{fs.number_of_installments}</td>
-                <td className="px-4 py-2">
-                  {detailsLoading[fs.id] ? (
-                    <span className="text-gray-400 text-sm">Loading...</span>
-                  ) : (
-                    renderWeekStatus(weekStatusMap[fs.id])
-                  )}
+                <td className="px-4 py-3 text-gray-600">{fs.number_of_installments}</td>
+                <td className="px-4 py-3">
+                  {renderWeekStatus(fs.week_status)}
                 </td>
-                <td className="px-4 py-2">{fs.is_active ? "Active" : "Inactive"}</td>
-                <td className="px-4 py-2 text-center whitespace-nowrap">
+                <td className="px-4 py-3">
+                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                    fs.is_active 
+                      ? "bg-green-100 text-green-800" 
+                      : "bg-gray-100 text-gray-800"
+                  }`}>
+                    {fs.is_active ? "Active" : "Inactive"}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-center whitespace-nowrap">
                   <button
                     onClick={() => {
                       setEditingId(fs.id);
@@ -284,7 +299,7 @@ function AdminFeeStructure() {
                       });
                       setShowForm(true);
                     }}
-                    className="text-blue-600 hover:text-blue-800 mx-1"
+                    className="text-blue-600 hover:text-blue-800 mx-1 transition"
                     title="Edit"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -293,7 +308,7 @@ function AdminFeeStructure() {
                   </button>
                   <button
                     onClick={() => handleDelete(fs.id)}
-                    className="text-red-600 hover:text-red-800 mx-1"
+                    className="text-red-600 hover:text-red-800 mx-1 transition"
                     title="Delete"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -303,14 +318,15 @@ function AdminFeeStructure() {
                 </td>
               </tr>
             ))}
+            {feeStructures.length === 0 && (
+              <tr>
+                <td colSpan="8" className="text-center py-12 text-gray-500">
+                  No fee structures found
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
-      </div>
-
-      {/* Note: remove mock data and replace with real API calls when backend is ready */}
-      <div className="mt-4 text-xs text-gray-400 text-center border-t pt-2">
-        ℹ️ Pending amount & Week status are currently using mock data. 
-        Replace <code>fetchPendingAndStatus</code> with real API endpoints.
       </div>
     </div>
   );
