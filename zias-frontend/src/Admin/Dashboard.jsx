@@ -1,4 +1,4 @@
-// src/Admin/Dashboard.jsx – with improved error handling and auto-refresh
+// src/Admin/Dashboard.jsx – Clean version without auto-refresh and status indicators
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../api/api";
@@ -151,10 +151,6 @@ const CustomTooltip = ({ active, payload, label }) => {
   return null;
 };
 
-const StatusDot = ({ ok }) => (
-  <span className={`inline-block w-2 h-2 rounded-full ${ok ? "bg-green-600" : "bg-red-600"}`} />
-);
-
 const ChartCard = ({ title, badge, children }) => (
   <div className="bg-white rounded-xl border border-gray-200 p-5 sm:p-6 shadow-sm">
     <div className="flex items-center justify-between mb-5">
@@ -200,19 +196,15 @@ function Dashboard() {
 
   const [stats, setStats] = useState({ students: 0, mentors: 0, reviewers: 0, courses: 0, batches: 0 });
   const [lastUpdated, setLastUpdated] = useState(null);
-  const [apiOk, setApiOk] = useState(true);
   const [loading, setLoading] = useState(true);
-  const [autoRefresh, setAutoRefresh] = useState(false);
 
   const fetched = useRef(false);
-  const autoRefreshInterval = useRef(null);
   const adminName = user?.first_name || user?.username || "Admin";
 
   const fetchData = async (showToast = false) => {
     try {
       setLoading(true);
       
-      // Use allSettled to handle individual API failures gracefully
       const results = await Promise.allSettled([
         API.get("students/"),
         API.get("mentors/"),
@@ -222,8 +214,6 @@ function Dashboard() {
       ]);
       
       const newStats = { students: 0, mentors: 0, reviewers: 0, courses: 0, batches: 0 };
-      let hasError = false;
-      let errorCount = 0;
       
       results.forEach((result, index) => {
         const endpoints = ['students', 'mentors', 'reviewers', 'courses', 'batches'];
@@ -231,49 +221,22 @@ function Dashboard() {
           newStats[endpoints[index]] = getCount(result.value);
         } else {
           console.error(`Failed to fetch ${endpoints[index]}:`, result.reason);
-          hasError = true;
-          errorCount++;
         }
       });
       
       setStats(newStats);
-      setApiOk(!hasError);
       setLastUpdated(new Date());
       
       if (showToast) {
-        if (hasError) {
-          toast.error(`${errorCount} of 5 data sources failed to load`, { duration: 3000 });
-        } else {
-          toast.success("Dashboard refreshed", { duration: 2000 });
-        }
+        toast.success("Dashboard refreshed", { duration: 2000 });
       }
     } catch (err) {
       console.warn(err);
       toast.error(getFriendlyErrorMessage(err, "Failed to load dashboard data"));
-      setApiOk(false);
     } finally {
       setLoading(false);
     }
   };
-
-  // Auto-refresh setup
-  useEffect(() => {
-    if (autoRefresh) {
-      autoRefreshInterval.current = setInterval(() => {
-        fetchData(false);
-      }, 30000); // Refresh every 30 seconds
-    } else {
-      if (autoRefreshInterval.current) {
-        clearInterval(autoRefreshInterval.current);
-      }
-    }
-    
-    return () => {
-      if (autoRefreshInterval.current) {
-        clearInterval(autoRefreshInterval.current);
-      }
-    };
-  }, [autoRefresh]);
 
   // Initial data fetch
   useEffect(() => {
@@ -289,7 +252,6 @@ function Dashboard() {
     return "Good evening";
   };
 
-  // Chart data with safety checks
   const barData = [
     { name: "Students",  value: stats.students || 0,  fill: "#3b82f6" },
     { name: "Mentors",   value: stats.mentors || 0,   fill: "#10b981" },
@@ -331,25 +293,11 @@ function Dashboard() {
           <p className="text-gray-400 text-xs mt-0.5 font-medium">Admin Dashboard</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 text-xs text-gray-500 font-medium">
-            <StatusDot ok={apiOk} />
-            {apiOk ? "All systems operational" : "Some services unavailable"}
-          </div>
           {lastUpdated && (
             <p className="text-gray-400 text-xs font-medium">
-              Updated {lastUpdated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              Last updated {lastUpdated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
             </p>
           )}
-          <button
-            onClick={() => setAutoRefresh(!autoRefresh)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-              autoRefresh 
-                ? "bg-green-100 text-green-700 border border-green-200" 
-                : "bg-gray-100 text-gray-500 border border-gray-200"
-            }`}
-          >
-            🔄 Auto {autoRefresh ? "ON" : "OFF"}
-          </button>
           <button
             onClick={() => fetchData(true)}
             disabled={loading}
@@ -462,22 +410,6 @@ function Dashboard() {
           )}
         </ChartCard>
       </div>
-
-      {/* Status message when API has errors but data exists */}
-      {!apiOk && !hasNoData && !loading && (
-        <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
-          <div className="flex items-center gap-3">
-            <span className="text-yellow-600 text-lg">⚠️</span>
-            <div>
-              <p className="text-sm font-medium text-yellow-800">Partial Data Available</p>
-              <p className="text-xs text-yellow-600 mt-0.5">
-                Some data sources are currently unavailable. The dashboard shows available data only.
-                {autoRefresh && " Auto-refresh is enabled. Data will update when available."}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
