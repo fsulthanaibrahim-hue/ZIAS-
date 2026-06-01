@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../api/api";
 import { toast } from "react-hot-toast";
+import { clearAuthStorage } from "../utils/authStorage";
 
 // Helper to turn any API error into a user‑friendly message (never 5xx)
 const getFriendlyErrorMessage = (err, defaultMsg = "An error occurred") => {
@@ -245,7 +246,7 @@ function Courses() {
         console.warn(err);
         if (err.response?.status === 401) {
           setTimeout(() => {
-            localStorage.clear();
+            clearAuthStorage();
             window.location.href = "/login";
           }, 1500);
         }

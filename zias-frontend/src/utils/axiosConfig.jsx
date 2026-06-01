@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { clearAuthStorage } from './authStorage';
 
 // Configure axios defaults
 axios.defaults.baseURL = 'http://127.0.0.1:8000/api/';
@@ -7,7 +8,9 @@ axios.defaults.baseURL = 'http://127.0.0.1:8000/api/';
 axios.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('access_token');
-    if (token) {
+    const isLoginRequest = config.url?.includes('/login/');
+    const isRefreshRequest = config.url?.includes('/token/refresh/');
+    if (token && !isLoginRequest && !isRefreshRequest) {
       config.headers.Authorization = `Bearer ${token}`;
     }
     config.headers['Content-Type'] = 'application/json';
@@ -24,7 +27,9 @@ axios.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
     
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    const isAuthRequest = originalRequest?.url?.includes('/login/') || originalRequest?.url?.includes('/token/refresh/');
+
+    if (error.response?.status === 401 && !originalRequest._retry && !isAuthRequest) {
       originalRequest._retry = true;
       
       try {
@@ -40,8 +45,8 @@ axios.interceptors.response.use(
         return axios(originalRequest);
       } catch (refreshError) {
         // Refresh failed - redirect to login
-        localStorage.clear();
-        window.location.href = '/admin-login';
+        clearAuthStorage();
+        window.location.href = '/login';
         return Promise.reject(refreshError);
       }
     }

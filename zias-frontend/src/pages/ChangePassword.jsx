@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import API from "../api/api";
+import { clearAuthStorage } from "../utils/authStorage";
 
 // Promise cache for user role fetch
 let userPromise = null;
@@ -36,6 +37,7 @@ function ChangePassword() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [toast, setToast] = useState(null);
   const [userRole, setUserRole] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
   const navigate = useNavigate();
   const mountedRef = useRef(true);
 
@@ -47,6 +49,7 @@ function ChangePassword() {
         try {
           const user = await userPromise;
           if (mountedRef.current) {
+            setCurrentUser(user);
             if (user.is_admin) setUserRole("admin");
             else if (user.is_mentor) setUserRole("mentor");
             else if (user.is_reviewer) setUserRole("reviewer");
@@ -73,6 +76,7 @@ function ChangePassword() {
       try {
         const user = await userPromise;
         if (mountedRef.current) {
+          setCurrentUser(user);
           if (user.is_admin) setUserRole("admin");
           else if (user.is_mentor) setUserRole("mentor");
           else if (user.is_reviewer) setUserRole("reviewer");
@@ -105,8 +109,8 @@ function ChangePassword() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!formData.old_password || !formData.new_password || !formData.confirm_password) {
-      showToast("Please fill in all fields.", "error");
+    if (!formData.new_password || !formData.confirm_password) {
+      showToast("Please enter and confirm your new password.", "error");
       return;
     }
     
@@ -125,14 +129,23 @@ function ChangePassword() {
     try {
       await API.post("change-password/", {
         old_password: formData.old_password,
+        current_password: formData.old_password,
         new_password: formData.new_password,
+        confirm_password: formData.confirm_password,
       });
       showToast("Password changed successfully!", "success");
       setTimeout(() => {
-        navigate(getProfilePath());
+        clearAuthStorage();
+        navigate("/login");
       }, 2000);
     } catch (err) {
-      const errorMsg = err.response?.data?.detail || "Failed to change password. Please try again.";
+      console.error("Change password response:", err.response?.data);
+      const data = err.response?.data;
+      const errorMsg =
+        data?.detail ||
+        data?.error ||
+        (data && typeof data === "object" ? Object.values(data).flat().join(" ") : "") ||
+        "Failed to change password. Please try again.";
       showToast(errorMsg, "error");
     } finally {
       setLoading(false);
@@ -164,6 +177,11 @@ function ChangePassword() {
             </div>
             <h1 className="text-xl font-semibold text-gray-800 tracking-tight">Change Password</h1>
             <p className="text-gray-500 text-sm mt-1">Update your account password</p>
+            {currentUser && (
+              <p className="text-gray-600 text-xs mt-2">
+                Account: <span className="font-semibold">{currentUser.username}</span>
+              </p>
+            )}
           </div>
 
           <form onSubmit={handleSubmit} className="px-8 py-6 space-y-5">
@@ -176,7 +194,7 @@ function ChangePassword() {
                   name="old_password"
                   value={formData.old_password}
                   onChange={handleChange}
-                  placeholder="Enter your current password"
+                  placeholder="Optional"
                   className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/30 transition-all duration-200 text-sm pr-10"
                 />
                 <button

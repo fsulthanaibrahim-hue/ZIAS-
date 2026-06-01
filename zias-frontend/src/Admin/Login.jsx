@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
+import { clearAuthStorage, saveAuthSession } from "../utils/authStorage";
 
 // Helper to turn any API error into a user‑friendly message
 const getFriendlyErrorMessage = (err) => {
@@ -41,10 +42,10 @@ function AdminLogin() {
           navigate("/admin/dashboard");
         } else {
           // Clear non‑admin user data
-          localStorage.clear();
+          clearAuthStorage();
         }
       } catch (e) {
-        localStorage.clear();
+        clearAuthStorage();
       }
     }
   }, [navigate]);
@@ -65,6 +66,7 @@ function AdminLogin() {
 
     try {
       // ✅ Use your custom login endpoint (which returns user data)
+      clearAuthStorage();
       const response = await axios.post("http://127.0.0.1:8000/api/login/", {
         username: trimmedUsername,
         password: trimmedPassword
@@ -81,9 +83,7 @@ function AdminLogin() {
 
       console.log("User role - is_admin:", user.is_admin); 
       
-      localStorage.setItem("access_token", access);
-      localStorage.setItem("refresh_token", refresh);
-      localStorage.setItem("user", JSON.stringify(user));
+      saveAuthSession({ access, refresh, user });
       
       axios.defaults.headers.common['Authorization'] = `Bearer ${access}`;
       
@@ -94,7 +94,7 @@ function AdminLogin() {
       } else {
         console.log("User is not admin. User data:", user);
         setError("You are not authorized as admin. Please contact system administrator.");
-        localStorage.clear();
+        clearAuthStorage();
         // localStorage.removeItem("access_token");
         // localStorage.removeItem("refresh_token");
         // localStorage.removeItem("user");

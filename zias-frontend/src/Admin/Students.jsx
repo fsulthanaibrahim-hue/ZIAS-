@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import API from "../api/api";
 import ProgressModal from "../components/ProgressModal";
+import { clearAuthStorage } from "../utils/authStorage";
 
 /* Add to index.html:
    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
@@ -130,7 +131,7 @@ function Students() {
     } catch (err) {
       if (err.response?.status === 401) {
         showToast("Session expired. Please log in again.", "error");
-        setTimeout(() => { localStorage.clear(); window.location.href = "/login"; }, 1500);
+        setTimeout(() => { clearAuthStorage(); window.location.href = "/login"; }, 1500);
       } else showToast("Failed to load data", "error");
     } finally {
       setLoading(false);
@@ -146,7 +147,7 @@ function Students() {
     } catch (err) {
       if (err.response?.status === 401) {
         showToast("Session expired.", "error");
-        setTimeout(() => { localStorage.clear(); window.location.href = "/login"; }, 1500);
+        setTimeout(() => { clearAuthStorage(); window.location.href = "/login"; }, 1500);
       } else showToast("Failed to refresh", "error");
     }
   }, [showToast]);

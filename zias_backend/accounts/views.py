@@ -134,6 +134,17 @@ class StudentViewSet(viewsets.ModelViewSet):
         if user.role == 'student':
             return Student.objects.filter(user=user)
         return Student.objects.none()
+
+    @action(detail=False, methods=['get'], url_path='me')
+    def me(self, request):
+        student = Student.objects.filter(user=request.user).first()
+        if not student:
+            return Response(
+                {'detail': 'Student profile not found for this user.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        serializer = self.get_serializer(student)
+        return Response(serializer.data)
     
     def create(self, request, *args, **kwargs):
         try:
@@ -170,6 +181,17 @@ class MentorViewSet(viewsets.ModelViewSet):
             return Mentor.objects.filter(user=user)
         return Mentor.objects.none()
 
+    @action(detail=False, methods=['get'], url_path='me')
+    def me(self, request):
+        mentor = Mentor.objects.filter(user=request.user).first()
+        if not mentor:
+            return Response(
+                {'detail': 'Mentor profile not found for this user.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        serializer = self.get_serializer(mentor)
+        return Response(serializer.data)
+
     def create(self, request, *args, **kwargs):
         print("=" * 50)
         print("Received data:", request.data)
@@ -191,6 +213,17 @@ class ReviewerViewSet(viewsets.ModelViewSet):
     queryset = Reviewer.objects.all()
     serializer_class = ReviewerSerializer
     permission_classes = [IsAuthenticated]
+
+    @action(detail=False, methods=['get'], url_path='me')
+    def me(self, request):
+        reviewer = Reviewer.objects.filter(user=request.user).first()
+        if not reviewer:
+            return Response(
+                {'detail': 'Reviewer profile not found for this user.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        serializer = self.get_serializer(reviewer)
+        return Response(serializer.data)
 
     def create(self, request, *args, **kwargs):
         try:
@@ -423,18 +456,22 @@ class ChangePasswordView(SafeAPIView):
 
     def post(self, request):
         user = request.user
-        old_password = request.data.get('old_password')
+        old_password = request.data.get('old_password') or request.data.get('current_password')
         new_password = request.data.get('new_password')
-        if not old_password or not new_password:
-            return Response({"detail": "Both old and new passwords are required."}, status=status.HTTP_400_BAD_REQUEST)
-        if not user.check_password(old_password):
-            return Response({"detail": "Current password is incorrect."}, status=status.HTTP_400_BAD_REQUEST)
+        confirm_password = request.data.get('confirm_password')
+        if not new_password:
+            return Response({"detail": "New password is required."}, status=status.HTTP_400_BAD_REQUEST)
         if len(new_password) < 6:
             return Response({"detail": "New password must be at least 6 characters."}, status=status.HTTP_400_BAD_REQUEST)
+        if confirm_password and new_password != confirm_password:
+            return Response({"detail": "New passwords do not match."}, status=status.HTTP_400_BAD_REQUEST)
         user.set_password(new_password)
         user.password_changed_at = timezone.now()
         user.save()
-        OutstandingToken.objects.filter(user=user).delete()
+        try:
+            OutstandingToken.objects.filter(user=user).delete()
+        except Exception:
+            pass
         return Response({"detail": "Password changed successfully."}, status=status.HTTP_200_OK)
 
 
@@ -576,24 +613,34 @@ class CustomLoginView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        username = request.data.get('username')
+        login_id = request.data.get('email') or request.data.get('username') or request.data.get('login')
         password = request.data.get('password')
         
         print("=" * 50)
-        print(f"Login attempt: {username}")
+        print(f"Login attempt: {login_id}")
         print("=" * 50)
+
+        if not login_id or not password:
+            return Response({'error': 'Username/email and password are required'}, status=400)
+
+        login_id = login_id.strip()
+        user_query = Q(email__iexact=login_id) | Q(username__iexact=login_id)
+        users = User.objects.filter(user_query).order_by('id')
         
-        # Authenticate
-        user = authenticate(username=username, password=password)
-        
+        if not users.exists():
+            print(f"Login failed. No account found for: {login_id}")
+            return Response({'error': 'No account found with this email or username'}, status=401)
+
+        user = next((candidate for candidate in users if candidate.check_password(password)), None)
+
         if not user:
-            print(f"Authentication failed for: {username}")
-            return Response({'error': 'Invalid username or password'}, status=401)
+            print(f"Login failed. Wrong password for: {login_id}")
+            return Response({'error': 'Password is incorrect'}, status=401)
         
         # Check if user is active
         if not user.is_active:
             return Response({'error': 'Account is disabled'}, status=401)
-        
+
         # Generate token
         refresh = RefreshToken.for_user(user)
         
@@ -602,11 +649,11 @@ class CustomLoginView(APIView):
             'id': user.id,
             'username': user.username,
             'email': user.email,
-            'is_admin': user.role == 'admin',
-            'is_mentor': user.role == 'mentor',
-            'is_reviewer': user.role == 'reviewer',
-            'is_student': user.role == 'student',
-            'is_accounts': user.role == 'accounts',
+            'is_admin': user.is_admin,
+            'is_mentor': user.is_mentor,
+            'is_reviewer': user.is_reviewer,
+            'is_student': user.is_student,
+            'is_accounts': user.is_accounts,
             'full_name': user.get_full_name() or user.username,
         }
         
@@ -618,7 +665,7 @@ class CustomLoginView(APIView):
         elif user.role == 'reviewer' and hasattr(user, 'reviewer_profile'):
             user_data['reviewer_id'] = user.reviewer_profile.id
         
-        print(f"Login successful: {username} (Role: {user.role})")
+        print(f"Login successful: {login_id} (Role: {user.role})")
         
         return Response({
             'refresh': str(refresh),

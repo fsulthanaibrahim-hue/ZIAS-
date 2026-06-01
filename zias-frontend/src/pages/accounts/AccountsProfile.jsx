@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import API from "../../api/api";
+import { clearAuthStorage } from "../../utils/authStorage";
 
 const avatarColors = [
   ["#e6f4ea", "#2e7d32"],
@@ -61,7 +62,7 @@ function AccountsProfile() {
   }, []);
 
   const handleLogout = () => {
-    localStorage.clear();
+    clearAuthStorage();
     navigate("/login");
   };
 

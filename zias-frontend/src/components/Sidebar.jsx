@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import NotificationBell from "./NotificationBell";
+import { clearAuthStorage } from "../utils/authStorage";
 
 function NavLink({ to, label, active, badge, collapsed }) {
   return (
@@ -198,7 +199,7 @@ function Sidebar() {
         </div>
         <button
           onClick={() => {
-            localStorage.clear();
+            clearAuthStorage();
             navigate("/login");
           }}
           className={`flex items-center gap-2 w-full px-3 py-2 rounded-lg text-red-600 hover:bg-red-50 transition text-sm font-medium ${

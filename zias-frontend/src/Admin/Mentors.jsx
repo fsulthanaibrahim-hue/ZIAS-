@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import API from "../api/api";
 import { toast } from "react-hot-toast";
+import { clearAuthStorage } from "../utils/authStorage";
 
 // Helper to turn any API error into a user‑friendly message
 const getFriendlyErrorMessage = (err, defaultMsg = "Request failed") => {
@@ -147,7 +148,7 @@ function Mentors() {
       showToast(msg, "error");
       if (err.response?.status === 401) {
         setTimeout(() => {
-          localStorage.clear();
+          clearAuthStorage();
           window.location.href = "/login";
         }, 1500);
       }

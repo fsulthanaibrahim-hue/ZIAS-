@@ -25,27 +25,17 @@ function AdminFeeStructure() {
     return Array.isArray(data) ? data : [];
   };
 
-  // Calculate pending amount based on payments (if payments data is included in fee structure response)
-  const calculatePendingAmount = (feeStructure) => {
-    if (!feeStructure.total_amount) return 0;
-    const totalPaid = feeStructure.payments?.reduce((sum, payment) => sum + (payment.amount || 0), 0) || 0;
-    return feeStructure.total_amount - totalPaid;
-  };
-
-  // Generate week status based on number of installments
   const generateWeekStatus = (feeStructure) => {
     const numberOfInstallments = feeStructure.number_of_installments || 1;
-    const payments = feeStructure.payments || [];
+    const totalAmount = parseFloat(feeStructure.total_amount) || 0;
+    const perInstallmentAmount = totalAmount / numberOfInstallments;
     
     const weekStatuses = [];
     for (let week = 1; week <= numberOfInstallments; week++) {
-      const paymentForWeek = payments.find(p => p.week_number === week);
       weekStatuses.push({
         week: week,
-        status: paymentForWeek?.paid_date ? "Paid" : "Pending",
-        amount: paymentForWeek?.amount || 0,
-        due_date: paymentForWeek?.due_date || null,
-        paid_date: paymentForWeek?.paid_date || null,
+        status: "Pending",
+        amount: perInstallmentAmount,
       });
     }
     return weekStatuses;
@@ -71,11 +61,10 @@ function AdminFeeStructure() {
       const structuresRes = await API.get("fee-structures/");
       const structures = extractArray(structuresRes);
       
-      // Process fee structures with calculated data
       const processedStructures = structures.map(fs => ({
         ...fs,
-        pending_amount: calculatePendingAmount(fs),
         week_status: generateWeekStatus(fs),
+        per_installment: (parseFloat(fs.total_amount) || 0) / (fs.number_of_installments || 1),
       }));
       
       setFeeStructures(processedStructures);
@@ -104,6 +93,20 @@ function AdminFeeStructure() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    if (!formData.name.trim()) {
+      toast.error("Fee structure name is required");
+      return;
+    }
+    if (!formData.total_amount || parseFloat(formData.total_amount) <= 0) {
+      toast.error("Total amount must be greater than 0");
+      return;
+    }
+    if (!formData.number_of_installments || parseInt(formData.number_of_installments) < 1) {
+      toast.error("Number of installments must be at least 1");
+      return;
+    }
+    
     try {
       const payload = {
         name: formData.name,
@@ -112,6 +115,7 @@ function AdminFeeStructure() {
         number_of_installments: parseInt(formData.number_of_installments),
         is_active: formData.is_active,
       };
+      
       if (editingId) {
         await API.patch(`fee-structures/${editingId}/`, payload);
         toast.success("Updated successfully");
@@ -139,6 +143,19 @@ function AdminFeeStructure() {
     }
   };
 
+  const toggleActiveStatus = async (fs) => {
+    try {
+      const newStatus = !fs.is_active;
+      await API.patch(`fee-structures/${fs.id}/`, { is_active: newStatus });
+      toast.success(`Fee structure ${newStatus ? "activated" : "deactivated"} successfully`);
+      // Refresh the data to show updated status
+      await fetchData();
+    } catch (err) {
+      toast.error("Failed to update status");
+      console.error(err);
+    }
+  };
+
   const getBatchName = (fs) => {
     if (fs.batch && typeof fs.batch === 'object' && fs.batch.name) return fs.batch.name;
     if (fs.batch_id && batchMap[fs.batch_id]) return batchMap[fs.batch_id];
@@ -153,35 +170,56 @@ function AdminFeeStructure() {
         {statuses.map((item, idx) => (
           <span
             key={idx}
-            className={`inline-block text-xs px-2 py-0.5 rounded-full ${
-              item.status === "Paid"
-                ? "bg-green-100 text-green-800"
-                : "bg-red-100 text-red-800"
-            }`}
+            className="inline-block text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-800"
           >
-            Week {item.week}: {item.status}
+            Week {item.week}: Pending (₹{item.amount.toLocaleString()})
           </span>
         ))}
       </div>
     );
   };
 
+  const totalFees = feeStructures.reduce((sum, fs) => {
+    const amount = parseFloat(fs.total_amount) || 0;
+    return sum + amount;
+  }, 0);
+
   if (loading) return <div className="p-8 text-center">Loading...</div>;
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Fee Structure</h1>
+        <div>
+          <h1 className="text-2xl font-bold">Fee Structure</h1>
+          <p className="text-sm text-gray-500 mt-1">Manage course fees and installment schedules</p>
+        </div>
         <div className="flex gap-2">
           <button onClick={fetchData} className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition">
             ⟳ Refresh
           </button>
           <button 
-            onClick={() => setShowForm(true)} 
+            onClick={() => {
+              setEditingId(null);
+              setFormData({ name: "", batch: "", total_amount: "", number_of_installments: 1, is_active: true });
+              setShowForm(true);
+            }} 
             className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition"
           >
             + Add Fee Structure
           </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
+          <p className="text-gray-500 text-sm">Total Fee Structures</p>
+          <p className="text-2xl font-bold text-gray-800">{feeStructures.length}</p>
+        </div>
+        <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
+          <p className="text-gray-500 text-sm">Total Course Fees</p>
+          <p className="text-2xl font-bold text-green-600">
+            ₹{totalFees.toLocaleString()}
+          </p>
         </div>
       </div>
 
@@ -190,53 +228,76 @@ function AdminFeeStructure() {
           <form onSubmit={handleSubmit} className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl" onClick={e => e.stopPropagation()}>
             <h2 className="text-lg font-bold mb-4">{editingId ? "Edit" : "New"} Fee Structure</h2>
             <div className="space-y-3">
-              <input
-                type="text"
-                placeholder="Fee structure name *"
-                value={formData.name}
-                onChange={e => setFormData({ ...formData, name: e.target.value })}
-                className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:border-green-500"
-                required
-              />
-              <select
-                value={formData.batch}
-                onChange={e => setFormData({ ...formData, batch: e.target.value })}
-                className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:border-green-500"
-              >
-                <option value="">Select Batch (optional)</option>
-                {batches.map(b => (
-                  <option key={b.id} value={b.id}>{b.name}</option>
-                ))}
-              </select>
-              <input
-                type="number"
-                step="0.01"
-                placeholder="Total Amount *"
-                value={formData.total_amount}
-                onChange={e => setFormData({ ...formData, total_amount: e.target.value })}
-                className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:border-green-500"
-                required
-              />
-              <input
-                type="number"
-                placeholder="Number of Installments"
-                value={formData.number_of_installments}
-                onChange={e => setFormData({ ...formData, number_of_installments: e.target.value })}
-                className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:border-green-500"
-                min="1"
-              />
-              <label className="flex items-center gap-2">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Fee Structure Name *</label>
+                <input
+                  type="text"
+                  placeholder="e.g., B.Tech 2024 - Semester 1"
+                  value={formData.name}
+                  onChange={e => setFormData({ ...formData, name: e.target.value })}
+                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:border-green-500"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Batch</label>
+                <select
+                  value={formData.batch}
+                  onChange={e => setFormData({ ...formData, batch: e.target.value })}
+                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:border-green-500"
+                >
+                  <option value="">Select Batch (optional)</option>
+                  {batches.map(b => (
+                    <option key={b.id} value={b.id}>{b.name}</option>
+                  ))}
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Total Amount *</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder="e.g., 50000"
+                  value={formData.total_amount}
+                  onChange={e => setFormData({ ...formData, total_amount: e.target.value })}
+                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:border-green-500"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Number of Installments (Weeks) *</label>
+                <input
+                  type="number"
+                  placeholder="e.g., 12"
+                  value={formData.number_of_installments}
+                  onChange={e => setFormData({ ...formData, number_of_installments: e.target.value })}
+                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:border-green-500"
+                  min="1"
+                  required
+                />
+                {formData.total_amount && formData.number_of_installments && (
+                  <p className="text-xs text-green-600 mt-1">
+                    💡 Each installment = ₹{(parseFloat(formData.total_amount) / parseInt(formData.number_of_installments)).toFixed(2)} per week
+                  </p>
+                )}
+              </div>
+              
+              <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={formData.is_active}
                   onChange={e => setFormData({ ...formData, is_active: e.target.checked })}
+                  className="w-4 h-4"
                 />
-                <span>Active</span>
+                <span>Active (visible to students)</span>
               </label>
             </div>
             <div className="flex gap-2 mt-6">
               <button type="submit" className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg transition">
-                Save
+                {editingId ? "Update" : "Create"}
               </button>
               <button type="button" onClick={() => setShowForm(false)} className="flex-1 bg-gray-200 hover:bg-gray-300 py-2 rounded-lg transition">
                 Cancel
@@ -250,82 +311,107 @@ function AdminFeeStructure() {
         <table className="min-w-full">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Name</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Batch</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Total Amount</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Pending Amount</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Installments</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Week-fee Status</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-              <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Name</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Batch</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Total Amount</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Installments</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Week-fee Status</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Status</th>
+              <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {feeStructures.map(fs => (
-              <tr key={fs.id} className="border-t hover:bg-gray-50 transition">
-                <td className="px-4 py-3 text-gray-800">{fs.name || "—"}</td>
-                <td className="px-4 py-3 text-gray-600">{getBatchName(fs)}</td>
-                <td className="px-4 py-3 font-medium text-gray-800">₹{fs.total_amount}</td>
-                <td className="px-4 py-3">
-                  <span className="font-medium text-red-600">
-                    ₹{fs.pending_amount?.toFixed(2) || "0.00"}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-gray-600">{fs.number_of_installments}</td>
-                <td className="px-4 py-3">
-                  {renderWeekStatus(fs.week_status)}
-                </td>
-                <td className="px-4 py-3">
-                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                    fs.is_active 
-                      ? "bg-green-100 text-green-800" 
-                      : "bg-gray-100 text-gray-800"
-                  }`}>
-                    {fs.is_active ? "Active" : "Inactive"}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-center whitespace-nowrap">
-                  <button
-                    onClick={() => {
-                      setEditingId(fs.id);
-                      const batchId = fs.batch?.id || fs.batch_id || fs.batch;
-                      setFormData({
-                        name: fs.name || "",
-                        batch: batchId?.toString() || "",
-                        total_amount: fs.total_amount,
-                        number_of_installments: fs.number_of_installments,
-                        is_active: fs.is_active,
-                      });
-                      setShowForm(true);
-                    }}
-                    className="text-blue-600 hover:text-blue-800 mx-1 transition"
-                    title="Edit"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                    </svg>
-                  </button>
-                  <button
-                    onClick={() => handleDelete(fs.id)}
-                    className="text-red-600 hover:text-red-800 mx-1 transition"
-                    title="Delete"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {feeStructures.map(fs => {
+              const totalAmount = parseFloat(fs.total_amount) || 0;
+              const numInstallments = fs.number_of_installments || 1;
+              const perWeek = totalAmount / numInstallments;
+              
+              return (
+                <tr key={fs.id} className="border-t hover:bg-gray-50 transition">
+                  <td className="px-4 py-3">
+                    <div>
+                      <p className="font-medium text-gray-800">{fs.name || "—"}</p>
+                      <p className="text-xs text-gray-400">ID: {fs.id}</p>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-gray-600">{getBatchName(fs)}</td>
+                  <td className="px-4 py-3 font-medium text-gray-800">₹{totalAmount.toLocaleString()}</td>
+                  <td className="px-4 py-3">
+                    <div>
+                      <span className="font-medium text-gray-800">{numInstallments} weeks</span>
+                      <span className="block text-xs text-gray-400">
+                        ₹{perWeek.toLocaleString()}/week
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    {renderWeekStatus(fs.week_status)}
+                  </td>
+                  <td className="px-4 py-3">
+                    <button
+                      onClick={() => toggleActiveStatus(fs)}
+                      className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium transition cursor-pointer ${
+                        fs.is_active 
+                          ? "bg-green-100 text-green-800 hover:bg-green-200" 
+                          : "bg-gray-100 text-gray-800 hover:bg-gray-200"
+                      }`}
+                    >
+                      {fs.is_active ? "Active ✓" : "Inactive"}
+                    </button>
+                  </td>
+                  <td className="px-4 py-3 text-center whitespace-nowrap">
+                    <button
+                      onClick={() => {
+                        setEditingId(fs.id);
+                        const batchId = fs.batch?.id || fs.batch_id || fs.batch;
+                        setFormData({
+                          name: fs.name || "",
+                          batch: batchId?.toString() || "",
+                          total_amount: fs.total_amount,
+                          number_of_installments: fs.number_of_installments || 1,
+                          is_active: fs.is_active,
+                        });
+                        setShowForm(true);
+                      }}
+                      className="text-blue-600 hover:text-blue-800 mx-1 transition"
+                      title="Edit"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => handleDelete(fs.id)}
+                      className="text-red-600 hover:text-red-800 mx-1 transition"
+                      title="Delete"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
             {feeStructures.length === 0 && (
               <tr>
-                <td colSpan="8" className="text-center py-12 text-gray-500">
-                  No fee structures found
+                <td colSpan="7" className="text-center py-12 text-gray-500">
+                  No fee structures found. Click "Add Fee Structure" to create one.
                 </td>
               </tr>
             )}
           </tbody>
         </table>
+      </div>
+
+      <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <h3 className="text-sm font-semibold text-blue-800 mb-2">📚 Understanding Fee Structure</h3>
+        <div className="text-xs text-blue-700 space-y-1">
+          <p><strong>Installments:</strong> Number of weeks the total fee is divided into. Example: ₹10,000 total with 4 installments = ₹2,500 per week.</p>
+          <p><strong>Week-fee Status:</strong> Shows payment status for each week/installment. All weeks start as "Pending" until payments are recorded.</p>
+          <p><strong>Total Amount:</strong> The complete course fee.</p>
+          <p><strong>Status:</strong> Click on the status badge to toggle between Active/Inactive.</p>
+        </div>
       </div>
     </div>
   );

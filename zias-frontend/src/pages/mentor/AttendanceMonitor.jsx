@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import API from '../../api/api';
+import { clearAuthStorage } from '../../utils/authStorage';
 
 // ---------- Helper: get today's local date in YYYY-MM-DD ----------
 const getLocalDateYYYYMMDD = () => {
@@ -82,7 +83,7 @@ const AttendanceMonitor = () => {
       } catch (err) {
         if (err.response?.status === 401) {
           toast.error('Session expired. Please login again.');
-          localStorage.clear();
+          clearAuthStorage();
           navigate('/login');
         } else {
           toast.error('Failed to load students');

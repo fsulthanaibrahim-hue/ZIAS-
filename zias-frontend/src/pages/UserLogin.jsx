@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import API from "../api/api";
+import { clearAuthStorage, saveAuthSession } from "../utils/authStorage";
 
 function UserLogin() {
-  const [email, setEmail] = useState("");
+  const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -15,16 +16,18 @@ function UserLogin() {
     setError("");
     setLoading(true);
 
+    const trimmedLoginId = loginId.trim();
     try {
+      clearAuthStorage();
       const response = await API.post("/login/", {
-        email: email,
+        email: trimmedLoginId,
+        username: trimmedLoginId,
+        login: trimmedLoginId,
         password: password,
       });
       const { access, refresh, user } = response.data;
 
-      localStorage.setItem("access_token", access);
-      localStorage.setItem("refresh_token", refresh);
-      localStorage.setItem("user", JSON.stringify(user));
+      saveAuthSession({ access, refresh, user });
 
       if (user.is_admin) {
         navigate("/admin/dashboard");
@@ -41,10 +44,11 @@ function UserLogin() {
       }
     } catch (err) {
       console.error("Login error:", err);
+      console.error("Login response:", err.response?.data);
       let errorMsg = "Unable to connect to the server. Please try again later.";
       if (err.response) {
         const { status, data } = err.response;
-        if (status === 401) errorMsg = "Invalid email or password";
+        if (status === 401) errorMsg = data?.error || "Invalid email or password";
         else if (status === 400) errorMsg = data?.error || data?.message || "Missing email or password";
         else if (status === 500) {
           const serverMsg = data?.error || data?.message || data?.detail || JSON.stringify(data);
@@ -82,7 +86,7 @@ function UserLogin() {
             </svg>
           </div>
           <h1 className="text-xl font-semibold text-gray-800">Welcome back</h1>
-          <p className="text-gray-500 text-sm mt-1">Sign in with your email</p>
+          <p className="text-gray-500 text-sm mt-1">Sign in with your email or username</p>
         </div>
         <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
           {error && (
@@ -92,13 +96,13 @@ function UserLogin() {
           )}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-gray-600 text-sm mb-1.5">Email address</label>
+              <label className="block text-gray-600 text-sm mb-1.5">Email or username</label>
               <input
-                type="email"
-                placeholder="you@example.com"
+                type="text"
+                placeholder="you@example.com or username"
                 className="w-full bg-white border border-gray-300 hover:border-gray-400 focus:border-green-500 focus:ring-1 focus:ring-green-500/30 focus:outline-none rounded-lg px-4 py-2.5 text-gray-800 placeholder-gray-400 text-sm transition-colors"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                value={loginId}
+                onChange={(e) => setLoginId(e.target.value)}
                 required
               />
             </div>
