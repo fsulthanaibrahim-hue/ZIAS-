@@ -1,4 +1,3 @@
-// src/Admin/ContactMessages.jsx – fetches all messages (up to 1000) using LimitOffsetPagination
 import { useEffect, useState, useRef } from "react";
 import API from "../api/api";
 import { toast } from "react-hot-toast";

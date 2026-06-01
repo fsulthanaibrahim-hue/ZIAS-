@@ -1,4 +1,3 @@
-// src/pages/student/StudentAttendance.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import API from '../../api/api';
 import { toast } from 'react-hot-toast';

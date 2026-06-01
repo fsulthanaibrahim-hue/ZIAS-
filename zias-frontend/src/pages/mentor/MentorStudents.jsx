@@ -1,4 +1,3 @@
-// src/pages/mentor/MentorStudents.jsx – Elegant Light Green Theme
 import { useEffect, useState, useRef } from "react";
 import { Link } from "react-router-dom";
 import API from "../../api/api";

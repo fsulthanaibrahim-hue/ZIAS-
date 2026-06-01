@@ -1,4 +1,3 @@
-// src/pages/reviewer/ReviewerDashboard.jsx
 import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import API from "../../api/api";

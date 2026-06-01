@@ -1,6 +1,3 @@
-// src/pages/reviewer/ReviewerReviewSheet.jsx
-// ✅ Only weeks up to and including the student's current week are editable.
-//    Future weeks are read‑only (plain text).
 import { useEffect, useState, useRef, useMemo } from "react";
 import { useSearchParams, Link, useNavigate, useLocation } from "react-router-dom";
 import toast from "react-hot-toast";

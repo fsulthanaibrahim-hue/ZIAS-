@@ -1,4 +1,3 @@
-// src/pages/reviewer/ReviewerProfile.jsx – displays full name, hides username
 import { useEffect, useState, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import API from "../../api/api";

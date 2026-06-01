@@ -1,4 +1,3 @@
-// src/pages/student/StudentReviewSheet.jsx – only current week (based on progress) is editable
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import API from "../../api/api";

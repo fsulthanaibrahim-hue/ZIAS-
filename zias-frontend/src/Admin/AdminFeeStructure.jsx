@@ -1,4 +1,3 @@
-// src/Admin/AdminFeeStructure.jsx – with Pending fee details & Week-fee status (Single API call each)
 import { useEffect, useState, useRef } from "react";
 import API from "../api/api";
 import toast from "react-hot-toast";

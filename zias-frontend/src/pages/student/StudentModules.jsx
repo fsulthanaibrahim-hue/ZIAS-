@@ -1,4 +1,3 @@
-// src/pages/student/StudentModules.jsx – optimized (no duplicate API calls)
 import React, { useState, useEffect, useRef } from "react";
 import StudentSidebar from "../../components/StudentSidebar";
 import API from "../../api/api";

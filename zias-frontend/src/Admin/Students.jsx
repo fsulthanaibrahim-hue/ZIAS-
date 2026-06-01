@@ -1,4 +1,3 @@
-// src/Admin/Students.jsx – first letter only in profile circles
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import API from "../api/api";

@@ -1,4 +1,3 @@
-// src/pages/student/StudentReviewSheetRange.jsx – with student‑editable progress video link
 import React, { useEffect, useState, useCallback } from "react";
 import { useParams, useSearchParams, Link } from "react-router-dom";
 import API from "../../api/api";

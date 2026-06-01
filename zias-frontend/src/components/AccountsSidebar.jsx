@@ -1,4 +1,3 @@
-// src/components/AccountsSidebar.jsx
 import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { FaTachometerAlt, FaMoneyBillWave, FaFileInvoice, FaUsers, FaUserCircle, FaSignOutAlt } from "react-icons/fa";
@@ -16,6 +15,7 @@ function NavLink({ to, label, active, collapsed }) {
     >
       <span className="w-4 h-4 flex-shrink-0">{getIcon(label)}</span>
       {!collapsed && <span>{label}</span>}
+
     </Link>
   );
 }

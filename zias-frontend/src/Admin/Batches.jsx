@@ -1,4 +1,3 @@
-// src/Admin/Batches.jsx – WITH DATE VALIDATION
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../api/api";

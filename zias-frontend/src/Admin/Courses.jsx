@@ -1,4 +1,3 @@
-// src/Admin/Courses.jsx – with modal as separate component (no focus loss)
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../api/api";

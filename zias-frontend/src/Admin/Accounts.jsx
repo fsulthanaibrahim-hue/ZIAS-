@@ -1,4 +1,3 @@
-// src/Admin/Accounts.jsx
 import { useEffect, useState, useRef, useCallback } from "react";
 import API from "../api/api";
 import { toast } from "react-hot-toast";

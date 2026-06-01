@@ -1,4 +1,3 @@
-// src/components/NotificationPage.jsx – final (no changes required)
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import API from '../api/api';

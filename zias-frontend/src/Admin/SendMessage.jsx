@@ -1,4 +1,3 @@
-// src/Admin/SendMessage.jsx
 import { useState } from 'react';
 import API from '../api/api';
 

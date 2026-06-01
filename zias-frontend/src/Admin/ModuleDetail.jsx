@@ -1,4 +1,3 @@
-// src/Admin/ModuleDetail.jsx – with icon buttons for edit/delete
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import API from "../api/api";

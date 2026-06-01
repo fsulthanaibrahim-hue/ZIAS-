@@ -1,4 +1,3 @@
-// src/components/ReviewerSidebar.jsx – removed Chat option, with error handling
 import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import NotificationBell from "./NotificationBell";

@@ -1,4 +1,3 @@
-// src/pages/student/CourseDetail.jsx
 import { useEffect, useState } from "react";
 import { useParams, useSearchParams, Link } from "react-router-dom";
 import API from "../../api/api";

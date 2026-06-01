@@ -1,4 +1,3 @@
-// src/pages/Admin/AdminAttendance.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import API from '../api/api';

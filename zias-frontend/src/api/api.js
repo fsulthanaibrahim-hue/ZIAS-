@@ -1,4 +1,3 @@
-// src/api/api.js - Clean version (no console logs)
 import axios from "axios";
 
 const API = axios.create({

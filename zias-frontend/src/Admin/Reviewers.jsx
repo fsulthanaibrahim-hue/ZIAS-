@@ -1,4 +1,3 @@
-// src/Admin/Reviewers.jsx – Complete Working Version
 import { useEffect, useState, useRef } from "react";
 import API from "../api/api";
 

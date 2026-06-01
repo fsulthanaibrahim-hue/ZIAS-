@@ -1,4 +1,3 @@
-// src/Admin/StudentReviewEdit.jsx – total includes review_score (0-20) + three 0-5 marks
 import { useEffect, useState, useRef, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import API from "../api/api";

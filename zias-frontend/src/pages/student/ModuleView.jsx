@@ -1,4 +1,3 @@
-// src/pages/student/ModuleView.jsx
 import React, { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { toast } from "react-hot-toast";

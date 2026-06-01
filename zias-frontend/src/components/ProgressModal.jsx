@@ -1,4 +1,3 @@
-// src/components/ProgressModal.jsx – real progress from review sheet data
 import { useEffect, useState } from "react";
 import API from "../api/api";
 

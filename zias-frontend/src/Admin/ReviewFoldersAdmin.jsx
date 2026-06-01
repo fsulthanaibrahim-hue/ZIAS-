@@ -1,4 +1,3 @@
-// src/Admin/ReviewFoldersAdmin.jsx – uses batches API for correct labels
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../api/api";

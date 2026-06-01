@@ -1,4 +1,3 @@
-// src/pages/student/InOutRegister.jsx – fully optimized & error‑handled
 import React, { useState, useEffect, useRef } from 'react';
 import API from '../../api/api';
 import { toast } from 'react-hot-toast';

@@ -1,4 +1,3 @@
-// src/Admin/Modules.jsx – card grid, click card to go to detail page (with course filter dropdown)
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import API from "../api/api";

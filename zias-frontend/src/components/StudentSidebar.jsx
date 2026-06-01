@@ -1,4 +1,3 @@
-// src/components/StudentSidebar.jsx – optimized (no API call)
 import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import NotificationBell from "./NotificationBell";

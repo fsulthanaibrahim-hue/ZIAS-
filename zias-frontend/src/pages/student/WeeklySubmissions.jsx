@@ -1,4 +1,3 @@
-// src/pages/student/WeeklySubmissions.jsx
 import React, { useState, useEffect } from 'react';
 import API from '../../api/api';
 import { toast } from 'react-hot-toast';

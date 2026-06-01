@@ -1,4 +1,3 @@
-// src/components/CreateAssignmentModal.jsx
 import { useState, useEffect } from "react";
 import API from "../api/api";
 

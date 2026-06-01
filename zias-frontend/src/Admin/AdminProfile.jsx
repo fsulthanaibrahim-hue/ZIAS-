@@ -1,4 +1,3 @@
-// src/Admin/AdminProfile.jsx
 import { useEffect, useState, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import API from "../api/api";

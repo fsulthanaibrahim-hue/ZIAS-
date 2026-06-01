@@ -1,4 +1,3 @@
-// src/pages/mentor/MentorModuleDetail.jsx
 import { useEffect, useState } from "react";
 import { useParams, useSearchParams, Link } from "react-router-dom";
 import API from "../../api/api";

@@ -1,4 +1,3 @@
-// src/pages/student/StudentReviewFolders.jsx – clean version (no syntax errors)
 import React, { useEffect, useState, useRef } from "react";
 import API from "../../api/api";
 import StudentSidebar from "../../components/StudentSidebar";

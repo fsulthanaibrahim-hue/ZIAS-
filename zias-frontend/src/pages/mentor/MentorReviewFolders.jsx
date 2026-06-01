@@ -1,4 +1,3 @@
-// src/pages/mentor/MentorReviewFolders.jsx – optimized (reduces API calls)
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../../api/api";

@@ -1,4 +1,3 @@
-// src/Admin/Dashboard.jsx – Clean version without auto-refresh and status indicators
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../api/api";

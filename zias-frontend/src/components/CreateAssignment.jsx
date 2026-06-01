@@ -1,4 +1,3 @@
-// src/components/CreateAssignment.jsx – responsive
 import { useState, useEffect } from "react";
 import API from "../api/api";
 import toast from "react-hot-toast";

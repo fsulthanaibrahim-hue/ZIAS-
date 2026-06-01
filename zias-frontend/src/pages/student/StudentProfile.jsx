@@ -1,4 +1,3 @@
-// src/pages/student/StudentProfile.jsx – safe (uses localStorage, one API call)
 import { useEffect, useState, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import API from "../../api/api";

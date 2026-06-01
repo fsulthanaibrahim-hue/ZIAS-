@@ -1,4 +1,3 @@
-// src/pages/mentor/MentorReviewSheetRange.jsx – full admin-style range view (mentor editable)
 import { useEffect, useState, useRef } from "react";
 import { useParams, useSearchParams, Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
