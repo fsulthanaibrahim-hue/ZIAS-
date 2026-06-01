@@ -190,7 +190,7 @@ function ReviewFoldersAdmin() {
   const [studentMap, setStudentMap] = useState(new Map());
   const [studentCourseMap, setStudentCourseMap] = useState(new Map());
   const [mentorsList, setMentorsList] = useState([]);
-  const [batchesList, setBatchesList] = useState([]);    // <-- new
+  const [batchesList, setBatchesList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorLogs, setErrorLogs] = useState([]);
   const errorLogsRef = useRef([]);
@@ -250,29 +250,50 @@ function ReviewFoldersAdmin() {
       const modulesRes = await API.get(`/modules/student-modules/?student_id=${studentId}`);
       const modules = modulesRes.data.results || modulesRes.data;
       const theModule = modules.find(m => m.order === weekNumber);
-      return theModule?.review_sheet_template || "";
-    } catch {
+      
+      if (theModule?.review_sheet_template) {
+        return theModule.review_sheet_template;
+      }
+      
+      if (theModule?.content) {
+        const urlMatch = theModule.content.match(/https?:\/\/[^\s]+(?:\.xlsx|\.xls|\.pdf|\.docx?)/i);
+        if (urlMatch) return urlMatch[0];
+      }
+      
+      return "";
+    } catch (err) {
+      console.error("Error getting default review sheet:", err);
       return "";
     }
   };
 
-  const ensureWeekReviewExists = async (studentId, weekNumber) => {
+  const ensureWeekReviewExists = async (studentId, weekNumber, reviewSheetUrl = "") => {
     try {
       const modulesRes = await API.get(`/modules/student-modules/?student_id=${studentId}`);
       const modules = modulesRes.data.results || modulesRes.data;
       const moduleObj = modules.find(m => m.order === weekNumber);
+      
       if (!moduleObj) {
         console.error(`❌ No module found for student ${studentId}, week ${weekNumber}`);
-        showToast(`⚠️ Review sheet not created: no module for week ${weekNumber}`, "error");
         return false;
       }
+      
       const moduleId = moduleObj.id;
+      
       try {
         const checkRes = await API.get(`week-review/${moduleId}/?student_id=${studentId}`);
-        if (checkRes.data && checkRes.data.id) return true;
+        if (checkRes.data && checkRes.data.id) {
+          if (reviewSheetUrl) {
+            await API.patch(`week-review/${checkRes.data.id}/`, {
+              review_sheet: reviewSheetUrl
+            });
+          }
+          return true;
+        }
       } catch (err) {
         if (err.response?.status !== 404) return false;
       }
+      
       const defaultReview = {
         student: studentId,
         module: moduleId,
@@ -288,13 +309,15 @@ function ReviewFoldersAdmin() {
         progress_video_mark: 0,
         review_score: 0,
         english_review: "",
+        review_sheet: reviewSheetUrl,
       };
+      
       await API.post("/week-review/", defaultReview);
-      showToast(`Review sheet created for week ${weekNumber}`, "success");
+      console.log(`✅ Created new review sheet for student ${studentId}, week ${weekNumber}`);
       return true;
+      
     } catch (err) {
       addErrorLog(err, { action: "ensureWeekReviewExists", studentId, weekNumber });
-      showToast(`Failed to create review sheet: ${err.response?.data?.detail || err.message}`, "error");
       return false;
     }
   };
@@ -377,20 +400,17 @@ function ReviewFoldersAdmin() {
     }
   }, []);
 
-  // ----- Helper: get batch name from batch ID -----
   const getBatchName = (batchId) => {
     if (!batchId) return null;
     const batch = batchesList.find(b => b.id === batchId);
     return batch ? batch.name : null;
   };
 
-  // ----- Build batch cards using mentor.batch (ID) mapped to batch name -----
-  // We group by the actual batch name (e.g., "B1") – mentors with same batch name are merged.
   const batchGroups = React.useMemo(() => {
-    const groups = new Map(); // key: batch name, value: { batchName, mentorIds, mentorNames, totalStudents }
+    const groups = new Map();
     mentorsList.forEach(mentor => {
       const batchName = getBatchName(mentor.batch);
-      if (!batchName) return; // skip mentors without a batch
+      if (!batchName) return;
       if (!groups.has(batchName)) {
         groups.set(batchName, {
           batchName,
@@ -402,10 +422,7 @@ function ReviewFoldersAdmin() {
       const group = groups.get(batchName);
       group.mentorIds.push(mentor.id);
       group.mentorNames.push(mentor.full_name || mentor.username);
-      // Count students belonging to any of the mentors in this batch?
-      // Actually students are linked to a specific mentor. For display we show total students in the batch (sum over mentors).
     });
-    // Calculate student count per batch group
     for (const [batchName, group] of groups.entries()) {
       let count = 0;
       group.mentorIds.forEach(mentorId => {
@@ -416,21 +433,6 @@ function ReviewFoldersAdmin() {
     return Array.from(groups.values()).sort((a, b) => a.batchName.localeCompare(b.batchName));
   }, [mentorsList, students, batchesList]);
 
-  // For backward compatibility: also produce a flat list of batches per mentor (if you want to keep old logic)
-  // But we'll use batchGroups for the cards.
-  // We'll also need to map selectedBatchMentorId (which is currently a mentor ID) to a batch group.
-  // However the old code used selectedBatchMentorId to filter students by mentor. Now that we group by batch name,
-  // we need to change the selection to be batch name based. Simpler: keep mentor-based selection but adjust display.
-  // To avoid breaking existing code, we'll keep the selectedBatchMentorId as mentor ID, but the cards will show batch groups.
-  // When a user clicks on a batch card, we need to set selectedBatchMentorId to one of the mentor IDs in that group (the first one).
-  // Then the folder logic (which filters by mentor ID) will work as before. But this means multiple mentors under same batch name would each show their own folders – that might be fine.
-
-  // Alternatively, we can change the folder view to show all students from all mentors in the batch.
-  // But the original code uses selectedBatchMentorId to get studentsInBatch via getStudentsInBatch(mentorId).
-  // So we'll keep mentor-level selection, but the card will represent the batch name and total students.
-  // Clicking the card will select the first mentor of that batch.
-  // This ensures that all existing folder logic (which refers to mentor ID) continues to work.
-
   const filteredBatchGroups = batchGroups.filter(group =>
     group.batchName.toLowerCase().includes(batchSearchTerm.toLowerCase()) ||
     group.mentorNames.some(name => name.toLowerCase().includes(batchSearchTerm.toLowerCase()))
@@ -440,7 +442,6 @@ function ReviewFoldersAdmin() {
     return students.filter(s => s.mentor_id === mentorId);
   };
 
-  // Folder aggregation - unchanged logic (still uses mentor ID)
   const batchFolders = () => {
     if (selectedBatchMentorId === null) return [];
     const studentIds = new Set(getStudentsInBatch(selectedBatchMentorId).map(s => s.id));
@@ -493,7 +494,6 @@ function ReviewFoldersAdmin() {
 
   const foldersToShow = selectedBatchMentorId === null ? allFoldersAggregated() : batchFolders();
 
-  // Folder actions (edit, delete) unchanged
   const editFolder = async (oldName) => {
     const newName = prompt("Enter new folder name:", oldName);
     if (!newName || newName.trim() === "" || newName === oldName) return;
@@ -537,14 +537,17 @@ function ReviewFoldersAdmin() {
     setCreatingWeek(true);
     let successCount = 0;
     let errorCount = 0;
+    
     for (const studentId of selectedStudentIds) {
       try {
         const currentCourse = studentCourseMap.get(studentId) || "—";
         const studentReviews = allFolders.filter(f => f.student === studentId && f.week != null);
+        
         let maxWeek = 0;
         let previousReviewSheet = "";
         let previousCourse = null;
         let courseChanged = false;
+        
         if (studentReviews.length > 0) {
           const sorted = [...studentReviews].sort((a, b) => parseInt(b.week,10) - parseInt(a.week,10));
           const latest = sorted[0];
@@ -553,13 +556,16 @@ function ReviewFoldersAdmin() {
           previousCourse = latest.course || "";
           if (previousCourse && previousCourse !== currentCourse) courseChanged = true;
         }
+        
         let newWeek = courseChanged ? 1 : maxWeek + 1;
+        
         const workDocUrl = await getWorkDocForWeek(studentId, newWeek);
         let reviewSheetValue = previousReviewSheet;
         if (!reviewSheetValue) {
           const moduleDefault = await getDefaultReviewSheetFromModule(studentId, newWeek);
           reviewSheetValue = moduleDefault || DEFAULT_REVIEW_SHEET_URL;
         }
+        
         await API.post("/review-folders/", {
           student: studentId,
           week_folder: folderName,
@@ -572,13 +578,21 @@ function ReviewFoldersAdmin() {
           meeting_link: "",
           is_done: false,
         });
-        await ensureWeekReviewExists(studentId, newWeek);
-        successCount++;
+        
+        const reviewCreated = await ensureWeekReviewExists(studentId, newWeek, reviewSheetValue);
+        
+        if (reviewCreated) {
+          successCount++;
+        } else {
+          errorCount++;
+        }
+        
       } catch (err) {
         errorCount++;
         addErrorLog(err, { action: "handleAddWeekForBatch", studentId, folderName });
       }
     }
+    
     showToast(`Created ${successCount} entries for "${folderName}" (${errorCount} failed)`, successCount > 0 ? "success" : "error");
     setShowAddWeekModal(false);
     await fetchAllFolders();
@@ -739,7 +753,6 @@ function ReviewFoldersAdmin() {
   const SaveIcon = () => (<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>);
   const CancelIcon = () => (<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>);
 
-  // For selected batch display
   const selectedBatchInfo = selectedBatchMentorId
     ? (() => {
         const mentor = mentorsList.find(m => m.id === selectedBatchMentorId);
@@ -777,7 +790,6 @@ function ReviewFoldersAdmin() {
             )}
           </div>
 
-          {/* Batch cards view – using batchGroups from batches API */}
           {selectedBatchMentorId === null && !selectedFolder && (
             <>
               <div className="mb-6 bg-white rounded-xl border border-gray-200 shadow-sm p-4">
@@ -801,7 +813,6 @@ function ReviewFoldersAdmin() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {filteredBatchGroups.map((group) => {
-                  // Pick first mentor ID from the group to use as selection
                   const firstMentorId = group.mentorIds[0];
                   return (
                     <div
@@ -825,7 +836,6 @@ function ReviewFoldersAdmin() {
             </>
           )}
 
-          {/* Folder table – shown when a batch is selected */}
           {selectedBatchMentorId !== null && !selectedFolder && (
             <>
               <div className="mb-4 flex justify-between items-center">
@@ -892,7 +902,6 @@ function ReviewFoldersAdmin() {
             </>
           )}
 
-          {/* Entries inside a selected folder */}
           {selectedFolder && (
             <div>
               <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
@@ -993,7 +1002,6 @@ function ReviewFoldersAdmin() {
         </div>
       </div>
 
-      {/* Add Week Modal */}
       {selectedBatchMentorId !== null && !selectedFolder && (
         <AddWeekModal
           isOpen={showAddWeekModal}
