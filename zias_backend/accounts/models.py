@@ -3,8 +3,8 @@ from django.contrib.auth.models import AbstractUser
 from django.utils import timezone
 
 
+    
 class User(AbstractUser):
-    # No role field here - it was removed in migration 0002_remove_user_role
     password_changed_at = models.DateTimeField(default=timezone.now, null=True, blank=True)
     last_dashboard_access = models.DateTimeField(default=timezone.now, null=True, blank=True)
 
@@ -13,13 +13,15 @@ class User(AbstractUser):
         """Get user role based on groups"""
         if self.is_superuser:
             return 'admin'
-        if hasattr(self, 'groups') and self.groups.filter(name='Accounts').exists():
+        # Check groups - ORDER MATTERS!
+        groups_list = list(self.groups.values_list('name', flat=True))
+        if 'Accounts' in groups_list:
             return 'accounts'
-        if hasattr(self, 'groups') and self.groups.filter(name='Reviewers').exists():
+        if 'Reviewers' in groups_list:
             return 'reviewer'
-        if hasattr(self, 'groups') and self.groups.filter(name='Mentors').exists():
+        if 'Mentors' in groups_list:
             return 'mentor'
-        if hasattr(self, 'groups') and self.groups.filter(name='Students').exists():
+        if 'Students' in groups_list:
             return 'student'
         return 'user'
 
@@ -42,9 +44,6 @@ class User(AbstractUser):
     @property
     def is_accounts(self):
         return self.role == 'accounts'
-    
-    def __str__(self):
-        return f"{self.username} ({self.role})"
     
 
 
