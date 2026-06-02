@@ -13,6 +13,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.exceptions import ValidationError, NotFound, PermissionDenied
 from django.utils import timezone
 from django.db.models import Q, Sum
+from django.contrib.auth.models import Group
 from django.db import models
 from django.db import IntegrityError
 from django.shortcuts import get_object_or_404
@@ -609,9 +610,6 @@ class ContactMessageDetailView(SafeAPIView, RetrieveAPIView):
 # ----------------------------
 # CUSTOM LOGIN VIEW
 # ----------------------------
-# ----------------------------
-# CUSTOM LOGIN VIEW - SIMPLIFIED AND CORRECTED
-# ----------------------------
 class CustomLoginView(APIView):
     permission_classes = [AllowAny]
 
@@ -628,65 +626,87 @@ class CustomLoginView(APIView):
 
         login_id = login_id.strip()
         
-        # Find user by username or email
+        # Find user
         user = None
-        
-        # Try username first
         try:
             user = User.objects.get(username__iexact=login_id)
-            print(f"Found user by username: {user.username}")
+            print(f"Found by username: {user.username}")
         except User.DoesNotExist:
             pass
         
-        # If not found, try email
         if not user:
             try:
                 user = User.objects.get(email__iexact=login_id)
-                print(f"Found user by email: {user.email}")
+                print(f"Found by email: {user.email}")
             except User.DoesNotExist:
                 pass
             except User.MultipleObjectsReturned:
-                # If multiple users with same email, take the first active one
                 user = User.objects.filter(email__iexact=login_id, is_active=True).first()
-                print(f"Multiple users found, using: {user.username}")
+                print(f"Multiple found, using: {user.username}")
         
         if not user:
-            print(f"Login failed. No account found for: {login_id}")
-            return Response({'error': 'No account found with this email or username'}, status=401)
+            return Response({'error': 'No account found'}, status=401)
 
         # Check password
         if not user.check_password(password):
-            print(f"Login failed. Wrong password for: {login_id}")
             return Response({'error': 'Password is incorrect'}, status=401)
         
-        # Check if user is active
         if not user.is_active:
             return Response({'error': 'Account is disabled'}, status=401)
 
-        # Get role from the property (this will work correctly now)
-        role = user.role
-        print(f"User role: {role}")
-        print(f"is_accounts: {user.is_accounts}")
-        print(f"is_student: {user.is_student}")
+        # IMPORTANT: Determine role based on groups
+        role = 'user'
+        is_admin = False
+        is_mentor = False
+        is_reviewer = False
+        is_student = False
+        is_accounts = False
+        
+        # Check for admin
+        if user.is_superuser or user.is_staff:
+            role = 'admin'
+            is_admin = True
+        # Check for accounts user (by group)
+        elif user.groups.filter(name='Accounts').exists():
+            role = 'accounts'
+            is_accounts = True
+        # Check for reviewer
+        elif user.groups.filter(name='Reviewers').exists():
+            role = 'reviewer'
+            is_reviewer = True
+        # Check for mentor
+        elif user.groups.filter(name='Mentors').exists():
+            role = 'mentor'
+            is_mentor = True
+        # Check for student
+        elif user.groups.filter(name='Students').exists():
+            role = 'student'
+            is_student = True
+        
+        print(f"Determined role: {role}")
+        print(f"is_accounts: {is_accounts}")
+        print(f"is_student: {is_student}")
+        print(f"User groups: {[g.name for g in user.groups.all()]}")
 
         # Generate token
         refresh = RefreshToken.for_user(user)
         
-        # Prepare response
+        # Prepare response - Make sure boolean flags are correct
         user_data = {
             'id': user.id,
             'username': user.username,
             'email': user.email,
             'role': role,
-            'is_admin': user.is_admin,
-            'is_mentor': user.is_mentor,
-            'is_reviewer': user.is_reviewer,
-            'is_student': user.is_student,
-            'is_accounts': user.is_accounts,
+            'is_admin': is_admin,
+            'is_mentor': is_mentor,
+            'is_reviewer': is_reviewer,
+            'is_student': is_student,
+            'is_accounts': is_accounts,
             'full_name': user.get_full_name() or user.username,
         }
         
-        print(f"Login successful: {login_id} (Role: {role})")
+        print(f"Response user_data: {user_data}")
+        print("=" * 50)
         
         return Response({
             'refresh': str(refresh),
@@ -1632,26 +1652,135 @@ class FeePaymentViewSet(viewsets.ModelViewSet):
 # ACCOUNTS VIEWSET
 # ----------------------------
 class AccountsViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing Accounts users.
+    - Admin can view, create, update, delete all accounts
+    - Accounts users can only view and update their own profile
+    """
     queryset = Accounts.objects.all()
     serializer_class = AccountsSerializer
     permission_classes = [IsAuthenticated]
     
     def get_queryset(self):
-        return Accounts.objects.select_related('user').all()
+        user = self.request.user
+        # Superuser or admin can see all accounts
+        if user.is_superuser or user.role == 'admin':
+            return Accounts.objects.select_related('user').all()
+        # Accounts users can only see their own profile
+        if user.role == 'accounts':
+            return Accounts.objects.filter(user=user)
+        # Other roles cannot access accounts
+        return Accounts.objects.none()
+    
+    def perform_create(self, serializer):
+        """Save account and add user to Accounts group"""
+        accounts = serializer.save()
+        
+        # Add user to Accounts group (this makes is_accounts = True)
+        accounts_group, created = Group.objects.get_or_create(name='Accounts')
+        accounts.user.groups.add(accounts_group)
+        
+        print(f"✅ Created accounts user:")
+        print(f"   Email: {accounts.user.email}")
+        print(f"   Username: {accounts.user.username}")
+        print(f"   Groups: {[g.name for g in accounts.user.groups.all()]}")
+        print(f"   is_accounts: {accounts.user.is_accounts}")
     
     def create(self, request, *args, **kwargs):
+        """Create a new accounts user"""
+        # Check if user already has an accounts profile
+        user_id = request.data.get('user')
+        if user_id:
+            existing = Accounts.objects.filter(user_id=user_id).first()
+            if existing:
+                return Response(
+                    {'error': 'User already has an accounts profile'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
             try:
-                self.perform_create(serializer)
-                return Response(serializer.data, status=status.HTTP_201_CREATED)
+                # Save the account (this will call perform_create)
+                account = serializer.save()
+                
+                # Return the created account with all details
+                return Response({
+                    'id': account.id,
+                    'user': {
+                        'id': account.user.id,
+                        'username': account.user.username,
+                        'email': account.user.email,
+                    },
+                    'full_name': account.full_name,
+                    'phone': account.phone,
+                    'department': account.department,
+                    'is_accounts': account.user.is_accounts,
+                    'role': account.user.role,
+                }, status=status.HTTP_201_CREATED)
             except Exception as e:
                 return Response(
                     {'error': str(e)}, 
                     status=status.HTTP_400_BAD_REQUEST
                 )
-        print("Serializer errors:", serializer.errors)  # Debug print
+        print("Serializer errors:", serializer.errors)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    def update(self, request, *args, **kwargs):
+        """Update accounts profile - cannot change user or email"""
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        
+        # Prevent changing the user
+        if 'user' in request.data:
+            return Response(
+                {'error': 'Cannot change the user associated with accounts profile'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Prevent changing email
+        if 'email' in request.data:
+            return Response(
+                {'error': 'Email cannot be changed. Please contact admin.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        if serializer.is_valid():
+            self.perform_update(serializer)
+            return Response({
+                'id': instance.id,
+                'user': {
+                    'id': instance.user.id,
+                    'username': instance.user.username,
+                    'email': instance.user.email,
+                },
+                'full_name': instance.full_name,
+                'phone': instance.phone,
+                'department': instance.department,
+                'is_accounts': instance.user.is_accounts,
+                'role': instance.user.role,
+            })
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    def destroy(self, request, *args, **kwargs):
+        """Delete accounts profile but keep the user"""
+        instance = self.get_object()
+        user = instance.user
+        
+        # Remove user from Accounts group
+        accounts_group = Group.objects.filter(name='Accounts').first()
+        if accounts_group:
+            user.groups.remove(accounts_group)
+            print(f"✅ Removed {user.email} from Accounts group")
+        
+        # Delete the accounts profile
+        instance.delete()
+        
+        return Response(
+            {'message': 'Accounts profile deleted successfully'},
+            status=status.HTTP_200_OK
+        )
 
 
 
@@ -1665,29 +1794,52 @@ class RegisterUserView(generics.CreateAPIView):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        role = request.data.get('role')
+        role = request.data.get('role', 'student')
+        
         if role not in ['student', 'mentor', 'reviewer', 'admin', 'accounts']:
-            return Response({"detail": "Invalid role"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "Invalid role. Choose from: student, mentor, reviewer, admin, accounts"}, status=status.HTTP_400_BAD_REQUEST)
 
         validated_data = serializer.validated_data
         password = validated_data.pop('password', None)
         if not password:
             password = generate_random_password()
 
-        user = User(
+        # Create user WITHOUT boolean fields (they don't exist)
+        user = User.objects.create_user(
             username=validated_data['username'],
             email=validated_data['email'],
-            is_student=(role == 'student'),
-            is_mentor=(role == 'mentor'),
-            is_reviewer=(role == 'reviewer'),
-            is_admin=(role == 'admin'),
-            is_accounts=(role == 'accounts'),
+            password=password,
+            first_name=validated_data.get('first_name', ''),
+            last_name=validated_data.get('last_name', '')
         )
-        user.set_password(password)
-        user.save()
+        
+        # Add user to the appropriate group
+        group_name = role.capitalize()
+        group, created = Group.objects.get_or_create(name=group_name)
+        user.groups.add(group)
+        
+        # Create role-specific profile if needed
+        if role == 'student':
+            Student.objects.get_or_create(user=user, defaults={'full_name': user.get_full_name() or user.username})
+        elif role == 'mentor':
+            Mentor.objects.get_or_create(user=user, defaults={'full_name': user.get_full_name() or user.username})
+        elif role == 'reviewer':
+            Reviewer.objects.get_or_create(user=user, defaults={'full_name': user.get_full_name() or user.username})
+        elif role == 'accounts':
+            Accounts.objects.get_or_create(user=user, defaults={
+                'full_name': user.get_full_name() or user.username,
+                'department': 'Finance'
+            })
 
+        # Send email with credentials
         try:
-            send_password_email(user, password)
+            send_mail(
+                f'Your {role} account has been created',
+                f'Your account has been created.\nUsername: {user.username}\nPassword: {password}\nRole: {role}',
+                settings.DEFAULT_FROM_EMAIL,
+                [user.email],
+                fail_silently=False
+            )
             email_sent = True
         except Exception as e:
             print(f"❌ Email sending failed for {user.email}: {e}")
@@ -1698,9 +1850,12 @@ class RegisterUserView(generics.CreateAPIView):
             "username": user.username,
             "email": user.email,
             "role": role,
+            "groups": [g.name for g in user.groups.all()],
             "email_sent": email_sent,
-            "message": f"{role.capitalize()} user created. {'Email sent.' if email_sent else 'Email could not be sent – check console log.'}"
+            "message": f"{role.capitalize()} user created successfully. {'Email sent.' if email_sent else 'Email could not be sent.'}"
         }, status=status.HTTP_201_CREATED)
+    
+    
 
 
 # ----------------------------

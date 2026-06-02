@@ -5,6 +5,7 @@ import re
 from django.core.mail import send_mail
 from django.utils import timezone
 from django.db import transaction
+from django.contrib.auth.models import Group
 from django.conf import settings
 from django.db import IntegrityError
 from django.template.loader import render_to_string
@@ -99,9 +100,13 @@ class AccountsSerializer(serializers.ModelSerializer):
         fields = ['id', 'full_name', 'phone', 'department', 'email', 'username']
 
     def to_representation(self, instance):
+        """Customize the response output"""
         representation = super().to_representation(instance)
         representation['email'] = instance.user.email
         representation['username'] = instance.user.username
+        representation['is_accounts'] = instance.user.is_accounts
+        representation['role'] = instance.user.role
+        representation['user_id'] = instance.user.id
         return representation
 
     def _send_welcome_email(self, email, username, password, full_name):
@@ -157,7 +162,14 @@ ZIAS Team
             return cleaned
         return value
 
+    def validate_email(self, value):
+        """Validate email is not already used"""
+        if User.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError("A user with this email already exists")
+        return value
+
     def create(self, validated_data):
+        """Create accounts user with proper group assignment"""
         email = validated_data.pop('email')
         full_name = validated_data.get('full_name', '')
         phone = validated_data.get('phone', '')
@@ -176,15 +188,24 @@ ZIAS Team
         # Generate random password
         random_password = generate_random_password()
         
+        # Split full name into first and last name
+        name_parts = full_name.strip().split() if full_name else []
+        first_name = name_parts[0] if name_parts else ''
+        last_name = ' '.join(name_parts[1:]) if len(name_parts) > 1 else ''
+        
         # Create user
         user = User.objects.create_user(
             username=username,
             email=email,
             password=random_password,
-            first_name=full_name.split()[0] if full_name else '',
-            last_name=' '.join(full_name.split()[1:]) if full_name and len(full_name.split()) > 1 else ''
+            first_name=first_name,
+            last_name=last_name
         )
-        user.save()
+        
+        # IMPORTANT: Add user to Accounts group (this makes is_accounts = True)
+        accounts_group, created = Group.objects.get_or_create(name='Accounts')
+        user.groups.add(accounts_group)
+        print(f"✅ Added {user.email} to Accounts group")
         
         # Create accounts profile
         accounts = Accounts.objects.create(
@@ -200,6 +221,7 @@ ZIAS Team
         return accounts
 
     def update(self, instance, validated_data):
+        """Update accounts profile"""
         # Update accounts profile fields
         instance.full_name = validated_data.get('full_name', instance.full_name)
         instance.phone = validated_data.get('phone', instance.phone)

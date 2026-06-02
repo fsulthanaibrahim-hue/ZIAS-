@@ -1,8 +1,6 @@
-// UserLogin.jsx - Updated version with correct role order
-
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import API from "../api/api";
+import { useAuth } from "../context/AuthContext";
 import { clearAuthStorage, saveAuthSession } from "../utils/authStorage";
 
 function UserLogin() {
@@ -12,6 +10,7 @@ function UserLogin() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -21,48 +20,54 @@ function UserLogin() {
     const trimmedLoginId = loginId.trim();
     try {
       clearAuthStorage();
-      const response = await API.post("/login/", {
-        email: trimmedLoginId,
-        username: trimmedLoginId,
-        login: trimmedLoginId,
-        password: password,
-      });
-      const { access, refresh, user } = response.data;
+      
+      // Login and get user data
+      const user = await login(trimmedLoginId, password);
 
-      // Debug logging to see what role is returned
-      console.log("User object from backend:", user);
-      console.log("User role:", user.role);
-      console.log("is_admin:", user.is_admin);
-      console.log("is_accounts:", user.is_accounts);
-      console.log("is_student:", user.is_student);
-      console.log("is_mentor:", user.is_mentor);
-      console.log("is_reviewer:", user.is_reviewer);
+      console.log("===== LOGIN SUCCESS =====");
+      console.log("User object:", user);
+      console.log("user.role:", user.role);
+      console.log("user.is_accounts:", user.is_accounts);
+      console.log("user.is_student:", user.is_student);
+      console.log("user.is_admin:", user.is_admin);
+      console.log("user.is_mentor:", user.is_mentor);
+      console.log("user.is_reviewer:", user.is_reviewer);
+      console.log("=========================");
 
-      saveAuthSession({ access, refresh, user });
-
-      // IMPORTANT: Check accounts BEFORE student
-      // The order matters! Put accounts before student
+      // Check accounts BEFORE student - ORDER MATTERS!
       if (user.is_admin) {
+        console.log("Redirecting to Admin Dashboard");
         navigate("/admin/dashboard");
       } 
-      else if (user.is_accounts) {  // ← MOVED UP - Check accounts BEFORE student
+      else if (user.is_accounts) {
+        console.log("Redirecting to Accounts Dashboard");
         navigate("/accounts/dashboard");
       }
       else if (user.is_mentor) {
+        console.log("Redirecting to Mentor Dashboard");
         navigate("/mentor/dashboard");
       } 
       else if (user.is_reviewer) {
+        console.log("Redirecting to Reviewer Dashboard");
         navigate("/reviewer/dashboard");
       }
-      else if (user.is_student) {  // ← Student checked AFTER accounts
+      else if (user.is_student) {
+        console.log("Redirecting to Student Dashboard");
         navigate("/student/dashboard");
       } 
       else {
+        console.log("No role matched, redirecting to home");
+        console.log("Available flags:", {
+          is_admin: user.is_admin,
+          is_accounts: user.is_accounts,
+          is_mentor: user.is_mentor,
+          is_reviewer: user.is_reviewer,
+          is_student: user.is_student
+        });
         navigate("/");
       }
     } catch (err) {
       console.error("Login error:", err);
-      console.error("Login response:", err.response?.data);
       let errorMsg = "Unable to connect to the server. Please try again later.";
       if (err.response) {
         const { status, data } = err.response;
