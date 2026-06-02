@@ -2168,5 +2168,119 @@ class InstallmentScheduleViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAdminUser]
 
 
+# ----------------------------
+# ADMIN STUDENT FEE LIST VIEW (for admin, accounts, mentors)
+# ----------------------------
+class AdminStudentFeeListView(SafeAPIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        
+        # Only admin, accounts, or mentor can access
+        if not (user.is_admin or user.is_accounts or user.is_mentor):
+            return Response({"detail": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
+
+        students = Student.objects.all().select_related('user', 'reviewer', 'mentor')
+        result = []
+        
+        for student in students:
+            payments = FeePayment.objects.filter(student=student)
+            total_paid = payments.filter(status='paid').aggregate(total=Sum('amount'))['total'] or 0
+            total_pending = payments.filter(status='pending').aggregate(total=Sum('amount'))['total'] or 0
+            total_overdue = payments.filter(status='overdue').aggregate(total=Sum('amount'))['total'] or 0
+            
+            # Calculate week-back fee status
+            week_back_status = "on_track"
+            if total_overdue > 0:
+                week_back_status = "overdue"
+            elif total_pending > 0:
+                oldest_pending = payments.filter(status='pending').order_by('due_date').first()
+                if oldest_pending and oldest_pending.due_date:
+                    if oldest_pending.due_date < timezone.now().date() - timedelta(days=7):
+                        week_back_status = "delayed"
+            
+            result.append({
+                'id': student.id,
+                'name': student.full_name or student.user.username,
+                'email': student.user.email,
+                'phone': student.phone or '',
+                'course': student.course or '—',
+                'batch': student.batch or '—',
+                'mentor_name': student.mentor.full_name if student.mentor else '—',
+                'total_fee': float(total_paid + total_pending + total_overdue),
+                'total_paid': float(total_paid),
+                'total_pending': float(total_pending),
+                'total_overdue': float(total_overdue),
+                'agreement_signed': student.agreement_signed,
+                'escalation_flag': student.escalation_flag,
+                'week_back_fee_status': week_back_status,
+            })
+        
+        return Response(result)
+
+
+# ----------------------------
+# ADMIN STUDENT FEE DETAIL VIEW (single student full details)
+# ----------------------------
+class AdminStudentFeeDetailView(SafeAPIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, student_id):
+        user = request.user
+        
+        # Only admin, accounts, or mentor can access
+        if not (user.is_admin or user.is_accounts or user.is_mentor):
+            return Response({"detail": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
+        
+        try:
+            student = Student.objects.get(id=student_id)
+        except Student.DoesNotExist:
+            return Response({"detail": "Student not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        payments = FeePayment.objects.filter(student=student).order_by('-payment_date')
+        total_paid = payments.filter(status='paid').aggregate(total=Sum('amount'))['total'] or 0
+        total_pending = payments.filter(status='pending').aggregate(total=Sum('amount'))['total'] or 0
+        total_overdue = payments.filter(status='overdue').aggregate(total=Sum('amount'))['total'] or 0
+
+        # Get fee structure details if exists
+        student_fee = StudentFee.objects.filter(student=student).first()
+        fee_structure_details = None
+        if student_fee:
+            fee_structure_details = {
+                'total_amount': float(student_fee.total_amount),
+                'paid_amount': float(student_fee.paid_amount),
+                'discount_applied': float(student_fee.discount_applied),
+                'fee_structure_name': student_fee.fee_structure.name if student_fee.fee_structure else None,
+            }
+
+        return Response({
+            'student_id': student.id,
+            'student_name': student.full_name or student.user.username,
+            'student_email': student.user.email,
+            'student_phone': student.phone or '',
+            'course': student.course or '—',
+            'batch': student.batch or '—',
+            'mentor_name': student.mentor.full_name if student.mentor else '—',
+            'reviewer_name': student.reviewer.full_name if student.reviewer else '—',
+            'agreement_signed': student.agreement_signed,
+            'escalation_flag': student.escalation_flag,
+            'total_fee': float(total_paid + total_pending + total_overdue),
+            'total_paid': float(total_paid),
+            'total_pending': float(total_pending),
+            'total_overdue': float(total_overdue),
+            'fee_structure': fee_structure_details,
+            'payments': [
+                {
+                    'id': p.id,
+                    'amount': float(p.amount),
+                    'due_date': p.due_date,
+                    'payment_date': p.payment_date,
+                    'status': p.status,
+                    'payment_method': p.payment_method or '—',
+                    'notes': p.notes or '',
+                } for p in payments
+            ],
+        })
 
 

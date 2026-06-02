@@ -16,7 +16,7 @@ from .views import (
     StudentDocumentDeleteView,
     StudentModuleViewSet,
     StudentReviewStatusView,
-    StudentCourseStatusView,  # ✅ ADDED - was missing
+    StudentCourseStatusView, 
     
     # Auth Views
     CustomLoginView,
@@ -80,6 +80,8 @@ from .views import (
     AccountsStudentListView,
     AccountsProfileView,
     StudentFeeSummaryView,
+    AdminStudentFeeListView,
+    AdminStudentFeeDetailView,
     
     # Other
     ReviewerViewSet,
@@ -145,7 +147,11 @@ urlpatterns = [
     path('student/fee-summary/', StudentFeeSummaryView.as_view(), name='student-fee-summary'),
     path('students/list/', StudentListView.as_view(), name='student-list'),
     path('student/review-status/', StudentReviewStatusView.as_view(), name='student-review-status'),
-    path('student/course-status/', StudentCourseStatusView.as_view(), name='student-course-status'),  # ✅ ADDED
+    path('student/course-status/', StudentCourseStatusView.as_view(), name='student-course-status'),
+    
+    # Admin/Accounts Fee Management URLs
+    path('admin/students-fee/', AdminStudentFeeListView.as_view(), name='admin-students-fee'),
+    path('admin/student-fee/<int:student_id>/', AdminStudentFeeDetailView.as_view(), name='admin-student-fee-detail'),
     
     # Module URLs
     path('modules/<int:module_id>/complete/', CompleteModuleView.as_view(), name='complete-module'),
@@ -180,6 +186,7 @@ urlpatterns = [
     # Notification URLs
     path('notifications/unread-count/', UnreadNotificationCountView.as_view(), name='unread-count'),
     
-    # Include router URLs
+    # Include router URLs (keep this at the end to avoid conflicts)
     path('', include(router.urls)),
 ]
+

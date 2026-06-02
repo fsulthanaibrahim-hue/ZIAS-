@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import API from "../api/api";
 import toast from "react-hot-toast";
 
@@ -21,7 +21,7 @@ function AdminFeeStructure() {
   const batchesFetched = useRef(false);
 
   const extractArray = (response) => {
-    const data = response.data.results || response.data;
+    const data = response.data?.results || response.data;
     return Array.isArray(data) ? data : [];
   };
 
@@ -41,7 +41,7 @@ function AdminFeeStructure() {
     return weekStatuses;
   };
 
-  const fetchBatches = async () => {
+  const fetchBatches = useCallback(async () => {
     if (batchesFetched.current) return;
     batchesFetched.current = true;
     try {
@@ -53,10 +53,11 @@ function AdminFeeStructure() {
       setBatchMap(map);
     } catch (err) {
       console.error("Failed to load batches:", err);
+      toast.error("Failed to load batches");
     }
-  };
+  }, []);
 
-  const fetchFeeStructures = async () => {
+  const fetchFeeStructures = useCallback(async () => {
     try {
       const structuresRes = await API.get("fee-structures/");
       const structures = extractArray(structuresRes);
@@ -70,28 +71,29 @@ function AdminFeeStructure() {
       setFeeStructures(processedStructures);
       return processedStructures;
     } catch (err) {
+      console.error("Failed to load fee structures:", err);
       toast.error("Failed to load fee structures");
-      console.error(err);
       return [];
     }
-  };
+  }, []);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       await Promise.all([fetchFeeStructures(), fetchBatches()]);
     } catch (err) {
+      console.error("Failed to load data:", err);
       toast.error("Failed to load data");
     } finally {
       setLoading(false);
     }
-  };
+  }, [fetchFeeStructures, fetchBatches]);
 
   useEffect(() => {
     if (initialFetchDone.current) return;
     initialFetchDone.current = true;
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -111,7 +113,7 @@ function AdminFeeStructure() {
     
     try {
       const payload = {
-        name: formData.name,
+        name: formData.name.trim(),
         batch: formData.batch ? parseInt(formData.batch) : null,
         total_amount: parseFloat(formData.total_amount),
         number_of_installments: parseInt(formData.number_of_installments),
@@ -131,7 +133,7 @@ function AdminFeeStructure() {
       await fetchData();
     } catch (err) {
       console.error("Submit error:", err);
-      toast.error(err.response?.data?.detail || "Operation failed");
+      toast.error(err.response?.data?.detail || err.response?.data?.message || "Operation failed");
     }
   };
 
@@ -147,20 +149,11 @@ function AdminFeeStructure() {
     }
   };
 
-  // FIXED: Better toggle with debugging
   const toggleActiveStatus = async (fs) => {
     const newStatus = !fs.is_active;
     
-    console.log("Toggling status:", {
-      id: fs.id,
-      currentStatus: fs.is_active,
-      newStatus: newStatus
-    });
-    
-    // Save current state for rollback
     const previousStructures = [...feeStructures];
     
-    // Optimistically update UI
     setFeeStructures(prevStructures => 
       prevStructures.map(item => 
         item.id === fs.id 
@@ -170,29 +163,19 @@ function AdminFeeStructure() {
     );
     
     try {
-      // Make API call to update status
       const response = await API.patch(`fee-structures/${fs.id}/`, { is_active: newStatus });
       
-      console.log("API Response:", response.data);
-      
-      // Check if the response has the updated status
-      if (response.data && response.data.is_active === newStatus) {
-        // Update the specific item with the response data
-        setFeeStructures(prevStructures => 
-          prevStructures.map(item => 
-            item.id === fs.id 
-              ? { ...item, ...response.data, week_status: generateWeekStatus(response.data) }
-              : item
-          )
-        );
-        toast.success(`Fee structure ${newStatus ? "activated" : "deactivated"} successfully`);
-      } else {
-        throw new Error("Server did not return updated status");
-      }
+      setFeeStructures(prevStructures => 
+        prevStructures.map(item => 
+          item.id === fs.id 
+            ? { ...item, ...response.data, week_status: generateWeekStatus(response.data) }
+            : item
+        )
+      );
+      toast.success(`Fee structure ${newStatus ? "activated" : "deactivated"} successfully`);
       
     } catch (err) {
       console.error("Status update error:", err);
-      // Revert on error
       setFeeStructures(previousStructures);
       toast.error(`Failed to update status: ${err.response?.data?.detail || err.message}`);
     }
@@ -226,17 +209,29 @@ function AdminFeeStructure() {
     return sum + amount;
   }, 0);
 
-  if (loading) return <div className="p-8 text-center">Loading...</div>;
+  if (loading) {
+    return (
+      <div className="p-8 text-center flex items-center justify-center min-h-screen">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-gray-400 text-sm">Loading fee structures...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl font-bold">Fee Structure</h1>
+          <h1 className="text-2xl font-bold text-gray-800">Fee Structure</h1>
           <p className="text-sm text-gray-500 mt-1">Manage course fees and installment schedules</p>
         </div>
         <div className="flex gap-2">
-          <button onClick={fetchData} className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition">
+          <button 
+            onClick={fetchData} 
+            className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition"
+          >
             ⟳ Refresh
           </button>
           <button 
@@ -277,9 +272,10 @@ function AdminFeeStructure() {
                   placeholder="e.g., B.Tech 2024 - Semester 1"
                   value={formData.name}
                   onChange={e => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:border-green-500"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:border-green-500"
                   required
                 />
+                <p className="text-xs text-gray-400 mt-1">Example: B.Tech 2024, MBA Semester 1, etc.</p>
               </div>
               
               <div>
@@ -287,7 +283,7 @@ function AdminFeeStructure() {
                 <select
                   value={formData.batch}
                   onChange={e => setFormData({ ...formData, batch: e.target.value })}
-                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:border-green-500"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:border-green-500"
                 >
                   <option value="">Select Batch (optional)</option>
                   {batches.map(b => (
@@ -304,7 +300,7 @@ function AdminFeeStructure() {
                   placeholder="e.g., 50000"
                   value={formData.total_amount}
                   onChange={e => setFormData({ ...formData, total_amount: e.target.value })}
-                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:border-green-500"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:border-green-500"
                   required
                 />
               </div>
@@ -316,7 +312,7 @@ function AdminFeeStructure() {
                   placeholder="e.g., 12"
                   value={formData.number_of_installments}
                   onChange={e => setFormData({ ...formData, number_of_installments: e.target.value })}
-                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:border-green-500"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:border-green-500"
                   min="1"
                   required
                 />
@@ -332,9 +328,9 @@ function AdminFeeStructure() {
                   type="checkbox"
                   checked={formData.is_active}
                   onChange={e => setFormData({ ...formData, is_active: e.target.checked })}
-                  className="w-4 h-4"
+                  className="w-4 h-4 text-green-600 rounded"
                 />
-                <span>Active (visible to students)</span>
+                <span className="text-sm text-gray-700">Active (visible to students)</span>
               </label>
             </div>
             <div className="flex gap-2 mt-6">
@@ -363,84 +359,87 @@ function AdminFeeStructure() {
             </tr>
           </thead>
           <tbody>
-            {feeStructures.map(fs => {
-              const totalAmount = parseFloat(fs.total_amount) || 0;
-              const numInstallments = fs.number_of_installments || 1;
-              const perWeek = totalAmount / numInstallments;
-              
-              return (
-                <tr key={fs.id} className="border-t hover:bg-gray-50 transition">
-                  <td className="px-4 py-3">
-                    <div>
-                      <p className="font-medium text-gray-800">{fs.name || "—"}</p>
-                      <p className="text-xs text-gray-400">ID: {fs.id}</p>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-gray-600">{getBatchName(fs)}</td>
-                  <td className="px-4 py-3 font-medium text-gray-800">₹{totalAmount.toLocaleString()}</td>
-                  <td className="px-4 py-3">
-                    <div>
-                      <span className="font-medium text-gray-800">{numInstallments} weeks</span>
-                      <span className="block text-xs text-gray-400">
-                        ₹{perWeek.toLocaleString()}/week
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    {renderWeekStatus(fs.week_status)}
-                  </td>
-                  <td className="px-4 py-3">
-                    <button
-                      onClick={() => toggleActiveStatus(fs)}
-                      className={`inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium transition cursor-pointer ${
-                        fs.is_active 
-                          ? "bg-green-100 text-green-800 hover:bg-green-200 border border-green-200" 
-                          : "bg-red-100 text-red-800 hover:bg-red-200 border border-red-200"
-                      }`}
-                    >
-                      {fs.is_active ? "✓ Active" : "✗ Inactive"}
-                    </button>
-                  </td>
-                  <td className="px-4 py-3 text-center whitespace-nowrap">
-                    <button
-                      onClick={() => {
-                        setEditingId(fs.id);
-                        const batchId = fs.batch?.id || fs.batch_id || fs.batch;
-                        setFormData({
-                          name: fs.name || "",
-                          batch: batchId?.toString() || "",
-                          total_amount: fs.total_amount,
-                          number_of_installments: fs.number_of_installments || 1,
-                          is_active: fs.is_active,
-                        });
-                        setShowForm(true);
-                      }}
-                      className="text-blue-600 hover:text-blue-800 mx-1 transition"
-                      title="Edit"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                      </svg>
-                    </button>
-                    <button
-                      onClick={() => handleDelete(fs.id)}
-                      className="text-red-600 hover:text-red-800 mx-1 transition"
-                      title="Delete"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-            {feeStructures.length === 0 && (
+            {feeStructures.length === 0 ? (
               <tr>
                 <td colSpan="7" className="text-center py-12 text-gray-500">
                   No fee structures found. Click "Add Fee Structure" to create one.
                 </td>
               </tr>
+            ) : (
+              feeStructures.map(fs => {
+                const totalAmount = parseFloat(fs.total_amount) || 0;
+                const numInstallments = fs.number_of_installments || 1;
+                const perWeek = totalAmount / numInstallments;
+                
+                return (
+                  <tr key={fs.id} className="border-t hover:bg-gray-50 transition">
+                    <td className="px-4 py-3">
+                      <div>
+                        <p className="font-medium text-gray-800">{fs.name || "—"}</p>
+                        <p className="text-xs text-gray-400">ID: {fs.id}</p>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-gray-600">{getBatchName(fs)}</td>
+                    <td className="px-4 py-3 font-medium text-gray-800">₹{totalAmount.toLocaleString()}</td>
+                    <td className="px-4 py-3">
+                      <div>
+                        <span className="font-medium text-gray-800">{numInstallments} weeks</span>
+                        <span className="block text-xs text-gray-400">
+                          ₹{perWeek.toLocaleString()}/week
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      {renderWeekStatus(fs.week_status)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <button
+                        onClick={() => toggleActiveStatus(fs)}
+                        className={`inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium transition cursor-pointer ${
+                          fs.is_active 
+                            ? "bg-green-100 text-green-800 hover:bg-green-200 border border-green-200" 
+                            : "bg-red-100 text-red-800 hover:bg-red-200 border border-red-200"
+                        }`}
+                      >
+                        {fs.is_active ? "✓ Active" : "✗ Inactive"}
+                      </button>
+                    </td>
+                    <td className="px-4 py-3 text-center whitespace-nowrap">
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          onClick={() => {
+                            setEditingId(fs.id);
+                            const batchId = fs.batch?.id || fs.batch_id || fs.batch;
+                            setFormData({
+                              name: fs.name || "",
+                              batch: batchId?.toString() || "",
+                              total_amount: fs.total_amount,
+                              number_of_installments: fs.number_of_installments || 1,
+                              is_active: fs.is_active,
+                            });
+                            setShowForm(true);
+                          }}
+                          className="text-blue-600 hover:text-blue-800 transition"
+                          title="Edit"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => handleDelete(fs.id)}
+                          className="text-red-600 hover:text-red-800 transition"
+                          title="Delete"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
