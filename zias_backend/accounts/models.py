@@ -589,14 +589,17 @@ class FeePayment(models.Model):
 
 
 # Fee Structure Models (if needed - add if missing)
+# models.py
 class FeeStructure(models.Model):
     name = models.CharField(max_length=255)
-    course = models.CharField(max_length=255, blank=True, null=True)
-    batch = models.ForeignKey(Batch, on_delete=models.SET_NULL, null=True, blank=True)
+    batch = models.ForeignKey('Batch', on_delete=models.SET_NULL, null=True, blank=True)
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
-    discount_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    number_of_installments = models.IntegerField(default=1)
+    is_active = models.BooleanField(default=True)  # Make sure this field exists
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
+    
     def __str__(self):
         return self.name
 

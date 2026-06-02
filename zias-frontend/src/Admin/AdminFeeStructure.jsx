@@ -68,9 +68,11 @@ function AdminFeeStructure() {
       }));
       
       setFeeStructures(processedStructures);
+      return processedStructures;
     } catch (err) {
       toast.error("Failed to load fee structures");
       console.error(err);
+      return [];
     }
   };
 
@@ -128,6 +130,7 @@ function AdminFeeStructure() {
       setFormData({ name: "", batch: "", total_amount: "", number_of_installments: 1, is_active: true });
       await fetchData();
     } catch (err) {
+      console.error("Submit error:", err);
       toast.error(err.response?.data?.detail || "Operation failed");
     }
   };
@@ -139,20 +142,59 @@ function AdminFeeStructure() {
       toast.success("Deleted successfully");
       await fetchData();
     } catch (err) {
+      console.error("Delete error:", err);
       toast.error("Delete failed");
     }
   };
 
+  // FIXED: Better toggle with debugging
   const toggleActiveStatus = async (fs) => {
+    const newStatus = !fs.is_active;
+    
+    console.log("Toggling status:", {
+      id: fs.id,
+      currentStatus: fs.is_active,
+      newStatus: newStatus
+    });
+    
+    // Save current state for rollback
+    const previousStructures = [...feeStructures];
+    
+    // Optimistically update UI
+    setFeeStructures(prevStructures => 
+      prevStructures.map(item => 
+        item.id === fs.id 
+          ? { ...item, is_active: newStatus }
+          : item
+      )
+    );
+    
     try {
-      const newStatus = !fs.is_active;
-      await API.patch(`fee-structures/${fs.id}/`, { is_active: newStatus });
-      toast.success(`Fee structure ${newStatus ? "activated" : "deactivated"} successfully`);
-      // Refresh the data to show updated status
-      await fetchData();
+      // Make API call to update status
+      const response = await API.patch(`fee-structures/${fs.id}/`, { is_active: newStatus });
+      
+      console.log("API Response:", response.data);
+      
+      // Check if the response has the updated status
+      if (response.data && response.data.is_active === newStatus) {
+        // Update the specific item with the response data
+        setFeeStructures(prevStructures => 
+          prevStructures.map(item => 
+            item.id === fs.id 
+              ? { ...item, ...response.data, week_status: generateWeekStatus(response.data) }
+              : item
+          )
+        );
+        toast.success(`Fee structure ${newStatus ? "activated" : "deactivated"} successfully`);
+      } else {
+        throw new Error("Server did not return updated status");
+      }
+      
     } catch (err) {
-      toast.error("Failed to update status");
-      console.error(err);
+      console.error("Status update error:", err);
+      // Revert on error
+      setFeeStructures(previousStructures);
+      toast.error(`Failed to update status: ${err.response?.data?.detail || err.message}`);
     }
   };
 
@@ -170,7 +212,7 @@ function AdminFeeStructure() {
         {statuses.map((item, idx) => (
           <span
             key={idx}
-            className="inline-block text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-800"
+            className="inline-block text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800"
           >
             Week {item.week}: Pending (₹{item.amount.toLocaleString()})
           </span>
@@ -350,13 +392,13 @@ function AdminFeeStructure() {
                   <td className="px-4 py-3">
                     <button
                       onClick={() => toggleActiveStatus(fs)}
-                      className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium transition cursor-pointer ${
+                      className={`inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium transition cursor-pointer ${
                         fs.is_active 
-                          ? "bg-green-100 text-green-800 hover:bg-green-200" 
-                          : "bg-gray-100 text-gray-800 hover:bg-gray-200"
+                          ? "bg-green-100 text-green-800 hover:bg-green-200 border border-green-200" 
+                          : "bg-red-100 text-red-800 hover:bg-red-200 border border-red-200"
                       }`}
                     >
-                      {fs.is_active ? "Active ✓" : "Inactive"}
+                      {fs.is_active ? "✓ Active" : "✗ Inactive"}
                     </button>
                   </td>
                   <td className="px-4 py-3 text-center whitespace-nowrap">
