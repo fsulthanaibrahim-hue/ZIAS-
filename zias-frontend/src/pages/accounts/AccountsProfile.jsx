@@ -66,6 +66,11 @@ function AccountsProfile() {
     navigate("/login");
   };
 
+  const handleChangePassword = () => {
+    // Navigate to accounts-specific change password page
+    navigate("/accounts/change-password");
+  };
+
   if (loading) {
     return (
       <div style={s.fullPage}>
@@ -130,11 +135,11 @@ function AccountsProfile() {
           </div>
 
           <div style={s.actions}>
-            <Link to="/change-password" style={s.btnSecondary}>
-              Change Password
-            </Link>
+            <button onClick={handleChangePassword} style={s.btnSecondary}>
+              🔒 Change Password
+            </button>
             <Link to="/accounts/dashboard" style={s.btnDashboard}>
-              Back to Dashboard
+              📊 Back to Dashboard
             </Link>
             <button onClick={handleLogout} style={s.btnLogout}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 8 }}>
@@ -319,6 +324,7 @@ const s = {
     fontSize: 14,
     fontWeight: 500,
     textDecoration: "none",
+    cursor: "pointer",
     transition: "background 0.2s, color 0.2s",
   },
   btnDashboard: {
