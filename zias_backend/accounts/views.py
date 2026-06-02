@@ -940,13 +940,51 @@ class WeekUpdateViewSet(SafeViewSet, viewsets.ModelViewSet):
 # ----------------------------
 # REVIEW FOLDER VIEWSET
 # ----------------------------
+# views.py - Updated ReviewFolderViewSet
+
 class ReviewFolderViewSet(SafeViewSet, viewsets.ModelViewSet):
     serializer_class = ReviewFolderSerializer
     permission_classes = [IsAuthenticated]
     pagination_class = None
 
     def get_queryset(self):
-        return ReviewFolder.objects.all()
+        user = self.request.user
+        
+        # Admin can see all review folders
+        if user.is_superuser or user.role == 'admin':
+            return ReviewFolder.objects.all().order_by('-created_at')
+        
+        # Accounts can see all review folders
+        if user.role == 'accounts':
+            return ReviewFolder.objects.all().order_by('-created_at')
+        
+        # Mentor can see only their students' review folders
+        if user.role == 'mentor':
+            try:
+                mentor = Mentor.objects.get(user=user)
+                # Get all students under this mentor
+                student_ids = Student.objects.filter(mentor=mentor).values_list('id', flat=True)
+                return ReviewFolder.objects.filter(student__id__in=student_ids).order_by('-created_at')
+            except Mentor.DoesNotExist:
+                return ReviewFolder.objects.none()
+        
+        # Reviewer can see assigned review folders
+        if user.role == 'reviewer':
+            try:
+                reviewer = Reviewer.objects.get(user=user)
+                return ReviewFolder.objects.filter(industry_expert__icontains=reviewer.full_name).order_by('-created_at')
+            except Reviewer.DoesNotExist:
+                return ReviewFolder.objects.none()
+        
+        # Student can see only their own review folders
+        if user.role == 'student':
+            try:
+                student = Student.objects.get(user=user)
+                return ReviewFolder.objects.filter(student=student).order_by('-created_at')
+            except Student.DoesNotExist:
+                return ReviewFolder.objects.none()
+        
+        return ReviewFolder.objects.none()
 
     def get_permissions(self):
         if self.request.method in ['POST', 'PUT', 'PATCH', 'DELETE']:
@@ -974,8 +1012,8 @@ class ReviewFolderViewSet(SafeViewSet, viewsets.ModelViewSet):
         reviewer = None
         try:
             first_word = expert_name.split()[0].lower()
-            user = User.objects.filter(username__icontains=first_word, is_reviewer=True).first()
-            if user:
+            user = User.objects.filter(username__icontains=first_word).first()
+            if user and user.role == 'reviewer':
                 reviewer = Reviewer.objects.filter(user=user).first()
         except Exception as e:
             print(f"Error finding reviewer: {e}")

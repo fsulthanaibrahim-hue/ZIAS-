@@ -259,18 +259,15 @@ function Students() {
     setSelectedFiles([]); setEditDocuments([]);
   };
 
-  // ================= FIXED handleSubmit =================
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Email is required
     if (!formData.email.trim()) {
       setEmailError("Email is required");
       showToast("Email is required", "error");
       return;
     }
 
-    // Phone validations
     const checks = [
       { field: 'phone', setErr: setPhoneError, label: 'Student phone' },
       { field: 'fathers_contact', setErr: setFathersContactError, label: "Father's contact" },
@@ -297,6 +294,7 @@ function Students() {
       email: formData.email.trim(),
       course: courseObj?.name || null,
       batch: batchObj?.name || null,
+      batch_id: formData.batch_id ? parseInt(formData.batch_id) : null,
       mentor: formData.mentor_id ? parseInt(formData.mentor_id) : null,
       phone: formData.phone || null,
       date_of_birth: formData.date_of_birth || null,
@@ -337,6 +335,8 @@ function Students() {
           msg = `${firstKey}: ${data[firstKey][0]}`;
         } else if (data.detail) {
           msg = data.detail;
+        } else if (data.error) {
+          msg = data.error;
         }
       }
       showToast(msg, "error");
@@ -344,7 +344,6 @@ function Students() {
       setSubmitting(false);
     }
   };
-  // ================= end of fixed handleSubmit =================
 
   const handleEdit = async (student) => {
     setEditingId(student.id);
@@ -446,7 +445,6 @@ function Students() {
       <ConfirmModal isOpen={showConfirmModal} onClose={() => setShowConfirmModal(false)} onConfirm={confirmDelete} studentName={studentToDelete?.name} />
       <ProgressModal isOpen={showProgressModal} onClose={() => setShowProgressModal(false)} student={progressStudent} />
 
-      {/* ── Top Banner ─────────────────────────────────────────────────────── */}
       <div className="bg-white border-b border-green-100 px-6 sm:px-8 py-6">
         <div className="max-w-[1400px] mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -507,7 +505,6 @@ function Students() {
 
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-8">
 
-        {/* ── Add/Edit Modal ─────────────────────────────────────────────── */}
         {showForm && (
           <div
             className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4"
@@ -518,7 +515,6 @@ function Students() {
               className="bg-white rounded-2xl w-full max-w-3xl border border-green-100 shadow-2xl shadow-green-100/50 max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Modal header */}
               <div className="sticky top-0 z-10 bg-white px-6 py-4 border-b border-green-100 rounded-t-2xl flex justify-between items-center">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-xl bg-green-600 flex items-center justify-center shadow-sm">
@@ -538,7 +534,6 @@ function Students() {
               </div>
 
               <div className="px-6 py-5 space-y-6">
-                {/* Basic Information */}
                 <div>
                   <p className={`${sectionTitleCls} text-green-600`}>Basic Information</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -585,7 +580,6 @@ function Students() {
                   </div>
                 </div>
 
-                {/* Parents */}
                 <div className="border-t border-green-50 pt-5">
                   <p className={`${sectionTitleCls} text-gray-400`}>Parents</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -596,13 +590,11 @@ function Students() {
                   </div>
                 </div>
 
-                {/* Address */}
                 <div className="border-t border-green-50 pt-5">
                   <p className={`${sectionTitleCls} text-gray-400`}>Address</p>
                   <textarea name="address" rows={2} value={formData.address} onChange={handleChange} className={`${inputCls} resize-none`} />
                 </div>
 
-                {/* Education */}
                 <div className="border-t border-green-50 pt-5">
                   <p className={`${sectionTitleCls} text-gray-400`}>Education</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -614,7 +606,6 @@ function Students() {
                   </div>
                 </div>
 
-                {/* Documents */}
                 <div className="border-t border-green-50 pt-5">
                   <p className={`${sectionTitleCls} text-green-600`}>Documents</p>
                   {editingId && (
@@ -674,7 +665,6 @@ function Students() {
           </div>
         )}
 
-        {/* ── View Student Modal ────────────────────────────────────────────── */}
         {viewingStudent && (
           <div
             className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4"
@@ -794,7 +784,6 @@ function Students() {
           </div>
         )}
 
-        {/* ── Students Table ────────────────────────────────────────────── */}
         <div className="bg-white rounded-2xl border border-green-100 overflow-hidden shadow-sm">
           <div className="h-1 bg-gradient-to-r from-green-500 to-green-300" />
 
@@ -875,7 +864,6 @@ function Students() {
             </tbody>
           </table>
 
-          {/* Pagination */}
           {totalFiltered > 0 && (
             <div className="bg-green-50/40 border-t border-green-100 px-5 py-3.5 flex flex-col sm:flex-row justify-between gap-3 items-center">
               <p className="text-gray-400 text-xs">
