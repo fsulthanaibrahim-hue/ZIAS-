@@ -92,7 +92,8 @@ function Accounts() {
 
   const fetchAccounts = useCallback(async () => {
     try {
-      const res = await API.get("accounts/");
+      // Fixed: Add leading slash
+      const res = await API.get("/accounts/");
       let accountsArray = [];
       if (Array.isArray(res.data)) {
         accountsArray = res.data;
@@ -105,6 +106,7 @@ function Accounts() {
       }
       setAccounts(accountsArray);
     } catch (err) {
+      console.error("Fetch accounts error:", err);
       const msg = getFriendlyErrorMessage(err, "Failed to load accounts");
       showToast(msg, "error");
       setAccounts([]);
@@ -125,10 +127,12 @@ function Accounts() {
   const confirmDelete = async () => {
     if (!accountToDelete) return;
     try {
-      await API.delete(`accounts/${accountToDelete.id}/`);
+      // Fixed: Add leading slash
+      await API.delete(`/accounts/${accountToDelete.id}/`);
       await fetchAccounts();
       showToast("Account deleted successfully", "success");
     } catch (err) {
+      console.error("Delete error:", err);
       const msg = getFriendlyErrorMessage(err, "Failed to delete account");
       showToast(msg, "error");
     } finally {
@@ -149,6 +153,7 @@ function Accounts() {
 
   const validatePhone = (phone) => {
     if (!phone) return true;
+    // Allow 10-digit numbers only
     const phoneRegex = /^\d{10}$/;
     return phoneRegex.test(phone);
   };
@@ -189,13 +194,15 @@ function Accounts() {
 
     try {
       if (editingId) {
+        // For edit, don't include email as it can't be changed
         const updatePayload = {
           full_name: formData.full_name.trim(),
           phone: formData.phone || "",
           department: formData.department || "",
         };
         
-        await API.patch(`accounts/${editingId}/`, updatePayload);
+        // Fixed: Add leading slash
+        await API.patch(`/accounts/${editingId}/`, updatePayload);
         showToast("Account updated successfully", "success");
         
         setShowForm(false);
@@ -212,9 +219,10 @@ function Accounts() {
         };
         
         console.log("Creating account with payload:", createPayload);
-        const response = await API.post("accounts/", createPayload);
+        // Fixed: Add leading slash
+        const response = await API.post("/accounts/", createPayload);
         
-        const generatedUsername = response.data?.username || "generated";
+        const generatedUsername = response.data?.username || response.data?.user?.username || "generated";
         showToast(`Account created! Username: ${generatedUsername} sent to ${formData.email}`, "success");
 
         setShowForm(false);
@@ -223,7 +231,7 @@ function Accounts() {
         setCurrentPage(1);
       }
     } catch (error) {
-      console.error("Error:", error);
+      console.error("Error saving account:", error);
       let msg = "Error saving account";
       
       if (error.response?.data?.error) {
@@ -232,6 +240,8 @@ function Accounts() {
         msg = error.response.data.detail;
       } else if (error.response?.data?.email) {
         msg = `Email error: ${error.response.data.email}`;
+      } else if (error.response?.data?.non_field_errors) {
+        msg = error.response.data.non_field_errors[0];
       }
       
       showToast(msg, "error");
@@ -262,7 +272,8 @@ function Accounts() {
         (a.full_name || a.username)?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         a.user?.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         a.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        a.department?.toLowerCase().includes(searchTerm.toLowerCase())
+        a.department?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        a.phone?.includes(searchTerm)
       )
     : [];
 
@@ -310,6 +321,11 @@ function Accounts() {
     "from-rose-500 to-rose-700", "from-cyan-500 to-cyan-700",
   ];
   const getColor = (name) => avatarColors[(name?.charCodeAt(0) || 0) % avatarColors.length];
+
+  // Auto-reset page when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
 
   return (
     <div className="min-h-screen w-full bg-gray-50 text-gray-800" style={{ fontFamily: "'Geist', 'SF Pro Display', system-ui, sans-serif" }}>
@@ -424,7 +440,7 @@ function Accounts() {
                         placeholder={editingId ? "Email cannot be changed" : "Enter email address"}
                       />
                       {!editingId && (
-                        <p className="text-xs text-gray-400 mt-1">Username will be auto-generated from email prefix</p>
+                        <p className="text-xs text-gray-400 mt-1">Username will be auto-generated from email prefix. Login credentials will be emailed.</p>
                       )}
                     </div>
                     <div>
@@ -448,7 +464,7 @@ function Accounts() {
                     </div>
                     <div>
                       <label className="block text-gray-600 text-xs font-medium mb-1.5">Department</label>
-                      <input type="text" name="department" value={formData.department} onChange={handleChange} className={inputClass} placeholder="Department name" />
+                      <input type="text" name="department" value={formData.department} onChange={handleChange} className={inputClass} placeholder="e.g., Finance, HR, Admin" />
                     </div>
                   </div>
                 </div>
@@ -472,7 +488,7 @@ function Accounts() {
           </div>
         )}
 
-        {/* View Details Modal - EXACTLY like Mentors page */}
+        {/* View Details Modal */}
         {viewingAccount && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={() => setViewingAccount(null)}>
             <div className="bg-white rounded-2xl w-full max-w-3xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -523,11 +539,28 @@ function Accounts() {
                         ) : "—"}
                       </p>
                     </div>
+                    <div>
+                      <label className="block text-gray-500 text-xs">Username</label>
+                      <p className="text-gray-800 text-sm mt-1">{viewingAccount.user?.username || "—"}</p>
+                    </div>
+                    <div>
+                      <label className="block text-gray-500 text-xs">Account ID</label>
+                      <p className="text-gray-800 text-sm mt-1 font-mono">#{viewingAccount.id}</p>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <div className="sticky bottom-0 bg-white px-4 sm:px-6 py-4 border-t border-gray-200 flex justify-end">
+              <div className="sticky bottom-0 bg-white px-4 sm:px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+                <button 
+                  onClick={() => {
+                    setViewingAccount(null);
+                    handleEdit(viewingAccount);
+                  }} 
+                  className="bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-lg transition-all text-sm font-medium"
+                >
+                  Edit Account
+                </button>
                 <button onClick={() => setViewingAccount(null)} className="bg-gray-100 hover:bg-gray-200 border border-gray-200 text-gray-700 hover:text-gray-800 px-5 py-2 rounded-lg transition-all text-sm font-medium">Close</button>
               </div>
             </div>
@@ -557,7 +590,7 @@ function Accounts() {
                         {a.full_name || a.user?.username}
                       </button>
                     </div>
-                  </td>
+                   </td>
                   <td data-label="Email" className="px-4 py-3 text-gray-500 text-sm break-all">{a.user?.email || a.email || "—"}</td>
                   <td data-label="Phone" className="px-4 py-3 text-gray-500 text-sm">{a.phone || "—"}</td>
                   <td data-label="Department" className="px-4 py-3">
@@ -583,7 +616,9 @@ function Accounts() {
               ))}
               {paginatedAccounts.length === 0 && (
                 <tr>
-                  <td colSpan="5" className="text-center py-12 text-gray-500">{searchTerm ? "No accounts match your search" : "No accounts yet"}</td>
+                  <td colSpan="5" className="text-center py-12 text-gray-500">
+                    {searchTerm ? "No accounts match your search" : "No accounts yet"}
+                  </td>
                 </tr>
               )}
             </tbody>

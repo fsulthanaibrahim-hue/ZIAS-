@@ -1,3 +1,5 @@
+// UserLogin.jsx - Updated version with correct role order
+
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import API from "../api/api";
@@ -27,19 +29,35 @@ function UserLogin() {
       });
       const { access, refresh, user } = response.data;
 
+      // Debug logging to see what role is returned
+      console.log("User object from backend:", user);
+      console.log("User role:", user.role);
+      console.log("is_admin:", user.is_admin);
+      console.log("is_accounts:", user.is_accounts);
+      console.log("is_student:", user.is_student);
+      console.log("is_mentor:", user.is_mentor);
+      console.log("is_reviewer:", user.is_reviewer);
+
       saveAuthSession({ access, refresh, user });
 
+      // IMPORTANT: Check accounts BEFORE student
+      // The order matters! Put accounts before student
       if (user.is_admin) {
         navigate("/admin/dashboard");
-      } else if (user.is_student) {
-        navigate("/student/dashboard");
-      } else if (user.is_mentor) {
-        navigate("/mentor/dashboard");
-      } else if (user.is_reviewer) {
-        navigate("/reviewer/dashboard");
-      } else if (user.is_accounts) {
+      } 
+      else if (user.is_accounts) {  // ← MOVED UP - Check accounts BEFORE student
         navigate("/accounts/dashboard");
-      } else {
+      }
+      else if (user.is_mentor) {
+        navigate("/mentor/dashboard");
+      } 
+      else if (user.is_reviewer) {
+        navigate("/reviewer/dashboard");
+      }
+      else if (user.is_student) {  // ← Student checked AFTER accounts
+        navigate("/student/dashboard");
+      } 
+      else {
         navigate("/");
       }
     } catch (err) {

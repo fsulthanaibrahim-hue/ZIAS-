@@ -39,7 +39,6 @@ import AttendanceMonitor from "./pages/mentor/AttendanceMonitor";
 import MentorAssignments from "./pages/mentor/MentorAssignments";
 import MentorFeeOverview from "./pages/mentor/MentorFeeOverview";
 
-
 // Admin pages
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./Admin/Dashboard";
@@ -60,8 +59,6 @@ import ModuleDetail from "./Admin/ModuleDetail";
 import Accounts from "./Admin/Accounts";
 import FeeAnalytics from "./Admin/FeeAnalytics";
 import AdminFeeStructure from "./Admin/AdminFeeStructure";
-
-
 
 // Common pages
 import Navbar from "./components/Navbar";
@@ -88,16 +85,19 @@ import AccountsPayments from "./pages/accounts/AccountsPayments";
 import AccountsStudents from "./pages/accounts/AccountsStudents";
 import AccountsProfile from "./pages/accounts/AccountsProfile";
 import AccountsInvoices from "./pages/accounts/AccountsInvoices";
+// REMOVED: import AccountsChangePassword from "./pages/accounts/AccountsChangePassword"; // This file doesn't exist
+
 import StudentFees from "./pages/student/StudentFees";
 import FeeOverview from "./Admin/FeeOverview";
 import AdminStudentFeeManagement from "./Admin/AdminStudentFeeManagement";
 
-
-
 // ========== ROUTE GUARDS ==========
 function PrivateRoute({ children }) {
   const token = localStorage.getItem("access_token");
-  return token ? children : <Navigate to="/login" replace />;
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+  return children;
 }
 
 function AdminRoute({ children }) {
@@ -109,7 +109,10 @@ function AdminRoute({ children }) {
   } catch (e) {
     user = null;
   }
-  return token && user?.is_admin ? children : <Navigate to="/admin/login" replace />;
+  if (!token || !user?.is_admin) {
+    return <Navigate to="/admin/login" replace />;
+  }
+  return children;
 }
 
 function AccountsRoute({ children }) {
@@ -121,7 +124,65 @@ function AccountsRoute({ children }) {
   } catch (e) {
     user = null;
   }
-  return token && user?.is_accounts ? children : <Navigate to="/login" replace />;
+  if (!token || !user?.is_accounts) {
+    return <Navigate to="/login" replace />;
+  }
+  return children;
+}
+
+function ReviewerRoute({ children }) {
+  const token = localStorage.getItem("access_token");
+  const userStr = localStorage.getItem("user");
+  let user = null;
+  try {
+    user = userStr ? JSON.parse(userStr) : null;
+  } catch (e) {
+    user = null;
+  }
+  if (!token || !user?.is_reviewer) {
+    return <Navigate to="/login" replace />;
+  }
+  return children;
+}
+
+function MentorRoute({ children }) {
+  const token = localStorage.getItem("access_token");
+  const userStr = localStorage.getItem("user");
+  let user = null;
+  try {
+    user = userStr ? JSON.parse(userStr) : null;
+  } catch (e) {
+    user = null;
+  }
+  if (!token || !user?.is_mentor) {
+    return <Navigate to="/login" replace />;
+  }
+  return children;
+}
+
+function StudentRoute({ children }) {
+  const token = localStorage.getItem("access_token");
+  const userStr = localStorage.getItem("user");
+  let user = null;
+  try {
+    user = userStr ? JSON.parse(userStr) : null;
+  } catch (e) {
+    user = null;
+  }
+  if (!token || !user?.is_student) {
+    return <Navigate to="/login" replace />;
+  }
+  return children;
+}
+
+// Helper function to get user from localStorage
+function getUser() {
+  const userStr = localStorage.getItem("user");
+  try {
+    return userStr ? JSON.parse(userStr) : null;
+  } catch (e) {
+    return null;
+  }
 }
 
 function App() {
@@ -130,28 +191,42 @@ function App() {
 
   useEffect(() => {
     const token = localStorage.getItem("access_token");
-    const userStr = localStorage.getItem("user");
-    let user = null;
-    try {
-      user = userStr ? JSON.parse(userStr) : null;
-    } catch (e) {
-      user = null;
-    }
+    const user = getUser();
 
-    if (location.pathname === "/login" || location.pathname === "/admin/login") {
+    // Public routes that don't need redirect
+    const publicRoutes = ["/login", "/admin/login", "/forgot-password", "/", "/courses", "/about", "/contact"];
+    const isPublicRoute = publicRoutes.some(route => location.pathname === route);
+    const isResetPassword = location.pathname.startsWith("/reset-password/");
+    
+    if (isPublicRoute || isResetPassword) {
       return;
     }
 
-    const isForgotPassword = location.pathname === "/forgot-password";
-    const isResetPassword = location.pathname.startsWith("/reset-password/");
-    const isResetPath = isForgotPassword || isResetPassword;
+    // If no token, redirect to login
+    if (!token) {
+      navigate("/login", { replace: true });
+      return;
+    }
 
-    if (token && user && isResetPath) {
-      if (user.is_admin) navigate("/admin/dashboard", { replace: true });
-      else if (user.is_student) navigate("/student/dashboard", { replace: true });
-      else if (user.is_mentor) navigate("/mentor/dashboard", { replace: true });
-      else if (user.is_reviewer) navigate("/reviewer/dashboard", { replace: true });
-      else if (user.is_accounts) navigate("/accounts/dashboard", { replace: true });
+    // If token exists but no user data, stay on current page
+    if (!user) {
+      return;
+    }
+
+    // Check if user is trying to access wrong dashboard
+    const path = location.pathname;
+    
+    // Redirect based on role - ORDER MATTERS! Check accounts BEFORE student
+    if (user.is_admin && !path.startsWith("/admin")) {
+      navigate("/admin/dashboard", { replace: true });
+    } else if (user.is_accounts && !path.startsWith("/accounts")) {
+      navigate("/accounts/dashboard", { replace: true });
+    } else if (user.is_mentor && !path.startsWith("/mentor")) {
+      navigate("/mentor/dashboard", { replace: true });
+    } else if (user.is_reviewer && !path.startsWith("/reviewer")) {
+      navigate("/reviewer/dashboard", { replace: true });
+    } else if (user.is_student && !path.startsWith("/student")) {
+      navigate("/student/dashboard", { replace: true });
     }
   }, [location.pathname, navigate]);
 
@@ -169,7 +244,7 @@ function App() {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password/:token" element={<ResetPassword />} />
 
-        {/* Redirects */}
+        {/* Redirects - User routes redirect to appropriate role dashboards */}
         <Route path="/user/dashboard" element={<Navigate to="/student/dashboard" replace />} />
         <Route path="/user/profile" element={<Navigate to="/student/profile" replace />} />
         <Route path="/user/review-sheet" element={<Navigate to="/student/review-sheet" replace />} />
@@ -177,186 +252,202 @@ function App() {
         <Route path="/student/detailed-review" element={<Navigate to="/student/review-sheet" replace />} />
 
         {/* Student routes */}
-        <Route path="/student/dashboard" element={<PrivateRoute><StudentDashboard /></PrivateRoute>} />
-        <Route path="/student/profile" element={<PrivateRoute><StudentProfile /></PrivateRoute>} />
-        <Route path="/student/review-sheet" element={<PrivateRoute><StudentReviewSheet /></PrivateRoute>} />
-        <Route path="/student/review-sheet/range/:start/:end" element={<PrivateRoute><StudentReviewSheetRange /></PrivateRoute>} />
-        <Route path="/student/week/:weekId" element={<PrivateRoute><StudentWeekView /></PrivateRoute>} />
-        <Route path="/student/course/:courseId" element={<PrivateRoute><CourseDetail /></PrivateRoute>} />
-        <Route path="/student/module/:moduleId" element={<PrivateRoute><ModuleView /></PrivateRoute>} />
-        <Route path="/student/change-password" element={<PrivateRoute><ChangePassword /></PrivateRoute>} />
-        <Route path="/student/dashboard-lock" element={<PrivateRoute><DashboardLock /></PrivateRoute>} />
-        <Route path="/student/modules" element={<PrivateRoute><StudentModules /></PrivateRoute>} />
-        <Route path="/student/review-folders" element={<PrivateRoute><StudentReviewFolders /></PrivateRoute>} />
-        <Route path="/student/in-out-register" element={<PrivateRoute><InOutRegister /></PrivateRoute>} />
-        <Route path="/student/fees" element={<PrivateRoute><StudentFees /></PrivateRoute>} />
-        <Route path="/student/attendance" element={<PrivateRoute><StudentAttendance /></PrivateRoute>} />
+        <Route path="/student/dashboard" element={<StudentRoute><StudentDashboard /></StudentRoute>} />
+        <Route path="/student/profile" element={<StudentRoute><StudentProfile /></StudentRoute>} />
+        <Route path="/student/review-sheet" element={<StudentRoute><StudentReviewSheet /></StudentRoute>} />
+        <Route path="/student/review-sheet/range/:start/:end" element={<StudentRoute><StudentReviewSheetRange /></StudentRoute>} />
+        <Route path="/student/week/:weekId" element={<StudentRoute><StudentWeekView /></StudentRoute>} />
+        <Route path="/student/course/:courseId" element={<StudentRoute><CourseDetail /></StudentRoute>} />
+        <Route path="/student/module/:moduleId" element={<StudentRoute><ModuleView /></StudentRoute>} />
+        <Route path="/student/change-password" element={<StudentRoute><ChangePassword /></StudentRoute>} />
+        <Route path="/student/dashboard-lock" element={<StudentRoute><DashboardLock /></StudentRoute>} />
+        <Route path="/student/modules" element={<StudentRoute><StudentModules /></StudentRoute>} />
+        <Route path="/student/review-folders" element={<StudentRoute><StudentReviewFolders /></StudentRoute>} />
+        <Route path="/student/in-out-register" element={<StudentRoute><InOutRegister /></StudentRoute>} />
+        <Route path="/student/fees" element={<StudentRoute><StudentFees /></StudentRoute>} />
+        <Route path="/student/attendance" element={<StudentRoute><StudentAttendance /></StudentRoute>} />
         <Route path="/student/notifications" element={
-          <PrivateRoute>
+          <StudentRoute>
             <div style={{ display: "flex" }}>
               <StudentSidebar />
               <NotificationPage />
             </div>
-          </PrivateRoute>
+          </StudentRoute>
         } />
 
-        {/* Generic change password route */}
+        {/* Generic change password route - accessible by all authenticated users */}
         <Route path="/change-password" element={<PrivateRoute><ChangePassword /></PrivateRoute>} />
 
         {/* Reviewer routes */}
         <Route path="/reviewer/dashboard" element={
-          <PrivateRoute>
+          <ReviewerRoute>
             <div style={{ display: "flex" }}>
               <ReviewerSidebar />
               <ReviewerDashboard />
             </div>
-          </PrivateRoute>
+          </ReviewerRoute>
         } />
         <Route path="/reviewer/notifications" element={
-          <PrivateRoute>
+          <ReviewerRoute>
             <div style={{ display: "flex" }}>
               <ReviewerSidebar />
               <NotificationPage />
             </div>
-          </PrivateRoute>
+          </ReviewerRoute>
         } />
         <Route path="/reviewer/profile" element={
-          <PrivateRoute>
+          <ReviewerRoute>
             <div style={{ display: "flex" }}>
               <ReviewerSidebar />
               <ReviewerProfile />
             </div>
-          </PrivateRoute>
+          </ReviewerRoute>
         } />
         <Route path="/reviewer/review-sheet" element={
-          <PrivateRoute>
+          <ReviewerRoute>
             <div style={{ display: "flex" }}>
               <ReviewerSidebar />
               <ReviewerReviewSheet />
             </div>
-          </PrivateRoute>
+          </ReviewerRoute>
         } />
         <Route path="/reviewer/review-sheet/range/:start/:end" element={
-          <PrivateRoute>
+          <ReviewerRoute>
             <div style={{ display: "flex" }}>
               <ReviewerSidebar />
               <ReviewerReviewSheetRange />
             </div>
-          </PrivateRoute>
+          </ReviewerRoute>
         } />
         <Route path="/reviewer/assignments" element={
-          <PrivateRoute>
+          <ReviewerRoute>
             <div style={{ display: "flex" }}>
               <ReviewerSidebar />
               <ReviewerAssignments />
             </div>
-          </PrivateRoute>
+          </ReviewerRoute>
+        } />
+        <Route path="/reviewer/change-password" element={
+          <ReviewerRoute>
+            <div style={{ display: "flex" }}>
+              <ReviewerSidebar />
+              <ChangePassword />
+            </div>
+          </ReviewerRoute>
         } />
 
         {/* Mentor routes */}
         <Route path="/mentor/dashboard" element={
-          <PrivateRoute>
+          <MentorRoute>
             <div style={{ display: "flex" }}>
               <MentorSidebar />
               <MentorDashboard />
             </div>
-          </PrivateRoute>
+          </MentorRoute>
         } />
         <Route path="/mentor/students" element={
-          <PrivateRoute>
+          <MentorRoute>
             <div style={{ display: "flex" }}>
               <MentorSidebar />
               <MentorStudents />
             </div>
-          </PrivateRoute>
+          </MentorRoute>
         } />
         <Route path="/mentor/modules" element={
-          <PrivateRoute>
+          <MentorRoute>
             <div style={{ display: "flex" }}>
               <MentorSidebar />
               <MentorModules />
             </div>
-          </PrivateRoute>
+          </MentorRoute>
         } />
         <Route path="/mentor/profile" element={
-          <PrivateRoute>
+          <MentorRoute>
             <div style={{ display: "flex" }}>
               <MentorSidebar />
               <MentorProfile />
             </div>
-          </PrivateRoute>
+          </MentorRoute>
         } />
         <Route path="/mentor/review-sheet" element={
-          <PrivateRoute>
+          <MentorRoute>
             <div style={{ display: "flex" }}>
               <MentorSidebar />
               <MentorReviewEdit />
             </div>
-          </PrivateRoute>
+          </MentorRoute>
         } />
         <Route path="/mentor/review-sheet/range/:start/:end" element={
-          <PrivateRoute>
+          <MentorRoute>
             <div style={{ display: "flex" }}>
               <MentorSidebar />
               <MentorReviewSheetRange />
             </div>
-          </PrivateRoute>
+          </MentorRoute>
         } />
         <Route path="/mentor/review-tracker" element={
-          <PrivateRoute>
+          <MentorRoute>
             <div style={{ display: "flex" }}>
               <MentorSidebar />
               <ReviewTracker />
             </div>
-          </PrivateRoute>
+          </MentorRoute>
         } />
         <Route path="/mentor/review-folders" element={
-          <PrivateRoute>
+          <MentorRoute>
             <div style={{ display: "flex" }}>
               <MentorSidebar />
               <MentorReviewFolders />
             </div>
-          </PrivateRoute>
+          </MentorRoute>
         } />
         <Route path="/mentor/notifications" element={
-          <PrivateRoute>
+          <MentorRoute>
             <div style={{ display: "flex" }}>
               <MentorSidebar />
               <NotificationPage />
             </div>
-          </PrivateRoute>
+          </MentorRoute>
         } />
         <Route path="/mentor/attendance" element={
-          <PrivateRoute>
+          <MentorRoute>
             <div style={{ display: "flex" }}>
               <MentorSidebar />
               <AttendanceMonitor />
             </div>
-          </PrivateRoute>
+          </MentorRoute>
         } />
         <Route path="/mentor/assignments" element={
-          <PrivateRoute>
+          <MentorRoute>
             <div style={{ display: "flex" }}>
               <MentorSidebar />
               <MentorAssignments />
             </div>
-          </PrivateRoute>
+          </MentorRoute>
         } />
         <Route path="/mentor/module/:moduleId" element={
-          <PrivateRoute>
+          <MentorRoute>
             <div style={{ display: "flex" }}>
               <MentorSidebar />
               <MentorModuleDetail />
             </div>
-          </PrivateRoute>
+          </MentorRoute>
         } />
         <Route path="/mentor/fee-overview" element={
-          <PrivateRoute>
+          <MentorRoute>
             <div style={{ display: "flex" }}>
               <MentorSidebar />
               <MentorFeeOverview />
             </div>
-          </PrivateRoute>
+          </MentorRoute>
+        } />
+        <Route path="/mentor/change-password" element={
+          <MentorRoute>
+            <div style={{ display: "flex" }}>
+              <MentorSidebar />
+              <ChangePassword />
+            </div>
+          </MentorRoute>
         } />
 
         {/* Admin routes */}
@@ -381,6 +472,14 @@ function App() {
         <Route path="/admin/fee-overview" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><FeeOverview /></div></AdminRoute>} />
         <Route path="/admin/fee-structure" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><AdminFeeStructure /></div></AdminRoute>} />
         <Route path="/admin/student-fee-management" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><AdminStudentFeeManagement /></div></AdminRoute>} />
+        <Route path="/admin/change-password" element={
+          <AdminRoute>
+            <div style={{ display: "flex" }}>
+              <Sidebar />
+              <ChangePassword />
+            </div>
+          </AdminRoute>
+        } />
 
         {/* Accounts routes – protected by AccountsRoute */}
         <Route path="/accounts/dashboard" element={
@@ -420,6 +519,15 @@ function App() {
             <div style={{ display: "flex" }}>
               <AccountsSidebar />
               <AccountsInvoices />
+            </div>
+          </AccountsRoute>
+        } />
+        {/* Accounts change password - using generic ChangePassword component */}
+        <Route path="/accounts/change-password" element={
+          <AccountsRoute>
+            <div style={{ display: "flex" }}>
+              <AccountsSidebar />
+              <ChangePassword />
             </div>
           </AccountsRoute>
         } />

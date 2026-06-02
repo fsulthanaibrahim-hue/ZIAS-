@@ -4,15 +4,24 @@ from django.utils import timezone
 
 
 class User(AbstractUser):
-    role = models.CharField(max_length=20, default='student', choices=[
-        ('admin', 'Admin'),
-        ('student', 'Student'),
-        ('mentor', 'Mentor'),
-        ('reviewer', 'Reviewer'),
-        ('accounts', 'Accounts'),
-    ])
+    # No role field here - it was removed in migration 0002_remove_user_role
     password_changed_at = models.DateTimeField(default=timezone.now, null=True, blank=True)
     last_dashboard_access = models.DateTimeField(default=timezone.now, null=True, blank=True)
+
+    @property
+    def role(self):
+        """Get user role based on groups"""
+        if self.is_superuser:
+            return 'admin'
+        if hasattr(self, 'groups') and self.groups.filter(name='Accounts').exists():
+            return 'accounts'
+        if hasattr(self, 'groups') and self.groups.filter(name='Reviewers').exists():
+            return 'reviewer'
+        if hasattr(self, 'groups') and self.groups.filter(name='Mentors').exists():
+            return 'mentor'
+        if hasattr(self, 'groups') and self.groups.filter(name='Students').exists():
+            return 'student'
+        return 'user'
 
     @property
     def is_admin(self):
@@ -33,6 +42,10 @@ class User(AbstractUser):
     @property
     def is_accounts(self):
         return self.role == 'accounts'
+    
+    def __str__(self):
+        return f"{self.username} ({self.role})"
+    
 
 
 class Batch(models.Model):

@@ -609,6 +609,9 @@ class ContactMessageDetailView(SafeAPIView, RetrieveAPIView):
 # ----------------------------
 # CUSTOM LOGIN VIEW
 # ----------------------------
+# ----------------------------
+# CUSTOM LOGIN VIEW - SIMPLIFIED AND CORRECTED
+# ----------------------------
 class CustomLoginView(APIView):
     permission_classes = [AllowAny]
 
@@ -624,16 +627,35 @@ class CustomLoginView(APIView):
             return Response({'error': 'Username/email and password are required'}, status=400)
 
         login_id = login_id.strip()
-        user_query = Q(email__iexact=login_id) | Q(username__iexact=login_id)
-        users = User.objects.filter(user_query).order_by('id')
         
-        if not users.exists():
+        # Find user by username or email
+        user = None
+        
+        # Try username first
+        try:
+            user = User.objects.get(username__iexact=login_id)
+            print(f"Found user by username: {user.username}")
+        except User.DoesNotExist:
+            pass
+        
+        # If not found, try email
+        if not user:
+            try:
+                user = User.objects.get(email__iexact=login_id)
+                print(f"Found user by email: {user.email}")
+            except User.DoesNotExist:
+                pass
+            except User.MultipleObjectsReturned:
+                # If multiple users with same email, take the first active one
+                user = User.objects.filter(email__iexact=login_id, is_active=True).first()
+                print(f"Multiple users found, using: {user.username}")
+        
+        if not user:
             print(f"Login failed. No account found for: {login_id}")
             return Response({'error': 'No account found with this email or username'}, status=401)
 
-        user = next((candidate for candidate in users if candidate.check_password(password)), None)
-
-        if not user:
+        # Check password
+        if not user.check_password(password):
             print(f"Login failed. Wrong password for: {login_id}")
             return Response({'error': 'Password is incorrect'}, status=401)
         
@@ -641,14 +663,21 @@ class CustomLoginView(APIView):
         if not user.is_active:
             return Response({'error': 'Account is disabled'}, status=401)
 
+        # Get role from the property (this will work correctly now)
+        role = user.role
+        print(f"User role: {role}")
+        print(f"is_accounts: {user.is_accounts}")
+        print(f"is_student: {user.is_student}")
+
         # Generate token
         refresh = RefreshToken.for_user(user)
         
-        # Prepare response based on role
+        # Prepare response
         user_data = {
             'id': user.id,
             'username': user.username,
             'email': user.email,
+            'role': role,
             'is_admin': user.is_admin,
             'is_mentor': user.is_mentor,
             'is_reviewer': user.is_reviewer,
@@ -657,15 +686,7 @@ class CustomLoginView(APIView):
             'full_name': user.get_full_name() or user.username,
         }
         
-        # Add role-specific IDs
-        if user.role == 'student' and hasattr(user, 'student_profile'):
-            user_data['student_id'] = user.student_profile.id
-        elif user.role == 'mentor' and hasattr(user, 'mentor_profile'):
-            user_data['mentor_id'] = user.mentor_profile.id
-        elif user.role == 'reviewer' and hasattr(user, 'reviewer_profile'):
-            user_data['reviewer_id'] = user.reviewer_profile.id
-        
-        print(f"Login successful: {login_id} (Role: {user.role})")
+        print(f"Login successful: {login_id} (Role: {role})")
         
         return Response({
             'refresh': str(refresh),
