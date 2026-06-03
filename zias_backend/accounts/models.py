@@ -614,17 +614,35 @@ class FeePayment(models.Model):
     
 
 
-class FeeStructure(models.Model):
-    name = models.CharField(max_length=255)
-    batch = models.ForeignKey('Batch', on_delete=models.SET_NULL, null=True, blank=True)
-    total_amount = models.DecimalField(max_digits=10, decimal_places=2)
-    number_of_installments = models.IntegerField(default=1)
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
-    updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
+from django.db import models
+from django.core.validators import MinValueValidator, MaxValueValidator
 
+class FeeStructure(models.Model):
+    name = models.CharField(max_length=200, help_text="e.g., B.Tech Computer Science - Semester 1")
+    course = models.ForeignKey('Course', on_delete=models.SET_NULL, null=True, blank=True, related_name='fee_structures')
+    batch = models.ForeignKey('Batch', on_delete=models.SET_NULL, null=True, blank=True, related_name='fee_structures')
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(0)])
+    discount_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0, validators=[MinValueValidator(0), MaxValueValidator(100)])
+    number_of_installments = models.IntegerField(default=1, validators=[MinValueValidator(1), MaxValueValidator(52)])
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+    
     def __str__(self):
         return self.name
+    
+    @property
+    def discounted_amount(self):
+        return self.total_amount * (1 - self.discount_percentage / 100)
+    
+    @property
+    def per_installment_amount(self):
+        if self.number_of_installments > 0:
+            return self.discounted_amount / self.number_of_installments
+        return 0
 
 
 class InstallmentSchedule(models.Model):

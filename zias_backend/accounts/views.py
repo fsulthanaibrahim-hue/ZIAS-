@@ -2100,32 +2100,143 @@ class StudentFeeSummaryView(SafeAPIView):
 # ----------------------------
 # FEE STRUCTURE VIEWSET
 # ----------------------------
+from rest_framework import viewsets, permissions, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from django.db import transaction
+from django.db.models import Sum, Count, Q
+from .models import FeeStructure, Student, StudentFee
+from .serializers import FeeStructureSerializer
+
 class FeeStructureViewSet(viewsets.ModelViewSet):
     queryset = FeeStructure.objects.all()
     serializer_class = FeeStructureSerializer
     permission_classes = [permissions.IsAdminUser]
-
+    
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        
+        # Filter by active status
+        is_active = self.request.query_params.get('is_active')
+        if is_active is not None:
+            queryset = queryset.filter(is_active=is_active.lower() == 'true')
+        
+        # Filter by course
+        course_id = self.request.query_params.get('course')
+        if course_id:
+            queryset = queryset.filter(course_id=course_id)
+        
+        # Filter by batch
+        batch_id = self.request.query_params.get('batch')
+        if batch_id:
+            queryset = queryset.filter(batch_id=batch_id)
+        
+        # Search by name
+        search = self.request.query_params.get('search')
+        if search:
+            queryset = queryset.filter(name__icontains=search)
+        
+        return queryset
+    
     @action(detail=True, methods=['post'])
     def apply_to_students(self, request, pk=None):
         fee_structure = self.get_object()
-        students = Student.objects.all()
+        
+        if not fee_structure.is_active:
+            return Response(
+                {"error": "Cannot apply inactive fee structure. Please activate it first."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get eligible students
+        students = Student.objects.filter(is_active=True)
+        
         if fee_structure.course:
             students = students.filter(course=fee_structure.course)
         if fee_structure.batch:
             students = students.filter(batch=fee_structure.batch)
-
+        
+        if not students.exists():
+            return Response({
+                "warning": "No eligible students found for this fee structure.",
+                "criteria": {
+                    "course": fee_structure.course.name if fee_structure.course else "Any",
+                    "batch": fee_structure.batch.name if fee_structure.batch else "Any"
+                }
+            })
+        
         created_count = 0
-        for student in students:
-            if not StudentFee.objects.filter(student=student, fee_structure=fee_structure).exists():
-                StudentFee.objects.create(
+        already_assigned = 0
+        
+        with transaction.atomic():
+            for student in students:
+                student_fee, created = StudentFee.objects.get_or_create(
                     student=student,
                     fee_structure=fee_structure,
-                    total_amount=fee_structure.total_amount * (1 - fee_structure.discount_percentage / 100),
-                    discount_applied=fee_structure.total_amount * fee_structure.discount_percentage / 100
+                    defaults={
+                        'total_amount': fee_structure.discounted_amount,
+                        'discount_applied': fee_structure.total_amount - fee_structure.discounted_amount,
+                        'pending_amount': fee_structure.discounted_amount
+                    }
                 )
-                created_count += 1
-        return Response({"message": f"Fee structure applied to {created_count} students."})
-
+                if created:
+                    created_count += 1
+                else:
+                    already_assigned += 1
+        
+        return Response({
+            "message": f"Fee structure applied successfully!",
+            "new_assignments": created_count,
+            "already_assigned": already_assigned,
+            "total_eligible": students.count()
+        })
+    
+    @action(detail=True, methods=['get'])
+    def detailed_stats(self, request, pk=None):
+        fee_structure = self.get_object()
+        
+        student_fees = StudentFee.objects.filter(fee_structure=fee_structure)
+        
+        stats = {
+            'id': fee_structure.id,
+            'name': fee_structure.name,
+            'total_amount': float(fee_structure.total_amount),
+            'discounted_amount': float(fee_structure.discounted_amount),
+            'total_students': student_fees.count(),
+            'total_collected': float(student_fees.aggregate(Sum('paid_amount'))['paid_amount__sum'] or 0),
+            'total_pending': float(student_fees.aggregate(Sum('pending_amount'))['pending_amount__sum'] or 0),
+            'fully_paid_students': student_fees.filter(pending_amount=0).count(),
+            'partial_paid_students': student_fees.filter(pending_amount__gt=0, paid_amount__gt=0).count(),
+            'no_payment_students': student_fees.filter(paid_amount=0).count(),
+            'collection_rate': (
+                (float(student_fees.aggregate(Sum('paid_amount'))['paid_amount__sum'] or 0) / 
+                 float(student_fees.aggregate(Sum('total_amount'))['total_amount__sum'] or 1)) * 100
+            ) if student_fees.exists() else 0
+        }
+        
+        return Response(stats)
+    
+    @action(detail=False, methods=['get'])
+    def dashboard_stats(self, request):
+        total_structures = FeeStructure.objects.count()
+        active_structures = FeeStructure.objects.filter(is_active=True).count()
+        
+        total_revenue = StudentFee.objects.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+        total_collected = StudentFee.objects.aggregate(Sum('paid_amount'))['paid_amount__sum'] or 0
+        total_pending = StudentFee.objects.aggregate(Sum('pending_amount'))['pending_amount__sum'] or 0
+        
+        # Recent fee structures
+        recent = FeeStructure.objects.all()[:5]
+        
+        return Response({
+            'total_structures': total_structures,
+            'active_structures': active_structures,
+            'total_revenue': float(total_revenue),
+            'total_collected': float(total_collected),
+            'total_pending': float(total_pending),
+            'collection_percentage': (total_collected / total_revenue * 100) if total_revenue > 0 else 0,
+            'recent_structures': FeeStructureSerializer(recent, many=True).data
+        })
 
 
 
