@@ -2098,25 +2098,6 @@ class StudentFeeSummaryView(SafeAPIView):
 
 
 
-
-
-from rest_framework import viewsets, permissions, status
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from django.db import transaction
-from django.db.models import Sum
-from django.utils import timezone
-from datetime import timedelta
-from .models import FeeStructure, Student, StudentFee, FeePayment, InstallmentSchedule
-from .serializers import (
-    FeeStructureSerializer, StudentFeeSerializer, 
-    FeePaymentSerializer, InstallmentScheduleSerializer
-)
-from rest_framework.permissions import IsAuthenticated
-
-class SafeAPIView(viewsets.ViewSet):
-    pass
-
 class FeeStructureViewSet(viewsets.ModelViewSet):
     queryset = FeeStructure.objects.all().order_by('-id')
     serializer_class = FeeStructureSerializer
@@ -2142,7 +2123,7 @@ class FeeStructureViewSet(viewsets.ModelViewSet):
                 'results': serializer.data
             })
         except Exception as e:
-            return Response({"error": str(e)}, status=500)
+            return Response({"error": str(e)}, status=400)
     
     @action(detail=True, methods=['post'])
     def apply_to_students(self, request, pk=None):
@@ -2189,7 +2170,7 @@ class FeeStructureViewSet(viewsets.ModelViewSet):
                 "total_eligible": students.count()
             })
         except Exception as e:
-            return Response({"error": str(e)}, status=500)
+            return Response({"error": str(e)}, status=400)
     
     @action(detail=True, methods=['get'])
     def detailed_stats(self, request, pk=None):
@@ -2212,7 +2193,7 @@ class FeeStructureViewSet(viewsets.ModelViewSet):
             }
             return Response(stats)
         except Exception as e:
-            return Response({"error": str(e)}, status=500)
+            return Response({"error": str(e)}, status=400)
     
     @action(detail=False, methods=['get'])
     def dashboard_stats(self, request):
@@ -2227,7 +2208,58 @@ class FeeStructureViewSet(viewsets.ModelViewSet):
                 'total_amount': total_amount
             })
         except Exception as e:
-            return Response({"error": str(e)}, status=500)
+            return Response({"error": str(e)}, status=400)
+
+    @action(detail=True, methods=['post'])
+    def update_student_fees(self, request, pk=None):
+        """
+        Update ALL existing student fees for this fee structure
+        This should be called AFTER updating a fee structure
+        """
+        try:
+            fee_structure = self.get_object()
+            
+            # Get all existing StudentFee records for this fee structure
+            student_fees = StudentFee.objects.filter(fee_structure=fee_structure)
+            
+            if not student_fees.exists():
+                return Response({
+                    "warning": "No existing student fees found. Use 'apply_to_students' first.",
+                    "updated_count": 0
+                })
+            
+            updated_count = 0
+            with transaction.atomic():
+                for student_fee in student_fees:
+                    # Calculate new amounts based on updated fee structure
+                    discounted_amount = float(fee_structure.total_amount) * (1 - float(fee_structure.discount_percentage) / 100)
+                    
+                    # Store old paid amount
+                    old_paid = float(student_fee.paid_amount)
+                    
+                    # Update amounts
+                    student_fee.total_amount = discounted_amount
+                    student_fee.discount_applied = float(fee_structure.total_amount) - discounted_amount
+                    student_fee.pending_amount = discounted_amount - old_paid
+                    student_fee.save()
+                    updated_count += 1
+            
+            return Response({
+                "message": f"Successfully updated {updated_count} student fee records!",
+                "updated_count": updated_count,
+                "fee_structure": {
+                    "id": fee_structure.id,
+                    "name": fee_structure.name,
+                    "total_amount": float(fee_structure.total_amount),
+                    "discount_percentage": float(fee_structure.discount_percentage),
+                    "number_of_installments": fee_structure.number_of_installments
+                }
+            })
+        except Exception as e:
+            return Response({"error": str(e)}, status=400)       
+
+
+
 
 
 class StudentFeeViewSet(viewsets.ModelViewSet):
@@ -2249,6 +2281,9 @@ class StudentFeeViewSet(viewsets.ModelViewSet):
             })
         except Exception as e:
             return Response({"error": str(e)}, status=500)
+        
+
+
 
 # ----------------------------
 # ADMIN STUDENT FEE LIST VIEW
