@@ -17,53 +17,34 @@ function FeeAnalytics() {
   const [paymentHistory, setPaymentHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   
-  // Refs to prevent duplicate API calls
   const initialFetchDone = useRef(false);
-  const summaryFetchingRef = useRef(false);
-  const studentsFetchedRef = useRef(false);
-  const currentPeriodRef = useRef('monthly');
 
   const fetchSummary = async (periodValue) => {
-    // Prevent duplicate summary calls for the same period
-    if (summaryFetchingRef.current && currentPeriodRef.current === periodValue) {
-      return;
-    }
-    summaryFetchingRef.current = true;
-    currentPeriodRef.current = periodValue;
-    
     try {
-      const res = await API.get(`/accounts/dashboard/?period=${periodValue}`);
+      const res = await API.get(`/fee-structures/dashboard_stats/`);
       setSummary({
         total_collected: res.data.total_collected || 0,
         total_pending: res.data.total_pending || 0,
-        total_overdue: res.data.total_overdue || 0
+        total_overdue: 0
       });
     } catch (err) {
       console.error(err);
       toast.error('Failed to load summary data');
-    } finally {
-      summaryFetchingRef.current = false;
     }
   };
 
   const fetchStudents = async () => {
-    // Prevent duplicate students fetch
-    if (studentsFetchedRef.current) return;
-    studentsFetchedRef.current = true;
-    
     try {
-      const res = await API.get('/accounts/students/');
+      const res = await API.get('/admin-student-fees/');
       let data = res.data;
       if (data.results) data = data.results;
       setStudents(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error(err);
       toast.error('Failed to load student fee data');
-      studentsFetchedRef.current = false;
     }
   };
 
-  // Initial load - only once
   useEffect(() => {
     if (initialFetchDone.current) return;
     initialFetchDone.current = true;
@@ -76,7 +57,6 @@ function FeeAnalytics() {
     loadAll();
   }, []);
 
-  // Handle period changes - only when period actually changes
   useEffect(() => {
     if (!initialFetchDone.current) return;
     fetchSummary(period);
@@ -86,7 +66,7 @@ function FeeAnalytics() {
     setSelectedStudent(student);
     setHistoryLoading(true);
     try {
-      const res = await API.get(`/fee-payments/?student=${student.id}`);
+      const res = await API.get(`/student-fees/?student=${student.id}`);
       let payments = res.data;
       if (payments.results) payments = payments.results;
       setPaymentHistory(Array.isArray(payments) ? payments : []);
@@ -198,67 +178,42 @@ function FeeAnalytics() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Student</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Course</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Agreement</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Escalation</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Paid</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Pending</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Overdue</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Outstanding</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Week‑back</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">History</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {filteredStudents.map(s => {
-                  const outstanding = (s.total_pending || 0) + (s.total_overdue || 0);
-                  return (
-                    <tr key={s.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-sm">
-                        <div>
-                          <p className="font-medium text-gray-800">{s.name}</p>
-                          <p className="text-xs text-gray-500">{s.email}</p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        {s.agreement_signed ? (
-                          <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">✓ Signed</span>
-                        ) : (
-                          <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">✗ Not signed</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        {s.escalation_flag ? (
-                          <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">⚠️ Flagged</span>
-                        ) : (
-                          <span className="text-gray-400">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-sm font-medium text-green-600">{formatCurrency(s.total_paid)}</td>
-                      <td className="px-4 py-3 text-sm font-medium text-yellow-600">{formatCurrency(s.total_pending)}</td>
-                      <td className="px-4 py-3 text-sm font-medium text-red-600">{formatCurrency(s.total_overdue)}</td>
-                      <td className="px-4 py-3 text-sm font-medium text-purple-600">{formatCurrency(outstanding)}</td>
-                      <td className="px-4 py-3 text-sm">
-                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
-                          s.week_back_fee_status === 'on_track' 
-                            ? 'bg-green-100 text-green-800' 
-                            : s.week_back_fee_status === 'delayed' 
-                              ? 'bg-yellow-100 text-yellow-800' 
-                              : 'bg-red-100 text-red-800'
-                        }`}>
-                          {s.week_back_fee_status === 'on_track' ? 'On Track' : s.week_back_fee_status === 'delayed' ? 'Delayed' : 'Overdue'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        <button onClick={() => viewPaymentHistory(s)} className="text-blue-600 hover:text-blue-800 text-sm font-medium">
-                          View
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
+                {filteredStudents.map(s => (
+                  <tr key={s.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 text-sm">
+                      <div>
+                        <p className="font-medium text-gray-800">{s.name}</p>
+                        <p className="text-xs text-gray-500">{s.email}</p>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-sm">{s.course || '—'}</td>
+                    <td className="px-4 py-3 text-sm">
+                      {s.agreement_signed ? (
+                        <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">✓ Signed</span>
+                      ) : (
+                        <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">✗ Not signed</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm font-medium text-green-600">{formatCurrency(s.total_paid)}</td>
+                    <td className="px-4 py-3 text-sm font-medium text-yellow-600">{formatCurrency(s.total_pending)}</td>
+                    <td className="px-4 py-3 text-sm">
+                      <button onClick={() => viewPaymentHistory(s)} className="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                        View History
+                      </button>
+                    </td>
+                  </tr>
+                ))}
                 {filteredStudents.length === 0 && (
                   <tr>
-                    <td colSpan="9" className="text-center py-8 text-gray-500">No students found.</td>
+                    <td colSpan="6" className="text-center py-8 text-gray-500">No students found.</td>
                   </tr>
                 )}
               </tbody>
@@ -285,9 +240,7 @@ function FeeAnalytics() {
                       <tr>
                         <th className="text-left py-2 text-xs font-medium text-gray-500 uppercase">Amount</th>
                         <th className="text-left py-2 text-xs font-medium text-gray-500 uppercase">Due Date</th>
-                        <th className="text-left py-2 text-xs font-medium text-gray-500 uppercase">Payment Date</th>
                         <th className="text-left py-2 text-xs font-medium text-gray-500 uppercase">Status</th>
-                        <th className="text-left py-2 text-xs font-medium text-gray-500 uppercase">Notes</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -295,19 +248,15 @@ function FeeAnalytics() {
                         <tr key={p.id}>
                           <td className="py-2 text-sm">{formatCurrency(p.amount)}</td>
                           <td className="py-2 text-sm">{new Date(p.due_date).toLocaleDateString()}</td>
-                          <td className="py-2 text-sm">{p.payment_date ? new Date(p.payment_date).toLocaleDateString() : '—'}</td>
                           <td className="py-2 text-sm">
                             <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
-                              p.status === 'paid' 
-                                ? 'bg-green-100 text-green-800' 
-                                : p.status === 'pending' 
-                                  ? 'bg-yellow-100 text-yellow-800' 
-                                  : 'bg-red-100 text-red-800'
+                              p.status === 'paid' ? 'bg-green-100 text-green-800' : 
+                              p.status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 
+                              'bg-red-100 text-red-800'
                             }`}>
                               {p.status}
                             </span>
                           </td>
-                          <td className="py-2 text-sm text-gray-500">{p.notes || '—'}</td>
                         </tr>
                       ))}
                     </tbody>

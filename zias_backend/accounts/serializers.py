@@ -1042,51 +1042,13 @@ class InstallmentScheduleSerializer(serializers.ModelSerializer):
         model = InstallmentSchedule
         fields = ['id', 'week_number', 'due_date', 'amount', 'status', 'paid_date']
 
+from rest_framework import serializers
+from .models import FeeStructure
+
 class FeeStructureSerializer(serializers.ModelSerializer):
-    batch_name = serializers.CharField(source='batch.name', read_only=True, allow_null=True)
-    course_name = serializers.CharField(source='course.name', read_only=True, allow_null=True)
-    discounted_amount = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
-    per_installment_amount = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
-    total_students_assigned = serializers.SerializerMethodField()
-    total_collected = serializers.SerializerMethodField()
-    
     class Meta:
         model = FeeStructure
-        fields = [
-            'id', 'name', 'batch', 'batch_name', 'course', 'course_name',
-            'total_amount', 'discount_percentage', 'discounted_amount',
-            'number_of_installments', 'per_installment_amount', 'is_active',
-            'total_students_assigned', 'total_collected', 'created_at', 'updated_at'
-        ]
-        read_only_fields = ['created_at', 'updated_at']
-    
-    def get_total_students_assigned(self, obj):
-        from .models import StudentFee
-        return StudentFee.objects.filter(fee_structure=obj).count()
-    
-    def get_total_collected(self, obj):
-        from .models import StudentFee
-        student_fees = StudentFee.objects.filter(fee_structure=obj)
-        total = sum(sf.paid_amount for sf in student_fees)
-        return total
-    
-    def validate_total_amount(self, value):
-        if value <= 0:
-            raise serializers.ValidationError("Total amount must be greater than 0")
-        if value > 9999999:
-            raise serializers.ValidationError("Total amount cannot exceed ₹99,99,999")
-        return value
-    
-    def validate_number_of_installments(self, value):
-        if value < 1:
-            raise serializers.ValidationError("Number of installments must be at least 1")
-        if value > 52:
-            raise serializers.ValidationError("Number of installments cannot exceed 52 weeks")
-        return value
-    
-    def validate_discount_percentage(self, value):
-        if value < 0 or value > 100:
-            raise serializers.ValidationError("Discount percentage must be between 0 and 100")
+        fields = ['id', 'name', 'total_amount', 'discount_percentage', 'number_of_installments', 'is_active', 'created_at', 'updated_at']
 
 
 
