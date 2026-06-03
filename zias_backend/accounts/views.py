@@ -1670,20 +1670,13 @@ class AttendanceHistoryView(SafeAPIView, generics.ListAPIView):
 # FEE PAYMENT VIEWSET
 # ----------------------------
 class FeePaymentViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated]
+    queryset = FeePayment.objects.all()
     serializer_class = FeePaymentSerializer
-
-    def get_queryset(self):
-        user = self.request.user
-        if user.is_admin or user.is_accounts:
-            return FeePayment.objects.all()
-        elif user.is_mentor:
-            qs = FeePayment.objects.all()
-            student_id = self.request.query_params.get('student')
-            if student_id:
-                qs = qs.filter(student_id=student_id)
-            return qs
-        return FeePayment.objects.none()
+    
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)  
 
 
 # ----------------------------

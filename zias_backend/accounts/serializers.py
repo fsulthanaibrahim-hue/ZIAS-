@@ -912,12 +912,113 @@ class AttendanceRecordSerializer(serializers.ModelSerializer):
         read_only_fields = ['student', 'check_in', 'created_at', 'net_work_hours']
 
 
+
 class FeePaymentSerializer(serializers.ModelSerializer):
     student_name = serializers.CharField(source='student.user.username', read_only=True)
+    student_full_name = serializers.CharField(source='student.full_name', read_only=True)
+    student_email = serializers.EmailField(source='student.user.email', read_only=True)
+    formatted_amount = serializers.SerializerMethodField()
+    formatted_due_date = serializers.SerializerMethodField()
+    formatted_payment_date = serializers.SerializerMethodField()
 
     class Meta:
         model = FeePayment
-        fields = '__all__'
+        fields = [
+            'id', 'student', 'student_name', 'student_full_name', 'student_email',
+            'amount', 'formatted_amount', 'due_date', 'formatted_due_date',
+            'payment_date', 'formatted_payment_date', 'status', 'payment_method',
+            'transaction_id', 'notes', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+
+    def get_formatted_amount(self, obj):
+        """Return formatted amount with Indian Rupee symbol"""
+        return f"₹{obj.amount:,.2f}" if obj.amount else "₹0.00"
+
+    def get_formatted_due_date(self, obj):
+        """Return formatted due date"""
+        if obj.due_date:
+            return obj.due_date.strftime('%d %b %Y')
+        return None
+
+    def get_formatted_payment_date(self, obj):
+        """Return formatted payment date"""
+        if obj.payment_date:
+            return obj.payment_date.strftime('%d %b %Y, %I:%M %p')
+        return None
+
+    def validate_amount(self, value):
+        """Validate amount is positive"""
+        if value <= 0:
+            raise serializers.ValidationError("Amount must be greater than zero")
+        return value
+
+    def validate_status(self, value):
+        """Validate status value"""
+        allowed_status = ['pending', 'paid', 'overdue', 'cancelled']
+        if value not in allowed_status:
+            raise serializers.ValidationError(f"Status must be one of: {', '.join(allowed_status)}")
+        return value
+
+    def validate(self, data):
+        """Cross-field validation"""
+        # If status is 'paid', ensure payment_date is set
+        if data.get('status') == 'paid' and not data.get('payment_date'):
+            data['payment_date'] = timezone.now()
+        
+        # If payment_date is set but status is not 'paid', warn but don't error
+        if data.get('payment_date') and data.get('status') != 'paid':
+            # Auto-set status to paid if payment_date exists
+            data['status'] = 'paid'
+        
+        return data
+
+    def create(self, validated_data):
+        """Create a new fee payment with automatic payment date if paid"""
+        # Auto-set payment date if status is paid
+        if validated_data.get('status') == 'paid' and not validated_data.get('payment_date'):
+            validated_data['payment_date'] = timezone.now()
+        
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        """Update fee payment with automatic payment date if status changes to paid"""
+        # If status is changing to 'paid', set payment_date
+        if validated_data.get('status') == 'paid' and instance.status != 'paid':
+            validated_data['payment_date'] = timezone.now()
+        
+        # If status is changing from 'paid' to something else, clear payment_date
+        if validated_data.get('status') != 'paid' and instance.status == 'paid':
+            validated_data['payment_date'] = None
+        
+        return super().update(instance, validated_data)
+
+    def to_representation(self, instance):
+        """Customize the output representation"""
+        representation = super().to_representation(instance)
+        
+        # Add student details
+        if instance.student:
+            representation['student_details'] = {
+                'id': instance.student.id,
+                'name': instance.student.full_name or instance.student.user.username,
+                'email': instance.student.user.email,
+                'phone': instance.student.phone,
+                'course': instance.student.course,
+                'batch': instance.student.batch,
+            }
+        
+        # Add status badge info for frontend
+        status_colors = {
+            'paid': 'green',
+            'pending': 'yellow',
+            'overdue': 'red',
+            'cancelled': 'gray'
+        }
+        representation['status_color'] = status_colors.get(instance.status, 'gray')
+        representation['status_label'] = instance.status.capitalize()
+        
+        return representation
 
 
 class StudentFeeSummarySerializer(serializers.Serializer):

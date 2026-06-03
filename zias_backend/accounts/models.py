@@ -1,9 +1,10 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.utils import timezone
+from django.contrib.contenttypes.fields import GenericRelation
+from django.core.validators import RegexValidator, FileExtensionValidator
 
 
-    
 class User(AbstractUser):
     password_changed_at = models.DateTimeField(default=timezone.now, null=True, blank=True)
     last_dashboard_access = models.DateTimeField(default=timezone.now, null=True, blank=True)
@@ -13,7 +14,6 @@ class User(AbstractUser):
         """Get user role based on groups"""
         if self.is_superuser:
             return 'admin'
-        # Check groups - ORDER MATTERS!
         groups_list = list(self.groups.values_list('name', flat=True))
         if 'Accounts' in groups_list:
             return 'accounts'
@@ -44,7 +44,9 @@ class User(AbstractUser):
     @property
     def is_accounts(self):
         return self.role == 'accounts'
-    
+
+    def __str__(self):
+        return f"{self.username} ({self.role})"
 
 
 class Batch(models.Model):
@@ -64,14 +66,20 @@ class Batch(models.Model):
 class Document(models.Model):
     file = models.FileField(upload_to='student_documents/')
     uploaded_at = models.DateTimeField(auto_now_add=True)
-    description = models.CharField(max_length=255, blank=True)
+    description = models.CharField(max_length=255, blank=True, null=True)
 
     def __str__(self):
         return self.file.name
 
+
 class Student(models.Model):
+    GENDER_CHOICES = [
+        ('Male', 'Male'),
+        ('Female', 'Female'),
+        ('Other', 'Other'),
+    ]
+    
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='student_profile')
-    # ✅ NO email field here - email is in User model
     full_name = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -82,7 +90,7 @@ class Student(models.Model):
     phone = models.CharField(max_length=20, blank=True, null=True)
     date_of_birth = models.DateField(null=True, blank=True)
     age = models.PositiveIntegerField(blank=True, null=True)
-    gender = models.CharField(max_length=10, blank=True, null=True, choices=[('Male','Male'),('Female','Female'),('Other','Other')])
+    gender = models.CharField(max_length=10, blank=True, null=True, choices=GENDER_CHOICES)
     fathers_name = models.CharField(max_length=255, blank=True, null=True)
     fathers_contact = models.CharField(max_length=20, blank=True, null=True)
     mothers_name = models.CharField(max_length=255, blank=True, null=True)
@@ -98,9 +106,24 @@ class Student(models.Model):
     agreement_signed = models.BooleanField(default=False)
     escalation_flag = models.BooleanField(default=False)
 
+    class Meta:
+        ordering = ['-created_at']
+
     def __str__(self):
         return self.full_name or self.user.email or self.user.username
-    
+
+    def save(self, *args, **kwargs):
+        if self.date_of_birth:
+            today = timezone.now().date()
+            age = today.year - self.date_of_birth.year
+            if (today.month, today.day) < (self.date_of_birth.month, self.date_of_birth.day):
+                age -= 1
+            self.age = age
+        super().save(*args, **kwargs)
+
+    @property
+    def email(self):
+        return self.user.email if self.user else None
 
 
 class Mentor(models.Model):
@@ -257,7 +280,6 @@ class StudentWeekReview(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='week_reviews')
     module = models.ForeignKey(Module, on_delete=models.CASCADE, related_name='student_reviews')
 
-    # Existing fields
     reviewer_name = models.CharField(max_length=255, blank=True)
     advisor_name = models.CharField(max_length=255, blank=True)
     review_date = models.DateField(null=True, blank=True)
@@ -274,20 +296,13 @@ class StudentWeekReview(models.Model):
         ('Not Completed', 'Not Completed'),
     ])
     english_review = models.TextField(blank=True)
-    
-    # ✅ FIXED - Only one english_score field
     english_score = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Score out of 5")
-
-    # New fields
     review_score = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Review score out of 20")
     extra_workouts_mark = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Extra workouts mark out of 5")
     progress_video = models.URLField(max_length=500, blank=True, null=True, help_text="Progress video link")
     progress_video_mark = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Progress video mark out of 5")
-
-    # ✅ FIXED - Only one total_score field
     star_rating = models.PositiveSmallIntegerField(null=True, blank=True, choices=[(i, i) for i in range(1, 6)])
     total_score = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Total score out of 35")
-
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -308,11 +323,9 @@ class StudentWeekReview(models.Model):
         return "Poor English. Strongly needs basic English training."
 
     def save(self, *args, **kwargs):
-        # Auto‑generate english_review from english_score (0‑5 scaled)
         if self.english_score is not None:
             self.english_review = self.generate_english_review()
 
-        # Auto‑calculate total_score and star_rating
         extra = self.extra_workouts_mark or 0
         english = self.english_score or 0
         video = self.progress_video_mark or 0
@@ -325,7 +338,6 @@ class StudentWeekReview(models.Model):
         total = round((sum_marks * 35) / 15)
         self.total_score = max(0, min(35, total))
 
-        # Star rating based on total out of 35
         t = self.total_score
         if t >= 30:
             self.star_rating = 5
@@ -336,7 +348,7 @@ class StudentWeekReview(models.Model):
         elif t >= 14:
             self.star_rating = 2
         else:
-            self.star_rating = 1 
+            self.star_rating = 1
 
         super().save(*args, **kwargs)
 
@@ -440,13 +452,12 @@ class ChatMessage(models.Model):
 
 class CourseStatus(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='course_statuses')
-    course_name = models.CharField(max_length=255, null=True, blank=True)  
+    course_name = models.CharField(max_length=255, null=True, blank=True)
     started_at = models.DateTimeField(auto_now_add=True)
     ended_at = models.DateTimeField(null=True, blank=True)
-    current_week = models.PositiveIntegerField(default=0)   
+    current_week = models.PositiveIntegerField(default=0)
 
     class Meta:
-        # ✅ FIXED - Only one unique_together
         unique_together = ['student', 'course_name']
         ordering = ['-started_at']
 
@@ -498,8 +509,8 @@ class ReviewAssignment(models.Model):
     reviewer = models.ForeignKey('Reviewer', on_delete=models.CASCADE, related_name='assigned_reviews')
     student = models.ForeignKey('Student', on_delete=models.CASCADE, related_name='review_assignments')
     review_sheet = models.URLField(max_length=500, blank=True, null=True)
-    work_documents = models.URLField(max_length=500, blank=True, null=True)   
-    week = models.CharField(max_length=10, blank=True, null=True)              
+    work_documents = models.URLField(max_length=500, blank=True, null=True)
+    week = models.CharField(max_length=10, blank=True, null=True)
     course = models.CharField(max_length=255, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending approval')
     comments = models.TextField(blank=True, null=True)
@@ -528,7 +539,6 @@ class WeeklySubmission(models.Model):
     notes = models.TextField(blank=True)
     submitted_at = models.DateTimeField(auto_now_add=True)
 
-    # Mentor review fields
     reviewed = models.BooleanField(default=False)
     marks = models.PositiveSmallIntegerField(null=True, blank=True, help_text="0-5")
     mentor_feedback = models.TextField(blank=True)
@@ -574,31 +584,45 @@ class FeePayment(models.Model):
         ('paid', 'Paid'),
         ('pending', 'Pending'),
         ('overdue', 'Overdue'),
+        ('cancelled', 'Cancelled'),
     ]
-    student = models.ForeignKey('Student', on_delete=models.CASCADE)
+    
+    PAYMENT_METHOD_CHOICES = [
+        ('cash', 'Cash'),
+        ('card', 'Card'),
+        ('online', 'Online Transfer'),
+        ('cheque', 'Cheque'),
+        ('bank_transfer', 'Bank Transfer'),
+    ]
+    
+    student = models.ForeignKey('Student', on_delete=models.CASCADE, related_name='fee_payments')
     amount = models.DecimalField(max_digits=10, decimal_places=2)
-    payment_date = models.DateField(null=True, blank=True)
+    payment_date = models.DateTimeField(null=True, blank=True)
     due_date = models.DateField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
-    transaction_id = models.CharField(max_length=100, blank=True)
-    notes = models.TextField(blank=True)
+    payment_method = models.CharField(max_length=50, choices=PAYMENT_METHOD_CHOICES, blank=True, null=True)
+    transaction_id = models.CharField(max_length=100, blank=True, null=True)
+    notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
 
     def __str__(self):
-        return f"{self.student.user.username} - {self.amount}"
+        return f"{self.student.user.username} - ₹{self.amount} - {self.status}"
+    
 
 
-# Fee Structure Models (if needed - add if missing)
-# models.py
 class FeeStructure(models.Model):
     name = models.CharField(max_length=255)
     batch = models.ForeignKey('Batch', on_delete=models.SET_NULL, null=True, blank=True)
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
     number_of_installments = models.IntegerField(default=1)
-    is_active = models.BooleanField(default=True)  # Make sure this field exists
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
 
-    
     def __str__(self):
         return self.name
 
@@ -647,7 +671,6 @@ class StudentFeePayment(models.Model):
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
-        # Update the total paid amount in StudentFee
         self.student_fee.paid_amount = self.student_fee.payments.aggregate(
             total=models.Sum('amount')
         )['total'] or 0
@@ -655,6 +678,8 @@ class StudentFeePayment(models.Model):
 
     def __str__(self):
         return f"Payment of {self.amount} for {self.student_fee}"
+
+
 
 
 # ========== POST-SAVE SIGNAL: AUTO-CREATE PROFILES ==========

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import API from '../../api/api';
 import { toast } from 'react-hot-toast';
 
@@ -15,13 +15,7 @@ function AccountsDashboard() {
   const [error, setError] = useState(null);
   const fetchedRef = useRef(false);
 
-  useEffect(() => {
-    if (fetchedRef.current) return;
-    fetchedRef.current = true;
-    fetchDashboardData();
-  }, [period]);
-
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -34,24 +28,56 @@ function AccountsDashboard() {
         recent_payments: res.data.recent_payments || []
       });
     } catch (err) {
-      console.error(err);
+      console.error('Dashboard error:', err);
       const errorMsg = err.response?.data?.error || err.response?.data?.detail || 'Failed to load dashboard data';
       toast.error(errorMsg);
       setError(errorMsg);
     } finally {
       setLoading(false);
     }
-  };
+  }, [period]);
+
+  useEffect(() => {
+    if (fetchedRef.current) return;
+    fetchedRef.current = true;
+    fetchDashboardData();
+  }, [fetchDashboardData]);
+
+  // Refresh when period changes
+  useEffect(() => {
+    fetchDashboardData();
+  }, [period, fetchDashboardData]);
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(amount || 0);
   };
 
-  if (loading) return <div className="p-8 text-center">Loading dashboard...</div>;
-  if (error) return <div className="p-8 text-center text-red-600">{error}</div>;
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-8 text-center">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+          <p className="text-red-600">{error}</p>
+          <button 
+            onClick={fetchDashboardData} 
+            className="mt-4 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="p-6 bg-gray-50 w-screen min-h-screen">
+    <div className="p-6 bg-gray-50 min-h-screen">
       <div className="max-w-7xl mx-auto">
         {/* Header with period selector */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
@@ -60,30 +86,19 @@ function AccountsDashboard() {
             <p className="text-gray-500 text-sm mt-1">Real‑time fee collection overview</p>
           </div>
           <div className="flex gap-2 bg-white p-1 rounded-xl shadow-sm">
-            <button
-              onClick={() => setPeriod('monthly')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                period === 'monthly' ? 'bg-green-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              Monthly
-            </button>
-            <button
-              onClick={() => setPeriod('weekly')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                period === 'weekly' ? 'bg-green-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              Weekly
-            </button>
-            <button
-              onClick={() => setPeriod('yearly')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                period === 'yearly' ? 'bg-green-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              Yearly
-            </button>
+            {['monthly', 'weekly', 'yearly'].map((p) => (
+              <button
+                key={p}
+                onClick={() => setPeriod(p)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  period === p 
+                    ? 'bg-green-600 text-white shadow-md' 
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                {p.charAt(0).toUpperCase() + p.slice(1)}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -102,6 +117,7 @@ function AccountsDashboard() {
               </div>
             </div>
           </div>
+          
           <div className="bg-gradient-to-br from-orange-50 to-white rounded-2xl shadow-sm border border-orange-100 p-5 hover:shadow-md transition">
             <div className="flex items-center justify-between">
               <div>
@@ -115,6 +131,7 @@ function AccountsDashboard() {
               </div>
             </div>
           </div>
+          
           <div className="bg-gradient-to-br from-red-50 to-white rounded-2xl shadow-sm border border-red-100 p-5 hover:shadow-md transition">
             <div className="flex items-center justify-between">
               <div>
@@ -138,6 +155,7 @@ function AccountsDashboard() {
             </svg>
             <h2 className="text-xl font-semibold text-gray-800">Reviewer-wise Fee Collection</h2>
           </div>
+          
           {data.reviewer_wise.length === 0 ? (
             <p className="text-gray-400 text-center py-6">No data available.</p>
           ) : (
@@ -163,6 +181,7 @@ function AccountsDashboard() {
             </div>
             <span className="text-xs text-gray-400">Last 10 transactions</span>
           </div>
+          
           {data.recent_payments.length === 0 ? (
             <p className="text-gray-400 text-center py-6">No recent payments found.</p>
           ) : (
@@ -189,7 +208,7 @@ function AccountsDashboard() {
                         }`}>
                           {p.status}
                         </span>
-                      </td>
+                       </td>
                     </tr>
                   ))}
                 </tbody>

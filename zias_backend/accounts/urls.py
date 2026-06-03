@@ -111,6 +111,7 @@ router.register('fee-structures', FeeStructureViewSet, basename='fee-structure')
 router.register('student-fees', StudentFeeViewSet, basename='student-fees')
 router.register('installments', InstallmentScheduleViewSet, basename='installments')
 
+
 # =========================
 # URL PATTERNS
 # =========================
