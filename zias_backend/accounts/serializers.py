@@ -506,12 +506,14 @@ class ReviewerSerializer(serializers.ModelSerializer):
             print(f"❌ Email sending failed for reviewer {email}: {e}")
 
     def create(self, validated_data):
-        full_name = validated_data.get('full_name', '')
+        # Remove fields from validated_data
+        full_name = validated_data.pop('full_name', '')
         email = validated_data.pop('email', None)
         
         if not full_name:
             raise serializers.ValidationError({"full_name": "Full name is required"})
         
+        # Generate username from full_name
         username = full_name.lower().replace(' ', '_')
         counter = 1
         original = username
@@ -522,11 +524,17 @@ class ReviewerSerializer(serializers.ModelSerializer):
         user_email = email if email else f"{username}@example.com"
         random_password = generate_random_password()
         
-        user = User.objects.create_user(username=username, email=user_email, password=random_password)
-        user.role = 'reviewer'
-        user.save()
+        # Create user - NO role assignment
+        user = User.objects.create_user(
+            username=username,
+            email=user_email,
+            password=random_password
+        )
+        # REMOVE THIS LINE: user.role = 'reviewer'
+        # REMOVE THIS LINE: user.save()
         
-        reviewer = Reviewer.objects.create(user=user, **validated_data)
+        # Create reviewer
+        reviewer = Reviewer.objects.create(user=user, full_name=full_name, **validated_data)
         self._send_welcome_email(user_email, username, random_password, full_name)
         
         return reviewer
