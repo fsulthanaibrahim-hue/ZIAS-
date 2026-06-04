@@ -94,7 +94,7 @@ function Students() {
   const [emailError, setEmailError] = useState("");
 
   const [formData, setFormData] = useState({
-    full_name: "", email: "", course: "", batch: "", mentor_id: "",
+    full_name: "", email: "", course: "", batch: "", mentor: "",
     phone: "", date_of_birth: "", age: "", gender: "",
     fathers_name: "", fathers_contact: "", mothers_name: "", mothers_contact: "",
     address: "", educational_qualification: "", college_school: "",
@@ -244,7 +244,7 @@ function Students() {
 
   const resetForm = () => {
     setFormData({
-      full_name: "", email: "", course: "", batch: "", mentor_id: "",
+      full_name: "", email: "", course: "", batch: "", mentor: "",
       phone: "", date_of_birth: "", age: "", gender: "",
       fathers_name: "", fathers_contact: "", mothers_name: "", mothers_contact: "",
       address: "", educational_qualification: "", college_school: "",
@@ -300,13 +300,13 @@ function Students() {
     }
     if (hasError) return;
 
-    // Prepare payload - FIXED: Send correct field names
+    // Prepare payload - FIXED: Send 'mentor' instead of 'mentor_id'
     const payload = {
       full_name: formData.full_name.trim(),
       email: formData.email.trim(),
       course: formData.course,
       batch: formData.batch,
-      mentor_id: formData.mentor_id ? parseInt(formData.mentor_id) : null,
+      mentor: formData.mentor ? parseInt(formData.mentor) : null,
       phone: formData.phone || null,
       date_of_birth: formData.date_of_birth || null,
       age: formData.age ? parseInt(formData.age) : null,
@@ -375,7 +375,7 @@ function Students() {
       email: student.email || "",
       course: student.course_name || student.course || "",
       batch: student.batch_name || student.batch || "",
-      mentor_id: student.mentor ? student.mentor.toString() : "",
+      mentor: student.mentor ? student.mentor.toString() : "",
       phone: student.phone || "", 
       date_of_birth: student.date_of_birth || "",
       age: student.age?.toString() || "", 
@@ -591,7 +591,7 @@ function Students() {
                     </div>
                     <div>
                       <label className={labelCls}>Mentor (optional)</label>
-                      <select name="mentor_id" value={formData.mentor_id} onChange={handleChange} className={inputCls}>
+                      <select name="mentor" value={formData.mentor} onChange={handleChange} className={inputCls}>
                         <option value="">Select a mentor</option>
                         {mentorsList.map(m => <option key={m.id} value={m.id}>{m.full_name || m.username}</option>)}
                       </select>
