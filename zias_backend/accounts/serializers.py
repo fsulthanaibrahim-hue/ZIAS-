@@ -396,183 +396,21 @@ Please change your password after first login.
         return instance
 
 
-# ----------------------------
-# MENTOR SERIALIZER - WITH EMAIL
-# ----------------------------
-class MentorSerializer(serializers.ModelSerializer):
-    email = serializers.EmailField(write_only=True, required=False)
-    
-    class Meta:
-        model = Mentor
-        fields = ['id', 'full_name', 'expertise', 'phone', 'batch', 'email']
-
-    def to_representation(self, instance):
-        representation = super().to_representation(instance)
-        # ✅ Show email from user model in response
-        representation['email'] = instance.user.email if instance.user else None
-        return representation
-
-    def _send_welcome_email(self, email, username, password, full_name):
-        """Send welcome email to mentor"""
-        try:
-            domain = getattr(settings, 'SITE_DOMAIN', 'localhost:5173')
-            expiry_days = getattr(settings, 'PASSWORD_EXPIRY_DAYS', 90)
-            
-            subject = '🎓 Welcome to ZIAS – Your Mentor Account'
-            
-            message = f"""
-            Dear {full_name},
-            
-            Welcome to ZIAS!
-            
-            Your mentor account has been created successfully.
-            
-            Login Credentials:
-            Username: {username}
-            Password: {password}
-            Email: {email}
-            
-            Please change your password within {expiry_days} days for security purposes.
-            
-            Login URL: http://{domain}/login
-            
-            Best regards,
-            ZIAS Team
-            """
-            
-            send_mail(
-                subject, 
-                message, 
-                settings.DEFAULT_FROM_EMAIL, 
-                [email], 
-                fail_silently=False
-            )
-            print(f"✅ Welcome email sent to mentor: {email}")
-        except Exception as e:
-            print(f"❌ Email sending failed for mentor {email}: {e}")
-
-    def create(self, validated_data):
-        full_name = validated_data.get('full_name', '')
-        # ✅ Get email from validated_data
-        email = validated_data.pop('email', None)
-        
-        if not full_name:
-            raise serializers.ValidationError({"full_name": "Full name is required"})
-        
-        # Generate username from full_name
-        username = full_name.lower().replace(' ', '_')
-        counter = 1
-        original_username = username
-        while User.objects.filter(username=username).exists():
-            username = f"{original_username}{counter}"
-            counter += 1
-        
-        # ✅ IMPORTANT: Use the email from frontend if provided
-        if email:
-            user_email = email
-        else:
-            user_email = f"{username}@example.com"
-        
-        random_password = generate_random_password()
-        
-        # Create user with the provided email
-        user = User.objects.create_user(
-            username=username,
-            email=user_email,
-            password=random_password
-        )
-        user.role = 'mentor'
-        user.save()
-        
-        # Create mentor
-        mentor = Mentor.objects.create(user=user, **validated_data)
-        
-        # ✅ Send welcome email to the provided email address
-        self._send_welcome_email(user_email, username, random_password, full_name)
-        
-        return mentor
-
-    def update(self, instance, validated_data):
-        # ✅ Get email if provided
-        email = validated_data.pop('email', None)
-        
-        instance.full_name = validated_data.get('full_name', instance.full_name)
-        instance.expertise = validated_data.get('expertise', instance.expertise)
-        instance.phone = validated_data.get('phone', instance.phone)
-        
-        batch = validated_data.get('batch')
-        if batch == "":
-            instance.batch = None
-        elif batch is not None:
-            instance.batch = batch
-        
-        instance.save()
-        
-        # ✅ Update user's email if provided
-        if email and instance.user:
-            instance.user.email = email
-            instance.user.save()
-            print(f"✅ Email updated for {instance.full_name}: {email}")
-        
-        return instance
-
-
-# ----------------------------
-# REVIEWER SERIALIZER - FINAL FIX
-# ----------------------------
-## accounts/serializers.py - MENTOR AND REVIEWER (SAME STRUCTURE)
 
 # ----------------------------
 # MENTOR SERIALIZER
 # ----------------------------
 class MentorSerializer(serializers.ModelSerializer):
-    email = serializers.EmailField(write_only=True, required=False)
-    
     class Meta:
         model = Mentor
-        fields = ['id', 'full_name', 'expertise', 'phone', 'batch', 'email']
-
-    def to_representation(self, instance):
-        representation = super().to_representation(instance)
-        representation['email'] = instance.user.email if instance.user else None
-        return representation
-
-    def _send_welcome_email(self, email, username, password, full_name):
-        try:
-            domain = getattr(settings, 'SITE_DOMAIN', 'localhost:5173')
-            expiry_days = getattr(settings, 'PASSWORD_EXPIRY_DAYS', 90)
-            subject = '🎓 Welcome to ZIAS – Your Mentor Account'
-            message = f"""
-            Dear {full_name},
-            
-            Welcome to ZIAS!
-            
-            Your mentor account has been created successfully.
-            
-            Login Credentials:
-            Username: {username}
-            Password: {password}
-            Email: {email}
-            
-            Please change your password within {expiry_days} days for security purposes.
-            
-            Login URL: http://{domain}/login
-            
-            Best regards,
-            ZIAS Team
-            """
-            send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [email], fail_silently=False)
-            print(f"✅ Welcome email sent to mentor: {email}")
-        except Exception as e:
-            print(f"❌ Email sending failed for mentor {email}: {e}")
+        fields = ['id', 'full_name', 'email', 'expertise', 'phone', 'batch']
 
     def create(self, validated_data):
-        full_name = validated_data.get('full_name', '')
-        email = validated_data.pop('email', None)
+        # Remove full_name from validated_data first
+        full_name = validated_data.pop('full_name', '')
+        email = validated_data.pop('email', '')
         
-        if not full_name:
-            raise serializers.ValidationError({"full_name": "Full name is required"})
-        
+        # Generate username from full_name
         username = full_name.lower().replace(' ', '_')
         counter = 1
         original = username
@@ -580,38 +418,47 @@ class MentorSerializer(serializers.ModelSerializer):
             username = f"{original}{counter}"
             counter += 1
         
-        user_email = email if email else f"{username}@example.com"
         random_password = generate_random_password()
         
-        user = User.objects.create_user(username=username, email=user_email, password=random_password)
-        user.role = 'mentor'
-        user.save()
+        # Create user
+        user = User.objects.create_user(
+            username=username,
+            email=email if email else f"{username}@example.com",
+            password=random_password
+        )
         
-        mentor = Mentor.objects.create(user=user, **validated_data)
-        self._send_welcome_email(user_email, username, random_password, full_name)
+        # Create mentor - use the rest of validated_data
+        mentor = Mentor.objects.create(
+            user=user,
+            full_name=full_name,
+            email=email if email else None,
+            **validated_data  # This contains expertise, phone, batch
+        )
+        
+        # Send welcome email
+        try:
+            domain = getattr(settings, 'SITE_DOMAIN', 'localhost:5173')
+            subject = 'Welcome to ZIAS – Your Mentor Account'
+            message = f"""
+Dear {full_name},
+
+Welcome to ZIAS!
+
+Your mentor account has been created.
+
+Username: {username}
+Password: {random_password}
+Email: {email}
+
+Login URL: http://{domain}/login
+
+Please change your password after first login.
+"""
+            send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [email], fail_silently=False)
+        except Exception as e:
+            print(f"Email failed: {e}")
         
         return mentor
-
-    def update(self, instance, validated_data):
-        email = validated_data.pop('email', None)
-        
-        instance.full_name = validated_data.get('full_name', instance.full_name)
-        instance.expertise = validated_data.get('expertise', instance.expertise)
-        instance.phone = validated_data.get('phone', instance.phone)
-        
-        batch = validated_data.get('batch')
-        if batch == "":
-            instance.batch = None
-        elif batch is not None:
-            instance.batch = batch
-        
-        instance.save()
-        
-        if email and instance.user:
-            instance.user.email = email
-            instance.user.save()
-        
-        return instance
 
 
 # ----------------------------

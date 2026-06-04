@@ -227,7 +227,7 @@ class StudentViewSet(viewsets.ModelViewSet):
 class MentorViewSet(viewsets.ModelViewSet):
     queryset = Mentor.objects.all()
     serializer_class = MentorSerializer
-    permission_classes = [IsAuthenticated]  # Only ONE permission line
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         user = self.request.user
@@ -239,26 +239,56 @@ class MentorViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='me')
     def me(self, request):
-        mentor = Mentor.objects.filter(user=request.user).first()
-        if not mentor:
-            return Response(
-                {'detail': 'Mentor profile not found for this user.'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        serializer = self.get_serializer(mentor)
-        return Response(serializer.data)
+        try:
+            mentor = Mentor.objects.filter(user=request.user).first()
+            if not mentor:
+                return Response(
+                    {'detail': 'Mentor profile not found for this user.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            serializer = self.get_serializer(mentor)
+            return Response(serializer.data)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     def create(self, request, *args, **kwargs):
-        print("=" * 50)
-        print("Received data:", request.data)
-        print("=" * 50)
-        
-        serializer = self.get_serializer(data=request.data)
-        if serializer.is_valid():
-            mentor = serializer.save()
-            return Response(serializer.data, status=201)
-        print("Errors:", serializer.errors)
-        return Response(serializer.errors, status=400)
+        try:
+            print("=" * 50)
+            print("Received data:", request.data)
+            print("=" * 50)
+            
+            serializer = self.get_serializer(data=request.data)
+            if serializer.is_valid():
+                mentor = serializer.save()
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            print("Validation Errors:", serializer.errors)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            print("Exception:", str(e))
+            import traceback
+            traceback.print_exc()
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def update(self, request, *args, **kwargs):
+        try:
+            partial = kwargs.pop('partial', False)
+            instance = self.get_object()
+            serializer = self.get_serializer(instance, data=request.data, partial=partial)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def destroy(self, request, *args, **kwargs):
+        try:
+            instance = self.get_object()
+            # Delete related records if any
+            instance.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 
