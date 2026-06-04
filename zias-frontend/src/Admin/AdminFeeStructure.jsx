@@ -12,6 +12,7 @@ function AdminFeeStructure() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [applyingId, setApplyingId] = useState(null);
   const [formData, setFormData] = useState({
     name: "",
     total_amount: "",
@@ -38,13 +39,25 @@ function AdminFeeStructure() {
     fetchFeeStructures();
   }, []);
 
-  const calculateTotalDiscountedRevenue = () => {
-    return feeStructures.reduce((sum, f) => {
-      const total = parseFloat(f.total_amount) || 0;
-      const discount = parseFloat(f.discount_percentage) || 0;
-      const discounted = total * (1 - discount / 100);
-      return sum + discounted;
-    }, 0);
+  // APPLY FUNCTION - This creates the link between fee structure and students
+  const handleApply = async (feeStructure) => {
+    if (!window.confirm(`Apply "${feeStructure.name}" to ALL students? This will create fee records for every student.`)) {
+      return;
+    }
+    
+    setApplyingId(feeStructure.id);
+    try {
+      const response = await API.post(`/fee-structures/${feeStructure.id}/apply_to_students/`);
+      toast.success(response.data.message || `Applied to ${response.data.new_assignments} students successfully!`);
+      
+      // Refresh the list
+      await fetchFeeStructures();
+    } catch (error) {
+      console.error("Apply error:", error);
+      toast.error(error.response?.data?.error || "Failed to apply fee structure");
+    } finally {
+      setApplyingId(null);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -93,10 +106,22 @@ function AdminFeeStructure() {
     }
   };
 
+  const handleEdit = (fs) => {
+    setEditingId(fs.id);
+    setFormData({
+      name: fs.name,
+      total_amount: fs.total_amount,
+      discount_percentage: fs.discount_percentage || 0,
+      number_of_installments: fs.number_of_installments || 1,
+      is_active: fs.is_active,
+    });
+    setShowForm(true);
+  };
+
   const toggleStatus = async (fs) => {
     try {
       await API.patch(`/fee-structures/${fs.id}/`, { is_active: !fs.is_active });
-      toast.success(`Status updated`);
+      toast.success(`Fee structure ${!fs.is_active ? "activated" : "deactivated"}`);
       fetchFeeStructures();
     } catch (error) {
       toast.error("Update failed");
@@ -109,6 +134,15 @@ function AdminFeeStructure() {
     const installments = parseInt(fs.number_of_installments) || 1;
     const discounted = total * (1 - discount / 100);
     return discounted / installments;
+  };
+
+  const calculateTotalRevenue = () => {
+    return feeStructures.reduce((sum, f) => {
+      const total = parseFloat(f.total_amount) || 0;
+      const discount = parseFloat(f.discount_percentage) || 0;
+      const discounted = total * (1 - discount / 100);
+      return sum + discounted;
+    }, 0);
   };
 
   if (loading) {
@@ -142,7 +176,6 @@ function AdminFeeStructure() {
           </button>
         </div>
 
-        {/* Stats Cards - 3 cards only */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div className="bg-white rounded-lg p-4 shadow border">
             <p className="text-gray-500 text-sm">Total Structures</p>
@@ -154,31 +187,28 @@ function AdminFeeStructure() {
           </div>
           <div className="bg-white rounded-lg p-4 shadow border">
             <p className="text-gray-500 text-sm">Total Revenue</p>
-            <p className="text-2xl font-bold text-blue-600">
-              ₹{calculateTotalDiscountedRevenue().toLocaleString()}
-            </p>
+            <p className="text-2xl font-bold text-blue-600">₹{calculateTotalRevenue().toLocaleString()}</p>
           </div>
         </div>
 
-        {/* Table */}
         <div className="bg-white rounded-lg shadow border overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50 border-b">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Amount</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Discount</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Installments</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Per Week</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Discount</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Installments</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Per Week</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
                 {feeStructures.length === 0 ? (
                   <tr>
-                    <td colSpan="7" className="px-6 py-12 text-center text-gray-500">
+                    <td colSpan="7" className="px-4 py-8 text-center text-gray-500">
                       No fee structures found. Click "Add Fee Structure" to create one.
                     </td>
                   </tr>
@@ -186,59 +216,61 @@ function AdminFeeStructure() {
                   feeStructures.map((fs) => {
                     const total = parseFloat(fs.total_amount) || 0;
                     const discount = parseFloat(fs.discount_percentage) || 0;
-                    const discountedAmount = total * (1 - discount / 100);
+                    const afterDiscount = total * (1 - discount / 100);
                     
                     return (
                       <tr key={fs.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4">
+                        <td className="px-4 py-3">
                           <p className="font-medium">{fs.name}</p>
                           <p className="text-xs text-gray-400">ID: {fs.id}</p>
                         </td>
-                        <td className="px-6 py-4 font-medium line-through text-gray-400">
-                          ₹{total.toLocaleString()}
+                        <td className="px-4 py-3">
+                          {discount > 0 ? (
+                            <>
+                              <span className="line-through text-gray-400 mr-2">₹{total.toLocaleString()}</span>
+                              <span className="font-medium text-green-600">₹{afterDiscount.toLocaleString()}</span>
+                            </>
+                          ) : (
+                            <span className="font-medium">₹{total.toLocaleString()}</span>
+                          )}
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="px-4 py-3">
                           {discount > 0 ? (
                             <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">{discount}% OFF</span>
                           ) : (
                             <span className="text-gray-400">—</span>
                           )}
                         </td>
-                        <td className="px-6 py-4">{fs.number_of_installments} weeks</td>
-                        <td className="px-6 py-4 font-medium text-green-600">
-                          ₹{calculatePerWeek(fs).toFixed(2)}
-                        </td>
-                        <td className="px-6 py-4">
+                        <td className="px-4 py-3">{fs.number_of_installments} weeks</td>
+                        <td className="px-4 py-3">₹{calculatePerWeek(fs).toFixed(2)}</td>
+                        <td className="px-4 py-3">
                           <button
                             onClick={() => toggleStatus(fs)}
-                            className={`px-3 py-1 rounded-full text-xs font-medium ${
+                            className={`px-2 py-1 rounded-full text-xs font-medium ${
                               fs.is_active ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-600"
                             }`}
                           >
                             {fs.is_active ? "Active" : "Inactive"}
                           </button>
                         </td>
-                        <td className="px-6 py-4">
-                          <div className="flex justify-center gap-2">
+                        <td className="px-4 py-3">
+                          <div className="flex gap-2 justify-center flex-wrap">
                             <button
-                              onClick={() => {
-                                setEditingId(fs.id);
-                                setFormData({
-                                  name: fs.name,
-                                  total_amount: fs.total_amount,
-                                  discount_percentage: fs.discount_percentage,
-                                  number_of_installments: fs.number_of_installments,
-                                  is_active: fs.is_active,
-                                });
-                                setShowForm(true);
-                              }}
-                              className="text-blue-600 hover:text-blue-800"
+                              onClick={() => handleApply(fs)}
+                              disabled={applyingId === fs.id}
+                              className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs font-medium disabled:opacity-50"
+                            >
+                              {applyingId === fs.id ? "Applying..." : "APPLY"}
+                            </button>
+                            <button
+                              onClick={() => handleEdit(fs)}
+                              className="text-blue-600 hover:text-blue-800 text-sm"
                             >
                               Edit
                             </button>
                             <button
                               onClick={() => handleDelete(fs.id, fs.name)}
-                              className="text-red-600 hover:text-red-800"
+                              className="text-red-600 hover:text-red-800 text-sm"
                             >
                               Delete
                             </button>
@@ -252,9 +284,17 @@ function AdminFeeStructure() {
             </table>
           </div>
         </div>
+
+        <div className="mt-6 bg-red-50 border border-red-200 rounded-lg p-4">
+          <h3 className="text-sm font-semibold text-red-800 mb-2">⚠️ CRITICAL STEP</h3>
+          <p className="text-sm text-red-700">
+            After creating a fee structure, you <strong className="text-red-800">MUST click the GREEN "APPLY" button</strong> to assign it to students!
+            Without applying, students will show "No fee structure applied" and all amounts will be ₹0.
+          </p>
+        </div>
       </div>
 
-      {/* Modal */}
+      {/* Modal Form */}
       {showForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setShowForm(false)}>
           <div className="bg-white rounded-lg max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
@@ -283,11 +323,6 @@ function AdminFeeStructure() {
                 onChange={e => setFormData({...formData, discount_percentage: e.target.value})}
                 className="w-full border rounded-lg px-3 py-2"
               />
-              {formData.total_amount && formData.discount_percentage > 0 && (
-                <p className="text-xs text-green-600 -mt-2">
-                  After discount: ₹{(parseFloat(formData.total_amount) * (1 - formData.discount_percentage / 100)).toFixed(2)}
-                </p>
-              )}
               <input
                 type="number"
                 placeholder="Installments"

@@ -2106,17 +2106,6 @@ class FeeStructureViewSet(viewsets.ModelViewSet):
     def list(self, request, *args, **kwargs):
         try:
             queryset = self.get_queryset()
-            
-            # Filter by active status
-            is_active = request.query_params.get('is_active')
-            if is_active is not None:
-                queryset = queryset.filter(is_active=is_active.lower() == 'true')
-            
-            # Search by name
-            search = request.query_params.get('search')
-            if search:
-                queryset = queryset.filter(name__icontains=search)
-            
             serializer = self.get_serializer(queryset, many=True)
             return Response({
                 'count': queryset.count(),
@@ -2129,6 +2118,7 @@ class FeeStructureViewSet(viewsets.ModelViewSet):
     def apply_to_students(self, request, pk=None):
         try:
             fee_structure = self.get_object()
+            print(f"Applying fee structure: {fee_structure.name} (ID: {fee_structure.id})")
             
             if not fee_structure.is_active:
                 return Response(
@@ -2136,129 +2126,50 @@ class FeeStructureViewSet(viewsets.ModelViewSet):
                     status=400
                 )
             
+            # Get all active students
             students = Student.objects.filter(is_active=True)
+            print(f"Found {students.count()} active students")
             
             if not students.exists():
                 return Response({"warning": "No eligible students found"})
             
             created_count = 0
-            already_assigned = 0
+            updated_count = 0
             
             with transaction.atomic():
                 for student in students:
+                    # Calculate discounted amount
                     discounted_amount = float(fee_structure.total_amount) * (1 - float(fee_structure.discount_percentage) / 100)
                     
-                    student_fee, created = StudentFee.objects.get_or_create(
+                    # Create or update StudentFee record
+                    student_fee, created = StudentFee.objects.update_or_create(
                         student=student,
                         fee_structure=fee_structure,
                         defaults={
                             'total_amount': discounted_amount,
                             'discount_applied': float(fee_structure.total_amount) - discounted_amount,
-                            'pending_amount': discounted_amount,
-                            'paid_amount': 0
                         }
                     )
+                    
                     if created:
                         created_count += 1
+                        print(f"  Created fee for student: {student.id}")
                     else:
-                        already_assigned += 1
+                        updated_count += 1
+                        print(f"  Updated fee for student: {student.id}")
             
             return Response({
-                "message": "Fee structure applied successfully!",
+                "message": f"Fee structure applied successfully!",
                 "new_assignments": created_count,
-                "already_assigned": already_assigned,
-                "total_eligible": students.count()
+                "updated_assignments": updated_count,
+                "total_students": students.count()
             })
         except Exception as e:
+            print(f"Error in apply_to_students: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return Response({"error": str(e)}, status=400)
-    
-    @action(detail=True, methods=['get'])
-    def detailed_stats(self, request, pk=None):
-        try:
-            fee_structure = self.get_object()
-            student_fees = StudentFee.objects.filter(fee_structure=fee_structure)
-            
-            total_amount_sum = student_fees.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
-            paid_amount_sum = student_fees.aggregate(Sum('paid_amount'))['paid_amount__sum'] or 0
-            
-            stats = {
-                'id': fee_structure.id,
-                'name': fee_structure.name,
-                'total_amount': float(fee_structure.total_amount),
-                'discounted_amount': float(fee_structure.total_amount) * (1 - float(fee_structure.discount_percentage) / 100),
-                'total_students': student_fees.count(),
-                'total_collected': float(paid_amount_sum),
-                'total_pending': float(total_amount_sum - paid_amount_sum),
-                'collection_rate': (float(paid_amount_sum) / float(total_amount_sum) * 100) if total_amount_sum > 0 else 0
-            }
-            return Response(stats)
-        except Exception as e:
-            return Response({"error": str(e)}, status=400)
-    
-    @action(detail=False, methods=['get'])
-    def dashboard_stats(self, request):
-        try:
-            total_structures = FeeStructure.objects.count()
-            active_structures = FeeStructure.objects.filter(is_active=True).count()
-            total_amount = sum(float(fs.total_amount) for fs in FeeStructure.objects.all())
-            
-            return Response({
-                'total_structures': total_structures,
-                'active_structures': active_structures,
-                'total_amount': total_amount
-            })
-        except Exception as e:
-            return Response({"error": str(e)}, status=400)
-
-    @action(detail=True, methods=['post'])
-    def update_student_fees(self, request, pk=None):
-        """
-        Update ALL existing student fees for this fee structure
-        This should be called AFTER updating a fee structure
-        """
-        try:
-            fee_structure = self.get_object()
-            
-            # Get all existing StudentFee records for this fee structure
-            student_fees = StudentFee.objects.filter(fee_structure=fee_structure)
-            
-            if not student_fees.exists():
-                return Response({
-                    "warning": "No existing student fees found. Use 'apply_to_students' first.",
-                    "updated_count": 0
-                })
-            
-            updated_count = 0
-            with transaction.atomic():
-                for student_fee in student_fees:
-                    # Calculate new amounts based on updated fee structure
-                    discounted_amount = float(fee_structure.total_amount) * (1 - float(fee_structure.discount_percentage) / 100)
-                    
-                    # Store old paid amount
-                    old_paid = float(student_fee.paid_amount)
-                    
-                    # Update amounts
-                    student_fee.total_amount = discounted_amount
-                    student_fee.discount_applied = float(fee_structure.total_amount) - discounted_amount
-                    student_fee.pending_amount = discounted_amount - old_paid
-                    student_fee.save()
-                    updated_count += 1
-            
-            return Response({
-                "message": f"Successfully updated {updated_count} student fee records!",
-                "updated_count": updated_count,
-                "fee_structure": {
-                    "id": fee_structure.id,
-                    "name": fee_structure.name,
-                    "total_amount": float(fee_structure.total_amount),
-                    "discount_percentage": float(fee_structure.discount_percentage),
-                    "number_of_installments": fee_structure.number_of_installments
-                }
-            })
-        except Exception as e:
-            return Response({"error": str(e)}, status=400)       
-
-
+     
 
 
 

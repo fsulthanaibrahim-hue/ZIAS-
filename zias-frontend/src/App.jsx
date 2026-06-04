@@ -57,7 +57,6 @@ import ReviewFoldersAdmin from "./Admin/ReviewFoldersAdmin";
 import AdminAttendance from "./Admin/AdminAttendance";
 import ModuleDetail from "./Admin/ModuleDetail";
 import Accounts from "./Admin/Accounts";
-import FeeAnalytics from "./Admin/FeeAnalytics";
 import AdminFeeStructure from "./Admin/AdminFeeStructure";
 
 // Common pages
@@ -468,7 +467,6 @@ function App() {
         <Route path="/admin/attendance" element={<AdminRoute><div style={{display:"flex"}}><AdminAttendance /></div></AdminRoute>} />
         <Route path="/admin/module/:id" element={<AdminRoute><div style={{ display: "flex" }}><Sidebar /><ModuleDetail /></div></AdminRoute>} />
         <Route path="/admin/accounts" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><Accounts /></div></AdminRoute>} />
-        <Route path="/admin/fee-analytics" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><FeeAnalytics /></div></AdminRoute>} />
         <Route path="/admin/fee-overview" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><FeeOverview /></div></AdminRoute>} />
         <Route path="/admin/fee-structure" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><AdminFeeStructure /></div></AdminRoute>} />
         <Route path="/admin/student-fee-management" element={<AdminRoute><div style={{display:"flex"}}><Sidebar /><AdminStudentFeeManagement /></div></AdminRoute>} />

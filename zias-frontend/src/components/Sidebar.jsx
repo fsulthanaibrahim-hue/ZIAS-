@@ -58,8 +58,6 @@ function getIcon(label) {
       return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}>
         <path d="M8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13zm0 1a5.5 5.5 0 110 11 5.5 5.5 0 010-11zm.5 2H7v5.5l4 2.5.5-1-3.5-2V4.5z"/>
       </svg>;
-    case "Fee Analytics":
-      return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}><path d="M8 1a6 6 0 00-6 6 6 6 0 1012 0 6 6 0 00-6-6zm0 1a5 5 0 015 5c0 2.5-2 5-5 5-2.5 0-5-2.5-5-5 0-3 2-5 5-5z"/></svg>;
     case "Fee Overview":
       return <svg viewBox="0 0 16 16" fill="currentColor" className={svgClass}>
         <path d="M3 2h10v12H3V2zm1 1v10h8V3H4zm2 2h4v1H6V5zm0 2h4v1H6V7zm0 2h2v1H6V9z"/>
@@ -110,7 +108,6 @@ function Sidebar() {
     { path: "/admin/attendance", label: "Attendance" },
     { path: "/admin/accounts", label: "Accounts" },
     { path: "/admin/fee-structure", label: "Fee Structure" },
-    { path: "/admin/fee-analytics", label: "Fee Analytics" },
     { path: "/admin/fee-overview", label: "Fee Overview" },
     { path: "/admin/student-fee-management", label: "Student Fee Management" }, // ← new link
     { path: "/admin/messages", label: "Messages" },
