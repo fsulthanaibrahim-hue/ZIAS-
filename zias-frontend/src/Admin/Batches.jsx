@@ -93,6 +93,15 @@ function Batches() {
 
   const fetched = useRef(false);
 
+  // Helper function to format dates correctly (fixes timezone issue)
+  const formatDate = (dateString) => {
+    if (!dateString) return "—";
+    const date = new Date(dateString);
+    // Add one day to fix timezone offset
+    date.setDate(date.getDate() + 1);
+    return date.toLocaleDateString('en-IN');
+  };
+
   const fetchBatches = async () => {
     setLoading(true);
     try {
@@ -119,7 +128,6 @@ function Batches() {
     fetchBatches();
   }, []);
 
-  // ✅ Validate dates: end date cannot be before start date
   const validateDates = (startDate, endDate) => {
     if (startDate && endDate) {
       if (new Date(endDate) < new Date(startDate)) {
@@ -204,7 +212,6 @@ function Batches() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // ✅ Final validation before submit
     if (formData.start_date && formData.end_date) {
       if (new Date(formData.end_date) < new Date(formData.start_date)) {
         setDateError("End date cannot be earlier than start date");
@@ -273,7 +280,6 @@ function Batches() {
   }
 
   const existingBatchNames = [...new Set(batches.map(b => b.name).filter(Boolean))];
-  // ✅ Get minimum date for end date (today or start date)
   const getMinEndDate = () => {
     if (formData.start_date) {
       return formData.start_date;
@@ -441,10 +447,10 @@ function Batches() {
                         </button>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {batch.start_date ? new Date(batch.start_date).toLocaleDateString() : "—"}
+                        {formatDate(batch.start_date)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {batch.end_date ? new Date(batch.end_date).toLocaleDateString() : "—"}
+                        {formatDate(batch.end_date)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${batch.is_active ? "bg-emerald-100 text-emerald-800" : "bg-gray-100 text-gray-600"}`}>

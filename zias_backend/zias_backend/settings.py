@@ -165,6 +165,9 @@ CHANNEL_LAYERS = {
 }
 
 
+USE_TZ = False
+
+
 
 CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:5173').split(',')
 
@@ -251,3 +254,6 @@ CSRF_TRUSTED_ORIGINS = config(
     'CSRF_TRUSTED_ORIGINS',
     default='http://localhost:5173'
 ).split(',')
+
+
+
