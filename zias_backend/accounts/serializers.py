@@ -7,6 +7,7 @@ from django.utils import timezone
 from django.db import transaction
 from django.contrib.auth.models import Group
 from django.conf import settings
+from accounts.models import User
 from django.db import IntegrityError
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
@@ -321,7 +322,8 @@ class StudentSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         email = validated_data.pop('email')
-        full_name = validated_data.get('full_name', '')
+        full_name = validated_data.pop('full_name', '')
+        phone = validated_data.pop('phone', '')
         
         # Generate username from email
         username = email.split('@')[0]
@@ -333,35 +335,41 @@ class StudentSerializer(serializers.ModelSerializer):
         
         random_password = generate_random_password()
         
-        # Create user
+        # Create user using your custom User model
         user = User.objects.create_user(
             username=username,
             email=email,
             password=random_password
         )
-        user.role = 'student'
-        user.save()
         
-        # Create student (NO email field here)
-        student = Student.objects.create(user=user, **validated_data)
+        # Create student
+        student = Student.objects.create(
+            user=user,
+            full_name=full_name,
+            phone=phone,
+            **validated_data
+        )
         
         # Send welcome email
         try:
             domain = getattr(settings, 'SITE_DOMAIN', 'localhost:5173')
-            subject = '🎓 Welcome to ZIAS – Your Student Account'
+            subject = 'Welcome to ZIAS – Your Student Account'
             message = f"""
-            Dear {full_name},
-            
-            Welcome to ZIAS!
-            
-            Your student account has been created.
-            
-            Username: {username}
-            Password: {random_password}
-            Email: {email}
-            
-            Login URL: http://{domain}/login
-            """
+Dear {full_name},
+
+Welcome to ZIAS!
+
+Your student account has been created.
+
+Username: {username}
+Password: {random_password}
+Email: {email}
+Phone: {phone}
+
+Login URL: http://{domain}/login
+
+Please change your password after first login.
+"""
             send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [email], fail_silently=False)
         except Exception as e:
             print(f"Email failed: {e}")
@@ -369,25 +377,15 @@ class StudentSerializer(serializers.ModelSerializer):
         return student
 
     def update(self, instance, validated_data):
-        instance.full_name = validated_data.get('full_name', instance.full_name)
-        instance.phone = validated_data.get('phone', instance.phone)
-        instance.course = validated_data.get('course', instance.course)
-        instance.date_of_birth = validated_data.get('date_of_birth', instance.date_of_birth)
-        instance.age = validated_data.get('age', instance.age)
-        instance.gender = validated_data.get('gender', instance.gender)
-        instance.fathers_name = validated_data.get('fathers_name', instance.fathers_name)
-        instance.fathers_contact = validated_data.get('fathers_contact', instance.fathers_contact)
-        instance.mothers_name = validated_data.get('mothers_name', instance.mothers_name)
-        instance.mothers_contact = validated_data.get('mothers_contact', instance.mothers_contact)
-        instance.address = validated_data.get('address', instance.address)
-        instance.educational_qualification = validated_data.get('educational_qualification', instance.educational_qualification)
-        instance.college_school = validated_data.get('college_school', instance.college_school)
-        instance.parent_name = validated_data.get('parent_name', instance.parent_name)
-        instance.parent_phone = validated_data.get('parent_phone', instance.parent_phone)
-        instance.emergency_contact = validated_data.get('emergency_contact', instance.emergency_contact)
-        instance.mentor = validated_data.get('mentor', instance.mentor)
+        validated_data.pop('email', None)
         
-        # Handle batch
+        for field in ['full_name', 'phone', 'course', 'date_of_birth', 'age', 'gender',
+                      'fathers_name', 'fathers_contact', 'mothers_name', 'mothers_contact',
+                      'address', 'educational_qualification', 'college_school',
+                      'parent_name', 'parent_phone', 'emergency_contact', 'mentor']:
+            if field in validated_data:
+                setattr(instance, field, validated_data[field])
+        
         batch_name = validated_data.get('batch')
         if batch_name:
             batch_obj = Batch.objects.filter(name__iexact=batch_name).first()

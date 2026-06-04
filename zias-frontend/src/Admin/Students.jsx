@@ -4,10 +4,6 @@ import API from "../api/api";
 import ProgressModal from "../components/ProgressModal";
 import { clearAuthStorage } from "../utils/authStorage";
 
-/* Add to index.html:
-   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
-*/
-
 function Toast({ message, type, onClose }) {
   useEffect(() => {
     const timer = setTimeout(onClose, 3000);
@@ -98,7 +94,7 @@ function Students() {
   const [emailError, setEmailError] = useState("");
 
   const [formData, setFormData] = useState({
-    full_name: "", email: "", course_id: "", batch_id: "", mentor_id: "",
+    full_name: "", email: "", course: "", batch: "", mentor_id: "",
     phone: "", date_of_birth: "", age: "", gender: "",
     fathers_name: "", fathers_contact: "", mothers_name: "", mothers_contact: "",
     address: "", educational_qualification: "", college_school: "",
@@ -248,7 +244,7 @@ function Students() {
 
   const resetForm = () => {
     setFormData({
-      full_name: "", email: "", course_id: "", batch_id: "", mentor_id: "",
+      full_name: "", email: "", course: "", batch: "", mentor_id: "",
       phone: "", date_of_birth: "", age: "", gender: "",
       fathers_name: "", fathers_contact: "", mothers_name: "", mothers_contact: "",
       address: "", educational_qualification: "", college_school: "",
@@ -262,21 +258,39 @@ function Students() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    // Basic validation
+    if (!formData.full_name.trim()) {
+      showToast("Full name is required", "error");
+      return;
+    }
+
     if (!formData.email.trim()) {
       setEmailError("Email is required");
       showToast("Email is required", "error");
       return;
     }
 
-    const checks = [
+    if (!formData.course) {
+      showToast("Course is required", "error");
+      return;
+    }
+
+    if (!formData.batch) {
+      showToast("Batch is required", "error");
+      return;
+    }
+
+    // Phone validation
+    const phoneFields = [
       { field: 'phone', setErr: setPhoneError, label: 'Student phone' },
       { field: 'fathers_contact', setErr: setFathersContactError, label: "Father's contact" },
       { field: 'mothers_contact', setErr: setMothersContactError, label: "Mother's contact" },
       { field: 'parent_phone', setErr: setParentPhoneError, label: 'Parent phone' },
       { field: 'emergency_contact', setErr: setEmergencyContactError, label: 'Emergency contact' },
     ];
+    
     let hasError = false;
-    for (const { field, setErr, label } of checks) {
+    for (const { field, setErr, label } of phoneFields) {
       const val = formData[field];
       if (val && !/^\d{10}$/.test(val)) {
         setErr('Must be 10 digits');
@@ -286,16 +300,13 @@ function Students() {
     }
     if (hasError) return;
 
-    const courseObj = coursesList.find(c => c.id === parseInt(formData.course_id));
-    const batchObj = batchesList.find(b => b.id === parseInt(formData.batch_id));
-
+    // Prepare payload - FIXED: Send correct field names
     const payload = {
-      full_name: formData.full_name?.trim() || null,
+      full_name: formData.full_name.trim(),
       email: formData.email.trim(),
-      course: courseObj?.name || null,
-      batch: batchObj?.name || null,
-      batch_id: formData.batch_id ? parseInt(formData.batch_id) : null,
-      mentor: formData.mentor_id ? parseInt(formData.mentor_id) : null,
+      course: formData.course,
+      batch: formData.batch,
+      mentor_id: formData.mentor_id ? parseInt(formData.mentor_id) : null,
       phone: formData.phone || null,
       date_of_birth: formData.date_of_birth || null,
       age: formData.age ? parseInt(formData.age) : null,
@@ -312,6 +323,8 @@ function Students() {
       emergency_contact: formData.emergency_contact || null,
     };
 
+    console.log("Sending payload:", payload);
+
     setSubmitting(true);
     try {
       if (editingId) {
@@ -322,21 +335,31 @@ function Students() {
       } else {
         payload.username = generateUsername(formData.email, formData.full_name);
         const createRes = await API.post("students/", payload);
-        showToast(`Student added! Username: ${payload.username}`, "success");
+        showToast(`Student added successfully!`, "success");
         if (selectedFiles.length) await uploadDocuments(createRes.data.id);
         setShowForm(false); resetForm(); await refreshStudents(); setCurrentPage(1);
       }
     } catch (error) {
+      console.error("Create error details:", error.response?.data);
       const data = error.response?.data;
-      let msg = "An unexpected error occurred.";
+      let msg = "Failed to add student. Please check all fields.";
+      
       if (data) {
-        const firstKey = Object.keys(data)[0];
-        if (firstKey && data[firstKey] && data[firstKey][0]) {
-          msg = `${firstKey}: ${data[firstKey][0]}`;
+        if (typeof data === 'string') {
+          msg = data;
         } else if (data.detail) {
           msg = data.detail;
         } else if (data.error) {
           msg = data.error;
+        } else if (data.email) {
+          msg = `Email: ${Array.isArray(data.email) ? data.email[0] : data.email}`;
+        } else if (data.username) {
+          msg = `Username: ${Array.isArray(data.username) ? data.username[0] : data.username}`;
+        } else {
+          const firstKey = Object.keys(data)[0];
+          if (firstKey) {
+            msg = `${firstKey}: ${Array.isArray(data[firstKey]) ? data[firstKey][0] : data[firstKey]}`;
+          }
         }
       }
       showToast(msg, "error");
@@ -347,20 +370,26 @@ function Students() {
 
   const handleEdit = async (student) => {
     setEditingId(student.id);
-    const courseObj = coursesList.find(c => c.name === (student.course_name || student.course));
-    const batchObj = batchesList.find(b => b.name === (student.batch_name || student.batch));
     setFormData({
-      full_name: student.full_name || "", email: student.email,
-      course_id: courseObj ? courseObj.id.toString() : "",
-      batch_id: batchObj ? batchObj.id.toString() : "",
+      full_name: student.full_name || "", 
+      email: student.email || "",
+      course: student.course_name || student.course || "",
+      batch: student.batch_name || student.batch || "",
       mentor_id: student.mentor ? student.mentor.toString() : "",
-      phone: student.phone || "", date_of_birth: student.date_of_birth || "",
-      age: student.age?.toString() || "", gender: student.gender || "",
-      fathers_name: student.fathers_name || "", fathers_contact: student.fathers_contact || "",
-      mothers_name: student.mothers_name || "", mothers_contact: student.mothers_contact || "",
-      address: student.address || "", educational_qualification: student.educational_qualification || "",
-      college_school: student.college_school || "", parent_name: student.parent_name || "",
-      parent_phone: student.parent_phone || "", emergency_contact: student.emergency_contact || "",
+      phone: student.phone || "", 
+      date_of_birth: student.date_of_birth || "",
+      age: student.age?.toString() || "", 
+      gender: student.gender || "",
+      fathers_name: student.fathers_name || "", 
+      fathers_contact: student.fathers_contact || "",
+      mothers_name: student.mothers_name || "", 
+      mothers_contact: student.mothers_contact || "",
+      address: student.address || "", 
+      educational_qualification: student.educational_qualification || "",
+      college_school: student.college_school || "", 
+      parent_name: student.parent_name || "",
+      parent_phone: student.parent_phone || "", 
+      emergency_contact: student.emergency_contact || "",
     });
     setLoadingEditDocs(true);
     const docs = await fetchStudentDocuments(student.id);
@@ -537,7 +566,10 @@ function Students() {
                 <div>
                   <p className={`${sectionTitleCls} text-green-600`}>Basic Information</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div><label className={labelCls}>Full Name</label><input type="text" name="full_name" value={formData.full_name} onChange={handleChange} className={inputCls} /></div>
+                    <div>
+                      <label className={labelCls}>Full Name *</label>
+                      <input type="text" name="full_name" value={formData.full_name} onChange={handleChange} className={inputCls} required />
+                    </div>
                     <div>
                       <label className={labelCls}>Email *</label>
                       <input type="email" name="email" value={formData.email} onChange={handleChange} required className={inputCls} />
@@ -545,16 +577,16 @@ function Students() {
                     </div>
                     <div>
                       <label className={labelCls}>Course *</label>
-                      <select name="course_id" value={formData.course_id} onChange={handleChange} required className={inputCls}>
+                      <select name="course" value={formData.course} onChange={handleChange} required className={inputCls}>
                         <option value="">Select a course</option>
-                        {coursesList.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        {coursesList.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                       </select>
                     </div>
                     <div>
                       <label className={labelCls}>Batch *</label>
-                      <select name="batch_id" value={formData.batch_id} onChange={handleChange} required className={inputCls}>
+                      <select name="batch" value={formData.batch} onChange={handleChange} required className={inputCls}>
                         <option value="">Select a batch</option>
-                        {batchesList.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                        {batchesList.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
                       </select>
                     </div>
                     <div>

@@ -32,6 +32,7 @@ from django.db.models import Count
 
 
 
+
 from .models import (
     User, Student, Mentor, Reviewer, Course, Module, Day, Task, Batch,
     StudentModule, PasswordResetToken, ContactMessage, StudentWeekReview, WeekUpdate, 
@@ -126,44 +127,98 @@ class BatchViewSet(SafeViewSet, viewsets.ModelViewSet):
 # ----------------------------
 class StudentViewSet(viewsets.ModelViewSet):
     serializer_class = StudentSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_superuser or user.role == 'admin':
+        if user.is_superuser:
             return Student.objects.all()
-        if user.role == 'student':
+        if hasattr(user, 'student_profile'):
             return Student.objects.filter(user=user)
         return Student.objects.none()
 
     @action(detail=False, methods=['get'], url_path='me')
     def me(self, request):
-        student = Student.objects.filter(user=request.user).first()
-        if not student:
-            return Response(
-                {'detail': 'Student profile not found for this user.'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        serializer = self.get_serializer(student)
-        return Response(serializer.data)
+        try:
+            student = Student.objects.filter(user=request.user).first()
+            if not student:
+                return Response(
+                    {'detail': 'Student profile not found for this user.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            serializer = self.get_serializer(student)
+            return Response(serializer.data)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     
     def create(self, request, *args, **kwargs):
         try:
-            print("=" * 50)
-            print("RECEIVED DATA:", request.data)
-            print("=" * 50)
-
             serializer = self.get_serializer(data=request.data)
             if serializer.is_valid():
                 student = serializer.save()
-                return Response(serializer.data, status=201)
-            else:
-                print("VALIDATION ERRORS:", serializer.errors)
-                return Response(serializer.errors, status=400)
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            print("EXCEPTION:", str(e))
-            return Response({'error': str(e)}, status=400)        
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+    def update(self, request, *args, **kwargs):
+        try:
+            partial = kwargs.pop('partial', False)
+            instance = self.get_object()
+            serializer = self.get_serializer(instance, data=request.data, partial=partial)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except ObjectDoesNotExist:
+            return Response({'error': 'Student not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def destroy(self, request, *args, **kwargs):
+        try:
+            instance = self.get_object()
+            
+            # Import related models
+            from .models import StudentWeekReview, StudentFee, FeePayment, AttendanceRecord, WeeklySubmission
+            
+            # Delete all related records
+            StudentWeekReview.objects.filter(student=instance).delete()
+            StudentFee.objects.filter(student=instance).delete()
+            FeePayment.objects.filter(student=instance).delete()
+            AttendanceRecord.objects.filter(student=instance).delete()
+            WeeklySubmission.objects.filter(student=instance).delete()
+            
+            # Clear ManyToMany relationships if exists
+            if hasattr(instance, 'documents'):
+                try:
+                    instance.documents.clear()
+                except:
+                    pass
+            
+            # Delete the student (this will also delete the user if on_delete=CASCADE)
+            instance.delete()
+            
+            return Response(status=status.HTTP_204_NO_CONTENT)
+            
+        except ObjectDoesNotExist:
+            return Response({'error': 'Student not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def retrieve(self, request, *args, **kwargs):
+        try:
+            instance = self.get_object()
+            serializer = self.get_serializer(instance)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except ObjectDoesNotExist:
+            return Response({'error': 'Student not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def partial_update(self, request, *args, **kwargs):
+        kwargs['partial'] = True
+        return self.update(request, *args, **kwargs)
 
 
 # ----------------------------
