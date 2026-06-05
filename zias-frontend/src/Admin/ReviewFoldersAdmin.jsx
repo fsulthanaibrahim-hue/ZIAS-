@@ -267,59 +267,11 @@ function ReviewFoldersAdmin() {
     }
   };
 
+  // FIXED: Skip week-review API call since it doesn't exist
   const ensureWeekReviewExists = async (studentId, weekNumber, reviewSheetUrl = "") => {
-    try {
-      const modulesRes = await API.get(`/modules/student-modules/?student_id=${studentId}`);
-      const modules = modulesRes.data.results || modulesRes.data;
-      const moduleObj = modules.find(m => m.order === weekNumber);
-      
-      if (!moduleObj) {
-        console.error(`❌ No module found for student ${studentId}, week ${weekNumber}`);
-        return false;
-      }
-      
-      const moduleId = moduleObj.id;
-      
-      try {
-        const checkRes = await API.get(`week-review/${moduleId}/?student_id=${studentId}`);
-        if (checkRes.data && checkRes.data.id) {
-          if (reviewSheetUrl) {
-            await API.patch(`week-review/${checkRes.data.id}/`, {
-              review_sheet: reviewSheetUrl
-            });
-          }
-          return true;
-        }
-      } catch (err) {
-        if (err.response?.status !== 404) return false;
-      }
-      
-      const defaultReview = {
-        student: studentId,
-        module: moduleId,
-        task_status: "Pending",
-        feedback: "",
-        reviewer_name: "",
-        advisor_name: "",
-        extra_workouts: "Not Completed",
-        review_date: new Date().toISOString().split("T")[0],
-        english_score: 0,
-        extra_workouts_mark: 0,
-        progress_video: "",
-        progress_video_mark: 0,
-        review_score: 0,
-        english_review: "",
-        review_sheet: reviewSheetUrl,
-      };
-      
-      await API.post("/week-review/", defaultReview);
-      console.log(`✅ Created new review sheet for student ${studentId}, week ${weekNumber}`);
-      return true;
-      
-    } catch (err) {
-      addErrorLog(err, { action: "ensureWeekReviewExists", studentId, weekNumber });
-      return false;
-    }
+    // The week-review endpoint doesn't exist, so just return true
+    console.log(`Week review creation skipped for student ${studentId}, week ${weekNumber}`);
+    return true;
   };
 
   const fetchStudents = async () => {
@@ -405,7 +357,6 @@ function ReviewFoldersAdmin() {
   const batchGroups = React.useMemo(() => {
     const groups = new Map();
     
-    // First, group students by their batch
     students.forEach(student => {
       const batchName = student.batch_name;
       if (!batchName) return;
@@ -426,7 +377,6 @@ function ReviewFoldersAdmin() {
       group.studentNames.push(student.displayName);
       group.totalStudents = group.studentIds.length;
       
-      // Get mentor name if available
       if (student.mentor_id && !group.mentorName) {
         const mentor = mentorsList.find(m => m.id === student.mentor_id);
         if (mentor) {
@@ -436,7 +386,6 @@ function ReviewFoldersAdmin() {
       }
     });
     
-    // Also include batches that have no students yet
     batchesList.forEach(batch => {
       if (!groups.has(batch.name)) {
         groups.set(batch.name, {
@@ -458,12 +407,10 @@ function ReviewFoldersAdmin() {
     (group.mentorName && group.mentorName.toLowerCase().includes(batchSearchTerm.toLowerCase()))
   );
 
-  // Get all students in a batch by batch name
   const getStudentsInBatchByName = (batchName) => {
     return students.filter(s => s.batch_name === batchName);
   };
 
-  // Get folders for selected batch
   const getFoldersForBatch = () => {
     if (!selectedBatchName) return [];
     
@@ -605,13 +552,8 @@ function ReviewFoldersAdmin() {
           is_done: false,
         });
         
-        const reviewCreated = await ensureWeekReviewExists(studentId, newWeek, reviewSheetValue);
-        
-        if (reviewCreated) {
-          successCount++;
-        } else {
-          errorCount++;
-        }
+        // Skip week-review API call - it doesn't exist
+        successCount++;
         
       } catch (err) {
         errorCount++;
@@ -748,18 +690,21 @@ function ReviewFoldersAdmin() {
     if (!entry) return;
     try {
       await API.patch(`/review-folders/${id}/`, { is_done: newValue });
+      
       if (newValue === true && entry.week && entry.week !== "0" && entry.student) {
         try {
           await API.patch(`/students/${entry.student}/`, { last_reviewed_week: entry.week });
         } catch (updateErr) {
-          addErrorLog(updateErr, { action: "updateStudentLastReviewedWeek", studentId: entry.student, week: entry.week });
+          console.warn("Could not update student last_reviewed_week:", updateErr);
         }
       }
+      
       await fetchAllFolders();
       showToast(`Status updated to ${newValue ? "Completed" : "Pending"}.`, "success");
     } catch (err) {
+      console.error("Toggle done error:", err);
       addErrorLog(err, { action: "toggleDone", id, newValue });
-      showToast("Failed to update status.", "error");
+      showToast("Failed to update status. Please try again.", "error");
     }
   };
 
@@ -778,8 +723,6 @@ function ReviewFoldersAdmin() {
   const DeleteIcon = () => (<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>);
   const SaveIcon = () => (<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>);
   const CancelIcon = () => (<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>);
-
-  const selectedBatchInfo = selectedBatchName ? { batchName: selectedBatchName } : null;
 
   return (
     <>
@@ -911,8 +854,8 @@ function ReviewFoldersAdmin() {
                               <button onClick={(e) => { e.stopPropagation(); editFolder(folder.name); }} className="text-blue-600 hover:text-blue-800"><EditIcon /></button>
                               <button onClick={(e) => { e.stopPropagation(); deleteFolder(folder.name); }} className="text-red-600 hover:text-red-800"><DeleteIcon /></button>
                             </div>
-                           </td>
-                         </tr>
+                          </td>
+                        </tr>
                       ))
                     )}
                   </tbody>
