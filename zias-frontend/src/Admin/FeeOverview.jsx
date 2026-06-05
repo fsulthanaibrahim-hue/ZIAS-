@@ -161,7 +161,6 @@ function FeeOverview() {
     return (
       (student.name || '').toLowerCase().includes(searchLower) ||
       (student.full_name || '').toLowerCase().includes(searchLower) ||
-      (student.email || '').toLowerCase().includes(searchLower) ||
       (student.course || '').toLowerCase().includes(searchLower) ||
       feeInfo.status.toLowerCase().includes(searchLower)
     );
@@ -202,9 +201,9 @@ function FeeOverview() {
 
   const getStatusColor = (status) => {
     switch(status) {
-      case 'Paid': return 'bg-green-100 text-green-800';
-      case 'Partially Paid': return 'bg-yellow-100 text-yellow-800';
-      case 'Pending': return 'bg-red-100 text-red-800';
+      case 'Paid': return 'bg-emerald-100 text-emerald-800';
+      case 'Partially Paid': return 'bg-amber-100 text-amber-800';
+      case 'Pending': return 'bg-rose-100 text-rose-800';
       case 'No Fee Assigned': return 'bg-gray-100 text-gray-600';
       default: return 'bg-gray-100 text-gray-600';
     }
@@ -214,7 +213,7 @@ function FeeOverview() {
     return (
       <div className="flex justify-center items-center h-64">
         <div className="text-center">
-          <div className="w-12 h-12 border-4 border-green-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+          <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
           <p className="text-gray-600">Loading fee data...</p>
         </div>
       </div>
@@ -231,7 +230,7 @@ function FeeOverview() {
           </div>
           <button
             onClick={fetchData}
-            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition"
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition"
           >
             Refresh
           </button>
@@ -248,13 +247,13 @@ function FeeOverview() {
             <p className="text-gray-500 text-sm">Total Fee</p>
             <p className="text-2xl font-bold text-purple-700">{formatCurrency(totalFee)}</p>
           </div>
-          <div className="bg-green-50 rounded-xl p-5 border border-green-200">
+          <div className="bg-emerald-50 rounded-xl p-5 border border-emerald-200">
             <p className="text-gray-500 text-sm">Total Paid</p>
-            <p className="text-2xl font-bold text-green-700">{formatCurrency(totalPaid)}</p>
+            <p className="text-2xl font-bold text-emerald-700">{formatCurrency(totalPaid)}</p>
           </div>
-          <div className="bg-red-50 rounded-xl p-5 border border-red-200">
+          <div className="bg-rose-50 rounded-xl p-5 border border-rose-200">
             <p className="text-gray-500 text-sm">Total Pending</p>
-            <p className="text-2xl font-bold text-red-700">{formatCurrency(totalPending)}</p>
+            <p className="text-2xl font-bold text-rose-700">{formatCurrency(totalPending)}</p>
           </div>
           <div className="bg-orange-50 rounded-xl p-5 border border-orange-200">
             <p className="text-gray-500 text-sm">Collection Rate</p>
@@ -266,17 +265,17 @@ function FeeOverview() {
 
         {/* Payment Status Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-          <div className="bg-green-50 rounded-xl p-4 border border-green-200 text-center">
+          <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-200 text-center">
             <p className="text-gray-500 text-sm">Fully Paid</p>
-            <p className="text-xl font-bold text-green-700">{paidCount} students</p>
+            <p className="text-xl font-bold text-emerald-700">{paidCount} students</p>
           </div>
-          <div className="bg-yellow-50 rounded-xl p-4 border border-yellow-200 text-center">
+          <div className="bg-amber-50 rounded-xl p-4 border border-amber-200 text-center">
             <p className="text-gray-500 text-sm">Partially Paid</p>
-            <p className="text-xl font-bold text-yellow-700">{partiallyPaidCount} students</p>
+            <p className="text-xl font-bold text-amber-700">{partiallyPaidCount} students</p>
           </div>
-          <div className="bg-red-50 rounded-xl p-4 border border-red-200 text-center">
+          <div className="bg-rose-50 rounded-xl p-4 border border-rose-200 text-center">
             <p className="text-gray-500 text-sm">Pending</p>
-            <p className="text-xl font-bold text-red-700">{pendingCount} students</p>
+            <p className="text-xl font-bold text-rose-700">{pendingCount} students</p>
           </div>
         </div>
 
@@ -284,10 +283,10 @@ function FeeOverview() {
         <div className="mb-6">
           <input
             type="text"
-            placeholder="Search by student name, email, course or payment status..."
+            placeholder="Search by student name, course or payment status..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full md:w-96 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+            className="w-full md:w-96 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
           />
         </div>
 
@@ -320,7 +319,6 @@ function FeeOverview() {
                       <td className="px-4 py-3">
                         <div>
                           <p className="font-medium text-gray-800">{student.name || student.full_name || '—'}</p>
-                          <p className="text-xs text-gray-500">{student.email || '—'}</p>
                         </div>
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600">
@@ -329,25 +327,27 @@ function FeeOverview() {
                       <td className="px-4 py-3 text-right font-medium text-gray-900">
                         {feeInfo.totalAmount > 0 ? formatCurrency(feeInfo.totalAmount) : '—'}
                       </td>
-                      <td className="px-4 py-3 text-right text-green-600 font-medium">
+                      <td className="px-4 py-3 text-right text-emerald-600 font-medium">
                         {feeInfo.paidAmount > 0 ? formatCurrency(feeInfo.paidAmount) : '—'}
                       </td>
-                      <td className="px-4 py-3 text-right text-red-600 font-medium">
+                      <td className="px-4 py-3 text-right text-rose-600 font-medium">
                         {feeInfo.pendingAmount > 0 ? formatCurrency(feeInfo.pendingAmount) : '—'}
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(feeInfo.status)}`}>
+                        <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(feeInfo.status)}`}>
                           {feeInfo.status}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-center">
                         <button
                           onClick={() => handleEditClick(student)}
-                          className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                          className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                           disabled={feeInfo.status === 'No Fee Assigned'}
                           title={feeInfo.status === 'No Fee Assigned' ? 'Apply fee structure first' : 'Edit fee'}
                         >
-                          Edit
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
                         </button>
                       </td>
                     </tr>
@@ -382,7 +382,6 @@ function FeeOverview() {
             </div>
             <div className="mb-4">
               <p className="text-sm text-gray-600">Student: {editingStudent.name || editingStudent.full_name}</p>
-              <p className="text-xs text-gray-500">{editingStudent.email}</p>
             </div>
             <div className="space-y-4">
               <div>
@@ -392,7 +391,7 @@ function FeeOverview() {
                   step="0.01"
                   value={editFormData.total_amount}
                   onChange={(e) => setEditFormData({...editFormData, total_amount: e.target.value})}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   required
                 />
               </div>
@@ -403,7 +402,7 @@ function FeeOverview() {
                   step="0.01"
                   value={editFormData.paid_amount}
                   onChange={(e) => setEditFormData({...editFormData, paid_amount: e.target.value})}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
             </div>
@@ -411,7 +410,7 @@ function FeeOverview() {
               <button
                 onClick={handleUpdateFee}
                 disabled={updating}
-                className="flex-1 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 disabled:opacity-50"
+                className="flex-1 bg-emerald-600 text-white py-2 rounded-lg hover:bg-emerald-700 disabled:opacity-50"
               >
                 {updating ? 'Updating...' : 'Update'}
               </button>

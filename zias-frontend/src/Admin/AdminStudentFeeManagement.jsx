@@ -55,7 +55,7 @@ function AdminStudentFeeManagement() {
         full_name: s.full_name,
         email: s.user?.email || s.email,
         course: s.course,
-        week_back_amount: s.week_back_amount || 0,
+        week_back_amount: parseFloat(s.week_back_amount) || 0,
         agreement_signed: s.agreement_signed || false
       }));
       
@@ -144,21 +144,12 @@ function AdminStudentFeeManagement() {
         await API.patch(`/student-fees/${studentFeeId}/`, feePayload);
       }
       
-      try {
-        await API.patch(`/students/${editingStudent.id}/`, {
-          agreement_signed: editFormData.agreement_signed
-        });
-      } catch (agreeErr) {
-        console.log("Agreement update failed:", agreeErr);
-      }
+      const studentPayload = {
+        agreement_signed: editFormData.agreement_signed,
+        week_back_amount: parseFloat(editFormData.week_back_amount) || 0
+      };
       
-      try {
-        await API.patch(`/students/${editingStudent.id}/`, {
-          week_back_amount: parseFloat(editFormData.week_back_amount) || 0
-        });
-      } catch (weekErr) {
-        console.log("Week back amount update failed:", weekErr.response?.data);
-      }
+      await API.patch(`/students/${editingStudent.id}/`, studentPayload);
       
       setShowEditModal(false);
       setEditingStudent(null);
@@ -204,7 +195,12 @@ function AdminStudentFeeManagement() {
       const res = await API.get(`/fee-payments/?student=${student.id}`);
       let payments = res.data;
       if (payments.results) payments = payments.results;
-      setPaymentHistory(Array.isArray(payments) ? payments : []);
+      
+      const filteredPayments = Array.isArray(payments) 
+        ? payments.filter(p => p.student === student.id)
+        : [];
+      
+      setPaymentHistory(filteredPayments);
     } catch (err) {
       console.error(err);
       toast.error("Failed to load payment history");
@@ -269,34 +265,55 @@ function AdminStudentFeeManagement() {
         <head>
           <title>Payment Receipt</title>
           <style>
-            body { font-family: Arial, sans-serif; padding: 20px; }
-            .receipt { max-width: 600px; margin: 0 auto; border: 1px solid #ccc; padding: 20px; border-radius: 10px; }
-            .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #eee; padding-bottom: 10px; }
-            .details { margin-bottom: 20px; }
-            .amount { font-size: 24px; color: green; font-weight: bold; text-align: center; margin: 20px 0; }
-            .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #666; }
+            body { font-family: 'Inter', sans-serif; padding: 20px; }
+            .receipt { max-width: 600px; margin: 0 auto; background: white; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); overflow: hidden; }
+            .header { background: linear-gradient(135deg, #059669, #10b981); color: white; padding: 30px; text-align: center; }
+            .content { padding: 30px; }
+            .amount { font-size: 32px; color: #059669; font-weight: bold; text-align: center; margin: 20px 0; }
+            .details { border-top: 1px solid #e5e7eb; border-bottom: 1px solid #e5e7eb; padding: 20px 0; margin: 20px 0; }
+            .detail-row { display: flex; justify-content: space-between; margin-bottom: 12px; }
+            .footer { text-align: center; padding: 20px; background: #f9fafb; font-size: 12px; color: #6b7280; }
           </style>
         </head>
         <body>
           <div class="receipt">
             <div class="header">
-              <h2>ZIAS - Payment Receipt</h2>
-              <p>Payment Confirmation</p>
+              <h2 style="margin:0">ZIAS Academy</h2>
+              <p style="margin:5px 0 0;opacity:0.9">Payment Receipt</p>
             </div>
-            <div class="details">
-              <p><strong>Receipt No:</strong> ${payment.id}</p>
-              <p><strong>Student:</strong> ${student?.name || student?.full_name}</p>
-              <p><strong>Email:</strong> ${student?.email || '—'}</p>
-              <p><strong>Amount Paid:</strong> ${formatCurrency(payment.amount)}</p>
-              <p><strong>Payment Date:</strong> ${formatDate(payment.payment_date)}</p>
-              <p><strong>Payment Method:</strong> ${payment.payment_method || 'Cash'}</p>
-              <p><strong>Status:</strong> ${payment.status}</p>
-              ${payment.notes ? `<p><strong>Notes:</strong> ${payment.notes}</p>` : ''}
-            </div>
-            <div class="amount">Amount Paid: ${formatCurrency(payment.amount)}</div>
-            <div class="footer">
-              <p>Thank you for your payment!</p>
-              <p>This is a computer generated receipt.</p>
+            <div class="content">
+              <div class="detail-row">
+                <span><strong>Receipt No:</strong></span>
+                <span>${payment.id}</span>
+              </div>
+              <div class="detail-row">
+                <span><strong>Student Name:</strong></span>
+                <span>${student?.name || student?.full_name}</span>
+              </div>
+              <div class="detail-row">
+                <span><strong>Email:</strong></span>
+                <span>${student?.email || '—'}</span>
+              </div>
+              <div class="amount">${formatCurrency(payment.amount)}</div>
+              <div class="details">
+                <div class="detail-row">
+                  <span>Payment Date:</span>
+                  <span>${formatDate(payment.payment_date)}</span>
+                </div>
+                <div class="detail-row">
+                  <span>Payment Method:</span>
+                  <span>${payment.payment_method?.toUpperCase() || 'CASH'}</span>
+                </div>
+                <div class="detail-row">
+                  <span>Status:</span>
+                  <span style="color:#059669">${payment.status?.toUpperCase()}</span>
+                </div>
+                ${payment.notes ? `<div class="detail-row"><span>Notes:</span><span>${payment.notes}</span></div>` : ''}
+              </div>
+              <div class="footer">
+                <p>Thank you for your payment!</p>
+                <p>This is a computer generated receipt.</p>
+              </div>
             </div>
           </div>
         </body>
@@ -318,21 +335,21 @@ function AdminStudentFeeManagement() {
   const generateFeeReport = async () => {
     setGeneratingReport(true);
     try {
+      const totalFee = studentFees.reduce((sum, sf) => sum + (Number(sf.total_amount) || 0), 0);
+      const totalPaid = studentFees.reduce((sum, sf) => sum + (Number(sf.paid_amount) || 0), 0);
+      
       const report = {
         generated_on: new Date().toISOString(),
         total_students: students.length,
         students_with_fee: studentFees.length,
-        total_fee_amount: studentFees.reduce((sum, sf) => sum + (Number(sf.total_amount) || 0), 0),
-        total_paid_amount: studentFees.reduce((sum, sf) => sum + (Number(sf.paid_amount) || 0), 0),
-        total_pending_amount: studentFees.reduce((sum, sf) => sum + (Number(sf.total_amount) - Number(sf.paid_amount) || 0), 0),
+        total_fee_amount: totalFee,
+        total_paid_amount: totalPaid,
+        total_pending_amount: totalFee - totalPaid,
         paid_count: students.filter((s) => getStudentFeeInfo(s).feeStatus === "Paid").length,
         partially_paid_count: students.filter((s) => getStudentFeeInfo(s).feeStatus === "Partially Paid").length,
         pending_count: students.filter((s) => getStudentFeeInfo(s).feeStatus === "Pending").length,
         no_fee_count: students.filter((s) => getStudentFeeInfo(s).feeStatus === "No Fee Assigned").length,
-        collection_rate: studentFees.length > 0 
-          ? ((studentFees.reduce((sum, sf) => sum + (Number(sf.paid_amount) || 0), 0) / 
-             studentFees.reduce((sum, sf) => sum + (Number(sf.total_amount) || 0), 0)) * 100).toFixed(1)
-          : 0
+        collection_rate: totalFee > 0 ? ((totalPaid / totalFee) * 100).toFixed(1) : 0
       };
       
       setReportData(report);
@@ -343,40 +360,6 @@ function AdminStudentFeeManagement() {
     } finally {
       setGeneratingReport(false);
     }
-  };
-
-  const exportReportCSV = () => {
-    if (!reportData) return;
-    
-    const csvRows = [
-      ["Fee Report - ZIAS"],
-      [`Generated on: ${new Date(reportData.generated_on).toLocaleString()}`],
-      [],
-      ["Metric", "Value"],
-      ["Total Students", reportData.total_students],
-      ["Students with Fee Assigned", reportData.students_with_fee],
-      ["Total Fee Amount", reportData.total_fee_amount],
-      ["Total Paid Amount", reportData.total_paid_amount],
-      ["Total Pending Amount", reportData.total_pending_amount],
-      ["Collection Rate", `${reportData.collection_rate}%`],
-      [],
-      ["Payment Status Summary", ""],
-      ["Fully Paid", reportData.paid_count],
-      ["Partially Paid", reportData.partially_paid_count],
-      ["Pending", reportData.pending_count],
-      ["No Fee Assigned", reportData.no_fee_count]
-    ];
-    
-    const csvContent = csvRows.map((row) => row.join(",")).join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `fee_report_${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    
-    toast.success("Report exported successfully");
   };
 
   const handleDeleteStudentFee = async (student) => {
@@ -417,249 +400,175 @@ function AdminStudentFeeManagement() {
     );
   });
 
-  // FIXED: Proper formatCurrency function
   const formatCurrency = (amount) => {
     if (amount === undefined || amount === null) return "₹0";
-    // Convert to number and handle decimal places
-    const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+    let numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
     if (isNaN(numAmount)) return "₹0";
-    return "₹" + numAmount.toLocaleString('en-IN');
+    return "₹" + Math.round(numAmount).toLocaleString('en-IN');
   };
 
   const formatDate = (dateString) => {
     if (!dateString) return "—";
-    const date = new Date(dateString);
-    return date.toLocaleDateString("en-IN");
+    return new Date(dateString).toLocaleDateString("en-IN");
   };
 
-  const totalCollected = students.reduce((sum, s) => {
-    const feeInfo = getStudentFeeInfo(s);
-    return sum + feeInfo.paidAmount;
-  }, 0);
-
-  const totalOutstanding = students.reduce((sum, s) => {
-    const feeInfo = getStudentFeeInfo(s);
-    return sum + feeInfo.pendingAmount;
-  }, 0);
-
-  const totalWeekBackAmount = students.reduce((sum, s) => {
-    const feeInfo = getStudentFeeInfo(s);
-    return sum + feeInfo.weekBackAmount;
-  }, 0);
+  const totalFee = studentFees.reduce((sum, sf) => sum + (Number(sf.total_amount) || 0), 0);
+  const totalPaid = studentFees.reduce((sum, sf) => sum + (Number(sf.paid_amount) || 0), 0);
+  const totalOutstanding = totalFee - totalPaid;
+  const totalCollected = totalPaid;
+  const totalWeekBackAmount = students.reduce((sum, s) => sum + (s.week_back_amount || 0), 0);
 
   const getFeeStatusBadge = (status) => {
-    switch(status) {
-      case "Paid": return "bg-green-100 text-green-800";
-      case "Partially Paid": return "bg-yellow-100 text-yellow-800";
-      case "Pending": return "bg-red-100 text-red-800";
-      default: return "bg-gray-100 text-gray-600";
-    }
+    const styles = {
+      "Paid": "bg-emerald-100 text-emerald-800",
+      "Partially Paid": "bg-amber-100 text-amber-800",
+      "Pending": "bg-rose-100 text-rose-800",
+      "No Fee Assigned": "bg-gray-100 text-gray-600"
+    };
+    return styles[status] || "bg-gray-100 text-gray-600";
   };
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
+      <div className="flex items-center justify-center h-screen bg-gray-50">
         <div className="text-center">
-          <div className="w-12 h-12 border-4 border-green-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-          <p className="text-gray-600">Loading student fee data...</p>
+          <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-500">Loading fee data...</p>
         </div>
       </div>
     );
   }
 
-  const hasAnyFeeApplied = studentFees.length > 0;
-
   return (
-    <div className="p-6 bg-gray-50 min-h-screen">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex justify-between items-center mb-6 flex-wrap gap-2">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-800">Student Fee Management</h1>
-            <p className="text-sm text-gray-500 mt-1">Manage student fees, track payments, and generate reports</p>
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            <button
-              onClick={generateFeeReport}
-              disabled={generatingReport}
-              className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition disabled:opacity-50"
-            >
-              📊 Fee Reports
-            </button>
-            {!hasAnyFeeApplied && feeStructures.length > 0 && (
-              <button onClick={handleApplyFeeToAll} disabled={applying} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition disabled:opacity-50">
-                {applying ? "Applying..." : "Apply Fee to All Students"}
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
+        <div className="mb-8">
+          <div className="flex justify-between items-center flex-wrap gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Student Fee Management</h1>
+              <p className="text-sm text-gray-500 mt-1">Manage student fees, track payments, and generate reports</p>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={generateFeeReport} disabled={generatingReport} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Fee Reports
               </button>
-            )}
-            <button onClick={() => fetchData()} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition">
-              Refresh
-            </button>
+              <button onClick={() => fetchData()} className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 transition-all duration-200">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Refresh
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-green-50 rounded-xl p-5 border border-green-200">
-            <p className="text-gray-500 text-sm">Total Collected</p>
-            <p className="text-2xl font-bold text-green-700">{formatCurrency(totalCollected)}</p>
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+          <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <div><p className="text-sm text-gray-500 mb-1">Total Collected</p><p className="text-2xl font-bold text-gray-900">{formatCurrency(totalCollected)}</p></div>
+              <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
+                <svg className="w-6 h-6 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              </div>
+            </div>
           </div>
-          <div className="bg-red-50 rounded-xl p-5 border border-red-200">
-            <p className="text-gray-500 text-sm">Total Outstanding</p>
-            <p className="text-2xl font-bold text-red-700">{formatCurrency(totalOutstanding)}</p>
+          <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <div><p className="text-sm text-gray-500 mb-1">Total Outstanding</p><p className="text-2xl font-bold text-gray-900">{formatCurrency(totalOutstanding)}</p></div>
+              <div className="w-12 h-12 bg-rose-100 rounded-xl flex items-center justify-center">
+                <svg className="w-6 h-6 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              </div>
+            </div>
           </div>
-          <div className="bg-orange-50 rounded-xl p-5 border border-orange-200">
-            <p className="text-gray-500 text-sm">Total Week Back Amount</p>
-            <p className="text-2xl font-bold text-orange-700">{formatCurrency(totalWeekBackAmount)}</p>
+          <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <div><p className="text-sm text-gray-500 mb-1">Week Back Amount</p><p className="text-2xl font-bold text-gray-900">{formatCurrency(totalWeekBackAmount)}</p></div>
+              <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center">
+                <svg className="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              </div>
+            </div>
           </div>
-          <div className="bg-blue-50 rounded-xl p-5 border border-blue-200">
-            <p className="text-gray-500 text-sm">Students with Fee</p>
-            <p className="text-2xl font-bold text-blue-700">{studentFees.length}</p>
+          <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <div><p className="text-sm text-gray-500 mb-1">Students with Fee</p><p className="text-2xl font-bold text-gray-900">{studentFees.length}</p></div>
+              <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+              </div>
+            </div>
           </div>
         </div>
 
         {/* Search */}
         <div className="mb-6">
-          <input
-            type="text"
-            placeholder="Search by name, email or course..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full md:w-96 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
-          />
+          <div className="relative max-w-md">
+            <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+            <input type="text" placeholder="Search by name, email or course..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" />
+          </div>
         </div>
 
         {/* Students Table */}
-        <div className="overflow-x-auto bg-white rounded-xl shadow border border-gray-200">
-          <table className="min-w-full w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Student</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Amount</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Paid</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Pending</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Week Back</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {filteredStudents.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
                 <tr>
-                  <td colSpan="7" className="text-center py-8 text-gray-500">No students found.</td>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
+                  <th className="px-6 py-4 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Total Amount</th>
+                  <th className="px-6 py-4 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Paid</th>
+                  <th className="px-6 py-4 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Pending</th>
+                  <th className="px-6 py-4 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Week Back</th>
+                  <th className="px-6 py-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
-              ) : (
-                filteredStudents.map((s) => {
-                  const feeInfo = getStudentFeeInfo(s);
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {filteredStudents.map((student) => {
+                  const feeInfo = getStudentFeeInfo(student);
                   return (
-                    <tr key={s.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-sm">
-                        <div>
-                          <p className="font-medium text-gray-800">{s.name || s.full_name}</p>
-                          <p className="text-xs text-gray-500">{s.email}</p>
-                          <p className="text-xs text-gray-400">{s.course || "--"}</p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                        {feeInfo.totalAmount > 0 ? formatCurrency(feeInfo.totalAmount) : "—"}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-green-600 font-medium">
-                        {feeInfo.paidAmount > 0 ? formatCurrency(feeInfo.paidAmount) : "—"}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-red-600 font-medium">
-                        {feeInfo.pendingAmount > 0 ? formatCurrency(feeInfo.pendingAmount) : "—"}
-                      </td>
-                      <td className="px-4 py-3 text-sm font-medium text-orange-600">
-                        {feeInfo.weekBackAmount > 0 ? formatCurrency(feeInfo.weekBackAmount) : "—"}
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${getFeeStatusBadge(feeInfo.feeStatus)}`}>
-                          {feeInfo.feeStatus}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-center">
-                        <div className="flex gap-2 justify-center">
-                          <button onClick={() => handleEditClick(s)} className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition" title="Edit">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                          </button>
-                          <button onClick={() => { setPaymentStudent(s); setShowPaymentModal(true); }} className="p-1.5 text-green-600 hover:text-green-800 hover:bg-green-50 rounded-lg transition" title="Add Payment">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                            </svg>
-                          </button>
-                          <button onClick={() => viewPaymentHistory(s)} className="p-1.5 text-purple-600 hover:text-purple-800 hover:bg-purple-50 rounded-lg transition" title="Payment History">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                          </button>
-                          <button onClick={() => handleDeleteStudentFee(s)} className="p-1.5 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition" title="Delete">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
+                    <tr key={student.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4"><div><p className="font-medium text-gray-900">{student.name}</p><p className="text-sm text-gray-500">{student.email}</p><p className="text-xs text-gray-400 mt-0.5">{student.course || "No Course"}</p></div></td>
+                      <td className="px-6 py-4 text-right font-semibold text-gray-900">{feeInfo.totalAmount > 0 ? formatCurrency(feeInfo.totalAmount) : "—"}</td>
+                      <td className="px-6 py-4 text-right text-emerald-600 font-medium">{feeInfo.paidAmount > 0 ? formatCurrency(feeInfo.paidAmount) : "—"}</td>
+                      <td className="px-6 py-4 text-right text-rose-600 font-medium">{feeInfo.pendingAmount > 0 ? formatCurrency(feeInfo.pendingAmount) : "—"}</td>
+                      <td className="px-6 py-4 text-right text-amber-600 font-medium">{feeInfo.weekBackAmount > 0 ? formatCurrency(feeInfo.weekBackAmount) : "—"}</td>
+                      <td className="px-6 py-4 text-center"><span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${getFeeStatusBadge(feeInfo.feeStatus)}`}>{feeInfo.feeStatus}</span></td>
+                      <td className="px-6 py-4 text-center">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button onClick={() => handleEditClick(student)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Edit Fee"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></button>
+                          <button onClick={() => { setPaymentStudent(student); setShowPaymentModal(true); }} className="p-2 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" title="Add Payment"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg></button>
+                          <button onClick={() => viewPaymentHistory(student)} className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Payment History"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg></button>
+                          <button onClick={() => handleDeleteStudentFee(student)} className="p-2 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors" title="Delete Fee"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
                         </div>
                       </td>
                     </tr>
                   );
-                })
-              )}
-            </tbody>
-          </table>
+                })}
+                {filteredStudents.length === 0 && (
+                  <tr><td colSpan="7" className="text-center py-12 text-gray-500"><svg className="w-12 h-12 mx-auto text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>No students found</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-
-        {!hasAnyFeeApplied && feeStructures.length > 0 && (
-          <div className="mt-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <h3 className="text-sm font-semibold text-yellow-800 mb-2">No Fee Structure Applied Yet</h3>
-            <p className="text-sm text-yellow-700">Click the "Apply Fee to All Students" button above to apply the fee structure to all students.</p>
-          </div>
-        )}
-
-        {feeStructures.length === 0 && (
-          <div className="mt-6 bg-red-50 border border-red-200 rounded-lg p-4">
-            <h3 className="text-sm font-semibold text-red-800 mb-2">No Fee Structure Found</h3>
-            <p className="text-sm text-red-700">Please go to Fee Structure Management page and create a fee structure first.</p>
-          </div>
-        )}
       </div>
 
-      {/* Edit Modal - Same as before */}
+      {/* Edit Modal */}
       {showEditModal && editingStudent && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowEditModal(false)}>
-          <div className="bg-white rounded-xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-gray-800">Edit Student Fee</h2>
-              <button onClick={() => setShowEditModal(false)} className="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
-            </div>
-            <div className="mb-4">
-              <p className="text-sm text-gray-600">Student: {editingStudent.name}</p>
-              <p className="text-xs text-gray-500">{editingStudent.email}</p>
-            </div>
+          <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-5"><h2 className="text-xl font-bold text-gray-900">Edit Student Fee</h2><button onClick={() => setShowEditModal(false)} className="text-gray-400 hover:text-gray-600 text-2xl">&times;</button></div>
+            <p className="text-sm text-gray-600 mb-5 pb-3 border-b">{editingStudent.name} • {editingStudent.email}</p>
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Total Amount (₹)</label>
-                <input type="number" step="0.01" value={editFormData.total_amount} onChange={(e) => setEditFormData({...editFormData, total_amount: e.target.value})} className="w-full border border-gray-300 rounded-lg px-3 py-2" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Paid Amount (₹)</label>
-                <input type="number" step="0.01" value={editFormData.paid_amount} onChange={(e) => setEditFormData({...editFormData, paid_amount: e.target.value})} className="w-full border border-gray-300 rounded-lg px-3 py-2" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Week Back Amount (₹)</label>
-                <input type="number" step="0.01" value={editFormData.week_back_amount} onChange={(e) => setEditFormData({...editFormData, week_back_amount: e.target.value})} className="w-full border border-gray-300 rounded-lg px-3 py-2" />
-              </div>
-              <div>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={editFormData.agreement_signed} onChange={(e) => setEditFormData({...editFormData, agreement_signed: e.target.checked})} className="w-4 h-4 text-green-600 rounded" />
-                  <span className="text-sm text-gray-700">Agreement Signed</span>
-                </label>
-              </div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Total Amount (₹)</label><input type="number" step="0.01" value={editFormData.total_amount} onChange={(e) => setEditFormData({...editFormData, total_amount: e.target.value})} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500" /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Paid Amount (₹)</label><input type="number" step="0.01" value={editFormData.paid_amount} onChange={(e) => setEditFormData({...editFormData, paid_amount: e.target.value})} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500" /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Week Back Amount (₹)</label><input type="number" step="0.01" value={editFormData.week_back_amount} onChange={(e) => setEditFormData({...editFormData, week_back_amount: e.target.value})} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-500" /></div>
+              <div><label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={editFormData.agreement_signed} onChange={(e) => setEditFormData({...editFormData, agreement_signed: e.target.checked})} className="w-4 h-4 text-emerald-600 rounded" /><span className="text-sm text-gray-700">Agreement Signed</span></label></div>
             </div>
-            <div className="flex gap-3 mt-6">
-              <button onClick={handleUpdateStudentFee} disabled={applying} className="flex-1 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 disabled:opacity-50">
-                {applying ? "Updating..." : "Update"}
-              </button>
-              <button onClick={() => setShowEditModal(false)} className="flex-1 bg-gray-200 text-gray-800 py-2 rounded-lg hover:bg-gray-300">Cancel</button>
-            </div>
+            <div className="flex gap-3 mt-6"><button onClick={handleUpdateStudentFee} disabled={applying} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-xl font-medium transition">Update</button><button onClick={() => setShowEditModal(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2.5 rounded-xl font-medium transition">Cancel</button></div>
           </div>
         </div>
       )}
@@ -667,44 +576,16 @@ function AdminStudentFeeManagement() {
       {/* Add Payment Modal */}
       {showPaymentModal && paymentStudent && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowPaymentModal(false)}>
-          <div className="bg-white rounded-xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-gray-800">Add Payment</h2>
-              <button onClick={() => setShowPaymentModal(false)} className="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
-            </div>
-            <div className="mb-4">
-              <p className="text-sm text-gray-600">Student: {paymentStudent.name}</p>
-              <p className="text-xs text-gray-500">{paymentStudent.email}</p>
-            </div>
+          <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-5"><h2 className="text-xl font-bold text-gray-900">Add Payment</h2><button onClick={() => setShowPaymentModal(false)} className="text-gray-400 hover:text-gray-600 text-2xl">&times;</button></div>
+            <p className="text-sm text-gray-600 mb-5 pb-3 border-b">{paymentStudent.name} • {paymentStudent.email}</p>
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Amount (₹)</label>
-                <input type="number" step="0.01" value={paymentData.amount} onChange={(e) => setPaymentData({...paymentData, amount: e.target.value})} className="w-full border border-gray-300 rounded-lg px-3 py-2" required />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Payment Date</label>
-                <input type="date" value={paymentData.payment_date} onChange={(e) => setPaymentData({...paymentData, payment_date: e.target.value})} className="w-full border border-gray-300 rounded-lg px-3 py-2" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
-                <select value={paymentData.payment_method} onChange={(e) => setPaymentData({...paymentData, payment_method: e.target.value})} className="w-full border border-gray-300 rounded-lg px-3 py-2">
-                  <option value="cash">Cash</option>
-                  <option value="card">Card</option>
-                  <option value="bank_transfer">Bank Transfer</option>
-                  <option value="online">Online</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Notes (Optional)</label>
-                <textarea value={paymentData.notes} onChange={(e) => setPaymentData({...paymentData, notes: e.target.value})} rows="2" className="w-full border border-gray-300 rounded-lg px-3 py-2" />
-              </div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Amount (₹)</label><input type="number" step="0.01" value={paymentData.amount} onChange={(e) => setPaymentData({...paymentData, amount: e.target.value})} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500" required /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Payment Date</label><input type="date" value={paymentData.payment_date} onChange={(e) => setPaymentData({...paymentData, payment_date: e.target.value})} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500" /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label><select value={paymentData.payment_method} onChange={(e) => setPaymentData({...paymentData, payment_method: e.target.value})} className="w-full border border-gray-300 rounded-xl px-4 py-2.5"><option value="cash">Cash</option><option value="card">Card</option><option value="bank_transfer">Bank Transfer</option><option value="online">Online</option></select></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Notes (Optional)</label><textarea value={paymentData.notes} onChange={(e) => setPaymentData({...paymentData, notes: e.target.value})} rows="2" className="w-full border border-gray-300 rounded-xl px-4 py-2.5" /></div>
             </div>
-            <div className="flex gap-3 mt-6">
-              <button onClick={handleAddPayment} disabled={addingPayment} className="flex-1 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 disabled:opacity-50">
-                {addingPayment ? "Processing..." : "Add Payment"}
-              </button>
-              <button onClick={() => setShowPaymentModal(false)} className="flex-1 bg-gray-200 text-gray-800 py-2 rounded-lg hover:bg-gray-300">Cancel</button>
-            </div>
+            <div className="flex gap-3 mt-6"><button onClick={handleAddPayment} disabled={addingPayment} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-xl font-medium transition">Add Payment</button><button onClick={() => setShowPaymentModal(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2.5 rounded-xl font-medium transition">Cancel</button></div>
           </div>
         </div>
       )}
@@ -712,42 +593,21 @@ function AdminStudentFeeManagement() {
       {/* Payment History Modal */}
       {showPaymentHistory && selectedStudent && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowPaymentHistory(false)}>
-          <div className="bg-white rounded-xl w-full max-w-3xl max-h-[80vh] overflow-hidden flex flex-col shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
-              <h2 className="text-lg font-semibold text-gray-800">Payment History - {selectedStudent.name}</h2>
-              <button onClick={() => setShowPaymentHistory(false)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
-            </div>
+          <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[80vh] overflow-hidden flex flex-col shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50"><h2 className="text-lg font-semibold text-gray-900">Payment History - {selectedStudent.name}</h2><button onClick={() => setShowPaymentHistory(false)} className="text-gray-400 hover:text-gray-600 text-2xl">&times;</button></div>
             <div className="overflow-y-auto flex-1 p-6">
-              {historyLoading ? (
-                <div className="text-center py-8">Loading payments...</div>
-              ) : paymentHistory.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">No payment records found for this student.</div>
-              ) : (
+              {historyLoading ? (<div className="text-center py-8">Loading payments...</div>) : paymentHistory.length === 0 ? (<div className="text-center py-8 text-gray-500">No payment records found.</div>) : (
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Payment Date</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Method</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                        <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Receipt</th>
-                      </tr>
-                    </thead>
+                    <thead className="bg-gray-50"><tr><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Payment Date</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Method</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th><th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Receipt</th></tr></thead>
                     <tbody className="divide-y divide-gray-100">
                       {paymentHistory.map((p) => (
                         <tr key={p.id} className="hover:bg-gray-50">
-                          <td className="px-4 py-2 text-sm font-medium">{formatCurrency(p.amount)}</td>
-                          <td className="px-4 py-2 text-sm">{p.payment_date ? formatDate(p.payment_date) : "--"}</td>
-                          <td className="px-4 py-2 text-sm capitalize">{p.payment_method || "—"}</td>
-                          <td className="px-4 py-2 text-sm">
-                            <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                              {p.status}
-                            </span>
-                          </td>
-                          <td className="px-4 py-2 text-center">
-                            <button onClick={() => generateReceipt(p)} className="text-blue-600 hover:text-blue-800 text-sm">📄 Receipt</button>
-                          </td>
+                          <td className="px-4 py-3 text-sm font-medium text-gray-900">{formatCurrency(p.amount)}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{p.payment_date ? formatDate(p.payment_date) : "--"}</td>
+                          <td className="px-4 py-3 text-sm capitalize text-gray-600">{p.payment_method || "—"}</td>
+                          <td className="px-4 py-3 text-sm"><span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">{p.status}</span></td>
+                          <td className="px-4 py-3 text-center"><button onClick={() => generateReceipt(p)} className="text-indigo-600 hover:text-indigo-700 text-sm font-medium">📄 Receipt</button></td>
                         </tr>
                       ))}
                     </tbody>
@@ -755,9 +615,7 @@ function AdminStudentFeeManagement() {
                 </div>
               )}
             </div>
-            <div className="px-6 py-4 border-t bg-gray-50 flex justify-end">
-              <button onClick={() => setShowPaymentHistory(false)} className="px-4 py-2 bg-gray-200 rounded-lg text-sm">Close</button>
-            </div>
+            <div className="px-6 py-4 border-t bg-gray-50 flex justify-end"><button onClick={() => setShowPaymentHistory(false)} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-sm font-medium transition">Close</button></div>
           </div>
         </div>
       )}
@@ -765,67 +623,27 @@ function AdminStudentFeeManagement() {
       {/* Fee Report Modal */}
       {showReportModal && reportData && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowReportModal(false)}>
-          <div className="bg-white rounded-xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
-              <h2 className="text-lg font-semibold text-gray-800">Fee Report</h2>
-              <button onClick={() => setShowReportModal(false)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
-            </div>
+          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50"><h2 className="text-lg font-semibold text-gray-900">Fee Report</h2><button onClick={() => setShowReportModal(false)} className="text-gray-400 hover:text-gray-600 text-2xl">&times;</button></div>
             <div className="overflow-y-auto flex-1 p-6">
-              <div className="text-center mb-6">
-                <h3 className="text-xl font-bold text-gray-800">ZIAS - Fee Report</h3>
-                <p className="text-gray-500">Generated on: {new Date(reportData.generated_on).toLocaleString()}</p>
-              </div>
-              
+              <div className="text-center mb-6"><h3 className="text-xl font-bold text-gray-900">ZIAS - Fee Report</h3><p className="text-gray-500 text-sm">Generated on: {new Date(reportData.generated_on).toLocaleString()}</p></div>
               <div className="grid grid-cols-2 gap-4 mb-6">
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <p className="text-gray-500 text-sm">Total Students</p>
-                  <p className="text-2xl font-bold text-blue-700">{reportData.total_students}</p>
-                </div>
-                <div className="bg-purple-50 p-4 rounded-lg">
-                  <p className="text-gray-500 text-sm">Students with Fee</p>
-                  <p className="text-2xl font-bold text-purple-700">{reportData.students_with_fee}</p>
-                </div>
-                <div className="bg-green-50 p-4 rounded-lg">
-                  <p className="text-gray-500 text-sm">Total Collected</p>
-                  <p className="text-2xl font-bold text-green-700">{formatCurrency(reportData.total_paid_amount)}</p>
-                </div>
-                <div className="bg-red-50 p-4 rounded-lg">
-                  <p className="text-gray-500 text-sm">Total Pending</p>
-                  <p className="text-2xl font-bold text-red-700">{formatCurrency(reportData.total_pending_amount)}</p>
-                </div>
+                <div className="bg-blue-50 rounded-xl p-4"><p className="text-gray-600 text-sm">Total Students</p><p className="text-2xl font-bold text-blue-700">{reportData.total_students}</p></div>
+                <div className="bg-purple-50 rounded-xl p-4"><p className="text-gray-600 text-sm">Students with Fee</p><p className="text-2xl font-bold text-purple-700">{reportData.students_with_fee}</p></div>
+                <div className="bg-emerald-50 rounded-xl p-4"><p className="text-gray-600 text-sm">Total Collected</p><p className="text-2xl font-bold text-emerald-700">{formatCurrency(reportData.total_paid_amount)}</p></div>
+                <div className="bg-rose-50 rounded-xl p-4"><p className="text-gray-600 text-sm">Total Pending</p><p className="text-2xl font-bold text-rose-700">{formatCurrency(reportData.total_pending_amount)}</p></div>
               </div>
-              
-              <div className="mb-6">
-                <h4 className="font-semibold text-gray-800 mb-2">Payment Status Summary</h4>
+              <div className="mb-6"><h4 className="font-semibold text-gray-900 mb-3">Payment Status Summary</h4>
                 <div className="space-y-2">
-                  <div className="flex justify-between items-center p-2 bg-green-50 rounded">
-                    <span>Fully Paid</span>
-                    <span className="font-bold">{reportData.paid_count} students</span>
-                  </div>
-                  <div className="flex justify-between items-center p-2 bg-yellow-50 rounded">
-                    <span>Partially Paid</span>
-                    <span className="font-bold">{reportData.partially_paid_count} students</span>
-                  </div>
-                  <div className="flex justify-between items-center p-2 bg-red-50 rounded">
-                    <span>Pending</span>
-                    <span className="font-bold">{reportData.pending_count} students</span>
-                  </div>
-                  <div className="flex justify-between items-center p-2 bg-gray-50 rounded">
-                    <span>No Fee Assigned</span>
-                    <span className="font-bold">{reportData.no_fee_count} students</span>
-                  </div>
+                  <div className="flex justify-between items-center p-3 bg-emerald-50 rounded-xl"><span>Fully Paid</span><span className="font-bold text-emerald-700">{reportData.paid_count} students</span></div>
+                  <div className="flex justify-between items-center p-3 bg-amber-50 rounded-xl"><span>Partially Paid</span><span className="font-bold text-amber-700">{reportData.partially_paid_count} students</span></div>
+                  <div className="flex justify-between items-center p-3 bg-rose-50 rounded-xl"><span>Pending</span><span className="font-bold text-rose-700">{reportData.pending_count} students</span></div>
+                  <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl"><span>No Fee Assigned</span><span className="font-bold text-gray-700">{reportData.no_fee_count} students</span></div>
                 </div>
               </div>
-              
-              <div className="bg-orange-50 p-4 rounded-lg text-center">
-                <p className="text-gray-600">Collection Rate</p>
-                <p className="text-3xl font-bold text-orange-600">{reportData.collection_rate}%</p>
-              </div>
+              <div className="bg-orange-50 rounded-xl p-4 text-center"><p className="text-gray-600">Collection Rate</p><p className="text-3xl font-bold text-orange-600">{reportData.collection_rate}%</p></div>
             </div>
-            <div className="px-6 py-4 border-t bg-gray-50 flex justify-between">
-              <button onClick={exportReportCSV} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm">📥 Export to CSV</button>
-              <button onClick={() => setShowReportModal(false)} className="px-4 py-2 bg-gray-200 rounded-lg text-sm">Close</button>
-            </div>
+            <div className="px-6 py-4 border-t bg-gray-50 flex justify-end"><button onClick={() => setShowReportModal(false)} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-sm font-medium transition">Close</button></div>
           </div>
         </div>
       )}

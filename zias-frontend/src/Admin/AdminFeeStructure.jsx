@@ -12,7 +12,6 @@ function AdminFeeStructure() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [applyingId, setApplyingId] = useState(null);
   const [formData, setFormData] = useState({
     name: "",
     total_amount: "",
@@ -38,27 +37,6 @@ function AdminFeeStructure() {
   useEffect(() => {
     fetchFeeStructures();
   }, []);
-
-  // APPLY FUNCTION - This creates the link between fee structure and students
-  const handleApply = async (feeStructure) => {
-    if (!window.confirm(`Apply "${feeStructure.name}" to ALL students? This will create fee records for every student.`)) {
-      return;
-    }
-    
-    setApplyingId(feeStructure.id);
-    try {
-      const response = await API.post(`/fee-structures/${feeStructure.id}/apply_to_students/`);
-      toast.success(response.data.message || `Applied to ${response.data.new_assignments} students successfully!`);
-      
-      // Refresh the list
-      await fetchFeeStructures();
-    } catch (error) {
-      console.error("Apply error:", error);
-      toast.error(error.response?.data?.error || "Failed to apply fee structure");
-    } finally {
-      setApplyingId(null);
-    }
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -157,7 +135,7 @@ function AdminFeeStructure() {
   }
 
   return (
-    <div className="p-6 bg-gray-50 min-h-screen">
+    <div className="p-6 bg-gray-50 min-h-screen w-screen">
       <div className="max-w-7xl mx-auto">
         <div className="flex justify-between items-center mb-6">
           <div>
@@ -170,45 +148,45 @@ function AdminFeeStructure() {
               setFormData({ name: "", total_amount: "", discount_percentage: 0, number_of_installments: 1, is_active: true });
               setShowForm(true);
             }}
-            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg transition"
           >
             + Add Fee Structure
           </button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <div className="bg-white rounded-lg p-4 shadow border">
+          <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
             <p className="text-gray-500 text-sm">Total Structures</p>
             <p className="text-2xl font-bold text-gray-800">{feeStructures.length}</p>
           </div>
-          <div className="bg-white rounded-lg p-4 shadow border">
+          <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
             <p className="text-gray-500 text-sm">Active Structures</p>
-            <p className="text-2xl font-bold text-green-600">{feeStructures.filter(f => f.is_active).length}</p>
+            <p className="text-2xl font-bold text-emerald-600">{feeStructures.filter(f => f.is_active).length}</p>
           </div>
-          <div className="bg-white rounded-lg p-4 shadow border">
+          <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
             <p className="text-gray-500 text-sm">Total Revenue</p>
             <p className="text-2xl font-bold text-blue-600">₹{calculateTotalRevenue().toLocaleString()}</p>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow border overflow-hidden">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gray-50 border-b">
+              <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Discount</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Installments</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Per Week</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Discount</th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Installments</th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Per Week</th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y">
+              <tbody className="divide-y divide-gray-100">
                 {feeStructures.length === 0 ? (
                   <tr>
-                    <td colSpan="7" className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan="7" className="px-6 py-12 text-center text-gray-500">
                       No fee structures found. Click "Add Fee Structure" to create one.
                     </td>
                   </tr>
@@ -219,64 +197,62 @@ function AdminFeeStructure() {
                     const afterDiscount = total * (1 - discount / 100);
                     
                     return (
-                      <tr key={fs.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3">
-                          <p className="font-medium">{fs.name}</p>
-                          <p className="text-xs text-gray-400">ID: {fs.id}</p>
-                        </td>
-                        <td className="px-4 py-3">
+                      <tr key={fs.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4">
+                          <p className="font-medium text-gray-900">{fs.name}</p>
+                         </td>
+                        <td className="px-6 py-4">
                           {discount > 0 ? (
                             <>
                               <span className="line-through text-gray-400 mr-2">₹{total.toLocaleString()}</span>
-                              <span className="font-medium text-green-600">₹{afterDiscount.toLocaleString()}</span>
+                              <span className="font-medium text-emerald-600">₹{afterDiscount.toLocaleString()}</span>
                             </>
                           ) : (
-                            <span className="font-medium">₹{total.toLocaleString()}</span>
+                            <span className="font-medium text-gray-900">₹{total.toLocaleString()}</span>
                           )}
-                        </td>
-                        <td className="px-4 py-3">
+                         </td>
+                        <td className="px-6 py-4">
                           {discount > 0 ? (
-                            <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">{discount}% OFF</span>
+                            <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">{discount}% OFF</span>
                           ) : (
                             <span className="text-gray-400">—</span>
                           )}
-                        </td>
-                        <td className="px-4 py-3">{fs.number_of_installments} weeks</td>
-                        <td className="px-4 py-3">₹{calculatePerWeek(fs).toFixed(2)}</td>
-                        <td className="px-4 py-3">
+                         </td>
+                        <td className="px-6 py-4 text-gray-700">{fs.number_of_installments} weeks</td>
+                        <td className="px-6 py-4 font-medium text-gray-900">₹{calculatePerWeek(fs).toFixed(2)}</td>
+                        <td className="px-6 py-4">
                           <button
                             onClick={() => toggleStatus(fs)}
-                            className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              fs.is_active ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-600"
+                            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                              fs.is_active ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                             }`}
                           >
                             {fs.is_active ? "Active" : "Inactive"}
                           </button>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex gap-2 justify-center flex-wrap">
-                            <button
-                              onClick={() => handleApply(fs)}
-                              disabled={applyingId === fs.id}
-                              className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs font-medium disabled:opacity-50"
-                            >
-                              {applyingId === fs.id ? "Applying..." : "APPLY"}
-                            </button>
+                         </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center justify-center gap-2">
                             <button
                               onClick={() => handleEdit(fs)}
-                              className="text-blue-600 hover:text-blue-800 text-sm"
+                              className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              title="Edit"
                             >
-                              Edit
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
                             </button>
                             <button
                               onClick={() => handleDelete(fs.id, fs.name)}
-                              className="text-red-600 hover:text-red-800 text-sm"
+                              className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Delete"
                             >
-                              Delete
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
                             </button>
                           </div>
-                        </td>
-                      </tr>
+                         </td>
+                       </tr>
                     );
                   })
                 )}
@@ -284,63 +260,71 @@ function AdminFeeStructure() {
             </table>
           </div>
         </div>
-
-        <div className="mt-6 bg-red-50 border border-red-200 rounded-lg p-4">
-          <h3 className="text-sm font-semibold text-red-800 mb-2">⚠️ CRITICAL STEP</h3>
-          <p className="text-sm text-red-700">
-            After creating a fee structure, you <strong className="text-red-800">MUST click the GREEN "APPLY" button</strong> to assign it to students!
-            Without applying, students will show "No fee structure applied" and all amounts will be ₹0.
-          </p>
-        </div>
       </div>
 
       {/* Modal Form */}
       {showForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setShowForm(false)}>
-          <div className="bg-white rounded-lg max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
-            <h2 className="text-xl font-bold mb-4">{editingId ? "Edit" : "Create"} Fee Structure</h2>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowForm(false)}>
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-5">
+              <h2 className="text-xl font-bold text-gray-900">{editingId ? "Edit" : "Create"} Fee Structure</h2>
+              <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+            </div>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <input
-                type="text"
-                placeholder="Name"
-                value={formData.name}
-                onChange={e => setFormData({...formData, name: e.target.value})}
-                className="w-full border rounded-lg px-3 py-2"
-                required
-              />
-              <input
-                type="number"
-                placeholder="Total Amount"
-                value={formData.total_amount}
-                onChange={e => setFormData({...formData, total_amount: e.target.value})}
-                className="w-full border rounded-lg px-3 py-2"
-                required
-              />
-              <input
-                type="number"
-                placeholder="Discount %"
-                value={formData.discount_percentage}
-                onChange={e => setFormData({...formData, discount_percentage: e.target.value})}
-                className="w-full border rounded-lg px-3 py-2"
-              />
-              <input
-                type="number"
-                placeholder="Installments"
-                value={formData.number_of_installments}
-                onChange={e => setFormData({...formData, number_of_installments: e.target.value})}
-                className="w-full border rounded-lg px-3 py-2"
-              />
-              <label className="flex items-center gap-2">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g., Basic Course, Premium Course"
+                  value={formData.name}
+                  onChange={e => setFormData({...formData, name: e.target.value})}
+                  className="w-full border border-gray-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Total Amount (₹)</label>
+                <input
+                  type="number"
+                  placeholder="Enter total amount"
+                  value={formData.total_amount}
+                  onChange={e => setFormData({...formData, total_amount: e.target.value})}
+                  className="w-full border border-gray-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Discount (%)</label>
+                <input
+                  type="number"
+                  placeholder="Discount percentage"
+                  value={formData.discount_percentage}
+                  onChange={e => setFormData({...formData, discount_percentage: e.target.value})}
+                  className="w-full border border-gray-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Number of Installments (Weeks)</label>
+                <input
+                  type="number"
+                  placeholder="Number of installments"
+                  value={formData.number_of_installments}
+                  onChange={e => setFormData({...formData, number_of_installments: e.target.value})}
+                  className="w-full border border-gray-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                />
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={formData.is_active}
                   onChange={e => setFormData({...formData, is_active: e.target.checked})}
+                  className="w-4 h-4 text-emerald-600 rounded"
                 />
-                Active
+                <span className="text-sm text-gray-700">Active</span>
               </label>
-              <div className="flex gap-3">
-                <button type="submit" className="flex-1 bg-green-600 text-white py-2 rounded-lg">Save</button>
-                <button type="button" onClick={() => setShowForm(false)} className="flex-1 bg-gray-200 py-2 rounded-lg">Cancel</button>
+              <div className="flex gap-3 pt-2">
+                <button type="submit" className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-xl font-medium transition">Save</button>
+                <button type="button" onClick={() => setShowForm(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2.5 rounded-xl font-medium transition">Cancel</button>
               </div>
             </form>
           </div>
