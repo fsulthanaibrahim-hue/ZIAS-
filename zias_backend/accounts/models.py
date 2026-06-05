@@ -78,6 +78,8 @@ class Student(models.Model):
         ('Female', 'Female'),
         ('Other', 'Other'),
     ]
+
+
     
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='student_profile')
     full_name = models.CharField(max_length=255)
@@ -103,6 +105,7 @@ class Student(models.Model):
     emergency_contact = models.CharField(max_length=20, blank=True, null=True)
     reviewer = models.ForeignKey('Reviewer', on_delete=models.SET_NULL, null=True, blank=True, related_name='students')
     documents = models.ManyToManyField(Document, blank=True, related_name='students')
+    week_back_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, null=True, blank=True)
     agreement_signed = models.BooleanField(default=False)
     escalation_flag = models.BooleanField(default=False)
 

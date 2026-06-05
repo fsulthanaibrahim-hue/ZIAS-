@@ -279,26 +279,21 @@ class ModuleSerializer(serializers.ModelSerializer):
         fields = ['id', 'course', 'course_name', 'title', 'order', 'content', 'is_common', 'is_locked', 'unlock_date']
 
 
-# ----------------------------- 
-# STUDENT DOCUMENT SERIALIZER 
-# -----------------------------
-class StudentDocumentSerializer(serializers.ModelSerializer):
-    url = serializers.SerializerMethodField()
 
+# ----------------------------
+# STUDENT DOCUMENT SERIALIZER 
+# ----------------------------
+class StudentDocumentSerializer(serializers.ModelSerializer):
     class Meta:
         model = StudentDocument
-        fields = ['id', 'file', 'file_name', 'uploaded_at', 'url']
-
-    def get_url(self, obj):
-        request = self.context.get('request')
-        if request:
-            return request.build_absolute_uri(obj.file.url)
-        return obj.file.url
+        fields = '__all__'
 
 
-# ----------------------------
-# STUDENT SERIALIZER - FIXED
-# ----------------------------
+
+
+# ----------------------------- 
+# STUDENT SERIALIZER 
+# -----------------------------
 class StudentSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(write_only=True, required=True)
     
@@ -309,7 +304,9 @@ class StudentSerializer(serializers.ModelSerializer):
             'phone', 'date_of_birth', 'age', 'gender',
             'fathers_name', 'fathers_contact', 'mothers_name', 'mothers_contact',
             'address', 'educational_qualification', 'college_school',
-            'parent_name', 'parent_phone', 'emergency_contact'
+            'parent_name', 'parent_phone', 'emergency_contact',
+            'week_back_amount',
+            'agreement_signed',
         ]
 
     def to_representation(self, instance):
@@ -382,7 +379,8 @@ Please change your password after first login.
         for field in ['full_name', 'phone', 'course', 'date_of_birth', 'age', 'gender',
                       'fathers_name', 'fathers_contact', 'mothers_name', 'mothers_contact',
                       'address', 'educational_qualification', 'college_school',
-                      'parent_name', 'parent_phone', 'emergency_contact', 'mentor']:
+                      'parent_name', 'parent_phone', 'emergency_contact', 'mentor',
+                      'week_back_amount', 'agreement_signed']:
             if field in validated_data:
                 setattr(instance, field, validated_data[field])
         
@@ -394,7 +392,6 @@ Please change your password after first login.
         
         instance.save()
         return instance
-
 
 
 # ----------------------------
