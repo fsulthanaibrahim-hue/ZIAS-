@@ -105,17 +105,14 @@ function Students() {
   const hideToast = useCallback(() => setToast(null), []);
   const hasLoaded = useRef(false);
 
-  // ========== NEW: Auto-assign mentor based on batch ==========
+  // ========== Auto-assign mentor based on batch ==========
   const getMentorForBatch = useCallback(async (batchName) => {
     if (!batchName) return null;
     try {
-      // First check if a mentor is already assigned to this batch
       const existingMentor = mentorsList.find(m => m.batch === batchName || m.batch_name === batchName);
       if (existingMentor) {
         return existingMentor.id;
       }
-      
-      // If not, fetch fresh mentors list
       const mentorsRes = await API.get("mentors/");
       const mentors = mentorsRes.data.results || mentorsRes.data;
       const batchMentor = mentors.find(m => m.batch === batchName || m.batch_name === batchName);
@@ -126,18 +123,55 @@ function Students() {
     }
   }, [mentorsList]);
 
-  // Auto-assign mentor when batch changes
   const handleBatchChange = async (e) => {
     const batchName = e.target.value;
     setFormData(prev => ({ ...prev, batch: batchName }));
-    
-    // Auto-assign mentor if batch is selected and no mentor manually selected
     if (batchName && !formData.mentor) {
       const mentorId = await getMentorForBatch(batchName);
       if (mentorId) {
         setFormData(prev => ({ ...prev, mentor: mentorId.toString() }));
         showToast(`Auto-assigned mentor for batch: ${batchName}`, "success");
       }
+    }
+  };
+
+  // ========== Auto-assign fee based on course ==========
+  const getTotalAmountByCourse = (courseName) => {
+    const courseAmounts = {
+      'Foundations': 200000,
+      'React.js': 50000,
+      'Python': 100000,
+      'Data Science': 150000,
+      'UI/UX': 120000,
+    };
+    return courseAmounts[courseName] || 100000; // Default fee
+  };
+
+  const assignFeeToStudent = async (studentId, courseName) => {
+    try {
+      // Get fee structures
+      const feeRes = await API.get("/fee-structures/");
+      let feeStructures = feeRes.data.results || feeRes.data;
+      
+      if (feeStructures && feeStructures.length > 0) {
+        const totalAmount = getTotalAmountByCourse(courseName);
+        
+        await API.post("/student-fees/", {
+          student: studentId,
+          fee_structure: feeStructures[0].id,
+          total_amount: totalAmount,
+          paid_amount: 0,
+          discount_applied: 0
+        });
+        console.log(`✅ Fee auto-assigned: ₹${totalAmount} for ${courseName}`);
+        return true;
+      } else {
+        console.log("⚠️ No fee structure found. Please create one first.");
+        return false;
+      }
+    } catch(err) {
+      console.error("Fee auto-assign failed:", err);
+      return false;
     }
   };
   // ============================================================
@@ -337,17 +371,14 @@ function Students() {
     }
     if (hasError) return;
 
-    // ========== AUTO-ASSIGN MENTOR FROM BATCH ==========
+    // Auto-assign mentor from batch
     let assignedMentorId = formData.mentor ? parseInt(formData.mentor) : null;
-    
-    // If no mentor manually selected, try to auto-assign from batch
     if (!assignedMentorId && formData.batch) {
       assignedMentorId = await getMentorForBatch(formData.batch);
       if (assignedMentorId) {
         console.log(`✅ Auto-assigned mentor ID ${assignedMentorId} for batch ${formData.batch}`);
       }
     }
-    // ===================================================
 
     // Prepare payload
     const payload = {
@@ -384,8 +415,13 @@ function Students() {
       } else {
         payload.username = generateUsername(formData.email, formData.full_name);
         const createRes = await API.post("students/", payload);
+        const newStudentId = createRes.data.id;
         showToast(`Student added successfully!`, "success");
-        if (selectedFiles.length) await uploadDocuments(createRes.data.id);
+        
+        // ✅ AUTO ASSIGN FEE TO NEW STUDENT
+        await assignFeeToStudent(newStudentId, formData.course);
+        
+        if (selectedFiles.length) await uploadDocuments(newStudentId);
         setShowForm(false); resetForm(); await refreshStudents(); setCurrentPage(1);
       }
     } catch (error) {
@@ -630,6 +666,7 @@ function Students() {
                         <option value="">Select a course</option>
                         {coursesList.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                       </select>
+                      <p className="text-[10px] text-gray-400 mt-1">Fee will be auto-assigned based on course</p>
                     </div>
                     <div>
                       <label className={labelCls}>Batch *</label>
