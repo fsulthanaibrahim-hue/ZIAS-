@@ -24,6 +24,7 @@ function MentorStudents() {
   const [progressStudent, setProgressStudent] = useState(null);
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [userRole, setUserRole] = useState("");
 
   const [formData, setFormData] = useState({
     full_name: "", email: "", course: "", phone: "", date_of_birth: "",
@@ -49,6 +50,8 @@ function MentorStudents() {
 
   useEffect(() => {
     setMentorName(authUser?.full_name || authUser?.username || "Mentor");
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    setUserRole(user.role || '');
   }, [authUser]);
 
   // FETCH STUDENTS - Fetch all and filter on frontend
@@ -85,7 +88,7 @@ function MentorStudents() {
       
       console.log("🎯 Using mentor ID:", mentorId);
       
-      // Fetch ALL students (the API filter is broken)
+      // Fetch ALL students
       const studentsRes = await fetch(`${BASE_URL}/api/students/`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -468,12 +471,15 @@ function MentorStudents() {
               </svg>
               Refresh
             </button>
-            <button onClick={() => { resetForm(); setShowModal(true); }} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white text-xs px-5 py-2.5 rounded-xl">
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-              </svg>
-              Add Student
-            </button>
+            {/* Show Add Student button for both Admin and Mentor */}
+            {(userRole === 'admin' || userRole === 'mentor') && (
+              <button onClick={() => { resetForm(); setShowModal(true); }} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white text-xs px-5 py-2.5 rounded-xl">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                </svg>
+                Add Student
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -519,10 +525,36 @@ function MentorStudents() {
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
-                    <Link to={`/mentor/review-sheet?student_id=${student.id}`} className="text-[11px] px-3 py-1.5 rounded-full border border-green-200 bg-green-50 text-green-700 hover:bg-green-600 hover:text-white">Review Sheet</Link>
-                    <button onClick={() => { setProgressStudent(student); setShowProgressModal(true); }} className="text-[11px] px-3 py-1.5 rounded-full border border-green-200 bg-green-50 text-green-700 hover:bg-green-600 hover:text-white">Progress</button>
-                    <button onClick={() => handleEdit(student)} className="text-[11px] px-3 py-1.5 rounded-full border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white">Edit</button>
-                    <button onClick={() => handleDeleteClick(student)} className="text-[11px] px-3 py-1.5 rounded-full border border-red-200 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white">Delete</button>
+                    <Link
+                      to={`/mentor/review-sheet?student_id=${student.id}`}
+                      className="text-[11px] px-3 py-1.5 rounded-full border border-green-200 bg-green-50 text-green-700 hover:bg-green-600 hover:text-white hover:border-green-600 transition-all font-medium"
+                    >
+                      Review Sheet
+                    </Link>
+                    <button
+                      onClick={() => { setProgressStudent(student); setShowProgressModal(true); }}
+                      className="text-[11px] px-3 py-1.5 rounded-full border border-green-200 bg-green-50 text-green-700 hover:bg-green-600 hover:text-white hover:border-green-600 transition-all font-medium"
+                    >
+                      Progress
+                    </button>
+                    
+                    {/* Show Edit and Delete buttons for both Admin and Mentor */}
+                    {(userRole === 'admin' || userRole === 'mentor') && (
+                      <>
+                        <button
+                          onClick={() => handleEdit(student)}
+                          className="text-[11px] px-3 py-1.5 rounded-full border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-all font-medium"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteClick(student)}
+                          className="text-[11px] px-3 py-1.5 rounded-full border border-red-200 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white hover:border-red-500 transition-all font-medium"
+                        >
+                          Delete
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -531,8 +563,8 @@ function MentorStudents() {
         )}
       </div>
 
-      {/* ADD/EDIT MODAL */}
-      {showModal && (
+      {/* ADD/EDIT MODAL - Show for both Admin and Mentor */}
+      {showModal && (userRole === 'admin' || userRole === 'mentor') && (
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowModal(false)}>
           <form onSubmit={handleSubmit} className="bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto border border-green-100 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="sticky top-0 z-10 bg-white px-6 py-4 border-b border-green-100 rounded-t-2xl flex justify-between items-center">
@@ -751,8 +783,8 @@ function MentorStudents() {
         </div>
       )}
 
-      {/* DELETE CONFIRM MODAL */}
-      {showDeleteConfirm && studentToDelete && (
+      {/* DELETE CONFIRM MODAL - Show for both Admin and Mentor */}
+      {showDeleteConfirm && studentToDelete && (userRole === 'admin' || userRole === 'mentor') && (
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl max-w-md w-full border border-red-100 shadow-2xl overflow-hidden">
             <div className="h-1 bg-gradient-to-r from-red-400 to-red-300" />

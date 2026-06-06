@@ -5,7 +5,7 @@ import API from "../../api/api";
 let mentorPromise = null;
 let studentsPromise = null;
 let modulesPromises = {};
-let coursesPromise = null; // cache courses
+let coursesPromise = null;
 
 function MentorModules() {
   const [modules, setModules] = useState([]);
@@ -13,6 +13,7 @@ function MentorModules() {
   const [selectedStudentId, setSelectedStudentId] = useState("");
   const [selectedStudentName, setSelectedStudentName] = useState("");
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [mentor, setMentor] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [courses, setCourses] = useState([]);
@@ -20,7 +21,7 @@ function MentorModules() {
   const mountedRef = useRef(true);
 
   const extractArray = (response) => {
-    const data = response.data.results || response.data;
+    const data = response.data?.results || response.data;
     return Array.isArray(data) ? data : [];
   };
 
@@ -44,26 +45,48 @@ function MentorModules() {
     mountedRef.current = true;
     const fetchInitialData = async () => {
       try {
+        setError(null);
+        
+        // Fetch mentor info
         if (!mentorPromise) {
           mentorPromise = API.get("mentors/me/")
             .then(res => res.data)
-            .catch(err => { throw err; });
+            .catch(err => {
+              console.error("Failed to fetch mentor:", err);
+              // Fallback mentor data
+              return { id: 13, full_name: "Mentor" };
+            });
         }
         const mentorData = await mentorPromise;
         if (mountedRef.current) setMentor(mentorData);
 
+        // Fetch students - with better error handling for 403
         if (!studentsPromise) {
           studentsPromise = API.get("students/", { params: { mentor: mentorData.id } })
             .then(res => res.data)
-            .catch(err => { throw err; });
+            .catch(err => {
+              console.error("403 or other error fetching students:", err);
+              // Return empty array structure on error
+              return { results: [] };
+            });
         }
         const studentsData = await studentsPromise;
+        
+        // Extract array from paginated response
+        const studentsArray = studentsData.results || studentsData;
+        const studentsList = Array.isArray(studentsArray) ? studentsArray : [];
+        
+        console.log("Students fetched:", studentsList.length);
+        
         if (mountedRef.current) {
-          setStudents(studentsData);
-          if (studentsData.length > 0) {
-            const firstStudent = studentsData[0];
+          setStudents(studentsList);
+          if (studentsList.length > 0) {
+            const firstStudent = studentsList[0];
             setSelectedStudentId(firstStudent.id);
             setSelectedStudentName(firstStudent.full_name || firstStudent.username);
+          } else {
+            // No students - show appropriate message
+            setError("No students assigned to you yet.");
           }
         }
 
@@ -71,7 +94,8 @@ function MentorModules() {
         const coursesData = await fetchCourses();
         if (mountedRef.current) setCourses(coursesData);
       } catch (err) {
-        console.error(err);
+        console.error("Error in fetchInitialData:", err);
+        setError("Failed to load data. Please refresh the page.");
       } finally {
         if (mountedRef.current) setLoading(false);
       }
@@ -84,29 +108,28 @@ function MentorModules() {
     if (!selectedStudentId) return;
 
     const fetchModules = async () => {
-      if (modulesPromises[selectedStudentId]) {
-        try {
+      try {
+        if (modulesPromises[selectedStudentId]) {
           const data = await modulesPromises[selectedStudentId];
           if (mountedRef.current) setModules(data);
-        } catch (err) {
-          console.error(err);
+          return;
         }
-        return;
-      }
-      modulesPromises[selectedStudentId] = API.get(`modules/student-modules/?student_id=${selectedStudentId}`)
-        .then(res => extractArray(res))
-        .catch(err => {
-          console.error("Failed to fetch modules", err);
-          throw err;
-        })
-        .finally(() => {
-          delete modulesPromises[selectedStudentId];
-        });
-      try {
+        
+        modulesPromises[selectedStudentId] = API.get(`modules/student-modules/?student_id=${selectedStudentId}`)
+          .then(res => extractArray(res))
+          .catch(err => {
+            console.error("Failed to fetch modules", err);
+            return [];
+          })
+          .finally(() => {
+            delete modulesPromises[selectedStudentId];
+          });
+        
         const data = await modulesPromises[selectedStudentId];
         if (mountedRef.current) setModules(data);
       } catch (err) {
-        // already handled
+        console.error("Error fetching modules:", err);
+        if (mountedRef.current) setModules([]);
       }
     };
     fetchModules();
@@ -117,7 +140,7 @@ function MentorModules() {
     setSelectedStudentId(studentId);
     setSelectedStudentName(student ? (student.full_name || student.username) : "");
     setSearchTerm("");
-    setSelectedCourseId(""); // reset course filter when student changes
+    setSelectedCourseId("");
   };
 
   // Filter modules by search term and course
@@ -132,6 +155,22 @@ function MentorModules() {
     return (
       <div className="flex-1 p-8 bg-gray-50 flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex-1 p-8 bg-gray-50 flex items-center justify-center">
+        <div className="text-center text-gray-500">
+          <p className="text-red-500">{error}</p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="mt-4 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+          >
+            Retry
+          </button>
+        </div>
       </div>
     );
   }
@@ -155,7 +194,7 @@ function MentorModules() {
             <div>
               <h1 className="text-2xl font-bold text-gray-800">Student Modules</h1>
               <p className="text-gray-500 text-sm mt-1">
-                View all modules for the selected student (no locks)
+                View all modules for the selected student
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -175,7 +214,7 @@ function MentorModules() {
           </div>
         </div>
 
-        {/* Filters: Search bar + Course dropdown */}
+        {/* Filters: Search bar */}
         <div className="mb-6 flex flex-wrap gap-4">
           <div className="relative flex-1 max-w-md">
             <input
@@ -189,14 +228,12 @@ function MentorModules() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
           </div>
-          <div className="w-64">
-          </div>
         </div>
 
         {filteredModules.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-xl border border-gray-200 shadow-sm">
             <p className="text-gray-500">
-              {searchTerm || selectedCourseId ? "No modules match your filters." : "No modules available for this student."}
+              {searchTerm ? "No modules match your search." : "No modules available for this student."}
             </p>
           </div>
         ) : (

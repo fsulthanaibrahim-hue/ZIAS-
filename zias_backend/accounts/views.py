@@ -138,6 +138,7 @@ class StudentViewSet(viewsets.ModelViewSet):
         if user_role == 'mentor':
             try:
                 # Use apps.get_model to avoid circular import
+                from django.apps import apps
                 Mentor = apps.get_model('mentors', 'Mentor')
                 
                 # Try to find mentor by email
@@ -202,11 +203,11 @@ class StudentViewSet(viewsets.ModelViewSet):
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     
     def create(self, request, *args, **kwargs):
-        # Check permission - only admin can create students
+        # Allow both Admin and Mentor to create students
         user_role = getattr(request.user, 'role', None)
-        if not (request.user.is_superuser or user_role == 'admin'):
+        if not (request.user.is_superuser or user_role == 'admin' or user_role == 'mentor'):
             return Response(
-                {'detail': 'You do not have permission to create students. Only admin can create students.'},
+                {'detail': 'You do not have permission to create students. Only Admin and Mentor can create students.'},
                 status=status.HTTP_403_FORBIDDEN
             )
         try:
@@ -219,11 +220,11 @@ class StudentViewSet(viewsets.ModelViewSet):
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     def update(self, request, *args, **kwargs):
-        # Check permission - only admin can update students
+        # Allow both Admin and Mentor to update students
         user_role = getattr(request.user, 'role', None)
-        if not (request.user.is_superuser or user_role == 'admin'):
+        if not (request.user.is_superuser or user_role == 'admin' or user_role == 'mentor'):
             return Response(
-                {'detail': 'You do not have permission to update students. Only admin can update students.'},
+                {'detail': 'You do not have permission to update students. Only Admin and Mentor can update students.'},
                 status=status.HTTP_403_FORBIDDEN
             )
         try:
@@ -240,11 +241,11 @@ class StudentViewSet(viewsets.ModelViewSet):
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     def destroy(self, request, *args, **kwargs):
-        # Check permission - only admin can delete students
+        # Allow both Admin and Mentor to delete students
         user_role = getattr(request.user, 'role', None)
-        if not (request.user.is_superuser or user_role == 'admin'):
+        if not (request.user.is_superuser or user_role == 'admin' or user_role == 'mentor'):
             return Response(
-                {'detail': 'You do not have permission to delete students. Only admin can delete students.'},
+                {'detail': 'You do not have permission to delete students. Only Admin and Mentor can delete students.'},
                 status=status.HTTP_403_FORBIDDEN
             )
         try:

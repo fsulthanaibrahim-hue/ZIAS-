@@ -2,12 +2,12 @@ import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../../api/api";
 import { useAuth } from "../../context/AuthContext";
+import toast from "react-hot-toast";
 
 const DEFAULT_REVIEW_SHEET_URL = "";
 
 // --------------------------------------------------------------
-// Modal for adding week folder (same as admin side)
-// Modal for adding week folder (unchanged)
+// Modal for adding week folder
 // --------------------------------------------------------------
 function AddWeekModal({ isOpen, onClose, batchStudents, batchName, onCreate, creating }) {
   const [folderName, setFolderName] = useState("");
@@ -48,11 +48,11 @@ function AddWeekModal({ isOpen, onClose, batchStudents, batchName, onCreate, cre
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!folderName.trim() || !reviewDate) {
-      alert("Folder name and review date are required.");
+      toast.error("Folder name and review date are required.");
       return;
     }
     if (selectedStudents.length === 0) {
-      alert("Select at least one student.");
+      toast.error("Select at least one student.");
       return;
     }
     onCreate(folderName.trim(), reviewDate, selectedStudents);
@@ -135,7 +135,6 @@ function AddWeekModal({ isOpen, onClose, batchStudents, batchName, onCreate, cre
 
 // --------------------------------------------------------------
 // Main component
-// Main component - optimized
 // --------------------------------------------------------------
 function MentorReviewFolders() {
   const { user, loading: authLoading } = useAuth();
@@ -158,7 +157,6 @@ function MentorReviewFolders() {
   const [refreshingDocId, setRefreshingDocId] = useState(null);
 
   // Refs to prevent duplicate API calls
- 
   const initialDataFetched = useRef(false);
   const reviewersFetched = useRef(false);
   const mentorDataFetched = useRef(false);
@@ -179,7 +177,6 @@ function MentorReviewFolders() {
   }, []);
 
   // ----- Fetch mentor's students and folders together (once) -----
-
   const fetchMentorData = useCallback(async () => {
     if (mentorDataFetched.current) return;
     mentorDataFetched.current = true;
@@ -199,7 +196,6 @@ function MentorReviewFolders() {
       }));
       setStudentsList(mappedStudents);
 
-
       if (mappedStudents.length === 0) {
         setAllFolders([]);
         setError("No students assigned to you. Please contact the admin.");
@@ -218,7 +214,6 @@ function MentorReviewFolders() {
     } finally {
       setLoading(false);
     }
-    
   }, []);
 
   // ----- Combined initial fetch -----
@@ -304,22 +299,20 @@ function MentorReviewFolders() {
   };
 
   // ----- Refresh work document for an existing entry -----
-  // ----- Refresh work doc for an existing entry -----
   const refreshWorkDoc = async (entryId, studentId, weekNumber) => {
     setRefreshingDocId(entryId);
     try {
       const newUrl = await getWorkDocForWeek(studentId, weekNumber);
       if (!newUrl) {
-        alert("No work document found for this student/week.");
+        toast.error("No work document found for this student/week.");
         return;
       }
       await API.patch(`/review-folders/${entryId}/`, { work_documents: newUrl });
-      await fetchMentorFolders();
       await refreshData();
-      alert("Work document refreshed successfully.");
+      toast.success("Work document refreshed successfully.");
     } catch (err) {
       console.error(err);
-      alert("Failed to refresh work document.");
+      toast.error("Failed to refresh work document.");
     } finally {
       setRefreshingDocId(null);
     }
@@ -332,7 +325,7 @@ function MentorReviewFolders() {
     const folderData = folderList.find(f => f.name === oldName);
     const entries = folderData?.entries || [];
     if (entries.length === 0) {
-      alert("No entries to rename.");
+      toast.error("No entries to rename.");
       return;
     }
     try {
@@ -340,12 +333,11 @@ function MentorReviewFolders() {
         await API.patch(`/review-folders/${entry.id}/`, { week_folder: newName.trim() });
       }
       if (selectedFolder === oldName) setSelectedFolder(newName.trim());
-      await fetchMentorFolders();
       await refreshData();
-      alert(`Folder renamed to "${newName}"`);
+      toast.success(`Folder renamed to "${newName}"`);
     } catch (err) {
       console.error(err);
-      alert("Failed to rename folder.");
+      toast.error("Failed to rename folder.");
     }
   };
 
@@ -358,27 +350,15 @@ function MentorReviewFolders() {
         await API.delete(`/review-folders/${entry.id}/`);
       }
       if (selectedFolder === folderName) setSelectedFolder(null);
-      await fetchMentorFolders();
       await refreshData();
-      alert(`Folder "${folderName}" deleted.`);
+      toast.success(`Folder "${folderName}" deleted.`);
     } catch (err) {
       console.error(err);
-      alert("Failed to delete folder.");
+      toast.error("Failed to delete folder.");
     }
   };
 
   // ----- Create week folder -----
-  const getDefaultReviewSheetFromModule = async (studentId, weekNumber) => {
-    try {
-      const modulesRes = await API.get(`/modules/student-modules/?student_id=${studentId}`);
-      const modules = modulesRes.data.results || modulesRes.data;
-      const theModule = modules.find(m => m.order === weekNumber);
-      return theModule?.review_sheet_template || "";
-    } catch {
-      return "";
-    }
-  };
-
   const ensureWeekReviewExists = async (studentId, weekNumber) => {
     try {
       const modulesRes = await API.get(`/modules/student-modules/?student_id=${studentId}`);
@@ -454,24 +434,26 @@ function MentorReviewFolders() {
         console.error(err);
       }
     }
-    alert(`Created ${successCount} entries for "${folderName}" (${errorCount} failed)`);
+    if (successCount > 0) {
+      toast.success(`✅ Created ${successCount} week folder(s) for "${folderName}"`);
+    }
+    if (errorCount > 0) {
+      toast.error(`⚠️ Failed to create ${errorCount} folder(s)`);
+    }
     setShowAddWeekModal(false);
-    await fetchMentorFolders();
     await refreshData();
     setCreatingWeek(false);
   };
 
-  // ----- Entry actions (edit/delete/toggle) -----
-  // ----- Entry actions -----
+  // ----- Entry actions (edit/delete/toggle) - TIME FIELDS REMOVED -----
   const startEdit = (entry) => {
     setEditingId(entry.id);
     setEditData({
-      review_date: entry.review_date || "",
+      review_date: entry.review_date ? entry.review_date.split('T')[0] : "",
       week: entry.week?.toString() || "",
       industry_expert: entry.industry_expert || "",
       meeting_link: entry.meeting_link || "",
-      time_started: entry.time_started || "",
-      time_ended: entry.time_ended || "",
+      // time_started and time_ended removed - causing 400 error
       work_documents: entry.work_documents || "",
       review_sheet: entry.review_sheet || "",
       is_done: entry.is_done || false,
@@ -489,29 +471,55 @@ function MentorReviewFolders() {
   };
 
   const saveEdit = async (id) => {
-    const payload = {};
-    const original = rawEntries.find(e => e.id === id);
-    if (!original) return;
-    for (const key in editData) {
-      let newVal = editData[key];
-      let oldVal = original[key] !== undefined && original[key] !== null ? original[key] : "";
-      if (key === "week") {
-        newVal = newVal ? Number(newVal) : null;
-        oldVal = oldVal ? Number(oldVal) : null;
-      }
-      if (newVal !== oldVal) payload[key] = newVal;
-    }
-    if (Object.keys(payload).length === 0) {
-      cancelEdit();
-      return;
-    }
     try {
-      await API.patch(`/review-folders/${id}/`, payload);
-      await fetchMentorFolders();
+      const original = rawEntries.find(e => e.id === id);
+      if (!original) {
+        toast.error("Original entry not found");
+        cancelEdit();
+        return;
+      }
+      
+      const updateData = {};
+      
+      // Only include fields that have changed (time fields excluded)
+      if (editData.review_date !== undefined && editData.review_date !== (original.review_date?.split('T')[0] || "")) {
+        updateData.review_date = editData.review_date;
+      }
+      if (editData.week !== undefined && Number(editData.week) !== (original.week || null)) {
+        updateData.week = editData.week ? Number(editData.week) : null;
+      }
+      if (editData.industry_expert !== undefined && editData.industry_expert !== (original.industry_expert || "")) {
+        updateData.industry_expert = editData.industry_expert;
+      }
+      if (editData.meeting_link !== undefined && editData.meeting_link !== (original.meeting_link || "")) {
+        updateData.meeting_link = editData.meeting_link;
+      }
+      if (editData.work_documents !== undefined && editData.work_documents !== (original.work_documents || "")) {
+        updateData.work_documents = editData.work_documents;
+      }
+      if (editData.review_sheet !== undefined && editData.review_sheet !== (original.review_sheet || "")) {
+        updateData.review_sheet = editData.review_sheet;
+      }
+      if (editData.is_done !== undefined && editData.is_done !== (original.is_done || false)) {
+        updateData.is_done = editData.is_done;
+      }
+      
+      if (Object.keys(updateData).length === 0) {
+        toast.info("No changes to save");
+        cancelEdit();
+        return;
+      }
+      
+      console.log("Updating review folder:", id, updateData);
+      
+      await API.patch(`/review-folders/${id}/`, updateData);
       await refreshData();
       cancelEdit();
+      toast.success("Entry updated successfully.");
     } catch (err) {
-      alert("Update failed: " + (err.response?.data?.detail || err.message));
+      console.error("Error:", err.response?.data);
+      const errorMsg = err.response?.data?.detail || err.response?.data?.message || err.message;
+      toast.error("Update failed: " + (typeof errorMsg === 'object' ? JSON.stringify(errorMsg) : errorMsg));
     }
   };
 
@@ -519,11 +527,10 @@ function MentorReviewFolders() {
     if (window.confirm("Delete this entry?")) {
       try {
         await API.delete(`/review-folders/${id}/`);
-        await fetchMentorFolders();
         await refreshData();
-        alert("Entry deleted successfully.");
+        toast.success("Entry deleted successfully.");
       } catch (err) {
-        alert("Failed to delete entry.");
+        toast.error("Failed to delete entry.");
       }
     }
   };
@@ -531,10 +538,9 @@ function MentorReviewFolders() {
   const toggleDone = async (id, newValue) => {
     try {
       await API.patch(`/review-folders/${id}/`, { is_done: newValue });
-      await fetchMentorFolders();
       await refreshData();
     } catch (err) {
-      alert("Failed to update status");
+      toast.error("Failed to update status");
     }
   };
 
@@ -560,7 +566,6 @@ function MentorReviewFolders() {
     Delete: () => (<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>),
     Save: () => (<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>),
     Cancel: () => (<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>),
-    Refresh: () => (<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>),
   };
 
   return (
@@ -650,8 +655,6 @@ function MentorReviewFolders() {
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Work Doc</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Meeting Link</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Review Sheet</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Start Time</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">End Time</th>
                   <th className="px-4 py-3 text-center text-xs font-medium text-gray-500">Status</th>
                   <th className="px-4 py-3 text-center text-xs font-medium text-gray-500">Actions</th>
                 </tr>
@@ -687,12 +690,6 @@ function MentorReviewFolders() {
                     <td className="px-4 py-3 text-sm">
                       {editingId === entry.id ? <input type="url" name="review_sheet" value={editData.review_sheet} onChange={handleChange} className="w-36 border rounded px-2 py-1 text-sm" /> : renderLink(entry.review_sheet, "Sheet")}
                     </td>
-                    <td className="px-4 py-3 text-sm">
-                      {editingId === entry.id ? <input type="time" name="time_started" value={editData.time_started} onChange={handleChange} className="w-28 border rounded px-2 py-1 text-sm" /> : entry.time_started || "—"}
-                    </td>
-                    <td className="px-4 py-3 text-sm">
-                      {editingId === entry.id ? <input type="time" name="time_ended" value={editData.time_ended} onChange={handleChange} className="w-28 border rounded px-2 py-1 text-sm" /> : entry.time_ended || "—"}
-                    </td>
                     <td className="px-4 py-3 text-center">
                       {editingId === entry.id ? (
                         <label className="flex items-center justify-center gap-1 cursor-pointer">
@@ -715,7 +712,6 @@ function MentorReviewFolders() {
                         <div className="flex gap-2 justify-center">
                           <button onClick={() => startEdit(entry)} className="text-blue-600 hover:text-blue-800"><Icons.Edit /></button>
                           <button onClick={() => deleteEntry(entry.id)} className="text-red-600 hover:text-red-800"><Icons.Delete /></button>
-
                         </div>
                       )}
                     </td>
