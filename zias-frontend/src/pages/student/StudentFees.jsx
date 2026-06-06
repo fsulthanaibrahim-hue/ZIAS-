@@ -6,7 +6,6 @@ import StudentSidebar from '../../components/StudentSidebar';
 function StudentFees() {
   const [studentInfo, setStudentInfo] = useState(null);
   const [studentFee, setStudentFee] = useState(null);
-  const [feeStructureDetails, setFeeStructureDetails] = useState(null);
   const [allPayments, setAllPayments] = useState([]);
   const [weekBackAmount, setWeekBackAmount] = useState(0);
   const [agreementSigned, setAgreementSigned] = useState(false);
@@ -54,15 +53,6 @@ function StudentFees() {
       if (feeData && feeData.length > 0) {
         const fee = feeData[0];
         setStudentFee(fee);
-        
-        if (fee.fee_structure) {
-          try {
-            const feeStructureRes = await API.get(`/fee-structures/${fee.fee_structure}/`);
-            setFeeStructureDetails(feeStructureRes.data);
-          } catch (err) {
-            console.error('Error fetching fee structure:', err);
-          }
-        }
       }
 
       // Get ALL payments for this student
@@ -126,11 +116,6 @@ function StudentFees() {
     statusBadgeColor = 'bg-amber-500';
   }
 
-  const discountPercentage = feeStructureDetails?.discount_percentage || 0;
-  const originalAmount = feeStructureDetails?.total_amount || totalAmount;
-  const discountedAmount = originalAmount * (1 - discountPercentage / 100);
-  const perMonthAmount = discountedAmount / (feeStructureDetails?.number_of_months || 1);
-
   if (loading) {
     return (
       <div className="flex h-screen bg-gray-50">
@@ -157,7 +142,7 @@ function StudentFees() {
               <p className="text-gray-500 text-sm mt-1">View your complete fee details, payment history, and week back amount</p>
             </div>
 
-            {/* Student Info Card */}
+            {/* Student Info Card - Student ID Removed */}
             {studentInfo && (
               <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6 shadow-sm">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -176,15 +161,12 @@ function StudentFees() {
                       </span>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-xs text-gray-500">Student ID</p>
-                    <p className="text-sm font-mono text-gray-600">#{studentInfo.id}</p>
-                  </div>
+                  {/* Student ID section completely removed */}
                 </div>
               </div>
             )}
 
-            {/* Fee Summary Cards - Like Admin View */}
+            {/* Fee Summary Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
               <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
                 <div className="flex items-center justify-between">
@@ -281,37 +263,7 @@ function StudentFees() {
               </div>
             )}
 
-            {/* Fee Structure Details */}
-            {feeStructureDetails && (
-              <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm mb-8">
-                <div className="bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-4">
-                  <h2 className="text-xl font-bold text-white">Your Fee Plan</h2>
-                  <p className="text-indigo-100 text-sm mt-1">{feeStructureDetails.name}</p>
-                </div>
-                <div className="p-6">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="text-center p-4 bg-gray-50 rounded-xl">
-                      <p className="text-gray-500 text-sm">Original Amount</p>
-                      <p className="text-xl font-bold text-gray-900">{formatCurrency(originalAmount)}</p>
-                    </div>
-                    <div className="text-center p-4 bg-gray-50 rounded-xl">
-                      <p className="text-gray-500 text-sm">Discount</p>
-                      <p className="text-xl font-bold text-emerald-600">{discountPercentage}% OFF</p>
-                    </div>
-                    <div className="text-center p-4 bg-gray-50 rounded-xl">
-                      <p className="text-gray-500 text-sm">Final Amount</p>
-                      <p className="text-xl font-bold text-purple-600">{formatCurrency(discountedAmount)}</p>
-                    </div>
-                  </div>
-                  <div className="mt-4 text-center text-gray-600 text-sm">
-                    Duration: <strong>{feeStructureDetails.number_of_months || feeStructureDetails.number_of_installments}</strong> months • 
-                    Monthly Payment: <strong>{formatCurrency(perMonthAmount)}</strong>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Payment History Table - Full Details Like Admin */}
+            {/* Payment History Table */}
             <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
               <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
                 <h3 className="font-semibold text-gray-800">Payment History</h3>
@@ -336,7 +288,6 @@ function StudentFees() {
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment Date</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Method</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Transaction ID</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Notes</th>
                       </tr>
                     </thead>
@@ -356,7 +307,6 @@ function StudentFees() {
                               {payment.status || 'Paid'}
                             </span>
                           </td>
-                          <td className="px-6 py-4 text-sm font-mono text-gray-500">{payment.transaction_id || '—'}</td>
                           <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">{payment.notes || '—'}</td>
                         </tr>
                       ))}
@@ -365,10 +315,10 @@ function StudentFees() {
                       <tr>
                         <td colSpan="1" className="px-6 py-3 text-sm font-semibold text-gray-700">Total</td>
                         <td className="px-6 py-3 text-sm font-bold text-emerald-600">{formatCurrency(actualPaidAmount)}</td>
-                        <td colSpan="5"></td>
-                      </tr>
+                        <td colSpan="4"></td>
+                       </tr>
                     </tfoot>
-                  </table>
+                   </table>
                 )}
               </div>
             </div>

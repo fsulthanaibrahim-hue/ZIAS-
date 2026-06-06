@@ -7,6 +7,7 @@ function FeeOverview() {
   const [studentFees, setStudentFees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [applyingFee, setApplyingFee] = useState(false);
   
   // Edit modal states
   const [showEditModal, setShowEditModal] = useState(false);
@@ -41,6 +42,51 @@ function FeeOverview() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Apply fee to all students who don't have fee record
+  const handleApplyFeeToAll = async () => {
+    // Get fee structures
+    const feeRes = await API.get('/fee-structures/');
+    const feeData = feeRes.data;
+    const feeStructures = feeData.results || feeData;
+    const feeStructureId = feeStructures[0]?.id;
+    
+    if (!feeStructureId) {
+      toast.error('No fee structure found. Please create one first.');
+      return;
+    }
+    
+    // Find students without fee
+    const studentsWithFeeIds = studentFees.map(sf => sf.student);
+    const studentsWithoutFee = students.filter(s => !studentsWithFeeIds.includes(s.id));
+    
+    if (studentsWithoutFee.length === 0) {
+      toast.info('All students already have fee assigned');
+      return;
+    }
+    
+    setApplyingFee(true);
+    let successCount = 0;
+    
+    for (const student of studentsWithoutFee) {
+      try {
+        await API.post('/student-fees/', {
+          student: student.id,
+          fee_structure: feeStructureId,
+          total_amount: 200000,
+          paid_amount: 0,
+          discount_applied: 0
+        });
+        successCount++;
+      } catch (err) {
+        console.error(`Failed for ${student.name}:`, err);
+      }
+    }
+    
+    toast.success(`Fee assigned to ${successCount} students`);
+    await fetchData();
+    setApplyingFee(false);
   };
 
   useEffect(() => {
@@ -173,6 +219,7 @@ function FeeOverview() {
   // Summary statistics - from StudentFee model
   const totalStudents = students.length;
   const studentsWithFee = studentFees.length;
+  const studentsWithoutFee = totalStudents - studentsWithFee;
   
   const totalFee = studentFees.reduce((sum, sf) => {
     return sum + (Number(sf.total_amount) || 0);
@@ -223,17 +270,28 @@ function FeeOverview() {
   return (
     <div className="p-4 sm:p-6 bg-gray-50 min-h-screen">
       <div className="max-w-7xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex justify-between items-center mb-6 flex-wrap gap-2">
           <div>
             <h1 className="text-2xl font-bold text-gray-800">Fee Overview</h1>
             <p className="text-sm text-gray-500 mt-1">Student-wise fee summary from Student Fee structure</p>
           </div>
-          <button
-            onClick={fetchData}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition"
-          >
-            Refresh
-          </button>
+          <div className="flex gap-2">
+            {studentsWithoutFee > 0 && (
+              <button
+                onClick={handleApplyFeeToAll}
+                disabled={applyingFee}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition disabled:opacity-50"
+              >
+                {applyingFee ? 'Applying...' : `Apply Fee (${studentsWithoutFee} students)`}
+              </button>
+            )}
+            <button
+              onClick={fetchData}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition"
+            >
+              Refresh
+            </button>
+          </div>
         </div>
 
         {/* Summary Cards */}
@@ -363,12 +421,17 @@ function FeeOverview() {
           <h3 className="text-sm font-semibold text-yellow-900 mb-2">📌 Fee Summary Information</h3>
           <p className="text-sm text-yellow-800">
             This page shows fee details from <strong>Student Fee table</strong>. Each student's Total Fee, Paid Amount, and Pending Balance are displayed.
-            If a student shows "No Fee Assigned", please apply a fee structure to that student from the Student Fee Management page.
+            If a student shows "No Fee Assigned", click the <strong>Apply Fee</strong> button above to assign fee to all students.
             Click the <strong>Edit</strong> button to modify individual student fees.
           </p>
           <div className="mt-2 text-xs text-yellow-700">
             <strong>Summary:</strong> Total Fee: {formatCurrency(totalFee)} | Total Paid: {formatCurrency(totalPaid)} | Total Pending: {formatCurrency(totalPending)} | Collection Rate: {totalFee > 0 ? ((totalPaid / totalFee) * 100).toFixed(1) : 0}%
           </div>
+          {studentsWithoutFee > 0 && (
+            <div className="mt-2 text-xs text-red-600">
+              ⚠️ {studentsWithoutFee} student(s) have no fee assigned. Click the blue "Apply Fee" button to fix this.
+            </div>
+          )}
         </div>
       </div>
 
