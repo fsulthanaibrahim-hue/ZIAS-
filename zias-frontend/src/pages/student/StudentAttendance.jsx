@@ -18,13 +18,17 @@ const formatDateDMY = (dateStr) => {
   return `${day}/${month}/${year}`;
 };
 
-const formatTimeHHMMSS = (datetimeStr) => {
+// NEW: Format time with AM/PM
+const formatTimeAMPM = (datetimeStr) => {
   if (!datetimeStr) return '—';
   const date = new Date(datetimeStr);
-  const hours = String(date.getHours()).padStart(2, '0');
+  let hours = date.getHours();
   const minutes = String(date.getMinutes()).padStart(2, '0');
   const seconds = String(date.getSeconds()).padStart(2, '0');
-  return `${hours}:${minutes}:${seconds}`;
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12;
+  hours = hours ? hours : 12; // the hour '0' should be '12'
+  return `${hours}:${minutes}:${seconds} ${ampm}`;
 };
 
 const getLocalDateKey = (datetimeStr) => {
@@ -221,8 +225,8 @@ const StudentAttendance = () => {
                 <div className="space-y-1 text-gray-600">
                   <p className="text-sm">
                     📅 Date: <span className="font-medium">{formatDateDMY(selectedLocalDate)}</span><br />
-                    🕐 First check‑in: <span className="font-mono">{dayStats.firstCheckIn ? formatTimeHHMMSS(dayStats.firstCheckIn) : '—'}</span> &nbsp;|&nbsp;
-                    Last check‑out: <span className="font-mono">{dayStats.lastCheckOut ? formatTimeHHMMSS(dayStats.lastCheckOut) : '—'}</span>
+                    🕐 First check‑in: <span className="font-mono font-medium text-blue-600">{dayStats.firstCheckIn ? formatTimeAMPM(dayStats.firstCheckIn) : '—'}</span> &nbsp;|&nbsp;
+                    Last check‑out: <span className="font-mono font-medium text-red-600">{dayStats.lastCheckOut ? formatTimeAMPM(dayStats.lastCheckOut) : '—'}</span>
                   </p>
                   <p>
                     🚪 Total check‑ins: <span className="font-semibold">{dayStats.checkInCount}</span> &nbsp;|&nbsp;
@@ -257,7 +261,7 @@ const StudentAttendance = () => {
             </div>
           </div>
 
-          {/* Attendance Table – each row with break before it and session duration */}
+          {/* Attendance Table - AM/PM format */}
           {filteredRecords.length === 0 ? (
             <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-500">
               No attendance record for {formatDateDMY(selectedLocalDate)}.
@@ -271,7 +275,6 @@ const StudentAttendance = () => {
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">DATE</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">CHECK IN</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">CHECK OUT</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">BREAK BEFORE (min)</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">SESSION DURATION</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">REASON</th>
                     </tr>
@@ -290,12 +293,13 @@ const StudentAttendance = () => {
                           <td className="px-6 py-3 text-sm text-gray-900">
                             {formatDateDMY(getLocalDateKey(rec.check_in))}
                           </td>
-                          <td className="px-6 py-3 text-sm text-gray-700 font-mono">{formatTimeHHMMSS(rec.check_in)}</td>
-                          <td className="px-6 py-3 text-sm text-gray-700 font-mono">{formatTimeHHMMSS(rec.check_out)}</td>
-                          <td className="px-6 py-3 text-sm text-gray-700">
-                            {rec.breakSeconds > 0 ? `${Math.round(rec.breakSeconds / 60)} min` : '—'}
+                          <td className="px-6 py-3 text-sm font-mono text-blue-600 font-medium">
+                            {formatTimeAMPM(rec.check_in)}
                           </td>
-                          <td className="px-6 py-3 text-sm font-medium text-blue-700">
+                          <td className="px-6 py-3 text-sm font-mono text-red-600 font-medium">
+                            {formatTimeAMPM(rec.check_out)}
+                          </td>
+                          <td className="px-6 py-3 text-sm font-medium text-green-700">
                             {formatDurationFromSeconds(sessionSec)}
                           </td>
                           <td className="px-6 py-3 text-sm text-gray-500">{rec.check_out_reason || '—'}</td>
@@ -306,7 +310,7 @@ const StudentAttendance = () => {
                 </table>
               </div>
               <div className="px-6 py-3 bg-gray-50 text-xs text-gray-400 border-t">
-                * “Break before” is the gap from previous check‑out to this check‑in. First record has no break.<br />
+                * Session duration = time between check‑in and check‑out.<br />
                 Day span = first check‑in to last check‑out. Net work = day span − total break time.
               </div>
             </div>

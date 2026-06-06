@@ -16,7 +16,7 @@ function AdminFeeStructure() {
     name: "",
     total_amount: "",
     discount_percentage: 0,
-    number_of_installments: 1,
+    number_of_months: 1,
     is_active: true,
   });
 
@@ -51,7 +51,7 @@ function AdminFeeStructure() {
         name: formData.name,
         total_amount: parseFloat(formData.total_amount),
         discount_percentage: parseFloat(formData.discount_percentage) || 0,
-        number_of_installments: parseInt(formData.number_of_installments),
+        number_of_months: parseInt(formData.number_of_months),
         is_active: formData.is_active,
       };
       
@@ -65,7 +65,13 @@ function AdminFeeStructure() {
       
       setShowForm(false);
       setEditingId(null);
-      setFormData({ name: "", total_amount: "", discount_percentage: 0, number_of_installments: 1, is_active: true });
+      setFormData({ 
+        name: "", 
+        total_amount: "", 
+        discount_percentage: 0, 
+        number_of_months: 1, 
+        is_active: true 
+      });
       fetchFeeStructures();
     } catch (error) {
       console.error("Submit error:", error);
@@ -90,7 +96,7 @@ function AdminFeeStructure() {
       name: fs.name,
       total_amount: fs.total_amount,
       discount_percentage: fs.discount_percentage || 0,
-      number_of_installments: fs.number_of_installments || 1,
+      number_of_months: fs.number_of_months || 1,
       is_active: fs.is_active,
     });
     setShowForm(true);
@@ -106,12 +112,12 @@ function AdminFeeStructure() {
     }
   };
 
-  const calculatePerWeek = (fs) => {
+  const calculatePerMonth = (fs) => {
     const total = parseFloat(fs.total_amount) || 0;
     const discount = parseFloat(fs.discount_percentage) || 0;
-    const installments = parseInt(fs.number_of_installments) || 1;
+    const months = parseInt(fs.number_of_months) || 1;
     const discounted = total * (1 - discount / 100);
-    return discounted / installments;
+    return discounted / months;
   };
 
   const calculateTotalRevenue = () => {
@@ -127,7 +133,7 @@ function AdminFeeStructure() {
     return (
       <div className="flex justify-center items-center h-screen">
         <div className="text-center">
-          <div className="w-12 h-12 border-4 border-green-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
           <p className="mt-3 text-gray-600">Loading...</p>
         </div>
       </div>
@@ -135,17 +141,23 @@ function AdminFeeStructure() {
   }
 
   return (
-    <div className="p-6 bg-gray-50 min-h-screen w-screen">
+    <div className="p-6 bg-gray-50 min-h-screen">
       <div className="max-w-7xl mx-auto">
         <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-800">Fee Structure Management</h1>
-            <p className="text-gray-500 text-sm mt-1">Manage course fees and installment plans</p>
+            <p className="text-gray-500 text-sm mt-1">Manage course fees and monthly installment plans</p>
           </div>
           <button
             onClick={() => {
               setEditingId(null);
-              setFormData({ name: "", total_amount: "", discount_percentage: 0, number_of_installments: 1, is_active: true });
+              setFormData({ 
+                name: "", 
+                total_amount: "", 
+                discount_percentage: 0, 
+                number_of_months: 1, 
+                is_active: true 
+              });
               setShowForm(true);
             }}
             className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg transition"
@@ -177,8 +189,8 @@ function AdminFeeStructure() {
                   <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                   <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
                   <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Discount</th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Installments</th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Per Week</th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Per Month</th>
                   <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                   <th className="px-6 py-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
@@ -195,12 +207,13 @@ function AdminFeeStructure() {
                     const total = parseFloat(fs.total_amount) || 0;
                     const discount = parseFloat(fs.discount_percentage) || 0;
                     const afterDiscount = total * (1 - discount / 100);
+                    const perMonth = calculatePerMonth(fs);
                     
                     return (
                       <tr key={fs.id} className="hover:bg-gray-50 transition-colors">
                         <td className="px-6 py-4">
                           <p className="font-medium text-gray-900">{fs.name}</p>
-                         </td>
+                        </td>
                         <td className="px-6 py-4">
                           {discount > 0 ? (
                             <>
@@ -210,16 +223,20 @@ function AdminFeeStructure() {
                           ) : (
                             <span className="font-medium text-gray-900">₹{total.toLocaleString()}</span>
                           )}
-                         </td>
+                        </td>
                         <td className="px-6 py-4">
                           {discount > 0 ? (
                             <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">{discount}% OFF</span>
                           ) : (
                             <span className="text-gray-400">—</span>
                           )}
-                         </td>
-                        <td className="px-6 py-4 text-gray-700">{fs.number_of_installments} weeks</td>
-                        <td className="px-6 py-4 font-medium text-gray-900">₹{calculatePerWeek(fs).toFixed(2)}</td>
+                        </td>
+                        <td className="px-6 py-4 text-gray-700">
+                          {fs.number_of_months} Month{fs.number_of_months !== 1 ? 's' : ''}
+                        </td>
+                        <td className="px-6 py-4 font-medium text-emerald-600">
+                          ₹{perMonth.toFixed(2)} / month
+                        </td>
                         <td className="px-6 py-4">
                           <button
                             onClick={() => toggleStatus(fs)}
@@ -229,7 +246,7 @@ function AdminFeeStructure() {
                           >
                             {fs.is_active ? "Active" : "Inactive"}
                           </button>
-                         </td>
+                        </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center justify-center gap-2">
                             <button
@@ -251,8 +268,8 @@ function AdminFeeStructure() {
                               </svg>
                             </button>
                           </div>
-                         </td>
-                       </tr>
+                        </td>
+                      </tr>
                     );
                   })
                 )}
@@ -275,7 +292,7 @@ function AdminFeeStructure() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
                 <input
                   type="text"
-                  placeholder="e.g., Basic Course, Premium Course"
+                  placeholder="e.g., Hostel Fee, Course Fee, Mess Fee"
                   value={formData.name}
                   onChange={e => setFormData({...formData, name: e.target.value})}
                   className="w-full border border-gray-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
@@ -304,14 +321,26 @@ function AdminFeeStructure() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Number of Installments (Weeks)</label>
-                <input
-                  type="number"
-                  placeholder="Number of installments"
-                  value={formData.number_of_installments}
-                  onChange={e => setFormData({...formData, number_of_installments: e.target.value})}
-                  className="w-full border border-gray-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                />
+                <label className="block text-sm font-medium text-gray-700 mb-1">Duration (Months)</label>
+                <select
+                  value={formData.number_of_months}
+                  onChange={e => setFormData({...formData, number_of_months: e.target.value})}
+                  className="w-full border border-gray-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="1">1 Month</option>
+                  <option value="2">2 Months</option>
+                  <option value="3">3 Months</option>
+                  <option value="4">4 Months</option>
+                  <option value="5">5 Months</option>
+                  <option value="6">6 Months</option>
+                  <option value="7">7 Months</option>
+                  <option value="8">8 Months</option>
+                  <option value="9">9 Months</option>
+                  <option value="10">10 Months</option>
+                  <option value="11">11 Months</option>
+                  <option value="12">12 Months</option>
+                </select>
+                <p className="text-xs text-gray-400 mt-1">Select the number of months for payment duration</p>
               </div>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
