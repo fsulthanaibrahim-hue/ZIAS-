@@ -105,6 +105,43 @@ function Students() {
   const hideToast = useCallback(() => setToast(null), []);
   const hasLoaded = useRef(false);
 
+  // ========== NEW: Auto-assign mentor based on batch ==========
+  const getMentorForBatch = useCallback(async (batchName) => {
+    if (!batchName) return null;
+    try {
+      // First check if a mentor is already assigned to this batch
+      const existingMentor = mentorsList.find(m => m.batch === batchName || m.batch_name === batchName);
+      if (existingMentor) {
+        return existingMentor.id;
+      }
+      
+      // If not, fetch fresh mentors list
+      const mentorsRes = await API.get("mentors/");
+      const mentors = mentorsRes.data.results || mentorsRes.data;
+      const batchMentor = mentors.find(m => m.batch === batchName || m.batch_name === batchName);
+      return batchMentor ? batchMentor.id : null;
+    } catch(err) {
+      console.error("Error finding mentor for batch:", err);
+      return null;
+    }
+  }, [mentorsList]);
+
+  // Auto-assign mentor when batch changes
+  const handleBatchChange = async (e) => {
+    const batchName = e.target.value;
+    setFormData(prev => ({ ...prev, batch: batchName }));
+    
+    // Auto-assign mentor if batch is selected and no mentor manually selected
+    if (batchName && !formData.mentor) {
+      const mentorId = await getMentorForBatch(batchName);
+      if (mentorId) {
+        setFormData(prev => ({ ...prev, mentor: mentorId.toString() }));
+        showToast(`Auto-assigned mentor for batch: ${batchName}`, "success");
+      }
+    }
+  };
+  // ============================================================
+
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const batch = params.get("batch");
@@ -300,13 +337,25 @@ function Students() {
     }
     if (hasError) return;
 
-    // Prepare payload - FIXED: Send 'mentor' instead of 'mentor_id'
+    // ========== AUTO-ASSIGN MENTOR FROM BATCH ==========
+    let assignedMentorId = formData.mentor ? parseInt(formData.mentor) : null;
+    
+    // If no mentor manually selected, try to auto-assign from batch
+    if (!assignedMentorId && formData.batch) {
+      assignedMentorId = await getMentorForBatch(formData.batch);
+      if (assignedMentorId) {
+        console.log(`✅ Auto-assigned mentor ID ${assignedMentorId} for batch ${formData.batch}`);
+      }
+    }
+    // ===================================================
+
+    // Prepare payload
     const payload = {
       full_name: formData.full_name.trim(),
       email: formData.email.trim(),
       course: formData.course,
       batch: formData.batch,
-      mentor: formData.mentor ? parseInt(formData.mentor) : null,
+      mentor: assignedMentorId,
       phone: formData.phone || null,
       date_of_birth: formData.date_of_birth || null,
       age: formData.age ? parseInt(formData.age) : null,
@@ -584,15 +633,22 @@ function Students() {
                     </div>
                     <div>
                       <label className={labelCls}>Batch *</label>
-                      <select name="batch" value={formData.batch} onChange={handleChange} required className={inputCls}>
+                      <select 
+                        name="batch" 
+                        value={formData.batch} 
+                        onChange={handleBatchChange} 
+                        required 
+                        className={inputCls}
+                      >
                         <option value="">Select a batch</option>
                         {batchesList.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
                       </select>
+                      <p className="text-[10px] text-gray-400 mt-1">Mentor will be auto-assigned based on batch</p>
                     </div>
                     <div>
-                      <label className={labelCls}>Mentor (optional)</label>
+                      <label className={labelCls}>Mentor (optional - auto-filled)</label>
                       <select name="mentor" value={formData.mentor} onChange={handleChange} className={inputCls}>
-                        <option value="">Select a mentor</option>
+                        <option value="">Auto-assign from batch</option>
                         {mentorsList.map(m => <option key={m.id} value={m.id}>{m.full_name || m.username}</option>)}
                       </select>
                     </div>

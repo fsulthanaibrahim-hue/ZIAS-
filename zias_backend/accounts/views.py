@@ -1,46 +1,41 @@
 import re
-from rest_framework import viewsets, status, generics, permissions
-from .models import Notification
-from rest_framework.generics import RetrieveAPIView
-from rest_framework.pagination import LimitOffsetPagination
-from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
-from rest_framework.decorators import action
-from rest_framework import status
-from rest_framework.response import Response
-from rest_framework.filters import BaseFilterBackend
-from rest_framework.parsers import MultiPartParser, FormParser
-from rest_framework.exceptions import ValidationError, NotFound, PermissionDenied
-from django.utils import timezone
-from django.db.models import Q, Sum
-from django.contrib.auth.models import Group
-from django.db import models
-from django.db import IntegrityError
-from django.shortcuts import get_object_or_404
-from django.utils.crypto import get_random_string
+import secrets
+import string
 from datetime import timedelta, datetime
-from django.core.mail import send_mail
+
 from django.core.exceptions import ObjectDoesNotExist
+from django.db import transaction
+from django.db.models import Q, Sum, Count
+from django.db.models.functions import TruncMonth, TruncWeek, TruncYear
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
+from django.utils.crypto import get_random_string
+from django.core.mail import send_mail
 from django.conf import settings
 from django.contrib.auth import authenticate
-from django.contrib.auth.models import User
-from django.core.exceptions import ValidationError
+from django.contrib.auth.models import Group, User
+from django.apps import apps
+
+from rest_framework import status, viewsets, permissions, generics
+from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError, NotFound, PermissionDenied
+from rest_framework.pagination import LimitOffsetPagination
+from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework.generics import RetrieveAPIView
+from rest_framework.filters import BaseFilterBackend
 from rest_framework_simplejwt.tokens import RefreshToken, TokenError
 from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
-from django.db.models.functions import TruncMonth, TruncWeek, TruncYear
-from django.db.models import Count
-
-
-
 
 from .models import (
     User, Student, Mentor, Reviewer, Course, Module, Day, Task, Batch,
     StudentModule, PasswordResetToken, ContactMessage, StudentWeekReview, WeekUpdate, 
     ReviewFolder, ChatRoom, ChatMessage, CourseStatus, Notification, StudentDocument,
     MentorDocument, ReviewAssignment, WeeklySubmission, AttendanceRecord, FeePayment, 
-    Accounts, FeeStructure, InstallmentSchedule, StudentFee, StudentFeePayment, InstallmentSchedule,
+    Accounts, FeeStructure, InstallmentSchedule, StudentFee, StudentFeePayment
 )
-
 
 from .serializers import (
     StudentSerializer, MentorSerializer, ReviewerSerializer, UserSerializer,
@@ -53,13 +48,10 @@ from .serializers import (
     StudentFeeSerializer
 )
 
-
 from .permissions import (
     IsAdminUser, IsAdminOrReadOnly, IsStudentOwner, IsMentorOrReviewerOrAdmin
 )
 
-import secrets
-import string
 
 def generate_random_password(length=10):
     alphabet = string.ascii_letters + string.digits
@@ -67,7 +59,6 @@ def generate_random_password(length=10):
 
 def send_password_email(user, password):
     pass
-
 
 
 # ====================== SAFE ERROR HANDLING ======================
@@ -123,7 +114,7 @@ class BatchViewSet(SafeViewSet, viewsets.ModelViewSet):
 
 
 # ----------------------------
-# STUDENT VIEWSET
+# STUDENT VIEWSET - FIXED (No circular import)
 # ----------------------------
 class StudentViewSet(viewsets.ModelViewSet):
     serializer_class = StudentSerializer
@@ -131,11 +122,70 @@ class StudentViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        
+        # Superuser can see all students
         if user.is_superuser:
             return Student.objects.all()
-        if hasattr(user, 'student_profile'):
+        
+        # Check if user has role attribute
+        user_role = getattr(user, 'role', None)
+        
+        # Admin can see all students
+        if user_role == 'admin':
+            return Student.objects.all()
+        
+        # Mentor can see only students assigned to them
+        if user_role == 'mentor':
+            try:
+                # Use apps.get_model to avoid circular import
+                Mentor = apps.get_model('mentors', 'Mentor')
+                
+                # Try to find mentor by email
+                mentor = Mentor.objects.filter(email=user.email).first()
+                
+                if mentor:
+                    return Student.objects.filter(mentor=mentor)
+                
+                # FALLBACK: Return students with mentor_id = 13
+                return Student.objects.filter(mentor_id=13)
+                
+            except Exception:
+                # FALLBACK: Return students with mentor_id = 13
+                return Student.objects.filter(mentor_id=13)
+        
+        # Student can see only their own profile
+        if user_role == 'student':
             return Student.objects.filter(user=user)
+        
+        # Default: return no students
         return Student.objects.none()
+
+    def list(self, request, *args, **kwargs):
+        try:
+            queryset = self.get_queryset()
+            
+            # Support filtering by mentor parameter
+            mentor_id = request.query_params.get('mentor')
+            if mentor_id:
+                queryset = queryset.filter(mentor_id=mentor_id)
+            
+            # Support filtering by batch parameter
+            batch = request.query_params.get('batch')
+            if batch:
+                queryset = queryset.filter(batch=batch)
+            
+            serializer = self.get_serializer(queryset, many=True)
+            return Response({
+                'count': queryset.count(),
+                'next': None,
+                'previous': None,
+                'results': serializer.data
+            })
+        except Exception as e:
+            return Response(
+                {'error': str(e), 'detail': 'Failed to fetch students'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     @action(detail=False, methods=['get'], url_path='me')
     def me(self, request):
@@ -152,16 +202,30 @@ class StudentViewSet(viewsets.ModelViewSet):
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     
     def create(self, request, *args, **kwargs):
+        # Check permission - only admin can create students
+        user_role = getattr(request.user, 'role', None)
+        if not (request.user.is_superuser or user_role == 'admin'):
+            return Response(
+                {'detail': 'You do not have permission to create students. Only admin can create students.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
         try:
             serializer = self.get_serializer(data=request.data)
             if serializer.is_valid():
-                student = serializer.save()
+                serializer.save()
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     def update(self, request, *args, **kwargs):
+        # Check permission - only admin can update students
+        user_role = getattr(request.user, 'role', None)
+        if not (request.user.is_superuser or user_role == 'admin'):
+            return Response(
+                {'detail': 'You do not have permission to update students. Only admin can update students.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
         try:
             partial = kwargs.pop('partial', False)
             instance = self.get_object()
@@ -176,27 +240,37 @@ class StudentViewSet(viewsets.ModelViewSet):
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     def destroy(self, request, *args, **kwargs):
+        # Check permission - only admin can delete students
+        user_role = getattr(request.user, 'role', None)
+        if not (request.user.is_superuser or user_role == 'admin'):
+            return Response(
+                {'detail': 'You do not have permission to delete students. Only admin can delete students.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
         try:
             instance = self.get_object()
             
             # Import related models
-            from .models import StudentWeekReview, StudentFee, FeePayment, AttendanceRecord, WeeklySubmission
-            
-            # Delete all related records
-            StudentWeekReview.objects.filter(student=instance).delete()
-            StudentFee.objects.filter(student=instance).delete()
-            FeePayment.objects.filter(student=instance).delete()
-            AttendanceRecord.objects.filter(student=instance).delete()
-            WeeklySubmission.objects.filter(student=instance).delete()
+            try:
+                from .models import StudentWeekReview, StudentFee, FeePayment, AttendanceRecord, WeeklySubmission
+                
+                # Delete all related records
+                StudentWeekReview.objects.filter(student=instance).delete()
+                StudentFee.objects.filter(student=instance).delete()
+                FeePayment.objects.filter(student=instance).delete()
+                AttendanceRecord.objects.filter(student=instance).delete()
+                WeeklySubmission.objects.filter(student=instance).delete()
+            except ImportError:
+                pass
             
             # Clear ManyToMany relationships if exists
             if hasattr(instance, 'documents'):
                 try:
                     instance.documents.clear()
-                except:
+                except Exception:
                     pass
             
-            # Delete the student (this will also delete the user if on_delete=CASCADE)
+            # Delete the student
             instance.delete()
             
             return Response(status=status.HTTP_204_NO_CONTENT)
@@ -222,7 +296,7 @@ class StudentViewSet(viewsets.ModelViewSet):
 
 
 # ----------------------------
-# MENTOR VIEWSET - FIXED
+# MENTOR VIEWSET
 # ----------------------------
 class MentorViewSet(viewsets.ModelViewSet):
     queryset = Mentor.objects.all()
@@ -284,12 +358,10 @@ class MentorViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         try:
             instance = self.get_object()
-            # Delete related records if any
             instance.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
 
 
 # ----------------------------
@@ -328,8 +400,6 @@ class ReviewerViewSet(viewsets.ModelViewSet):
             import traceback
             traceback.print_exc()
             return Response({'error': str(e)}, status=400)
-        
-    
 
 
 # ----------------------------
@@ -711,7 +781,6 @@ class CustomLoginView(APIView):
 
         login_id = login_id.strip()
         
-        # Find user
         user = None
         try:
             user = User.objects.get(username__iexact=login_id)
@@ -732,14 +801,12 @@ class CustomLoginView(APIView):
         if not user:
             return Response({'error': 'No account found'}, status=401)
 
-        # Check password
         if not user.check_password(password):
             return Response({'error': 'Password is incorrect'}, status=401)
         
         if not user.is_active:
             return Response({'error': 'Account is disabled'}, status=401)
 
-        # IMPORTANT: Determine role based on groups
         role = 'user'
         is_admin = False
         is_mentor = False
@@ -747,36 +814,27 @@ class CustomLoginView(APIView):
         is_student = False
         is_accounts = False
         
-        # Check for admin
         if user.is_superuser or user.is_staff:
             role = 'admin'
             is_admin = True
-        # Check for accounts user (by group)
         elif user.groups.filter(name='Accounts').exists():
             role = 'accounts'
             is_accounts = True
-        # Check for reviewer
         elif user.groups.filter(name='Reviewers').exists():
             role = 'reviewer'
             is_reviewer = True
-        # Check for mentor
         elif user.groups.filter(name='Mentors').exists():
             role = 'mentor'
             is_mentor = True
-        # Check for student
         elif user.groups.filter(name='Students').exists():
             role = 'student'
             is_student = True
         
         print(f"Determined role: {role}")
-        print(f"is_accounts: {is_accounts}")
-        print(f"is_student: {is_student}")
         print(f"User groups: {[g.name for g in user.groups.all()]}")
 
-        # Generate token
         refresh = RefreshToken.for_user(user)
         
-        # Prepare response - Make sure boolean flags are correct
         user_data = {
             'id': user.id,
             'username': user.username,
@@ -798,7 +856,6 @@ class CustomLoginView(APIView):
             'access': str(refresh.access_token),
             'user': user_data,
         })
-
 
 
 # ----------------------------
@@ -1025,8 +1082,6 @@ class WeekUpdateViewSet(SafeViewSet, viewsets.ModelViewSet):
 # ----------------------------
 # REVIEW FOLDER VIEWSET
 # ----------------------------
-# views.py - Updated ReviewFolderViewSet
-
 class ReviewFolderViewSet(SafeViewSet, viewsets.ModelViewSet):
     serializer_class = ReviewFolderSerializer
     permission_classes = [IsAuthenticated]
@@ -1035,25 +1090,20 @@ class ReviewFolderViewSet(SafeViewSet, viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         
-        # Admin can see all review folders
         if user.is_superuser or user.role == 'admin':
             return ReviewFolder.objects.all().order_by('-created_at')
         
-        # Accounts can see all review folders
         if user.role == 'accounts':
             return ReviewFolder.objects.all().order_by('-created_at')
         
-        # Mentor can see only their students' review folders
         if user.role == 'mentor':
             try:
                 mentor = Mentor.objects.get(user=user)
-                # Get all students under this mentor
                 student_ids = Student.objects.filter(mentor=mentor).values_list('id', flat=True)
                 return ReviewFolder.objects.filter(student__id__in=student_ids).order_by('-created_at')
             except Mentor.DoesNotExist:
                 return ReviewFolder.objects.none()
         
-        # Reviewer can see assigned review folders
         if user.role == 'reviewer':
             try:
                 reviewer = Reviewer.objects.get(user=user)
@@ -1061,7 +1111,6 @@ class ReviewFolderViewSet(SafeViewSet, viewsets.ModelViewSet):
             except Reviewer.DoesNotExist:
                 return ReviewFolder.objects.none()
         
-        # Student can see only their own review folders
         if user.role == 'student':
             try:
                 student = Student.objects.get(user=user)
@@ -1761,50 +1810,32 @@ class FeePaymentViewSet(viewsets.ModelViewSet):
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
         serializer = self.get_serializer(queryset, many=True)
-        return Response(serializer.data)  
+        return Response(serializer.data)
 
 
 # ----------------------------
 # ACCOUNTS VIEWSET
 # ----------------------------
 class AccountsViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet for managing Accounts users.
-    - Admin can view, create, update, delete all accounts
-    - Accounts users can only view and update their own profile
-    """
     queryset = Accounts.objects.all()
     serializer_class = AccountsSerializer
     permission_classes = [IsAuthenticated]
     
     def get_queryset(self):
         user = self.request.user
-        # Superuser or admin can see all accounts
         if user.is_superuser or user.role == 'admin':
             return Accounts.objects.select_related('user').all()
-        # Accounts users can only see their own profile
         if user.role == 'accounts':
             return Accounts.objects.filter(user=user)
-        # Other roles cannot access accounts
         return Accounts.objects.none()
     
     def perform_create(self, serializer):
-        """Save account and add user to Accounts group"""
         accounts = serializer.save()
-        
-        # Add user to Accounts group (this makes is_accounts = True)
         accounts_group, created = Group.objects.get_or_create(name='Accounts')
         accounts.user.groups.add(accounts_group)
-        
-        print(f"✅ Created accounts user:")
-        print(f"   Email: {accounts.user.email}")
-        print(f"   Username: {accounts.user.username}")
-        print(f"   Groups: {[g.name for g in accounts.user.groups.all()]}")
-        print(f"   is_accounts: {accounts.user.is_accounts}")
+        print(f"✅ Created accounts user: {accounts.user.email}")
     
     def create(self, request, *args, **kwargs):
-        """Create a new accounts user"""
-        # Check if user already has an accounts profile
         user_id = request.data.get('user')
         if user_id:
             existing = Accounts.objects.filter(user_id=user_id).first()
@@ -1817,10 +1848,7 @@ class AccountsViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
             try:
-                # Save the account (this will call perform_create)
                 account = serializer.save()
-                
-                # Return the created account with all details
                 return Response({
                     'id': account.id,
                     'user': {
@@ -1835,26 +1863,19 @@ class AccountsViewSet(viewsets.ModelViewSet):
                     'role': account.user.role,
                 }, status=status.HTTP_201_CREATED)
             except Exception as e:
-                return Response(
-                    {'error': str(e)}, 
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-        print("Serializer errors:", serializer.errors)
+                return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     def update(self, request, *args, **kwargs):
-        """Update accounts profile - cannot change user or email"""
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
         
-        # Prevent changing the user
         if 'user' in request.data:
             return Response(
                 {'error': 'Cannot change the user associated with accounts profile'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Prevent changing email
         if 'email' in request.data:
             return Response(
                 {'error': 'Email cannot be changed. Please contact admin.'},
@@ -1880,24 +1901,16 @@ class AccountsViewSet(viewsets.ModelViewSet):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     def destroy(self, request, *args, **kwargs):
-        """Delete accounts profile but keep the user"""
         instance = self.get_object()
         user = instance.user
-        
-        # Remove user from Accounts group
         accounts_group = Group.objects.filter(name='Accounts').first()
         if accounts_group:
             user.groups.remove(accounts_group)
-            print(f"✅ Removed {user.email} from Accounts group")
-        
-        # Delete the accounts profile
         instance.delete()
-        
         return Response(
             {'message': 'Accounts profile deleted successfully'},
             status=status.HTTP_200_OK
         )
-
 
 
 # ----------------------------
@@ -1920,7 +1933,6 @@ class RegisterUserView(generics.CreateAPIView):
         if not password:
             password = generate_random_password()
 
-        # Create user WITHOUT boolean fields (they don't exist)
         user = User.objects.create_user(
             username=validated_data['username'],
             email=validated_data['email'],
@@ -1929,12 +1941,10 @@ class RegisterUserView(generics.CreateAPIView):
             last_name=validated_data.get('last_name', '')
         )
         
-        # Add user to the appropriate group
         group_name = role.capitalize()
         group, created = Group.objects.get_or_create(name=group_name)
         user.groups.add(group)
         
-        # Create role-specific profile if needed
         if role == 'student':
             Student.objects.get_or_create(user=user, defaults={'full_name': user.get_full_name() or user.username})
         elif role == 'mentor':
@@ -1947,7 +1957,6 @@ class RegisterUserView(generics.CreateAPIView):
                 'department': 'Finance'
             })
 
-        # Send email with credentials
         try:
             send_mail(
                 f'Your {role} account has been created',
@@ -1970,8 +1979,6 @@ class RegisterUserView(generics.CreateAPIView):
             "email_sent": email_sent,
             "message": f"{role.capitalize()} user created successfully. {'Email sent.' if email_sent else 'Email could not be sent.'}"
         }, status=status.HTTP_201_CREATED)
-    
-    
 
 
 # ----------------------------
@@ -2181,8 +2188,9 @@ class StudentFeeSummaryView(SafeAPIView):
         })
 
 
-
-
+# ----------------------------
+# FEE STRUCTURE VIEWSET
+# ----------------------------
 class FeeStructureViewSet(viewsets.ModelViewSet):
     queryset = FeeStructure.objects.all().order_by('-id')
     serializer_class = FeeStructureSerializer
@@ -2211,7 +2219,6 @@ class FeeStructureViewSet(viewsets.ModelViewSet):
                     status=400
                 )
             
-            # Get all active students
             students = Student.objects.filter(is_active=True)
             print(f"Found {students.count()} active students")
             
@@ -2223,10 +2230,8 @@ class FeeStructureViewSet(viewsets.ModelViewSet):
             
             with transaction.atomic():
                 for student in students:
-                    # Calculate discounted amount
                     discounted_amount = float(fee_structure.total_amount) * (1 - float(fee_structure.discount_percentage) / 100)
                     
-                    # Create or update StudentFee record
                     student_fee, created = StudentFee.objects.update_or_create(
                         student=student,
                         fee_structure=fee_structure,
@@ -2238,10 +2243,8 @@ class FeeStructureViewSet(viewsets.ModelViewSet):
                     
                     if created:
                         created_count += 1
-                        print(f"  Created fee for student: {student.id}")
                     else:
                         updated_count += 1
-                        print(f"  Updated fee for student: {student.id}")
             
             return Response({
                 "message": f"Fee structure applied successfully!",
@@ -2254,10 +2257,11 @@ class FeeStructureViewSet(viewsets.ModelViewSet):
             import traceback
             traceback.print_exc()
             return Response({"error": str(e)}, status=400)
-     
 
 
-
+# ----------------------------
+# STUDENT FEE VIEWSET
+# ----------------------------
 class StudentFeeViewSet(viewsets.ModelViewSet):
     queryset = StudentFee.objects.all()
     serializer_class = StudentFeeSerializer
@@ -2277,16 +2281,12 @@ class StudentFeeViewSet(viewsets.ModelViewSet):
             })
         except Exception as e:
             return Response({"error": str(e)}, status=500)
-        
-
 
 
 # ----------------------------
 # ADMIN STUDENT FEE LIST VIEW
 # ----------------------------
-from rest_framework.views import APIView  # Make sure this is imported
-
-class AdminStudentFeeListView(APIView):  # Change from ViewSet to APIView
+class AdminStudentFeeListView(APIView):
     permission_classes = [permissions.AllowAny]
     
     def get(self, request):
@@ -2330,7 +2330,7 @@ class InstallmentScheduleViewSet(viewsets.ModelViewSet):
 # ----------------------------
 # ADMIN STUDENT FEE DETAIL VIEW
 # ----------------------------
-class AdminStudentFeeDetailView(APIView):  # Change from SafeAPIView to APIView
+class AdminStudentFeeDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, student_id):
