@@ -7,6 +7,7 @@ function ReviewerAssignments() {
   const [loading, setLoading] = useState(true);
   const [suggestTimeForId, setSuggestTimeForId] = useState(null);
   const [suggestedTime, setSuggestedTime] = useState("");
+  const [filterStatus, setFilterStatus] = useState("all");
   const fetchedRef = useRef(false);
 
   const fetchAssignments = async () => {
@@ -54,15 +55,85 @@ function ReviewerAssignments() {
     return match ? match[1] : null;
   };
 
+  // Filter assignments based on status
+  const filteredAssignments = assignments.filter(assignment => {
+    if (filterStatus === "all") return true;
+    return assignment.status === filterStatus;
+  });
+
+  // Count assignments by status
+  const counts = {
+    all: assignments.length,
+    assigned: assignments.filter(a => a.status === "assigned").length,
+    accepted: assignments.filter(a => a.status === "accepted").length,
+    rejected: assignments.filter(a => a.status === "rejected").length,
+    pending: assignments.filter(a => a.status === "pending approval").length
+  };
+
   if (loading) return <div className="p-8 text-center">Loading assignments...</div>;
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen w-full">
       <h1 className="text-2xl font-bold mb-4">My Review Assignments</h1>
+      
+      {/* Filter Buttons */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        <button
+          onClick={() => setFilterStatus("all")}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+            filterStatus === "all" 
+              ? "bg-gray-800 text-white" 
+              : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+          }`}
+        >
+          All ({counts.all})
+        </button>
+        <button
+          onClick={() => setFilterStatus("assigned")}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+            filterStatus === "assigned" 
+              ? "bg-blue-600 text-white" 
+              : "bg-blue-100 text-blue-700 hover:bg-blue-200"
+          }`}
+        >
+          Assigned ({counts.assigned})
+        </button>
+        <button
+          onClick={() => setFilterStatus("accepted")}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+            filterStatus === "accepted" 
+              ? "bg-green-600 text-white" 
+              : "bg-green-100 text-green-700 hover:bg-green-200"
+          }`}
+        >
+          Accepted ({counts.accepted})
+        </button>
+        <button
+          onClick={() => setFilterStatus("rejected")}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+            filterStatus === "rejected" 
+              ? "bg-red-600 text-white" 
+              : "bg-red-100 text-red-700 hover:bg-red-200"
+          }`}
+        >
+          Rejected ({counts.rejected})
+        </button>
+        <button
+          onClick={() => setFilterStatus("pending approval")}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+            filterStatus === "pending approval" 
+              ? "bg-yellow-600 text-white" 
+              : "bg-yellow-100 text-yellow-700 hover:bg-yellow-200"
+          }`}
+        >
+          Pending ({counts.pending})
+        </button>
+      </div>
+
       <button onClick={fetchAssignments} className="bg-gray-200 px-3 py-1 rounded text-sm mb-4">⟳ Refresh</button>
 
-      {assignments.length === 0 ? (
-        <div className="text-center py-8 bg-white rounded shadow">No assignments found for you.</div>
+      {filteredAssignments.length === 0 ? (
+        <div className="text-center py-8 bg-white rounded shadow">No assignments found for this filter.</div>
       ) : (
         <div className="overflow-x-auto bg-white rounded shadow">
           <table className="min-w-full">
@@ -79,7 +150,7 @@ function ReviewerAssignments() {
               </tr>
             </thead>
             <tbody>
-              {assignments.map((ass) => {
+              {filteredAssignments.map((ass) => {
                 const existingTime = getSuggestedTime(ass.comments);
                 const isAssigned = ass.status === "assigned";
                 const showSuggest = isAssigned && suggestTimeForId === ass.id;
@@ -102,7 +173,6 @@ function ReviewerAssignments() {
                         />
                       ) : (existingTime || "—")}
                     </td>
-                    {/* Dedicated Review Sheet column */}
                     <td className="px-4 py-2">
                       {studentId ? (
                         <Link
@@ -126,7 +196,6 @@ function ReviewerAssignments() {
                       </span>
                     </td>
                     
-                    {/* Actions column */}
                     <td className="px-4 py-2">
                       {isAssigned && (
                         showSuggest ? (
