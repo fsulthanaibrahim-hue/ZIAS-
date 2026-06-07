@@ -1,8 +1,9 @@
-import { useEffect, useState, useRef, useMemo } from "react";
+import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import API from "../api/api";
 
 let initialDataFetched = false;
+let reviewersMentorsCache = null; // Cache for reviewers/mentors
 
 const extractWeekNumber = (module) => {
   if (module.order) return parseInt(module.order, 10);
@@ -16,22 +17,20 @@ const cleanTitle = (title) => {
   return title.replace(pattern, "").trim();
 };
 
-// ✅ CORRECTED: star rating starts at 0, only >=1 gives first star
 const calculateTotalAndStars = (reviewScore, extra, english, video) => {
   const safeReview = Math.min(20, Math.max(0, reviewScore || 0));
   const safeExtra = Math.min(5, Math.max(0, extra || 0));
   const safeEnglish = Math.min(5, Math.max(0, english || 0));
   const safeVideo = Math.min(5, Math.max(0, video || 0));
-  const total = safeReview + safeExtra + safeEnglish + safeVideo; // max 20+5+5+5=35
+  const total = safeReview + safeExtra + safeEnglish + safeVideo;
   const finalTotal = Math.min(35, Math.max(0, total));
 
-  let stars = 0;                        // start at 0 (all empty)
+  let stars = 0;
   if (finalTotal >= 29) stars = 5;
   else if (finalTotal >= 22) stars = 4;
   else if (finalTotal >= 15) stars = 3;
   else if (finalTotal >= 8) stars = 2;
   else if (finalTotal >= 1) stars = 1;
-  // else stars stays 0
 
   return { total: finalTotal, stars };
 };
@@ -107,36 +106,58 @@ function StudentReviewEdit() {
     );
   };
 
-  // Fetch reviewers and mentors
+  // ✅ OPTIMIZED: Fetch reviewers and mentors once with caching
   useEffect(() => {
-    const fetchReviewers = async () => {
+    const fetchReviewersAndMentors = async () => {
+      // Use cache if available
+      if (reviewersMentorsCache) {
+        setReviewersList(reviewersMentorsCache.reviewers);
+        setMentorsList(reviewersMentorsCache.mentors);
+        return;
+      }
+
       try {
-        const res = await API.get("reviewers/");
-        let reviewers = Array.isArray(res.data) ? res.data : (res.data?.results || []);
-        const names = reviewers.map(rev => {
+        // ✅ Fetch both in parallel
+        const [reviewersRes, mentorsRes] = await Promise.all([
+          API.get("reviewers/"),
+          API.get("mentors/")
+        ]);
+
+        let reviewers = Array.isArray(reviewersRes.data) ? reviewersRes.data : (reviewersRes.data?.results || []);
+        let mentors = Array.isArray(mentorsRes.data) ? mentorsRes.data : (mentorsRes.data?.results || []);
+
+        const reviewerNames = reviewers.map(rev => {
           let name = rev.full_name || rev.name || rev.user?.full_name || rev.user?.username || rev.username;
           if (!name) name = `Reviewer #${rev.id}`;
           if (name && name !== `Reviewer #${rev.id}`) name = name.charAt(0).toUpperCase() + name.slice(1);
           return `${name} Sir`;
         });
-        setReviewersList(names.length ? [...new Set(names)] : ["No reviewers available"]);
-      } catch (err) { setReviewersList(["No reviewers available"]); }
-    };
-    const fetchMentors = async () => {
-      try {
-        const res = await API.get("mentors/");
-        let mentors = Array.isArray(res.data) ? res.data : (res.data?.results || []);
-        const names = mentors.map(ment => {
+
+        const mentorNames = mentors.map(ment => {
           let name = ment.full_name || ment.name || ment.user?.full_name || ment.user?.username || ment.username;
           if (!name) name = `Mentor #${ment.id}`;
           if (name && name !== `Mentor #${ment.id}`) name = name.charAt(0).toUpperCase() + name.slice(1);
           return name;
         });
-        setMentorsList(names.length ? [...new Set(names)] : ["No mentors available"]);
-      } catch (err) { setMentorsList(["No mentors available"]); }
+
+        const finalReviewers = reviewerNames.length ? [...new Set(reviewerNames)] : ["No reviewers available"];
+        const finalMentors = mentorNames.length ? [...new Set(mentorNames)] : ["No mentors available"];
+
+        // Cache the results
+        reviewersMentorsCache = {
+          reviewers: finalReviewers,
+          mentors: finalMentors
+        };
+
+        setReviewersList(finalReviewers);
+        setMentorsList(finalMentors);
+      } catch (err) {
+        setReviewersList(["No reviewers available"]);
+        setMentorsList(["No mentors available"]);
+      }
     };
-    fetchReviewers();
-    fetchMentors();
+
+    fetchReviewersAndMentors();
   }, []);
 
   const rows = useMemo(
@@ -156,45 +177,59 @@ function StudentReviewEdit() {
     [reviewersList, mentorsList]
   );
 
-  // Fetch student and modules
+  // ✅ OPTIMIZED: Fetch student and modules in parallel
   useEffect(() => {
-    if (!studentId) { navigate("/admin/review-sheets"); return; }
-    const fetchStudent = async () => {
-      try { const res = await API.get(`students/${studentId}/`); setStudent(res.data); }
-      catch { setError("Failed to load student"); }
-    };
-    fetchStudent();
-  }, [studentId, navigate]);
-
-  useEffect(() => {
-    if (!studentId) return;
-    if (!initialDataFetched && !dataFetched.current) {
-      initialDataFetched = true;
-      dataFetched.current = true;
-      const fetchData = async () => {
-        setLoading(true);
-        try {
-          const modulesRes = await API.get(`modules/student-modules/?student_id=${studentId}`);
-          let weeksData = modulesRes.data;
-          weeksData.sort((a, b) => extractWeekNumber(a) - extractWeekNumber(b));
-          setAllWeeks(weeksData);
-          const reviewsData = {};
-          const editsData = {};
-          for (const week of weeksData) {
-            try {
-              const reviewRes = await API.get(`week-review/${week.id}/?student_id=${studentId}`);
-              reviewsData[week.id] = reviewRes.data;
-              editsData[week.id] = { ...reviewRes.data };
-            } catch { reviewsData[week.id] = {}; editsData[week.id] = {}; }
-          }
-          setOriginalReviews(reviewsData);
-          setEditedReviews(editsData);
-        } catch (err) { setError("Failed to load review data."); }
-        finally { setLoading(false); }
-      };
-      fetchData();
+    if (!studentId) {
+      navigate("/admin/review-sheets");
+      return;
     }
-  }, [studentId]);
+
+    const fetchInitialData = async () => {
+      setLoading(true);
+      try {
+        // ✅ Fetch student and modules in parallel
+        const [studentRes, modulesRes] = await Promise.all([
+          API.get(`students/${studentId}/`),
+          API.get(`modules/student-modules/?student_id=${studentId}`)
+        ]);
+
+        setStudent(studentRes.data);
+
+        let weeksData = modulesRes.data;
+        weeksData.sort((a, b) => extractWeekNumber(a) - extractWeekNumber(b));
+        setAllWeeks(weeksData);
+
+        // ✅ OPTIMIZED: Batch fetch all reviews in parallel
+        const reviewPromises = weeksData.map(week => 
+          API.get(`week-review/${week.id}/?student_id=${studentId}`)
+            .then(res => ({ weekId: week.id, data: res.data }))
+            .catch(() => ({ weekId: week.id, data: {} }))
+        );
+
+        const reviewsResults = await Promise.all(reviewPromises);
+
+        const reviewsData = {};
+        const editsData = {};
+        reviewsResults.forEach(({ weekId, data }) => {
+          reviewsData[weekId] = data;
+          editsData[weekId] = { ...data };
+        });
+
+        setOriginalReviews(reviewsData);
+        setEditedReviews(editsData);
+      } catch (err) {
+        setError("Failed to load review data.");
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (!dataFetched.current) {
+      dataFetched.current = true;
+      fetchInitialData();
+    }
+  }, [studentId, navigate]);
 
   useEffect(() => {
     if (!allWeeks.length) return;
@@ -205,8 +240,10 @@ function StudentReviewEdit() {
     setFilteredWeeks(filtered);
   }, [allWeeks, rangeMin, rangeMax]);
 
-  const handleRangeClick = (range) => { setSearchParams({ student_id: studentId, range }); };
-  
+  const handleRangeClick = (range) => {
+    setSearchParams({ student_id: studentId, range });
+  };
+
   const handleFieldChange = (weekId, field, value) => {
     let processedValue = value;
     if (typeof value === "string" && (field.includes("mark") || field.includes("score"))) {
@@ -267,70 +304,94 @@ function StudentReviewEdit() {
     return <input type="text" value={value} onChange={e => onChange(e.target.value)} className={inputClass} />;
   };
 
+  // ✅ OPTIMIZED: Batch save with single API call per week (but parallel across weeks)
   const handleSaveAll = async () => {
     setSaving(true);
     const promises = [];
     const allowedFields = [
       "task_status", "feedback", "reviewer_name", "advisor_name",
       "extra_workouts", "review_date", "english_score",
-      "review_score", "extra_workouts_mark", "progress_video", "progress_video_mark"
+      "review_score", "extra_workouts_mark", "progress_video", "progress_video_mark", "english_review"
     ];
+
     for (const week of filteredWeeks) {
       const weekId = week.id;
       const original = originalReviews[weekId] || {};
       const edited = editedReviews[weekId] || {};
       const changes = {};
+
       for (const row of rows) {
         const field = row.field;
         if (!allowedFields.includes(field)) continue;
+
         let originalValue = original[field];
         let editedValue = edited[field];
+
         if (row.type === "number") {
           if (editedValue === "" || editedValue === undefined || editedValue === null) editedValue = null;
           else editedValue = Number(editedValue);
           if (originalValue === "" || originalValue === undefined || originalValue === null) originalValue = null;
           else originalValue = Number(originalValue);
         }
+
         if (row.type === "url" && editedValue === null) editedValue = "";
         if (originalValue !== editedValue) {
           changes[field] = editedValue;
         }
       }
+
+      // Add english_review if changed
       if (edited.english_review !== original.english_review) {
         changes.english_review = edited.english_review;
       }
+
       if (Object.keys(changes).length) {
         promises.push(
           API.patch(`week-review/${weekId}/?student_id=${studentId}`, changes)
+            .then(res => ({ weekId, success: true, data: res.data }))
             .catch(err => {
               console.error(`Error updating week ${weekId}:`, err.response?.data);
-              throw err;
+              throw { weekId, error: err };
             })
         );
       }
     }
-    if (!promises.length) { showToast("No changes to save", "info"); setSaving(false); return; }
+
+    if (!promises.length) {
+      showToast("No changes to save", "info");
+      setSaving(false);
+      return;
+    }
+
     try {
-      await Promise.all(promises);
-      showToast("All changes saved successfully", "success");
-      const newOriginal = {};
-      for (const week of filteredWeeks) {
-        const weekId = week.id;
-        try {
-          const reviewRes = await API.get(`week-review/${weekId}/?student_id=${studentId}`);
-          newOriginal[weekId] = reviewRes.data;
-          setEditedReviews(prev => ({ ...prev, [weekId]: { ...reviewRes.data } }));
-        } catch { newOriginal[weekId] = { ...editedReviews[weekId] }; }
+      const results = await Promise.all(promises);
+      showToast(`Successfully saved ${results.length} week(s)`, "success");
+
+      // ✅ Refresh only the updated weeks
+      const newOriginal = { ...originalReviews };
+      const newEdited = { ...editedReviews };
+
+      for (const result of results) {
+        if (result.success) {
+          newOriginal[result.weekId] = result.data;
+          newEdited[result.weekId] = { ...result.data };
+        }
       }
-      setOriginalReviews(prev => ({ ...prev, ...newOriginal }));
+
+      setOriginalReviews(newOriginal);
+      setEditedReviews(newEdited);
     } catch (err) {
       console.error(err);
-      const errorData = err.response?.data;
-      let errorMsg = "Failed to save changes.";
-      if (errorData && typeof errorData === "object") {
-        const firstKey = Object.keys(errorData)[0];
-        if (firstKey) errorMsg = `${firstKey}: ${errorData[firstKey]}`;
-      } else if (typeof errorData === "string") errorMsg = errorData;
+      let errorMsg = "Failed to save some changes.";
+      if (err.error?.response?.data) {
+        const errorData = err.error.response.data;
+        if (typeof errorData === "object") {
+          const firstKey = Object.keys(errorData)[0];
+          if (firstKey) errorMsg = `${firstKey}: ${errorData[firstKey]}`;
+        } else if (typeof errorData === "string") {
+          errorMsg = errorData;
+        }
+      }
       showToast(errorMsg, "error");
     } finally {
       setSaving(false);
@@ -341,7 +402,6 @@ function StudentReviewEdit() {
   if (error) return <div className="min-h-screen bg-gray-50 text-red-600 flex items-center justify-center">{error}</div>;
   if (!student) return <div className="min-h-screen bg-gray-50 text-center p-8">Student not found</div>;
 
-  // Helper for total & star (includes review_score)
   const getWeekTotalAndStars = (weekId) => {
     const review = editedReviews[weekId]?.review_score || 0;
     const extra = editedReviews[weekId]?.extra_workouts_mark || 0;
@@ -362,11 +422,13 @@ function StudentReviewEdit() {
           </div>
           <div className="flex gap-2">
             <button onClick={() => navigate("/admin/review-sheets")} className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium">← Back</button>
-            <button onClick={handleSaveAll} disabled={saving} className="bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-lg text-sm font-medium disabled:opacity-50">{saving ? "Saving..." : "Save All Changes"}</button>
+            <button onClick={handleSaveAll} disabled={saving} className="bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-lg text-sm font-medium disabled:opacity-50">
+              {saving ? "Saving..." : "Save All Changes"}
+            </button>
           </div>
         </div>
 
-        {/* Desktop Table */}
+        {/* Desktop Table - same as before */}
         <div className="hidden md:block overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
           <table className="min-w-full border-collapse">
             <thead className="bg-gray-50 border-b">
@@ -392,7 +454,6 @@ function StudentReviewEdit() {
                   ))}
                 </tr>
               ))}
-              {/* Total Score row */}
               <tr key="total_row" className="hover:bg-gray-50/40">
                 <td className="sticky left-0 bg-white px-4 py-3 text-gray-600 text-sm font-medium border-r border-gray-200">Total Score (out of 35)</td>
                 {filteredWeeks.map(week => {
@@ -404,7 +465,6 @@ function StudentReviewEdit() {
                   );
                 })}
               </tr>
-              {/* Star Rating row */}
               <tr key="star_row" className="hover:bg-gray-50/40">
                 <td className="sticky left-0 bg-white px-4 py-3 text-gray-600 text-sm font-medium border-r border-gray-200">Star Rating</td>
                 {filteredWeeks.map(week => {
@@ -420,7 +480,7 @@ function StudentReviewEdit() {
           </table>
         </div>
 
-        {/* Mobile Cards */}
+        {/* Mobile Cards - same as before */}
         <div className="md:hidden space-y-6">
           {filteredWeeks.map(week => {
             const { total, stars } = getWeekTotalAndStars(week.id);
@@ -449,11 +509,11 @@ function StudentReviewEdit() {
         </div>
 
         <div className="mt-6 bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-          <h3 className="text-sm font-semibold text-gray-800 mb-2">Personal Details</h3>
+          <h3 className="text-sm font-semibold text-gray-800 mb-2">Week Range Selector</h3>
           <div className="flex flex-wrap gap-4 text-xs text-gray-500">
-            {["0-12","13-16","17-24","25-32","33-40","41-44"].map(range => (
+            {["0-12", "13-16", "17-24", "25-32", "33-40", "41-44"].map(range => (
               <span key={range} onClick={() => handleRangeClick(range)} className={`cursor-pointer hover:text-green-600 ${rangeParam === range ? "text-green-600 font-semibold" : ""}`}>
-                Week {range.replace("-"," - ")}
+                Week {range.replace("-", " - ")}
               </span>
             ))}
           </div>
