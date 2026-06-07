@@ -49,17 +49,19 @@ const About = () => {
           </div>
           
           <div className="bg-black rounded-2xl overflow-hidden shadow-2xl">
-            <video 
-              controls 
-              autoPlay 
-              muted 
-              loop
-              className="w-full h-auto"
-              poster="/campus-poster.jpg"
-            >
-              <source src="/videos/cmps short.mp4" type="video/mp4" />
-              Your browser does not support the video tag.
-            </video>
+            <div className="relative" style={{ paddingBottom: "56.25%", height: 0 }}>
+              <video 
+                controls 
+                autoPlay 
+                muted 
+                loop
+                className="absolute top-0 left-0 w-full h-full"
+                style={{ objectFit: "cover" }}
+              >
+                <source src="/videos/cmps short.mp4" type="video/mp4" />
+                Your browser does not support the video tag.
+              </video>
+            </div>
           </div>
           
           <div className="grid md:grid-cols-3 gap-6 mt-8">
@@ -79,49 +81,8 @@ const About = () => {
         </div>
       </section>
 
-      {/* Student Testimonial Video Section */}
-      <section className="py-20 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-              Student Success Stories
-            </h2>
-            <div className="w-24 h-1 bg-green-600 mx-auto mb-6"></div>
-            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-              Real experiences from our successful graduates
-            </p>
-          </div>
-          
-          <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl overflow-hidden shadow-2xl">
-            <video 
-              controls 
-              className="w-full h-auto"
-              poster="/student-poster.jpg"
-            >
-              <source src="/videos/wafa's.MP4" type="video/mp4" />
-              Your browser does not support the video tag.
-            </video>
-          </div>
-          
-          <div className="flex justify-center gap-8 mt-8 flex-wrap">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-green-600 rounded-full"></div>
-              <span className="text-gray-600">100+ Success Stories</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-green-600 rounded-full"></div>
-              <span className="text-gray-600">Top Companies</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-green-600 rounded-full"></div>
-              <span className="text-gray-600">Career Growth</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* Why Choose ZIAS */}
-      <section className="py-20 bg-gray-50">
+      <section className="py-20 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
@@ -134,8 +95,8 @@ const About = () => {
           </div>
           
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
-            <div className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4 mx-auto">
+            <div className="bg-gray-50 rounded-xl p-6 shadow-lg hover:shadow-xl transition-all group">
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4 mx-auto group-hover:bg-green-200 transition">
                 <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                 </svg>
@@ -144,8 +105,8 @@ const About = () => {
               <p className="text-gray-600 text-center">Hands-on projects and real-world applications</p>
             </div>
             
-            <div className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4 mx-auto">
+            <div className="bg-gray-50 rounded-xl p-6 shadow-lg hover:shadow-xl transition-all group">
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4 mx-auto group-hover:bg-green-200 transition">
                 <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
@@ -154,8 +115,8 @@ const About = () => {
               <p className="text-gray-600 text-center">Guidance from industry professionals</p>
             </div>
             
-            <div className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4 mx-auto">
+            <div className="bg-gray-50 rounded-xl p-6 shadow-lg hover:shadow-xl transition-all group">
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4 mx-auto group-hover:bg-green-200 transition">
                 <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                 </svg>
@@ -164,8 +125,8 @@ const About = () => {
               <p className="text-gray-600 text-center">100% job assistance guaranteed</p>
             </div>
             
-            <div className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4 mx-auto">
+            <div className="bg-gray-50 rounded-xl p-6 shadow-lg hover:shadow-xl transition-all group">
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4 mx-auto group-hover:bg-green-200 transition">
                 <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
@@ -174,11 +135,80 @@ const About = () => {
               <p className="text-gray-600 text-center">Industry-recognized certificates</p>
             </div>
           </div>
+
+          {/* Student Stories Section - Added Here */}
+          <div className="mt-20 pt-12 border-t-2 border-gray-200">
+            <div className="text-center mb-12">
+              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+                Student Success Stories
+              </h2>
+              <div className="w-24 h-1 bg-green-600 mx-auto mb-6"></div>
+              <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+                Real experiences from our successful graduates
+              </p>
+            </div>
+            
+            <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl overflow-hidden shadow-2xl">
+              <div className="relative" style={{ paddingBottom: "56.25%", height: 0 }}>
+                <video 
+                  controls
+                  className="absolute top-0 left-0 w-full h-full"
+                  style={{ objectFit: "contain", backgroundColor: "#000" }}
+                >
+                  <source src="/videos/wafa's.MP4" type="video/mp4" />
+                  Your browser does not support the video tag.
+                </video>
+              </div>
+            </div>
+            
+            <div className="flex justify-center gap-8 mt-8 flex-wrap">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-green-600 rounded-full"></div>
+                <span className="text-gray-600">100+ Success Stories</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-green-600 rounded-full"></div>
+                <span className="text-gray-600">Top Companies</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-green-600 rounded-full"></div>
+                <span className="text-gray-600">Career Growth</span>
+              </div>
+            </div>
+
+            {/* Testimonial Cards */}
+            <div className="grid md:grid-cols-3 gap-6 mt-12">
+              <div className="bg-gray-50 rounded-xl p-6 shadow-md">
+                <div className="text-yellow-500 text-2xl mb-3">★★★★★</div>
+                <p className="text-gray-700 italic">"ZIAS transformed my career. The practical training and placement support helped me land my dream job."</p>
+                <div className="mt-4">
+                  <div className="font-bold text-gray-900">Rahul Sharma</div>
+                  <div className="text-sm text-gray-500">Software Engineer at Google</div>
+                </div>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-6 shadow-md">
+                <div className="text-yellow-500 text-2xl mb-3">★★★★★</div>
+                <p className="text-gray-700 italic">"The mentors at ZIAS are amazing. They guided me through every step and helped me become job-ready."</p>
+                <div className="mt-4">
+                  <div className="font-bold text-gray-900">Priya Patel</div>
+                  <div className="text-sm text-gray-500">Full Stack Developer at Amazon</div>
+                </div>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-6 shadow-md">
+                <div className="text-yellow-500 text-2xl mb-3">★★★★★</div>
+                <p className="text-gray-700 italic">"Best decision I ever made. The pay after placement option made it possible for me to pursue my dreams."</p>
+                <div className="mt-4">
+                  <div className="font-bold text-gray-900">Amit Kumar</div>
+                  <div className="text-sm text-gray-500">Frontend Developer at Microsoft</div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
       {/* Payment Plans */}
-      <section className="py-20 bg-white">
+      <section className="py-20 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
@@ -191,38 +221,38 @@ const About = () => {
           </div>
           
           <div className="grid md:grid-cols-3 gap-8">
-            <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-8 shadow-xl hover:shadow-2xl transition-all">
-              <div className="text-4xl mb-4">🎯</div>
+            <div className="bg-white rounded-2xl p-8 shadow-xl hover:shadow-2xl transition-all transform hover:-translate-y-2">
+              <div className="text-5xl mb-4">🎯</div>
               <h3 className="text-2xl font-bold text-gray-800 mb-3">Pay After Placement</h3>
               <p className="text-gray-600 leading-relaxed">
                 Start learning today with zero upfront cost. Pay only after you secure a job with minimum salary guarantee.
               </p>
               <div className="mt-6 pt-6 border-t border-green-200">
-                <div className="text-sm text-green-600 font-semibold">✓ No upfront payment</div>
+                <div className="text-sm text-green-600 font-semibold mb-2">✓ No upfront payment</div>
                 <div className="text-sm text-green-600 font-semibold">✓ Income-based repayment</div>
               </div>
             </div>
             
-            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-8 shadow-xl hover:shadow-2xl transition-all transform md:scale-105">
-              <div className="text-4xl mb-4">⭐</div>
+            <div className="bg-white rounded-2xl p-8 shadow-xl hover:shadow-2xl transition-all transform hover:-translate-y-2 md:scale-105">
+              <div className="text-5xl mb-4">⭐</div>
               <h3 className="text-2xl font-bold text-gray-800 mb-3">Full Payment</h3>
               <p className="text-gray-600 leading-relaxed">
                 Pay the complete fee upfront and get exclusive benefits including additional resources and priority support.
               </p>
               <div className="mt-6 pt-6 border-t border-blue-200">
-                <div className="text-sm text-blue-600 font-semibold">✓ 15% discount</div>
+                <div className="text-sm text-blue-600 font-semibold mb-2">✓ 15% discount</div>
                 <div className="text-sm text-blue-600 font-semibold">✓ Bonus materials</div>
               </div>
             </div>
             
-            <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-8 shadow-xl hover:shadow-2xl transition-all">
-              <div className="text-4xl mb-4">📱</div>
+            <div className="bg-white rounded-2xl p-8 shadow-xl hover:shadow-2xl transition-all transform hover:-translate-y-2">
+              <div className="text-5xl mb-4">📅</div>
               <h3 className="text-2xl font-bold text-gray-800 mb-3">Monthly Installments</h3>
               <p className="text-gray-600 leading-relaxed">
                 Split your fee into easy monthly payments. Flexible terms available for 3, 6, or 12 months.
               </p>
               <div className="mt-6 pt-6 border-t border-purple-200">
-                <div className="text-sm text-purple-600 font-semibold">✓ Zero interest</div>
+                <div className="text-sm text-purple-600 font-semibold mb-2">✓ Zero interest</div>
                 <div className="text-sm text-purple-600 font-semibold">✓ Flexible tenure</div>
               </div>
             </div>
@@ -231,10 +261,10 @@ const About = () => {
       </section>
 
       {/* Mission & Vision */}
-      <section className="py-20 bg-gray-50">
+      <section className="py-20 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid md:grid-cols-2 gap-12">
-            <div className="bg-white rounded-2xl p-8 shadow-xl">
+            <div className="bg-gray-50 rounded-2xl p-8 shadow-xl hover:shadow-2xl transition-all transform hover:-translate-y-1">
               <div className="text-green-600 mb-6">
                 <svg className="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -246,7 +276,7 @@ const About = () => {
               </p>
             </div>
             
-            <div className="bg-white rounded-2xl p-8 shadow-xl">
+            <div className="bg-gray-50 rounded-2xl p-8 shadow-xl hover:shadow-2xl transition-all transform hover:-translate-y-1">
               <div className="text-green-600 mb-6">
                 <svg className="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -262,20 +292,20 @@ const About = () => {
           
           {/* Statistics */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-12 pt-12 border-t border-gray-200">
-            <div className="text-center">
-              <div className="text-4xl font-bold text-green-600">500+</div>
+            <div className="text-center group">
+              <div className="text-4xl font-bold text-green-600 group-hover:scale-110 transition-transform">500+</div>
               <div className="text-gray-600 mt-2">Students Trained</div>
             </div>
-            <div className="text-center">
-              <div className="text-4xl font-bold text-green-600">95%</div>
+            <div className="text-center group">
+              <div className="text-4xl font-bold text-green-600 group-hover:scale-110 transition-transform">95%</div>
               <div className="text-gray-600 mt-2">Placement Rate</div>
             </div>
-            <div className="text-center">
-              <div className="text-4xl font-bold text-green-600">50+</div>
+            <div className="text-center group">
+              <div className="text-4xl font-bold text-green-600 group-hover:scale-110 transition-transform">50+</div>
               <div className="text-gray-600 mt-2">Expert Mentors</div>
             </div>
-            <div className="text-center">
-              <div className="text-4xl font-bold text-green-600">1000+</div>
+            <div className="text-center group">
+              <div className="text-4xl font-bold text-green-600 group-hover:scale-110 transition-transform">1000+</div>
               <div className="text-gray-600 mt-2">Projects Built</div>
             </div>
           </div>
@@ -305,4 +335,4 @@ const About = () => {
   );
 };
 
-export default About;
+export default About; 

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../api/api";
 import { useAuth } from "../context/AuthContext";
@@ -195,6 +195,7 @@ function ReviewFoldersAdmin() {
   const [errorLogs, setErrorLogs] = useState([]);
   const errorLogsRef = useRef([]);
   const hasFetched = useRef(false);
+  const initialFetchDone = useRef(false);
 
   // UI states
   const [selectedBatchName, setSelectedBatchName] = useState(null);
@@ -227,57 +228,21 @@ function ReviewFoldersAdmin() {
   const showToast = (message, type = "success") => setToast({ message, type });
   const hideToast = () => setToast(null);
 
-  // API calls
-  const getWorkDocForWeek = async (studentId, weekNumber) => {
+  // OPTIMIZED: Single function to fetch all initial data
+  const fetchInitialData = useCallback(async () => {
+    if (initialFetchDone.current) return;
+    initialFetchDone.current = true;
+    setLoading(true);
+    
     try {
-      const modulesRes = await API.get(`/modules/student-modules/?student_id=${studentId}`);
-      const modules = modulesRes.data.results || modulesRes.data;
-      const theModule = modules.find(m => m.order === weekNumber);
-      if (theModule && theModule.work_document_url) return theModule.work_document_url;
-      if (theModule && theModule.content) {
-        const urlMatch = theModule.content.match(/https?:\/\/[^\s]+/);
-        if (urlMatch) return urlMatch[0];
-      }
-      return "";
-    } catch (err) {
-      addErrorLog(err, { action: "getWorkDocForWeek", studentId, weekNumber });
-      return "";
-    }
-  };
-
-  const getDefaultReviewSheetFromModule = async (studentId, weekNumber) => {
-    try {
-      const modulesRes = await API.get(`/modules/student-modules/?student_id=${studentId}`);
-      const modules = modulesRes.data.results || modulesRes.data;
-      const theModule = modules.find(m => m.order === weekNumber);
+      const [studentsRes, mentorsRes, batchesRes, foldersRes] = await Promise.all([
+        API.get("/students/"),
+        API.get("/mentors/"),
+        API.get("batches/"),
+        API.get("/review-folders/")
+      ]);
       
-      if (theModule?.review_sheet_template) {
-        return theModule.review_sheet_template;
-      }
-      
-      if (theModule?.content) {
-        const urlMatch = theModule.content.match(/https?:\/\/[^\s]+(?:\.xlsx|\.xls|\.pdf|\.docx?)/i);
-        if (urlMatch) return urlMatch[0];
-      }
-      
-      return "";
-    } catch (err) {
-      console.error("Error getting default review sheet:", err);
-      return "";
-    }
-  };
-
-  // FIXED: Skip week-review API call since it doesn't exist
-  const ensureWeekReviewExists = async (studentId, weekNumber, reviewSheetUrl = "") => {
-    // The week-review endpoint doesn't exist, so just return true
-    console.log(`Week review creation skipped for student ${studentId}, week ${weekNumber}`);
-    return true;
-  };
-
-  const fetchStudents = async () => {
-    try {
-      const res = await API.get("/students/");
-      const studentsList = (res.data.results || res.data).map(s => {
+      const studentsList = (studentsRes.data.results || studentsRes.data).map(s => {
         let mentorId = null;
         if (s.mentor) {
           if (typeof s.mentor === 'object' && s.mentor.id) mentorId = s.mentor.id;
@@ -294,6 +259,7 @@ function ReviewFoldersAdmin() {
         };
       });
       setStudents(studentsList);
+      
       const nameMap = new Map();
       const courseMap = new Map();
       studentsList.forEach(s => {
@@ -302,58 +268,44 @@ function ReviewFoldersAdmin() {
       });
       setStudentMap(nameMap);
       setStudentCourseMap(courseMap);
-    } catch (err) {
-      addErrorLog(err, { api: "/students/" });
-      showToast("Failed to load students", "error");
-    }
-  };
-
-  const fetchMentors = async () => {
-    try {
-      const res = await API.get("/mentors/");
-      setMentorsList(res.data.results || res.data);
-    } catch (err) {
-      addErrorLog(err, { api: "/mentors/" });
-    }
-  };
-
-  const fetchBatches = async () => {
-    try {
-      const res = await API.get("batches/");
+      
+      setMentorsList(mentorsRes.data.results || mentorsRes.data);
+      
       let batchesArray = [];
-      if (Array.isArray(res.data)) {
-        batchesArray = res.data;
-      } else if (res.data && Array.isArray(res.data.results)) {
-        batchesArray = res.data.results;
+      if (Array.isArray(batchesRes.data)) {
+        batchesArray = batchesRes.data;
+      } else if (batchesRes.data && Array.isArray(batchesRes.data.results)) {
+        batchesArray = batchesRes.data.results;
       }
       setBatchesList(batchesArray);
+      
+      setAllFolders(foldersRes.data);
+      
     } catch (err) {
-      addErrorLog(err, { api: "batches/" });
-      showToast("Failed to load batches", "error");
+      addErrorLog(err, { action: "fetchInitialData" });
+      showToast("Failed to load data", "error");
+    } finally {
+      setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchAllFolders = async () => {
-    setLoading(true);
+  const refreshFolders = useCallback(async () => {
     try {
       const res = await API.get("/review-folders/");
       setAllFolders(res.data);
     } catch (err) {
-      addErrorLog(err, { api: "/review-folders/" });
-      showToast("Failed to load folders", "error");
-    } finally {
-      setLoading(false);
+      addErrorLog(err, { action: "refreshFolders" });
+      showToast("Failed to refresh folders", "error");
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (!hasFetched.current) {
       hasFetched.current = true;
-      Promise.all([fetchStudents(), fetchMentors(), fetchBatches(), fetchAllFolders()]);
+      fetchInitialData();
     }
-  }, []);
+  }, [fetchInitialData]);
 
-  // Group batches directly by batch name from students
   const batchGroups = React.useMemo(() => {
     const groups = new Map();
     
@@ -411,7 +363,7 @@ function ReviewFoldersAdmin() {
     return students.filter(s => s.batch_name === batchName);
   };
 
-  const getFoldersForBatch = () => {
+  const getFoldersForBatch = useCallback(() => {
     if (!selectedBatchName) return [];
     
     const studentsInBatch = getStudentsInBatchByName(selectedBatchName);
@@ -439,9 +391,9 @@ function ReviewFoldersAdmin() {
     return Array.from(folderMap.values())
       .filter(folder => folder.name.toLowerCase().includes(folderSearchTerm.toLowerCase()))
       .sort((a, b) => new Date(b.modified) - new Date(a.modified));
-  };
+  }, [selectedBatchName, allFolders, folderSearchTerm]);
 
-  const allFoldersAggregated = () => {
+  const allFoldersAggregated = useCallback(() => {
     const folderMap = allFolders
       .filter(f => f.week_folder)
       .reduce((acc, f) => {
@@ -463,9 +415,48 @@ function ReviewFoldersAdmin() {
     return Object.values(folderMap)
       .filter(folder => folder.name.toLowerCase().includes(folderSearchTerm.toLowerCase()))
       .sort((a, b) => new Date(b.modified) - new Date(a.modified));
-  };
+  }, [allFolders, folderSearchTerm]);
 
   const foldersToShow = selectedBatchName === null ? allFoldersAggregated() : getFoldersForBatch();
+
+  const getWorkDocForWeek = async (studentId, weekNumber) => {
+    try {
+      const modulesRes = await API.get(`/modules/student-modules/?student_id=${studentId}`);
+      const modules = modulesRes.data.results || modulesRes.data;
+      const theModule = modules.find(m => m.order === weekNumber);
+      if (theModule && theModule.work_document_url) return theModule.work_document_url;
+      if (theModule && theModule.content) {
+        const urlMatch = theModule.content.match(/https?:\/\/[^\s]+/);
+        if (urlMatch) return urlMatch[0];
+      }
+      return "";
+    } catch (err) {
+      addErrorLog(err, { action: "getWorkDocForWeek", studentId, weekNumber });
+      return "";
+    }
+  };
+
+  const getDefaultReviewSheetFromModule = async (studentId, weekNumber) => {
+    try {
+      const modulesRes = await API.get(`/modules/student-modules/?student_id=${studentId}`);
+      const modules = modulesRes.data.results || modulesRes.data;
+      const theModule = modules.find(m => m.order === weekNumber);
+      
+      if (theModule?.review_sheet_template) {
+        return theModule.review_sheet_template;
+      }
+      
+      if (theModule?.content) {
+        const urlMatch = theModule.content.match(/https?:\/\/[^\s]+(?:\.xlsx|\.xls|\.pdf|\.docx?)/i);
+        if (urlMatch) return urlMatch[0];
+      }
+      
+      return "";
+    } catch (err) {
+      console.error("Error getting default review sheet:", err);
+      return "";
+    }
+  };
 
   const editFolder = async (oldName) => {
     const newName = prompt("Enter new folder name:", oldName);
@@ -481,7 +472,7 @@ function ReviewFoldersAdmin() {
         await API.patch(`/review-folders/${entry.id}/`, { week_folder: newName.trim() });
       }
       if (selectedFolder === oldName) setSelectedFolder(newName.trim());
-      await fetchAllFolders();
+      await refreshFolders();
       showToast(`Folder renamed to "${newName}"`, "success");
     } catch (err) {
       addErrorLog(err, { action: "editFolder", oldName, newName });
@@ -498,7 +489,7 @@ function ReviewFoldersAdmin() {
         await API.delete(`/review-folders/${entry.id}/`);
       }
       if (selectedFolder === folderName) setSelectedFolder(null);
-      await fetchAllFolders();
+      await refreshFolders();
       showToast(`Folder "${folderName}" deleted.`, "success");
     } catch (err) {
       addErrorLog(err, { action: "deleteFolder", folderName });
@@ -552,7 +543,6 @@ function ReviewFoldersAdmin() {
           is_done: false,
         });
         
-        // Skip week-review API call - it doesn't exist
         successCount++;
         
       } catch (err) {
@@ -563,7 +553,7 @@ function ReviewFoldersAdmin() {
     
     showToast(`Created ${successCount} entries for "${folderName}" (${errorCount} failed)`, successCount > 0 ? "success" : "error");
     setShowAddWeekModal(false);
-    await fetchAllFolders();
+    await refreshFolders();
     if (selectedFolder === folderName) setSelectedFolder(folderName);
     else if (!selectedFolder) setSelectedFolder(null);
     setCreatingWeek(false);
@@ -659,7 +649,7 @@ function ReviewFoldersAdmin() {
     });
     try {
       await API.patch(`/review-folders/${id}/`, payload);
-      await fetchAllFolders();
+      await refreshFolders();
       showToast("Entry updated successfully.", "success");
       cancelEdit();
       if (newExpert && newExpert !== oldExpert && newExpert.trim() !== "") {
@@ -676,7 +666,7 @@ function ReviewFoldersAdmin() {
     if (window.confirm("Delete this entry?")) {
       try {
         await API.delete(`/review-folders/${id}/`);
-        await fetchAllFolders();
+        await refreshFolders();
         showToast("Entry deleted successfully.", "success");
       } catch (err) {
         addErrorLog(err, { action: "deleteEntry", id });
@@ -699,7 +689,7 @@ function ReviewFoldersAdmin() {
         }
       }
       
-      await fetchAllFolders();
+      await refreshFolders();
       showToast(`Status updated to ${newValue ? "Completed" : "Pending"}.`, "success");
     } catch (err) {
       console.error("Toggle done error:", err);
@@ -725,243 +715,241 @@ function ReviewFoldersAdmin() {
   const CancelIcon = () => (<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>);
 
   return (
-    <>
+    <div className="p-4 sm:p-6 bg-gray-50 min-h-screen w-full">
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
-      <div className="p-4 sm:p-6 bg-gray-50 min-h-screen w-full">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
-            <div>
-              <h1 className="text-xl sm:text-2xl font-bold text-gray-800">Review Folders (Admin)</h1>
-              <p className="text-gray-500 text-xs sm:text-sm">
-                {selectedFolder
-                  ? `Showing entries for "${selectedFolder}"`
-                  : selectedBatchName !== null
-                  ? `Batch ${selectedBatchName}`
-                  : "Select a batch"}
-              </p>
-            </div>
-            {(selectedBatchName !== null || selectedFolder) && (
-              <button
-                onClick={() => {
-                  setSelectedFolder(null);
-                  setSelectedBatchName(null);
-                }}
-                className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium"
-              >
-                ← Back to Batches
-              </button>
-            )}
+      <div className="max-w-7xl mx-auto">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-800">Review Folders (Admin)</h1>
+            <p className="text-gray-500 text-xs sm:text-sm">
+              {selectedFolder
+                ? `Showing entries for "${selectedFolder}"`
+                : selectedBatchName !== null
+                ? `Batch ${selectedBatchName}`
+                : "Select a batch"}
+            </p>
           </div>
+          {(selectedBatchName !== null || selectedFolder) && (
+            <button
+              onClick={() => {
+                setSelectedFolder(null);
+                setSelectedBatchName(null);
+              }}
+              className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium"
+            >
+              ← Back to Batches
+            </button>
+          )}
+        </div>
 
-          {selectedBatchName === null && !selectedFolder && (
-            <>
-              <div className="mb-6 bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-                <div className="flex items-center gap-3">
-                  <div className="text-2xl">📊</div>
-                  <div>
-                    <div className="text-sm text-gray-500">Total Students</div>
-                    <div className="text-2xl font-bold text-gray-800">{students.length}</div>
-                  </div>
+        {selectedBatchName === null && !selectedFolder && (
+          <>
+            <div className="mb-6 bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+              <div className="flex items-center gap-3">
+                <div className="text-2xl">📊</div>
+                <div>
+                  <div className="text-sm text-gray-500">Total Students</div>
+                  <div className="text-2xl font-bold text-gray-800">{students.length}</div>
                 </div>
               </div>
+            </div>
 
-              <div className="mb-4">
+            <div className="mb-4">
+              <input
+                type="text"
+                placeholder="🔍 Search batches by name (B1, B2...) or mentor name..."
+                value={batchSearchTerm}
+                onChange={(e) => setBatchSearchTerm(e.target.value)}
+                className="w-full sm:w-80 border border-gray-300 rounded-lg px-4 py-2 text-sm bg-white"
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {filteredBatchGroups.map((group) => (
+                <div
+                  key={group.batchName}
+                  onClick={() => setSelectedBatchName(group.batchName)}
+                  className="cursor-pointer bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all p-4"
+                >
+                  <div className="text-2xl mb-2">👥</div>
+                  <div className="text-lg font-semibold text-gray-800">{group.batchName}</div>
+                  <div className="text-sm text-gray-500 mt-1">{group.totalStudents} students</div>
+                  <div className="text-xs text-gray-400 mt-1">
+                    👤 {group.mentorName || "No mentor assigned"}
+                  </div>
+                </div>
+              ))}
+              {filteredBatchGroups.length === 0 && (
+                <div className="col-span-full text-center text-gray-400 py-8">
+                  No batches match your search.
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {selectedBatchName !== null && !selectedFolder && (
+          <>
+            <div className="mb-4 flex justify-between items-center">
+              <h2 className="text-lg font-semibold text-gray-800">
+                Batch {selectedBatchName}
+              </h2>
+              <button
+                onClick={() => setShowAddWeekModal(true)}
+                disabled={getStudentsInBatchByName(selectedBatchName).length === 0}
+                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                + Add Week Folder
+              </button>
+            </div>
+
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-x-auto">
+              <div className="p-3 border-b border-gray-200 bg-gray-50">
                 <input
                   type="text"
-                  placeholder="🔍 Search batches by name (B1, B2...) or mentor name..."
-                  value={batchSearchTerm}
-                  onChange={(e) => setBatchSearchTerm(e.target.value)}
-                  className="w-full sm:w-80 border border-gray-300 rounded-lg px-4 py-2 text-sm bg-white"
+                  placeholder="Search folders..."
+                  value={folderSearchTerm}
+                  onChange={(e) => setFolderSearchTerm(e.target.value)}
+                  className="w-full sm:w-64 border border-gray-300 rounded-lg px-3 py-2 text-sm"
                 />
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {filteredBatchGroups.map((group) => (
-                  <div
-                    key={group.batchName}
-                    onClick={() => setSelectedBatchName(group.batchName)}
-                    className="cursor-pointer bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all p-4"
-                  >
-                    <div className="text-2xl mb-2">👥</div>
-                    <div className="text-lg font-semibold text-gray-800">{group.batchName}</div>
-                    <div className="text-sm text-gray-500 mt-1">{group.totalStudents} students</div>
-                    <div className="text-xs text-gray-400 mt-1">
-                      👤 {group.mentorName || "No mentor assigned"}
-                    </div>
-                  </div>
-                ))}
-                {filteredBatchGroups.length === 0 && (
-                  <div className="col-span-full text-center text-gray-400 py-8">
-                    No batches match your search.
-                  </div>
-                )}
-              </div>
-            </>
-          )}
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">People</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Modified</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source</th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {foldersToShow.length === 0 ? (
+                    <tr>
+                      <td colSpan="6" className="px-4 py-8 text-center text-gray-400">
+                        No week folders yet. Click '+ Add Week Folder'.
+                       </td>
+                    </tr>
+                  ) : (
+                    foldersToShow.map(folder => (
+                      <tr key={folder.name} className="hover:bg-gray-50 cursor-pointer" onClick={(e) => handleFolderClick(folder.name, e)}>
+                        <td className="px-4 py-3 text-sm text-blue-600">📁 {folder.name}</td>
+                        <td className="px-4 py-3 text-sm text-gray-700">Folder</td>
+                        <td className="px-4 py-3 text-sm text-gray-700">{folder.people}</td>
+                        <td className="px-4 py-3 text-sm text-gray-700">{folder.modified}</td>
+                        <td className="px-4 py-3 text-sm text-gray-700">{folder.source}</td>
+                        <td className="px-4 py-3 text-center">
+                          <div className="flex gap-2 justify-center">
+                            <button onClick={(e) => { e.stopPropagation(); editFolder(folder.name); }} className="text-blue-600 hover:text-blue-800"><EditIcon /></button>
+                            <button onClick={(e) => { e.stopPropagation(); deleteFolder(folder.name); }} className="text-red-600 hover:text-red-800"><DeleteIcon /></button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
 
-          {selectedBatchName !== null && !selectedFolder && (
-            <>
-              <div className="mb-4 flex justify-between items-center">
-                <h2 className="text-lg font-semibold text-gray-800">
-                  Batch {selectedBatchName}
-                </h2>
-                <button
-                  onClick={() => setShowAddWeekModal(true)}
-                  disabled={getStudentsInBatchByName(selectedBatchName).length === 0}
-                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  + Add Week Folder
-                </button>
+        {selectedFolder && (
+          <div>
+            <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
+              <button onClick={() => setSelectedFolder(null)} className="text-green-600 hover:text-green-800 flex items-center gap-1 text-sm">← Back to folders</button>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Search student or week..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-48 border border-gray-300 rounded-lg px-3 py-1 text-sm"
+                />
               </div>
-
+            </div>
+            <SafeTable>
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-x-auto">
-                <div className="p-3 border-b border-gray-200 bg-gray-50">
-                  <input
-                    type="text"
-                    placeholder="Search folders..."
-                    value={folderSearchTerm}
-                    onChange={(e) => setFolderSearchTerm(e.target.value)}
-                    className="w-full sm:w-64 border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                  />
-                </div>
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">People</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Modified</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Student</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Week</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Review Date</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Work Doc</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Industry Expert</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Meeting Link</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Review Sheet</th>
+                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
                       <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {foldersToShow.length === 0 ? (
-                      <tr>
-                        <td colSpan="6" className="px-4 py-8 text-center text-gray-400">
-                          No week folders yet. Click '+ Add Week Folder'.
+                    {currentEntries.filter(entry => {
+                      if (!searchTerm && !selectedWeek) return true;
+                      const matchesSearch = !searchTerm
+                        || entry.student_name?.toLowerCase().includes(searchTerm.toLowerCase())
+                        || entry.week?.toString().toLowerCase().includes(searchTerm.toLowerCase());
+                      const matchesWeek = !selectedWeek || entry.week?.toString() === selectedWeek;
+                      return matchesSearch && matchesWeek;
+                    }).map(entry => (
+                      <tr key={entry.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 text-sm text-gray-900">{studentMap.get(entry.student) || entry.student_name || "—"}</td>
+                        <td className="px-4 py-3 text-sm text-gray-700">
+                          {editingId === entry.id ? (
+                            <input type="number" name="week" value={editData.week || ""} onChange={handleEditChange} className="w-20 border border-gray-300 rounded px-2 py-1 text-sm" />
+                          ) : `Week ${entry.week}`}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700">
+                          {editingId === entry.id ? (
+                            <input type="date" name="review_date" value={editData.review_date || ""} onChange={handleEditChange} className="w-full border border-gray-300 rounded px-2 py-1 text-sm" />
+                          ) : entry.review_date || "—"}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700">
+                          {editingId === entry.id ? (
+                            <input type="url" name="work_documents" value={editData.work_documents || ""} onChange={handleEditChange} className="w-36 border border-gray-300 rounded px-2 py-1 text-sm" />
+                          ) : renderLink(entry.work_documents, "Work Doc")}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700">
+                          {editingId === entry.id ? (
+                            <input type="text" name="industry_expert" value={editData.industry_expert || ""} onChange={handleEditChange} className="w-36 border border-gray-300 rounded px-2 py-1 text-sm" />
+                          ) : entry.industry_expert || "—"}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700">
+                          {editingId === entry.id ? (
+                            <input type="url" name="meeting_link" value={editData.meeting_link || ""} onChange={handleEditChange} className="w-36 border border-gray-300 rounded px-2 py-1 text-sm" />
+                          ) : renderLink(entry.meeting_link, "Meeting")}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700">
+                          {editingId === entry.id ? (
+                            <input type="url" name="review_sheet" value={editData.review_sheet || ""} onChange={handleEditChange} className="w-36 border border-gray-300 rounded px-2 py-1 text-sm" />
+                          ) : renderLink(entry.review_sheet, "Review Sheet")}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <button onClick={() => toggleDone(entry.id, !entry.is_done)} className={`px-3 py-1 rounded-full text-xs font-medium transition cursor-pointer ${entry.is_done ? "bg-green-100 text-green-800 hover:bg-green-200" : "bg-yellow-100 text-yellow-800 hover:bg-yellow-200"}`}>
+                            {entry.is_done ? "Completed" : "Pending"}
+                          </button>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {editingId === entry.id ? (
+                            <div className="flex gap-2 justify-center">
+                              <button onClick={() => saveEdit(entry.id)} className="text-green-600 hover:text-green-800"><SaveIcon /></button>
+                              <button onClick={cancelEdit} className="text-gray-600 hover:text-gray-800"><CancelIcon /></button>
+                            </div>
+                          ) : (
+                            <div className="flex gap-2 justify-center">
+                              <button onClick={() => startEdit(entry)} className="text-blue-600 hover:text-blue-800"><EditIcon /></button>
+                              <button onClick={() => deleteEntry(entry.id)} className="text-red-600 hover:text-red-800"><DeleteIcon /></button>
+                            </div>
+                          )}
                         </td>
                       </tr>
-                    ) : (
-                      foldersToShow.map(folder => (
-                        <tr key={folder.name} className="hover:bg-gray-50 cursor-pointer" onClick={(e) => handleFolderClick(folder.name, e)}>
-                          <td className="px-4 py-3 text-sm text-blue-600">📁 {folder.name}</td>
-                          <td className="px-4 py-3 text-sm text-gray-700">Folder</td>
-                          <td className="px-4 py-3 text-sm text-gray-700">{folder.people}</td>
-                          <td className="px-4 py-3 text-sm text-gray-700">{folder.modified}</td>
-                          <td className="px-4 py-3 text-sm text-gray-700">{folder.source}</td>
-                          <td className="px-4 py-3 text-center">
-                            <div className="flex gap-2 justify-center">
-                              <button onClick={(e) => { e.stopPropagation(); editFolder(folder.name); }} className="text-blue-600 hover:text-blue-800"><EditIcon /></button>
-                              <button onClick={(e) => { e.stopPropagation(); deleteFolder(folder.name); }} className="text-red-600 hover:text-red-800"><DeleteIcon /></button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    )}
+                    ))}
                   </tbody>
                 </table>
               </div>
-            </>
-          )}
-
-          {selectedFolder && (
-            <div>
-              <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
-                <button onClick={() => setSelectedFolder(null)} className="text-green-600 hover:text-green-800 flex items-center gap-1 text-sm">← Back to folders</button>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Search student or week..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-48 border border-gray-300 rounded-lg px-3 py-1 text-sm"
-                  />
-                </div>
-              </div>
-              <SafeTable>
-                <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Student</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Week</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Review Date</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Work Doc</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Industry Expert</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Meeting Link</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Review Sheet</th>
-                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
-                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {currentEntries.filter(entry => {
-                        if (!searchTerm && !selectedWeek) return true;
-                        const matchesSearch = !searchTerm
-                          || entry.student_name?.toLowerCase().includes(searchTerm.toLowerCase())
-                          || entry.week?.toString().toLowerCase().includes(searchTerm.toLowerCase());
-                        const matchesWeek = !selectedWeek || entry.week?.toString() === selectedWeek;
-                        return matchesSearch && matchesWeek;
-                      }).map(entry => (
-                        <tr key={entry.id} className="hover:bg-gray-50">
-                          <td className="px-4 py-3 text-sm text-gray-900">{studentMap.get(entry.student) || entry.student_name || "—"}</td>
-                          <td className="px-4 py-3 text-sm text-gray-700">
-                            {editingId === entry.id ? (
-                              <input type="number" name="week" value={editData.week || ""} onChange={handleEditChange} className="w-20 border border-gray-300 rounded px-2 py-1 text-sm" />
-                            ) : `Week ${entry.week}`}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-700">
-                            {editingId === entry.id ? (
-                              <input type="date" name="review_date" value={editData.review_date || ""} onChange={handleEditChange} className="w-full border border-gray-300 rounded px-2 py-1 text-sm" />
-                            ) : entry.review_date || "—"}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-700">
-                            {editingId === entry.id ? (
-                              <input type="url" name="work_documents" value={editData.work_documents || ""} onChange={handleEditChange} className="w-36 border border-gray-300 rounded px-2 py-1 text-sm" />
-                            ) : renderLink(entry.work_documents, "Work Doc")}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-700">
-                            {editingId === entry.id ? (
-                              <input type="text" name="industry_expert" value={editData.industry_expert || ""} onChange={handleEditChange} className="w-36 border border-gray-300 rounded px-2 py-1 text-sm" />
-                            ) : entry.industry_expert || "—"}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-700">
-                            {editingId === entry.id ? (
-                              <input type="url" name="meeting_link" value={editData.meeting_link || ""} onChange={handleEditChange} className="w-36 border border-gray-300 rounded px-2 py-1 text-sm" />
-                            ) : renderLink(entry.meeting_link, "Meeting")}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-700">
-                            {editingId === entry.id ? (
-                              <input type="url" name="review_sheet" value={editData.review_sheet || ""} onChange={handleEditChange} className="w-36 border border-gray-300 rounded px-2 py-1 text-sm" />
-                            ) : renderLink(entry.review_sheet, "Review Sheet")}
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <button onClick={() => toggleDone(entry.id, !entry.is_done)} className={`px-3 py-1 rounded-full text-xs font-medium transition cursor-pointer ${entry.is_done ? "bg-green-100 text-green-800 hover:bg-green-200" : "bg-yellow-100 text-yellow-800 hover:bg-yellow-200"}`}>
-                              {entry.is_done ? "Completed" : "Pending"}
-                            </button>
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            {editingId === entry.id ? (
-                              <div className="flex gap-2 justify-center">
-                                <button onClick={() => saveEdit(entry.id)} className="text-green-600 hover:text-green-800"><SaveIcon /></button>
-                                <button onClick={cancelEdit} className="text-gray-600 hover:text-gray-800"><CancelIcon /></button>
-                              </div>
-                            ) : (
-                              <div className="flex gap-2 justify-center">
-                                <button onClick={() => startEdit(entry)} className="text-blue-600 hover:text-blue-800"><EditIcon /></button>
-                                <button onClick={() => deleteEntry(entry.id)} className="text-red-600 hover:text-red-800"><DeleteIcon /></button>
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </SafeTable>
-            </div>
-          )}
-        </div>
+            </SafeTable>
+          </div>
+        )}
       </div>
 
       {selectedBatchName !== null && !selectedFolder && (
@@ -974,7 +962,7 @@ function ReviewFoldersAdmin() {
           creating={creatingWeek}
         />
       )}
-    </>
+    </div>
   );
 }
 
