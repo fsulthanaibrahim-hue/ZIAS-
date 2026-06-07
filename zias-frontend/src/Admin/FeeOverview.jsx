@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import API from '../api/api';
 import { toast } from 'react-hot-toast';
 
@@ -19,10 +19,16 @@ function FeeOverview() {
   const [updating, setUpdating] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  const fetchedRef = useRef(false);
+
   const fetchData = async () => {
+    if (fetchedRef.current) return;
+    fetchedRef.current = true;
+    
     setLoading(true);
     try {
-      const studentsRes = await API.get('/admin/students-fee/');
+      // ✅ CHANGED: Using fast /students/ endpoint instead of slow /admin/students-fee/
+      const studentsRes = await API.get('/students/');
       let studentsData = studentsRes.data;
       if (studentsData.results) studentsData = studentsData.results;
       
@@ -30,7 +36,18 @@ function FeeOverview() {
       let studentFeesData = studentFeesRes.data;
       if (studentFeesData.results) studentFeesData = studentFeesData.results;
       
-      setStudents(Array.isArray(studentsData) ? studentsData : []);
+      // Map students to consistent format
+      const mappedStudents = studentsData.map(s => ({
+        id: s.id,
+        name: s.full_name || s.name || `Student ${s.id}`,
+        full_name: s.full_name,
+        email: s.user?.email || s.email,
+        course: s.course,
+        week_back_amount: parseFloat(s.week_back_amount) || 0,
+        agreement_signed: s.agreement_signed || false
+      }));
+      
+      setStudents(Array.isArray(mappedStudents) ? mappedStudents : []);
       setStudentFees(Array.isArray(studentFeesData) ? studentFeesData : []);
       
     } catch (err) {
@@ -81,22 +98,19 @@ function FeeOverview() {
     }
     
     toast.success(`Fee assigned to ${successCount} students`);
+    fetchedRef.current = false;
     await fetchData();
     setApplyingFee(false);
   };
 
   useEffect(() => {
     fetchData();
-    
-    const handleUpdate = () => {
-      fetchData();
-    };
-    window.addEventListener('studentFeeUpdated', handleUpdate);
-    
-    return () => {
-      window.removeEventListener('studentFeeUpdated', handleUpdate);
-    };
   }, []);
+
+  const handleRefresh = () => {
+    fetchedRef.current = false;
+    fetchData();
+  };
 
   const getStudentFeeInfo = (student) => {
     const studentFeeRecord = studentFees.find(sf => sf.student === student.id);
@@ -104,7 +118,7 @@ function FeeOverview() {
     if (studentFeeRecord) {
       const totalAmount = Number(studentFeeRecord.total_amount) || 0;
       const paidAmount = Number(studentFeeRecord.paid_amount) || 0;
-      const pendingAmount = totalAmount - paidAmount;
+      const pendingAmount = Math.max(0, totalAmount - paidAmount);
       
       let status = 'Pending';
       if (pendingAmount === 0 && totalAmount > 0) {
@@ -178,8 +192,8 @@ function FeeOverview() {
       setShowEditModal(false);
       setEditingStudent(null);
       
+      fetchedRef.current = false;
       await fetchData();
-      window.dispatchEvent(new Event('studentFeeUpdated'));
       
     } catch (err) {
       console.error('Update error:', err);
@@ -201,7 +215,8 @@ function FeeOverview() {
   });
 
   const formatCurrency = (amount) => {
-    return '₹' + (amount || 0).toLocaleString('en-IN');
+    if (amount === undefined || amount === null) return '₹0';
+    return '₹' + amount.toLocaleString('en-IN');
   };
 
   const totalStudents = students.length;
@@ -209,14 +224,14 @@ function FeeOverview() {
   const studentsWithoutFee = totalStudents - studentsWithFee;
   
   const totalFee = studentFees.reduce((sum, sf) => {
-    return sum + (Number(sf.total_amount) || 0);
+    return sum + (Math.max(0, Number(sf.total_amount)) || 0);
   }, 0);
   
   const totalPaid = studentFees.reduce((sum, sf) => {
-    return sum + (Number(sf.paid_amount) || 0);
+    return sum + (Math.max(0, Number(sf.paid_amount)) || 0);
   }, 0);
   
-  const totalPending = totalFee - totalPaid;
+  const totalPending = Math.max(0, totalFee - totalPaid);
   
   const paidCount = students.filter(s => {
     const feeInfo = getStudentFeeInfo(s);
@@ -289,7 +304,7 @@ function FeeOverview() {
               </button>
             )}
             <button
-              onClick={fetchData}
+              onClick={handleRefresh}
               className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition text-sm whitespace-nowrap"
             >
               Refresh
@@ -297,7 +312,7 @@ function FeeOverview() {
           </div>
         </div>
 
-        {/* Summary Cards - Responsive Grid */}
+        {/* Summary Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 mb-6">
           <div className="bg-blue-50 rounded-xl p-4 sm:p-5 border border-blue-200">
             <p className="text-gray-500 text-xs sm:text-sm">Total Students</p>
@@ -367,10 +382,10 @@ function FeeOverview() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {filteredStudents.length === 0 ? (
-                <tr>
+                <tr key="empty">
                   <td colSpan="7" className="text-center py-8 text-gray-500">
                     No students found.
-                  </td>
+                   </td>
                 </tr>
               ) : (
                 filteredStudents.map((student) => {
@@ -379,6 +394,7 @@ function FeeOverview() {
                     <tr key={student.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-4 py-3">
                         <p className="font-medium text-gray-800 text-sm">{student.name || student.full_name || '—'}</p>
+                        {student.email && <p className="text-xs text-gray-400">{student.email}</p>}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600">
                         {student.course || '—'}
@@ -428,18 +444,17 @@ function FeeOverview() {
               const feeInfo = getStudentFeeInfo(student);
               return (
                 <div key={student.id} className="bg-white rounded-xl shadow border border-gray-200 p-4">
-                  {/* Student Header */}
                   <div className="flex justify-between items-start mb-3">
                     <div>
                       <h3 className="font-semibold text-gray-800 text-base">{student.name || student.full_name || '—'}</h3>
-                      <p className="text-xs text-gray-500 mt-0.5">{student.course || '—'}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">{student.email}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">{student.course || '—'}</p>
                     </div>
                     <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(feeInfo.status)}`}>
                       {feeInfo.status}
                     </span>
                   </div>
                   
-                  {/* Fee Details */}
                   <div className="grid grid-cols-3 gap-3 mb-3 pt-2 border-t border-gray-100">
                     <div>
                       <p className="text-xs text-gray-500 mb-1">Total Fee</p>
@@ -455,7 +470,6 @@ function FeeOverview() {
                     </div>
                   </div>
                   
-                  {/* Action Button */}
                   <button
                     onClick={() => handleEditClick(student)}
                     className="w-full flex items-center justify-center gap-2 px-3 py-2 text-blue-600 hover:text-white hover:bg-blue-600 border border-blue-200 rounded-lg transition-colors text-sm"
@@ -472,7 +486,7 @@ function FeeOverview() {
           )}
         </div>
 
-        {/* Note Section - Responsive */}
+        {/* Note Section */}
         <div className="mt-6 bg-yellow-50 border border-yellow-200 rounded-lg p-3 sm:p-4">
           <h3 className="text-sm font-semibold text-yellow-900 mb-2">📌 Fee Summary Information</h3>
           <p className="text-xs sm:text-sm text-yellow-800">
@@ -491,7 +505,7 @@ function FeeOverview() {
         </div>
       </div>
 
-      {/* Edit Modal - Responsive */}
+      {/* Edit Modal */}
       {showEditModal && editingStudent && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowEditModal(false)}>
           <div className="bg-white rounded-xl w-full max-w-md p-5 sm:p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>

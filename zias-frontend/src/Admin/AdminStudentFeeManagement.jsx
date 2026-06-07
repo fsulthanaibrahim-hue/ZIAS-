@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import API from "../api/api";
 import toast from "react-hot-toast";
 
@@ -38,7 +38,12 @@ function AdminStudentFeeManagement() {
   const [reportData, setReportData] = useState(null);
   const [generatingReport, setGeneratingReport] = useState(false);
 
+  const fetchedRef = useRef(false);
+
   const fetchData = async () => {
+    if (fetchedRef.current) return;
+    fetchedRef.current = true;
+    
     setLoading(true);
     try {
       const [studentsRes, feeRes, studentFeesRes] = await Promise.all([
@@ -76,6 +81,15 @@ function AdminStudentFeeManagement() {
     } finally {
       setLoading(false);
     }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const handleRefresh = () => {
+    fetchedRef.current = false;
+    fetchData();
   };
 
   const getStudentFeeInfo = (student) => {
@@ -156,6 +170,7 @@ function AdminStudentFeeManagement() {
       setShowEditModal(false);
       setEditingStudent(null);
       toast.success("Student updated successfully");
+      fetchedRef.current = false;
       await fetchData();
       
     } catch (err) {
@@ -179,6 +194,7 @@ function AdminStudentFeeManagement() {
       
       if (response.data) {
         toast.success(response.data.message || "Fee applied successfully to all students");
+        fetchedRef.current = false;
         await fetchData();
       }
     } catch (err) {
@@ -248,6 +264,7 @@ function AdminStudentFeeManagement() {
       setShowPaymentModal(false);
       setPaymentStudent(null);
       setPaymentData({ amount: "", payment_date: "", payment_method: "cash", notes: "" });
+      fetchedRef.current = false;
       await fetchData();
       
     } catch (err) {
@@ -358,6 +375,7 @@ function AdminStudentFeeManagement() {
     try {
       await API.delete(`/student-fees/${feeInfo.studentFeeId}/`);
       toast.success("Fee record deleted successfully");
+      fetchedRef.current = false;
       await fetchData();
     } catch (err) {
       console.error("Delete error:", err);
@@ -366,10 +384,6 @@ function AdminStudentFeeManagement() {
       setApplying(false);
     }
   };
-
-  useEffect(() => {
-    fetchData();
-  }, []);
 
   const filteredStudents = students.filter((s) => {
     const searchLower = search.toLowerCase();
@@ -423,42 +437,33 @@ function AdminStudentFeeManagement() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
-        {/* Header */}
-        <div className="mb-6 sm:mb-8">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">Student Fee Management</h1>
-              <p className="text-xs sm:text-sm text-gray-500 mt-1">Manage student fees, track payments, and generate reports</p>
-            </div>
-            
-            {/* Mobile Menu Toggle */}
-            <div className="sm:hidden">
-              <button
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-700 text-sm font-medium flex items-center justify-center gap-2"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-                Actions
-              </button>
-            </div>
-            
-            {/* Action Buttons */}
-            <div className={`${mobileMenuOpen ? 'flex' : 'hidden'} sm:flex flex-col sm:flex-row gap-3`}>
-              <button onClick={generateFeeReport} disabled={generatingReport} className="flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-all duration-200 shadow-sm disabled:opacity-50">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                Fee Reports
-              </button>
-              <button onClick={fetchData} className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 transition-all duration-200">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                Refresh
-              </button>
-            </div>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
+          <div>
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">Student Fee Management</h1>
+            <p className="text-xs sm:text-sm text-gray-500 mt-1">Manage student fees, track payments, and generate reports</p>
+          </div>
+          
+          <div className="sm:hidden">
+            <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-700 text-sm font-medium flex items-center justify-center gap-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+              Actions
+            </button>
+          </div>
+          
+          <div className={`${mobileMenuOpen ? 'flex' : 'hidden'} sm:flex flex-col sm:flex-row gap-3`}>
+            <button onClick={generateFeeReport} disabled={generatingReport} className="flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-all duration-200 shadow-sm disabled:opacity-50">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+              Fee Reports
+            </button>
+            <button onClick={handleRefresh} className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 transition-all duration-200">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+              Refresh
+            </button>
           </div>
         </div>
 
-        {/* Stats Cards - Responsive Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 sm:mb-8">
           <div className="bg-white rounded-xl border border-gray-100 p-4 sm:p-5 shadow-sm hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between">
@@ -486,7 +491,6 @@ function AdminStudentFeeManagement() {
           </div>
         </div>
 
-        {/* Search */}
         <div className="mb-6">
           <div className="relative max-w-md w-full">
             <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
@@ -494,7 +498,6 @@ function AdminStudentFeeManagement() {
           </div>
         </div>
 
-        {/* Desktop Table View */}
         <div className="hidden lg:block bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -514,36 +517,62 @@ function AdminStudentFeeManagement() {
                   const feeInfo = getStudentFeeInfo(student);
                   return (
                     <tr key={student.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-4 py-3"><div><p className="font-medium text-gray-900 text-sm">{student.name}</p><p className="text-xs text-gray-500">{student.email}</p><p className="text-xs text-gray-400 mt-0.5">{student.course || "No Course"}</p></div></td>
+                      <td className="px-4 py-3">
+                        <div>
+                          <p className="font-medium text-gray-900 text-sm">{student.name}</p>
+                          <p className="text-xs text-gray-500">{student.email}</p>
+                          <p className="text-xs text-gray-400 mt-0.5">{student.course || "No Course"}</p>
+                        </div>
+                      </td>
                       <td className="px-4 py-3 text-right font-semibold text-gray-900 text-sm">{feeInfo.totalAmount > 0 ? formatCurrency(feeInfo.totalAmount) : "—"}</td>
                       <td className="px-4 py-3 text-right text-emerald-600 font-medium text-sm">{feeInfo.paidAmount > 0 ? formatCurrency(feeInfo.paidAmount) : "—"}</td>
                       <td className="px-4 py-3 text-right text-rose-600 font-medium text-sm">{feeInfo.pendingAmount > 0 ? formatCurrency(feeInfo.pendingAmount) : "—"}</td>
                       <td className="px-4 py-3 text-right text-amber-600 font-medium text-sm">{feeInfo.weekBackAmount > 0 ? formatCurrency(feeInfo.weekBackAmount) : "—"}</td>
-                      <td className="px-4 py-3 text-center"><span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${getFeeStatusBadge(feeInfo.feeStatus)}`}>{feeInfo.feeStatus}</span></td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${getFeeStatusBadge(feeInfo.feeStatus)}`}>
+                          {feeInfo.feeStatus}
+                        </span>
+                      </td>
                       <td className="px-4 py-3 text-center">
                         <div className="flex items-center justify-center gap-1">
-                          <button onClick={() => handleEditClick(student)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Edit"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></button>
-                          <button onClick={() => { setPaymentStudent(student); setShowPaymentModal(true); }} className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" title="Add Payment"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg></button>
-                          <button onClick={() => viewPaymentHistory(student)} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="History"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg></button>
-                          <button onClick={() => handleDeleteStudentFee(student)} className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors" title="Delete"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                          <button onClick={() => handleEditClick(student)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                          </button>
+                          <button onClick={() => { setPaymentStudent(student); setShowPaymentModal(true); }} className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" title="Add Payment">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                          </button>
+                          <button onClick={() => viewPaymentHistory(student)} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="History">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                          </button>
+                          <button onClick={() => handleDeleteStudentFee(student)} className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors" title="Delete">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                          </button>
                         </div>
                       </td>
                     </tr>
                   );
                 })}
                 {filteredStudents.length === 0 && (
-                  <tr><td colSpan="7" className="text-center py-12 text-gray-500"><svg className="w-12 h-12 mx-auto text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>No students found</td></tr>
+                  <tr key="empty">
+                    <td colSpan="7" className="text-center py-12 text-gray-500">
+                      <svg className="w-12 h-12 mx-auto text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      No students found
+                    </td>
+                  </tr>
                 )}
               </tbody>
             </table>
           </div>
         </div>
 
-        {/* Mobile Card View */}
         <div className="lg:hidden space-y-3">
           {filteredStudents.length === 0 ? (
             <div className="bg-white rounded-xl p-8 text-center text-gray-500">
-              <svg className="w-12 h-12 mx-auto text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              <svg className="w-12 h-12 mx-auto text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
               No students found
             </div>
           ) : (
@@ -568,9 +597,15 @@ function AdminStudentFeeManagement() {
                   </div>
                   
                   <div className="flex gap-2 pt-2 border-t border-gray-100">
-                    <button onClick={() => handleEditClick(student)} className="flex-1 flex items-center justify-center gap-1 px-3 py-2 text-blue-600 hover:text-white hover:bg-blue-600 border border-blue-200 rounded-lg transition-colors text-xs"><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>Edit</button>
-                    <button onClick={() => { setPaymentStudent(student); setShowPaymentModal(true); }} className="flex-1 flex items-center justify-center gap-1 px-3 py-2 text-emerald-600 hover:text-white hover:bg-emerald-600 border border-emerald-200 rounded-lg transition-colors text-xs"><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>Pay</button>
-                    <button onClick={() => viewPaymentHistory(student)} className="flex-1 flex items-center justify-center gap-1 px-3 py-2 text-indigo-600 hover:text-white hover:bg-indigo-600 border border-indigo-200 rounded-lg transition-colors text-xs"><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>History</button>
+                    <button onClick={() => handleEditClick(student)} className="flex-1 flex items-center justify-center gap-1 px-3 py-2 text-blue-600 hover:text-white hover:bg-blue-600 border border-blue-200 rounded-lg transition-colors text-xs">
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>Edit
+                    </button>
+                    <button onClick={() => { setPaymentStudent(student); setShowPaymentModal(true); }} className="flex-1 flex items-center justify-center gap-1 px-3 py-2 text-emerald-600 hover:text-white hover:bg-emerald-600 border border-emerald-200 rounded-lg transition-colors text-xs">
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>Pay
+                    </button>
+                    <button onClick={() => viewPaymentHistory(student)} className="flex-1 flex items-center justify-center gap-1 px-3 py-2 text-indigo-600 hover:text-white hover:bg-indigo-600 border border-indigo-200 rounded-lg transition-colors text-xs">
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>History
+                    </button>
                   </div>
                 </div>
               );
@@ -579,11 +614,13 @@ function AdminStudentFeeManagement() {
         </div>
       </div>
 
-      {/* Edit Modal */}
       {showEditModal && editingStudent && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowEditModal(false)}>
           <div className="bg-white rounded-xl w-full max-w-md p-5 sm:p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4"><h2 className="text-lg sm:text-xl font-bold text-gray-900">Edit Student Fee</h2><button onClick={() => setShowEditModal(false)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button></div>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg sm:text-xl font-bold text-gray-900">Edit Student Fee</h2>
+              <button onClick={() => setShowEditModal(false)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+            </div>
             <p className="text-sm text-gray-600 mb-4 pb-3 border-b break-words">{editingStudent.name}</p>
             <div className="space-y-4">
               <div><label className="block text-sm font-medium text-gray-700 mb-1">Total Amount (₹)</label><input type="number" step="0.01" value={editFormData.total_amount} onChange={(e) => setEditFormData({...editFormData, total_amount: e.target.value})} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm" /></div>
@@ -591,16 +628,21 @@ function AdminStudentFeeManagement() {
               <div><label className="block text-sm font-medium text-gray-700 mb-1">Week Back Amount (₹)</label><input type="number" step="0.01" value={editFormData.week_back_amount} onChange={(e) => setEditFormData({...editFormData, week_back_amount: e.target.value})} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm" /></div>
               <div><label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={editFormData.agreement_signed} onChange={(e) => setEditFormData({...editFormData, agreement_signed: e.target.checked})} className="w-4 h-4 text-emerald-600 rounded" /><span className="text-sm text-gray-700">Agreement Signed</span></label></div>
             </div>
-            <div className="flex gap-3 mt-6"><button onClick={handleUpdateStudentFee} disabled={applying} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-xl font-medium transition text-sm">Update</button><button onClick={() => setShowEditModal(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2.5 rounded-xl font-medium transition text-sm">Cancel</button></div>
+            <div className="flex gap-3 mt-6">
+              <button onClick={handleUpdateStudentFee} disabled={applying} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-xl font-medium transition text-sm">Update</button>
+              <button onClick={() => setShowEditModal(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2.5 rounded-xl font-medium transition text-sm">Cancel</button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Add Payment Modal */}
       {showPaymentModal && paymentStudent && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowPaymentModal(false)}>
           <div className="bg-white rounded-xl w-full max-w-md p-5 sm:p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4"><h2 className="text-lg sm:text-xl font-bold text-gray-900">Add Payment</h2><button onClick={() => setShowPaymentModal(false)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button></div>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg sm:text-xl font-bold text-gray-900">Add Payment</h2>
+              <button onClick={() => setShowPaymentModal(false)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+            </div>
             <p className="text-sm text-gray-600 mb-4 pb-3 border-b break-words">{paymentStudent.name}</p>
             <div className="space-y-4">
               <div><label className="block text-sm font-medium text-gray-700 mb-1">Amount (₹)</label><input type="number" step="0.01" value={paymentData.amount} onChange={(e) => setPaymentData({...paymentData, amount: e.target.value})} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm" required /></div>
@@ -608,28 +650,46 @@ function AdminStudentFeeManagement() {
               <div><label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label><select value={paymentData.payment_method} onChange={(e) => setPaymentData({...paymentData, payment_method: e.target.value})} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"><option value="cash">Cash</option><option value="card">Card</option><option value="bank_transfer">Bank Transfer</option><option value="online">Online</option></select></div>
               <div><label className="block text-sm font-medium text-gray-700 mb-1">Notes (Optional)</label><textarea value={paymentData.notes} onChange={(e) => setPaymentData({...paymentData, notes: e.target.value})} rows="2" className="w-full border border-gray-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm" /></div>
             </div>
-            <div className="flex gap-3 mt-6"><button onClick={handleAddPayment} disabled={addingPayment} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-xl font-medium transition text-sm">Add Payment</button><button onClick={() => setShowPaymentModal(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2.5 rounded-xl font-medium transition text-sm">Cancel</button></div>
+            <div className="flex gap-3 mt-6">
+              <button onClick={handleAddPayment} disabled={addingPayment} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-xl font-medium transition text-sm">Add Payment</button>
+              <button onClick={() => setShowPaymentModal(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2.5 rounded-xl font-medium transition text-sm">Cancel</button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Payment History Modal */}
       {showPaymentHistory && selectedStudent && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowPaymentHistory(false)}>
           <div className="bg-white rounded-xl w-full max-w-3xl max-h-[85vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center px-4 sm:px-6 py-4 border-b bg-gray-50"><h2 className="text-base sm:text-lg font-semibold text-gray-900">Payment History - {selectedStudent.name}</h2><button onClick={() => setShowPaymentHistory(false)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button></div>
+            <div className="flex justify-between items-center px-4 sm:px-6 py-4 border-b bg-gray-50">
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900">Payment History - {selectedStudent.name}</h2>
+              <button onClick={() => setShowPaymentHistory(false)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+            </div>
             <div className="overflow-y-auto flex-1 p-4 sm:p-6">
-              {historyLoading ? (<div className="text-center py-8">Loading payments...</div>) : paymentHistory.length === 0 ? (<div className="text-center py-8 text-gray-500">No payment records found.</div>) : (
+              {historyLoading ? (
+                <div className="text-center py-8">Loading payments...</div>
+              ) : paymentHistory.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">No payment records found.</div>
+              ) : (
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50"><tr><th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Amount</th><th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th><th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Method</th><th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Receipt</th></tr></thead>
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Method</th>
+                        <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Receipt</th>
+                      </tr>
+                    </thead>
                     <tbody className="divide-y divide-gray-100">
                       {paymentHistory.map((p) => (
                         <tr key={p.id} className="hover:bg-gray-50">
                           <td className="px-3 py-2 text-sm font-medium text-gray-900">{formatCurrency(p.amount)}</td>
                           <td className="px-3 py-2 text-sm text-gray-600">{formatDate(p.payment_date)}</td>
                           <td className="px-3 py-2 text-sm capitalize text-gray-600">{p.payment_method || "—"}</td>
-                          <td className="px-3 py-2 text-center"><button onClick={() => generateReceipt(p)} className="text-indigo-600 hover:text-indigo-700 text-sm font-medium">📄 Receipt</button></td>
+                          <td className="px-3 py-2 text-center">
+                            <button onClick={() => generateReceipt(p)} className="text-indigo-600 hover:text-indigo-700 text-sm font-medium">📄 Receipt</button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -637,18 +697,25 @@ function AdminStudentFeeManagement() {
                 </div>
               )}
             </div>
-            <div className="px-4 sm:px-6 py-4 border-t bg-gray-50 flex justify-end"><button onClick={() => setShowPaymentHistory(false)} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-sm font-medium transition">Close</button></div>
+            <div className="px-4 sm:px-6 py-4 border-t bg-gray-50 flex justify-end">
+              <button onClick={() => setShowPaymentHistory(false)} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-sm font-medium transition">Close</button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Fee Report Modal */}
       {showReportModal && reportData && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowReportModal(false)}>
           <div className="bg-white rounded-xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center px-4 sm:px-6 py-4 border-b bg-gray-50"><h2 className="text-base sm:text-lg font-semibold text-gray-900">Fee Report</h2><button onClick={() => setShowReportModal(false)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button></div>
+            <div className="flex justify-between items-center px-4 sm:px-6 py-4 border-b bg-gray-50">
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900">Fee Report</h2>
+              <button onClick={() => setShowReportModal(false)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+            </div>
             <div className="overflow-y-auto flex-1 p-4 sm:p-6">
-              <div className="text-center mb-6"><h3 className="text-lg sm:text-xl font-bold text-gray-900">ZIAS - Fee Report</h3><p className="text-gray-500 text-xs sm:text-sm">Generated on: {new Date(reportData.generated_on).toLocaleString()}</p></div>
+              <div className="text-center mb-6">
+                <h3 className="text-lg sm:text-xl font-bold text-gray-900">ZIAS - Fee Report</h3>
+                <p className="text-gray-500 text-xs sm:text-sm">Generated on: {new Date(reportData.generated_on).toLocaleString()}</p>
+              </div>
               <div className="grid grid-cols-2 gap-3 mb-6">
                 <div className="bg-blue-50 rounded-xl p-3"><p className="text-gray-600 text-xs">Total Students</p><p className="text-lg sm:text-xl font-bold text-blue-700">{reportData.total_students}</p></div>
                 <div className="bg-purple-50 rounded-xl p-3"><p className="text-gray-600 text-xs">Students with Fee</p><p className="text-lg sm:text-xl font-bold text-purple-700">{reportData.students_with_fee}</p></div>
@@ -663,7 +730,9 @@ function AdminStudentFeeManagement() {
               </div>
               <div className="mt-6 bg-orange-50 rounded-xl p-4 text-center"><p className="text-gray-600 text-sm">Collection Rate</p><p className="text-2xl sm:text-3xl font-bold text-orange-600">{reportData.collection_rate}%</p></div>
             </div>
-            <div className="px-4 sm:px-6 py-4 border-t bg-gray-50 flex justify-end"><button onClick={() => setShowReportModal(false)} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-sm font-medium transition">Close</button></div>
+            <div className="px-4 sm:px-6 py-4 border-t bg-gray-50 flex justify-end">
+              <button onClick={() => setShowReportModal(false)} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-sm font-medium transition">Close</button>
+            </div>
           </div>
         </div>
       )}

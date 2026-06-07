@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import toast from "react-hot-toast";
 
@@ -19,6 +19,9 @@ function AdminFeeStructure() {
     number_of_months: 1,
     is_active: true,
   });
+  
+  // Add ref to prevent double API calls
+  const fetchedRef = useRef(false);
 
   const fetchFeeStructures = async () => {
     try {
@@ -34,7 +37,10 @@ function AdminFeeStructure() {
     }
   };
 
+  // Use ref to ensure single fetch
   useEffect(() => {
+    if (fetchedRef.current) return;
+    fetchedRef.current = true;
     fetchFeeStructures();
   }, []);
 
@@ -205,10 +211,10 @@ function AdminFeeStructure() {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {feeStructures.length === 0 ? (
-                    <tr>
+                    <tr key="empty">
                       <td colSpan="7" className="px-6 py-12 text-center text-gray-500">
                         No fee structures found. Click "Add Fee Structure" to create one.
-                      </td>
+                       </td>
                     </tr>
                   ) : (
                     feeStructures.map((fs) => {
@@ -221,7 +227,7 @@ function AdminFeeStructure() {
                         <tr key={fs.id} className="hover:bg-gray-50 transition-colors">
                           <td className="px-6 py-4">
                             <p className="font-medium text-gray-900">{fs.name}</p>
-                          </td>
+                           </td>
                           <td className="px-6 py-4">
                             {discount > 0 ? (
                               <>
@@ -231,20 +237,20 @@ function AdminFeeStructure() {
                             ) : (
                               <span className="font-medium text-gray-900">₹{total.toLocaleString()}</span>
                             )}
-                          </td>
+                           </td>
                           <td className="px-6 py-4">
                             {discount > 0 ? (
                               <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">{discount}% OFF</span>
                             ) : (
                               <span className="text-gray-400">—</span>
                             )}
-                          </td>
+                           </td>
                           <td className="px-6 py-4 text-gray-700">
                             {fs.number_of_months} Month{fs.number_of_months !== 1 ? 's' : ''}
-                          </td>
+                           </td>
                           <td className="px-6 py-4 font-medium text-emerald-600">
                             ₹{perMonth.toFixed(2)} / month
-                          </td>
+                           </td>
                           <td className="px-6 py-4">
                             <button
                               onClick={() => toggleStatus(fs)}
@@ -254,7 +260,7 @@ function AdminFeeStructure() {
                             >
                               {fs.is_active ? "Active" : "Inactive"}
                             </button>
-                          </td>
+                           </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center justify-center gap-2">
                               <button
@@ -276,8 +282,8 @@ function AdminFeeStructure() {
                                 </svg>
                               </button>
                             </div>
-                          </td>
-                        </tr>
+                           </td>
+                         </tr>
                       );
                     })
                   )}
