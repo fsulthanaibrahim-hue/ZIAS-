@@ -18,7 +18,7 @@ from .models import (
     StudentModule, ContactMessage, StudentWeekReview, WeekUpdate, ReviewFolder,
     ChatRoom, ChatMessage, CourseStatus, Notification, StudentDocument, MentorDocument,
     ReviewAssignment, WeeklySubmission, AttendanceRecord, Accounts, FeePayment, FeeStructure,
-    InstallmentSchedule, StudentFee, StudentFeePayment,
+    InstallmentSchedule, StudentFee, StudentFeePayment, TaskCompletion,
 )
 
 
@@ -285,7 +285,17 @@ class DaySerializer(serializers.ModelSerializer):
 class TaskSerializer(serializers.ModelSerializer):
     class Meta:
         model = Task
-        fields = ['id', 'day', 'title', 'description', 'order']
+        fields = ['id', 'title', 'description', 'day', 'order']
+
+
+
+
+class TaskCompletionSerializer(serializers.ModelSerializer):
+    task_title = serializers.CharField(source='task.title', read_only=True)
+    
+    class Meta:
+        model = TaskCompletion
+        fields = ['id', 'student', 'task', 'task_title', 'completed', 'completed_at', 'updated_at']
 
 
 # ----------------------------

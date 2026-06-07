@@ -6,6 +6,9 @@ import toast from "react-hot-toast";
 
 const DEFAULT_REVIEW_SHEET_URL = "";
 
+// Global cache outside component - persists across renders
+const globalModuleCache = new Map();
+
 // --------------------------------------------------------------
 // Modal for adding week folder
 // --------------------------------------------------------------
@@ -155,6 +158,7 @@ function MentorReviewFolders() {
   const [showAddWeekModal, setShowAddWeekModal] = useState(false);
   const [creatingWeek, setCreatingWeek] = useState(false);
   const [refreshingDocId, setRefreshingDocId] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Refs to prevent duplicate API calls
   const initialDataFetched = useRef(false);
@@ -175,6 +179,153 @@ function MentorReviewFolders() {
       if (err.response?.status !== 403) console.error("Failed to fetch reviewers", err);
     }
   }, []);
+
+  // ----- OPTIMIZED: Create folders using BATCH API -----
+  const handleAddWeekForBatch = async (folderName, reviewDate, selectedStudentIds) => {
+    setCreatingWeek(true);
+    
+    try {
+      const selectedStudents = studentsList.filter(s => selectedStudentIds.includes(s.id));
+      
+      // Step 1: Calculate next week numbers for all students
+      const weekResults = await Promise.all(selectedStudentIds.map(async (studentId) => {
+        const studentReviews = allFolders.filter(f => f.student === studentId && f.week != null);
+        let maxWeek = 0;
+        let previousReviewSheet = "";
+        
+        if (studentReviews.length > 0) {
+          const sorted = [...studentReviews].sort((a, b) => parseInt(b.week, 10) - parseInt(a.week, 10));
+          const latest = sorted[0];
+          maxWeek = parseInt(latest.week, 10);
+          previousReviewSheet = latest.review_sheet || "";
+        }
+        
+        return { studentId, newWeek: maxWeek + 1, previousReviewSheet };
+      }));
+      
+      const weekMap = {};
+      weekResults.forEach(({ studentId, newWeek, previousReviewSheet }) => {
+        weekMap[studentId] = { newWeek, previousReviewSheet };
+      });
+      
+      const newWeekNumber = weekResults[0]?.newWeek || 1;
+      
+      // STEP 2: Get ALL modules for ALL students
+      let allModulesMap = {};
+      try {
+        const modulesResponse = await API.post('/batch/student-modules/', {
+          student_ids: selectedStudentIds
+        });
+        allModulesMap = modulesResponse.data;
+      } catch (batchError) {
+        console.warn("Batch endpoint not available, falling back to individual calls", batchError);
+        const individualPromises = selectedStudentIds.map(async (studentId) => {
+          const res = await API.get(`/modules/student-modules/?student_id=${studentId}`);
+          let modules = res.data.results || res.data;
+          if (!Array.isArray(modules)) modules = [];
+          return { studentId, modules };
+        });
+        const results = await Promise.all(individualPromises);
+        results.forEach(({ studentId, modules }) => {
+          allModulesMap[studentId] = modules;
+        });
+      }
+      
+      // Step 3: Prepare data for batch creation
+      const foldersToCreate = [];
+      const weekReviewsToCreate = [];
+      
+      selectedStudentIds.forEach(studentId => {
+        const student = selectedStudents.find(s => s.id === studentId);
+        const modules = allModulesMap[String(studentId)] || [];
+        const theModule = modules.find(m => Number(m.order) === Number(newWeekNumber));
+        
+        let workDocUrl = "";
+        if (theModule && theModule.work_document_url) {
+          workDocUrl = theModule.work_document_url;
+        } else if (theModule && theModule.content) {
+          const urlMatch = theModule.content.match(/https?:\/\/[^\s]+/);
+          workDocUrl = urlMatch ? urlMatch[0] : "";
+        }
+        
+        foldersToCreate.push({
+          student: studentId,
+          week_folder: folderName,
+          week: String(weekMap[studentId].newWeek),
+          course: student?.course || "—",
+          review_date: reviewDate,
+          work_documents: workDocUrl,
+          review_sheet: weekMap[studentId].previousReviewSheet || DEFAULT_REVIEW_SHEET_URL,
+          industry_expert: "",
+          meeting_link: "",
+          is_done: false,
+        });
+        
+        if (theModule) {
+          weekReviewsToCreate.push({
+            student: studentId,
+            module: theModule.id,
+            task_status: "Pending",
+            feedback: "",
+            reviewer_name: "",
+            advisor_name: "",
+            extra_workouts: "Not Completed",
+            review_date: reviewDate,
+            english_score: 0,
+            extra_workouts_mark: 0,
+            progress_video: "",
+            progress_video_mark: 0,
+            review_score: 0,
+            english_review: "",
+          });
+        }
+      });
+      
+      // Create folders
+      let successCount = 0;
+      try {
+        const foldersResponse = await API.post('/batch/review-folders/', {
+          folders: foldersToCreate
+        });
+        successCount = foldersResponse.data.success_count || 0;
+      } catch (batchError) {
+        const individualPromises = foldersToCreate.map(folderData =>
+          API.post("/review-folders/", folderData)
+        );
+        const results = await Promise.allSettled(individualPromises);
+        successCount = results.filter(r => r.status === 'fulfilled').length;
+      }
+      
+      // Create week reviews
+      if (weekReviewsToCreate.length > 0) {
+        try {
+          await API.post('/batch/week-reviews/', {
+            reviews: weekReviewsToCreate
+          });
+        } catch (batchError) {
+          const individualPromises = weekReviewsToCreate.map(reviewData =>
+            API.post("/week-review/", reviewData)
+          );
+          await Promise.allSettled(individualPromises);
+        }
+      }
+      
+      toast.success(`✅ Created ${successCount} week folder(s) for "${folderName}"`);
+      
+      setShowAddWeekModal(false);
+      
+      // Refresh data in background without blocking
+      setTimeout(() => {
+        refreshData();
+      }, 500);
+      
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to create week folders");
+    } finally {
+      setCreatingWeek(false);
+    }
+  };
 
   // ----- Fetch mentor's students and folders together (once) -----
   const fetchMentorData = useCallback(async () => {
@@ -220,10 +371,14 @@ function MentorReviewFolders() {
     await Promise.all([fetchReviewers(), fetchMentorData()]);
   }, [fetchReviewers, fetchMentorData]);
 
-  // ----- Refresh function -----
+  // ----- Refresh function (clears cache) -----
   const refreshData = useCallback(async () => {
     if (refreshInProgress.current) return;
     refreshInProgress.current = true;
+    
+    // Clear module cache
+    globalModuleCache.clear();
+    
     mentorDataFetched.current = false;
     await fetchMentorData();
     refreshInProgress.current = false;
@@ -279,16 +434,30 @@ function MentorReviewFolders() {
   // ----- Helper functions -----
   const getWorkDocForWeek = async (studentId, weekNumber) => {
     try {
-      const modulesRes = await API.get(`/modules/student-modules/?student_id=${studentId}`);
-      let modules = modulesRes.data.results || modulesRes.data;
-      if (!Array.isArray(modules)) modules = [];
-      const theModule = modules.find(m => Number(m.order) === Number(weekNumber));
-      if (theModule && theModule.work_document_url) return theModule.work_document_url;
-      if (theModule && theModule.content) {
-        const urlMatch = theModule.content.match(/https?:\/\/[^\s]+/);
-        if (urlMatch) return urlMatch[0];
+      try {
+        const response = await API.post('/batch/student-modules/', {
+          student_ids: [studentId]
+        });
+        const modules = response.data[String(studentId)] || [];
+        const theModule = modules.find(m => Number(m.order) === Number(weekNumber));
+        if (theModule && theModule.work_document_url) return theModule.work_document_url;
+        if (theModule && theModule.content) {
+          const urlMatch = theModule.content.match(/https?:\/\/[^\s]+/);
+          if (urlMatch) return urlMatch[0];
+        }
+        return "";
+      } catch {
+        const modulesRes = await API.get(`/modules/student-modules/?student_id=${studentId}`);
+        let modules = modulesRes.data.results || modulesRes.data;
+        if (!Array.isArray(modules)) modules = [];
+        const theModule = modules.find(m => Number(m.order) === Number(weekNumber));
+        if (theModule && theModule.work_document_url) return theModule.work_document_url;
+        if (theModule && theModule.content) {
+          const urlMatch = theModule.content.match(/https?:\/\/[^\s]+/);
+          if (urlMatch) return urlMatch[0];
+        }
+        return "";
       }
-      return "";
     } catch {
       return "";
     }
@@ -323,9 +492,11 @@ function MentorReviewFolders() {
       return;
     }
     try {
-      for (const entry of entries) {
-        await API.patch(`/review-folders/${entry.id}/`, { week_folder: newName.trim() });
-      }
+      const updatePromises = entries.map(entry =>
+        API.patch(`/review-folders/${entry.id}/`, { week_folder: newName.trim() })
+      );
+      await Promise.all(updatePromises);
+      
       if (selectedFolder === oldName) setSelectedFolder(newName.trim());
       await refreshData();
       toast.success(`Folder renamed to "${newName}"`);
@@ -340,9 +511,9 @@ function MentorReviewFolders() {
     const folderData = folderList.find(f => f.name === folderName);
     const entries = folderData?.entries || [];
     try {
-      for (const entry of entries) {
-        await API.delete(`/review-folders/${entry.id}/`);
-      }
+      const deletePromises = entries.map(entry => API.delete(`/review-folders/${entry.id}/`));
+      await Promise.all(deletePromises);
+      
       if (selectedFolder === folderName) setSelectedFolder(null);
       await refreshData();
       toast.success(`Folder "${folderName}" deleted.`);
@@ -352,93 +523,7 @@ function MentorReviewFolders() {
     }
   };
 
-  const ensureWeekReviewExists = async (studentId, weekNumber) => {
-    try {
-      const modulesRes = await API.get(`/modules/student-modules/?student_id=${studentId}`);
-      const modules = modulesRes.data.results || modulesRes.data;
-      const moduleObj = modules.find(m => m.order === weekNumber);
-      if (!moduleObj) return false;
-      const moduleId = moduleObj.id;
-      try {
-        const checkRes = await API.get(`week-review/${moduleId}/?student_id=${studentId}`);
-        if (checkRes.data && checkRes.data.id) return true;
-      } catch (err) {
-        if (err.response?.status !== 404) return false;
-      }
-      await API.post("/week-review/", {
-        student: studentId,
-        module: moduleId,
-        task_status: "Pending",
-        feedback: "",
-        reviewer_name: "",
-        advisor_name: "",
-        extra_workouts: "Not Completed",
-        review_date: new Date().toISOString().split("T")[0],
-        english_score: 0,
-        extra_workouts_mark: 0,
-        progress_video: "",
-        progress_video_mark: 0,
-        review_score: 0,
-        english_review: "",
-      });
-      return true;
-    } catch (err) {
-      console.error(err);
-      return false;
-    }
-  };
-
-  const handleAddWeekForBatch = async (folderName, reviewDate, selectedStudentIds) => {
-    setCreatingWeek(true);
-    let successCount = 0;
-    let errorCount = 0;
-    for (const studentId of selectedStudentIds) {
-      try {
-        const student = studentsList.find(s => s.id === studentId);
-        const currentCourse = student?.course || "—";
-        const studentReviews = allFolders.filter(f => f.student === studentId && f.week != null);
-        let maxWeek = 0;
-        let previousReviewSheet = "";
-        if (studentReviews.length > 0) {
-          const sorted = [...studentReviews].sort((a, b) => parseInt(b.week,10) - parseInt(a.week,10));
-          const latest = sorted[0];
-          maxWeek = parseInt(latest.week,10);
-          previousReviewSheet = latest.review_sheet || "";
-        }
-        let newWeek = maxWeek + 1;
-        const workDocUrl = await getWorkDocForWeek(studentId, newWeek);
-        let reviewSheetValue = previousReviewSheet || DEFAULT_REVIEW_SHEET_URL;
-        await API.post("/review-folders/", {
-          student: studentId,
-          week_folder: folderName,
-          week: String(newWeek),
-          course: currentCourse,
-          review_date: reviewDate,
-          work_documents: workDocUrl,
-          review_sheet: reviewSheetValue,
-          industry_expert: "",
-          meeting_link: "",
-          is_done: false,
-        });
-        await ensureWeekReviewExists(studentId, newWeek);
-        successCount++;
-      } catch (err) {
-        errorCount++;
-        console.error(err);
-      }
-    }
-    if (successCount > 0) {
-      toast.success(`✅ Created ${successCount} week folder(s) for "${folderName}"`);
-    }
-    if (errorCount > 0) {
-      toast.error(`⚠️ Failed to create ${errorCount} folder(s)`);
-    }
-    setShowAddWeekModal(false);
-    await refreshData();
-    setCreatingWeek(false);
-  };
-
-  // ----- Entry actions -----
+  // ----- Entry actions - OPTIMIZED -----
   const startEdit = (entry) => {
     setEditingId(entry.id);
     setEditData({
@@ -462,12 +547,18 @@ function MentorReviewFolders() {
     setEditData(prev => ({ ...prev, [name]: type === "checkbox" ? checked : value }));
   };
 
+  // ✅ OPTIMIZED SAVE - Immediate response with background refresh
   const saveEdit = async (id) => {
+    if (isSaving) return;
+    
+    setIsSaving(true);
+    
     try {
       const original = rawEntries.find(e => e.id === id);
       if (!original) {
         toast.error("Original entry not found");
         cancelEdit();
+        setIsSaving(false);
         return;
       }
       
@@ -498,38 +589,98 @@ function MentorReviewFolders() {
       if (Object.keys(updateData).length === 0) {
         toast.info("No changes to save");
         cancelEdit();
+        setIsSaving(false);
         return;
       }
       
+      // Show loading toast
+      toast.loading("Saving changes...", { id: "save-toast" });
+      
+      // Update in background
       await API.patch(`/review-folders/${id}/`, updateData);
-      await refreshData();
+      
+      // Immediate optimistic update
+      setAllFolders(prev => 
+        prev.map(f => 
+          f.id === id ? { ...f, ...updateData } : f
+        )
+      );
+      
+      // Update raw entries in foldersMap
+      if (selectedFolder) {
+        const updatedEntries = rawEntries.map(entry =>
+          entry.id === id ? { ...entry, ...updateData } : entry
+        );
+        foldersMap[selectedFolder].entries = updatedEntries;
+      }
+      
+      // Dismiss loading and show success
+      toast.dismiss("save-toast");
+      toast.success("Saved successfully!");
+      
+      // Close edit mode immediately
       cancelEdit();
-      toast.success("Entry updated successfully.");
+      
+      // Refresh in background without blocking
+      setTimeout(() => {
+        refreshData();
+      }, 1000);
+      
     } catch (err) {
+      toast.dismiss("save-toast");
       console.error("Error:", err.response?.data);
       const errorMsg = err.response?.data?.detail || err.response?.data?.message || err.message;
       toast.error("Update failed: " + (typeof errorMsg === 'object' ? JSON.stringify(errorMsg) : errorMsg));
+    } finally {
+      setIsSaving(false);
     }
   };
 
   const deleteEntry = async (id) => {
-    if (window.confirm("Delete this entry?")) {
-      try {
-        await API.delete(`/review-folders/${id}/`);
-        await refreshData();
-        toast.success("Entry deleted successfully.");
-      } catch (err) {
-        toast.error("Failed to delete entry.");
+    if (!window.confirm("Delete this entry?")) return;
+    
+    try {
+      toast.loading("Deleting...", { id: "delete-toast" });
+      await API.delete(`/review-folders/${id}/`);
+      toast.dismiss("delete-toast");
+      toast.success("Entry deleted successfully.");
+      
+      // Optimistic update
+      setAllFolders(prev => prev.filter(f => f.id !== id));
+      if (selectedFolder) {
+        foldersMap[selectedFolder].entries = rawEntries.filter(entry => entry.id !== id);
       }
+      
+      // Refresh in background
+      setTimeout(() => {
+        refreshData();
+      }, 500);
+      
+    } catch (err) {
+      toast.dismiss("delete-toast");
+      toast.error("Failed to delete entry.");
     }
   };
 
   const toggleDone = async (id, newValue) => {
     try {
+      // Optimistic update
+      setAllFolders(prev => 
+        prev.map(f => 
+          f.id === id ? { ...f, is_done: newValue } : f
+        )
+      );
+      
       await API.patch(`/review-folders/${id}/`, { is_done: newValue });
-      await refreshData();
+      
     } catch (err) {
       toast.error("Failed to update status");
+      // Revert on error
+      setAllFolders(prev => 
+        prev.map(f => 
+          f.id === id ? { ...f, is_done: !newValue } : f
+        )
+      );
     }
   };
 
@@ -563,7 +714,6 @@ function MentorReviewFolders() {
       <p className="text-gray-500 text-sm mb-6">Click a folder to view/edit entries.</p>
 
       {!selectedFolder ? (
-        // Folder List View
         <div>
           <div className="mb-4 flex justify-between items-center">
             <input
@@ -610,8 +760,8 @@ function MentorReviewFolders() {
                           <button onClick={(e) => { e.stopPropagation(); editFolder(folder.name); }} className="text-blue-600 hover:text-blue-800"><Icons.Edit /></button>
                           <button onClick={(e) => { e.stopPropagation(); deleteFolder(folder.name); }} className="text-red-600 hover:text-red-800"><Icons.Delete /></button>
                         </div>
-                      </td>
-                    </tr>
+                       </td>
+                     </tr>
                   ))
                 )}
               </tbody>
@@ -619,7 +769,6 @@ function MentorReviewFolders() {
           </div>
         </div>
       ) : (
-        // Entries View
         <div>
           <div className="flex justify-between items-center mb-4">
             <button onClick={() => setSelectedFolder(null)} className="text-green-600 hover:text-green-800 flex items-center gap-1 text-sm">← Back to all folders</button>
@@ -697,7 +846,9 @@ function MentorReviewFolders() {
                       <td className="px-4 py-3 text-center">
                         {editingId === entry.id ? (
                           <div className="flex gap-2 justify-center">
-                            <button onClick={() => saveEdit(entry.id)} className="text-green-600 hover:text-green-800"><Icons.Save /></button>
+                            <button onClick={() => saveEdit(entry.id)} disabled={isSaving} className="text-green-600 hover:text-green-800 disabled:opacity-50">
+                              {isSaving ? <div className="w-4 h-4 border-2 border-green-600 border-t-transparent rounded-full animate-spin"></div> : <Icons.Save />}
+                            </button>
                             <button onClick={cancelEdit} className="text-gray-600 hover:text-gray-800"><Icons.Cancel /></button>
                           </div>
                         ) : (

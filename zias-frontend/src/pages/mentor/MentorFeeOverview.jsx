@@ -1,6 +1,12 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import API from "../../api/api";
 import toast from "react-hot-toast";
+
+// Cache to prevent duplicate requests
+let cachedData = null;
+let isFetching = false;
+let fetchPromise = null;
+let initialFetchDone = false;
 
 function MentorFeeOverview() {
   const [students, setStudents] = useState([]);
@@ -14,50 +20,108 @@ function MentorFeeOverview() {
   const [paymentHistory, setPaymentHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
-  // Fetch data
-  const fetchData = async () => {
+  // Fetch data - only one API call at a time
+  const fetchData = useCallback(async (forceRefresh = false) => {
+    // If force refresh, clear cache
+    if (forceRefresh) {
+      cachedData = null;
+      fetchPromise = null;
+      isFetching = false;
+    }
+    
+    // Return cached data if available
+    if (cachedData && !forceRefresh) {
+      setStudents(cachedData.students);
+      setStudentFees(cachedData.studentFees);
+      setLoading(false);
+      return;
+    }
+    
+    // If already fetching, wait for that promise
+    if (fetchPromise && !forceRefresh) {
+      try {
+        const data = await fetchPromise;
+        setStudents(data.students);
+        setStudentFees(data.studentFees);
+        setLoading(false);
+        return;
+      } catch (err) {
+        console.error("Fetch error:", err);
+        setLoading(false);
+        return;
+      }
+    }
+    
     setLoading(true);
+    
+    fetchPromise = (async () => {
+      try {
+        const token = localStorage.getItem("access_token");
+        const BASE_URL = "http://127.0.0.1:8000";
+        
+        // Fetch mentor and students in parallel
+        const [mentorRes, studentsRes] = await Promise.all([
+          fetch(`${BASE_URL}/api/mentors/me/`, {
+            headers: { "Authorization": `Bearer ${token}` }
+          }),
+          fetch(`${BASE_URL}/api/students/`, {
+            headers: { "Authorization": `Bearer ${token}` }
+          })
+        ]);
+        
+        const mentor = await mentorRes.json();
+        const mentorId = mentor.id;
+        
+        const studentsData = await studentsRes.json();
+        const allStudents = studentsData.results || studentsData;
+        
+        // Filter students by mentor
+        const mentorStudents = allStudents.filter(s => s.mentor === mentorId);
+        
+        const mappedStudents = mentorStudents.map(s => ({
+          id: s.id,
+          name: s.full_name || s.name || `Student ${s.id}`,
+          email: s.user?.email || s.email,
+          course: s.course,
+          week_back_amount: parseFloat(s.week_back_amount) || 0,
+          agreement_signed: s.agreement_signed || false
+        }));
+        
+        const studentFeesRes = await fetch(`${BASE_URL}/api/student-fees/`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        const feesData = await studentFeesRes.json();
+        let feesList = feesData.results || feesData;
+        const mappedFees = Array.isArray(feesList) ? feesList : [];
+        
+        const result = {
+          students: mappedStudents,
+          studentFees: mappedFees
+        };
+        
+        cachedData = result;
+        return result;
+        
+      } catch (err) {
+        console.error("Error:", err);
+        toast.error("Failed to load fee data");
+        throw err;
+      } finally {
+        fetchPromise = null;
+        isFetching = false;
+      }
+    })();
+    
     try {
-      const token = localStorage.getItem("access_token");
-      const BASE_URL = "http://127.0.0.1:8000";
-      
-      const mentorRes = await fetch(`${BASE_URL}/api/mentors/me/`, {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      const mentor = await mentorRes.json();
-      const mentorId = mentor.id;
-      
-      const studentsRes = await fetch(`${BASE_URL}/api/students/?mentor=${mentorId}`, {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      const studentsData = await studentsRes.json();
-      const allStudents = studentsData.results || studentsData;
-      
-      const mappedStudents = allStudents.map(s => ({
-        id: s.id,
-        name: s.full_name || s.name || `Student ${s.id}`,
-        email: s.user?.email || s.email,
-        course: s.course,
-        week_back_amount: parseFloat(s.week_back_amount) || 0,
-        agreement_signed: s.agreement_signed || false
-      }));
-      
-      setStudents(mappedStudents);
-      
-      const studentFeesRes = await fetch(`${BASE_URL}/api/student-fees/`, {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      const feesData = await studentFeesRes.json();
-      let feesList = feesData.results || feesData;
-      setStudentFees(Array.isArray(feesList) ? feesList : []);
-      
+      const data = await fetchPromise;
+      setStudents(data.students);
+      setStudentFees(data.studentFees);
     } catch (err) {
-      console.error("Error:", err);
-      toast.error("Failed to load fee data");
+      // Error already handled
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   const getStudentFeeInfo = (student) => {
     const studentFeeRecord = studentFees.find((sf) => sf.student === student.id);
@@ -120,9 +184,17 @@ function MentorFeeOverview() {
     }
   };
 
+  // Only fetch once on mount
   useEffect(() => {
-    fetchData();
-  }, []);
+    if (!initialFetchDone) {
+      initialFetchDone = true;
+      fetchData();
+    }
+  }, [fetchData]);
+
+  const handleRefresh = () => {
+    fetchData(true);
+  };
 
   const filteredStudents = students.filter((s) => {
     const searchLower = search.toLowerCase();
@@ -180,7 +252,7 @@ function MentorFeeOverview() {
               <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Student Fee Overview</h1>
               <p className="text-sm text-gray-500 mt-1">View student fee details and payment history</p>
             </div>
-            <button onClick={fetchData} className="flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 transition-all w-full sm:w-auto">
+            <button onClick={handleRefresh} className="flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 transition-all w-full sm:w-auto">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>

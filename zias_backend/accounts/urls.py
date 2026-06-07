@@ -85,6 +85,14 @@ from .views import (
     AccountsStudentListView, 
     AccountsStudentFeeView, 
     StudentProgressView, 
+
+
+    ModuleProgressView, 
+    TaskCompletionToggleView,
+    batch_get_student_modules,
+    batch_create_week_reviews, 
+    batch_create_review_folders,
+    batch_check_week_reviews,
     
     # Other
     ReviewerViewSet,  
@@ -188,9 +196,20 @@ urlpatterns = [
     path('attendance/check-in/', CheckInView.as_view(), name='check-in'),
     path('attendance/check-out/', CheckOutView.as_view(), name='check-out'),
     path('attendance/history/', AttendanceHistoryView.as_view(), name='attendance-history'),
+
+    # Batch endpoints for optimization
+    path('batch/student-modules/', batch_get_student_modules, name='batch-student-modules'),
+    path('batch/review-folders/', batch_create_review_folders, name='batch-review-folders'),
+    path('batch/week-reviews/', batch_create_week_reviews, name='batch-week-reviews'),
+    path('batch/week-reviews/check/', batch_check_week_reviews, name='batch-week-reviews-check'),
     
     # Notification URLs
     path('notifications/unread-count/', UnreadNotificationCountView.as_view(), name='unread-count'),
     
+     # Progress tracking endpoints
+    path('module-progress/', ModuleProgressView.as_view(), name='module-progress'),
+    path('task-completion/toggle/', TaskCompletionToggleView.as_view(), name='task-completion-toggle'),
+
+
     path('', include(router.urls)),
 ]

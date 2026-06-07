@@ -229,19 +229,42 @@ class Day(models.Model):
         return f"{self.module.title} - {self.title}"
 
 
+
+
 class Task(models.Model):
-    day = models.ForeignKey(Day, on_delete=models.CASCADE, related_name='tasks')
+    """Model for tasks within a day"""
     title = models.CharField(max_length=200)
-    description = models.TextField(blank=True)
+    description = models.TextField(blank=True, null=True)
+    day = models.ForeignKey('Day', on_delete=models.CASCADE, related_name='tasks')
     order = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
+    
     class Meta:
-        ordering = ['order']
-
+        ordering = ['order', 'id']
+    
     def __str__(self):
         return self.title
+
+
+
+
+class TaskCompletion(models.Model):
+    """Track which tasks a student has completed"""
+    student = models.ForeignKey('Student', on_delete=models.CASCADE, related_name='task_completions')
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='completions')
+    completed = models.BooleanField(default=False)
+    completed_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ['student', 'task']
+        ordering = ['-completed_at']
+    
+    def __str__(self):
+        return f"{self.student.full_name} - {self.task.title}: {'✓' if self.completed else '✗'}"
+    
+
+
 
 
 class PasswordResetToken(models.Model):
@@ -502,6 +525,8 @@ class MentorDocument(models.Model):
         super().save(*args, **kwargs)
 
 
+
+
 class ReviewAssignment(models.Model):
     STATUS_CHOICES = (
         ('assigned', 'Assigned'),
@@ -517,16 +542,20 @@ class ReviewAssignment(models.Model):
     work_documents = models.URLField(max_length=500, blank=True, null=True)
     week = models.CharField(max_length=10, blank=True, null=True)
     course = models.CharField(max_length=255, blank=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending approval')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='assigned')
     comments = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['-created_at']
+        # ✅ IMPORTANT: Ensures each week has its own assignment
+        unique_together = ['mentor', 'reviewer', 'student', 'week']
 
     def __str__(self):
-        return f"{self.reviewer.user.username} – {self.student.user.username} ({self.status})"
+        week_display = f"Week {self.week}" if self.week else ""
+        return f"{self.reviewer.user.username} – {self.student.user.username} {week_display} ({self.status})"    
+    
 
 
 class WeeklySubmission(models.Model):

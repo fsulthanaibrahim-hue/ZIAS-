@@ -1169,8 +1169,14 @@ class ReviewFolderViewSet(SafeViewSet, viewsets.ModelViewSet):
     def perform_update(self, serializer):
         old = self.get_object()
         instance = serializer.save(updated_by=self.request.user)
+        
+        # If reviewer (industry_expert) changed, sync assignment
         if old.industry_expert != instance.industry_expert and instance.industry_expert:
             self._notify_reviewer(instance)
+            self._sync_assignment(instance)
+        
+        # ✅ Also sync if week changed
+        if old.week != instance.week:
             self._sync_assignment(instance)
 
     def _notify_reviewer(self, review_folder):
@@ -1209,6 +1215,7 @@ class ReviewFolderViewSet(SafeViewSet, viewsets.ModelViewSet):
         reviewer = Reviewer.objects.filter(
             Q(full_name__iexact=expert_name) | Q(user__username__iexact=expert_name)
         ).first()
+        
         if not reviewer:
             print(f"Reviewer not found for name '{expert_name}', cannot sync assignment")
             return
@@ -1223,25 +1230,62 @@ class ReviewFolderViewSet(SafeViewSet, viewsets.ModelViewSet):
             return
 
         course = student.course or ""
+        week = review_folder.week or ""  # ✅ Get week from review_folder
 
-        assignment, created = ReviewAssignment.objects.get_or_create(
+        # ✅ CRITICAL FIX: Include week in update_or_create
+        # This prevents different weeks from overwriting each other
+        assignment, created = ReviewAssignment.objects.update_or_create(
             mentor=mentor,
             reviewer=reviewer,
             student=student,
+            week=week,  # ✅ IMPORTANT: Include week to separate different weeks
             defaults={
                 'course': course,
                 'review_sheet': review_folder.review_sheet or "",
+                'work_documents': review_folder.work_documents or "",
                 'status': 'assigned',
             }
         )
 
+        print(f"📝 Assignment {'created' if created else 'updated'} - Week: {week}, Status: {assignment.status}")
+
         if created:
+            # Send notification to MENTOR
+            Notification.objects.create(
+                user=mentor.user,
+                message=f"✅ Review assignment created for {student.full_name or student.user.username} (Week {week}) with reviewer {reviewer.full_name or reviewer.user.username}",
+                link="/mentor/assignments",
+                is_read=False
+            )
+            
+            # Send notification to REVIEWER
             Notification.objects.create(
                 user=reviewer.user,
-                message=f"New review assignment from {mentor.full_name or mentor.user.username} for student {student.full_name or student.user.username} (Course: {course})",
+                message=f"📋 New review assignment from {mentor.full_name or mentor.user.username} for student {student.full_name or student.user.username} (Course: {course}, Week: {week})",
                 link="/reviewer/assignments",
                 is_read=False
             )
+        else:
+            # Update existing assignment status if it was rejected
+            if assignment.status == 'rejected':
+                assignment.status = 'assigned'
+                assignment.save(update_fields=['status'])
+                
+                Notification.objects.create(
+                    user=reviewer.user,
+                    message=f"🔄 Review assignment re-assigned for {student.full_name or student.user.username} (Week {week}) by {mentor.full_name or mentor.user.username}",
+                    link="/reviewer/assignments",
+                    is_read=False
+                )
+            
+            # Notify mentor about updates (only if something meaningful changed)
+            Notification.objects.create(
+                user=mentor.user,
+                message=f"📝 Updated assignment for {student.full_name or student.user.username} with reviewer {reviewer.full_name or reviewer.user.username} (Week: {week})",
+                link="/mentor/assignments",
+                is_read=False
+            )
+
 
 
 # ----------------------------
@@ -1652,6 +1696,7 @@ class ReviewAssignmentViewSet(SafeViewSet, viewsets.ModelViewSet):
         )
 
         return Response({"status": "time suggested", "comments": new_comments})
+
 
 
 # ----------------------------
@@ -2721,5 +2766,388 @@ class StudentProgressView(SafeAPIView):
 
 
 
+# accounts/views.py
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from rest_framework import status
+from django.db.models import Q, Count, Case, When, Value, IntegerField
+from .models import Student, Module, Day, Task, TaskCompletion
+from .serializers import TaskCompletionSerializer
+
+class ModuleProgressView(APIView):
+    """
+    Get a student's progress for a specific module
+    GET /api/module-progress/?student=<student_id>&module=<module_id>
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        student_id = request.query_params.get('student')
+        module_id = request.query_params.get('module')
+        
+        # Validate parameters
+        if not student_id:
+            return Response(
+                {"error": "student parameter is required"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not module_id:
+            return Response(
+                {"error": "module parameter is required"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # Get the student and module
+            student = Student.objects.get(id=student_id)
+            module = Module.objects.get(id=module_id)
+            
+            # Get all days for this module
+            days = Day.objects.filter(module=module)
+            
+            # Get all tasks for all days in this module
+            tasks = Task.objects.filter(day__in=days)
+            total_tasks = tasks.count()
+            
+            # Get completed tasks for this student
+            completed_tasks = TaskCompletion.objects.filter(
+                student=student,
+                task__in=tasks,
+                completed=True
+            )
+            completed_count = completed_tasks.count()
+            
+            # Create a dictionary of task completions
+            task_completions = {}
+            for completion in completed_tasks:
+                task_completions[str(completion.task.id)] = {
+                    'completed': True,
+                    'completed_at': completion.completed_at,
+                    'title': completion.task.title
+                }
+            
+            # For tasks not completed, add false entry
+            for task in tasks:
+                if str(task.id) not in task_completions:
+                    task_completions[str(task.id)] = {
+                        'completed': False,
+                        'completed_at': None,
+                        'title': task.title
+                    }
+            
+            # Calculate overall percentage
+            overall_percentage = (completed_count / total_tasks * 100) if total_tasks > 0 else 0
+            
+            # Get module completion status
+            module_completed = completed_count == total_tasks if total_tasks > 0 else False
+            
+            # Prepare response
+            response_data = {
+                'student_id': student.id,
+                'student_name': student.full_name or student.username,
+                'student_email': student.email,
+                'module_id': module.id,
+                'module_title': module.title,
+                'module_order': module.order,
+                'total_tasks': total_tasks,
+                'completed_tasks': completed_count,
+                'overall_percentage': round(overall_percentage, 1),
+                'module_completed': module_completed,
+                'task_completions': task_completions,
+                'days_progress': {}
+            }
+            
+            # Calculate progress per day
+            for day in days:
+                day_tasks = Task.objects.filter(day=day)
+                day_total = day_tasks.count()
+                day_completed = TaskCompletion.objects.filter(
+                    student=student,
+                    task__in=day_tasks,
+                    completed=True
+                ).count()
+                
+                response_data['days_progress'][str(day.id)] = {
+                    'day_title': day.title,
+                    'total_tasks': day_total,
+                    'completed_tasks': day_completed,
+                    'percentage': round((day_completed / day_total * 100), 1) if day_total > 0 else 0
+                }
+            
+            return Response(response_data, status=status.HTTP_200_OK)
+            
+        except Student.DoesNotExist:
+            return Response(
+                {"error": f"Student with id {student_id} not found"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Module.DoesNotExist:
+            return Response(
+                {"error": f"Module with id {module_id} not found"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {"error": f"An error occurred: {str(e)}"}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+class TaskCompletionToggleView(APIView):
+    """
+    Toggle task completion status for a student
+    POST /api/task-completion/toggle/
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        student_id = request.data.get('student_id')
+        task_id = request.data.get('task_id')
+        completed = request.data.get('completed', True)
+        
+        if not student_id or not task_id:
+            return Response(
+                {"error": "student_id and task_id are required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            student = Student.objects.get(id=student_id)
+            task = Task.objects.get(id=task_id)
+            
+            completion, created = TaskCompletion.objects.get_or_create(
+                student=student,
+                task=task,
+                defaults={'completed': completed}
+            )
+            
+            if not created:
+                completion.completed = completed
+                if completed and not completion.completed_at:
+                    from django.utils import timezone
+                    completion.completed_at = timezone.now()
+                completion.save()
+            
+            serializer = TaskCompletionSerializer(completion)
+            
+            # Get updated module progress
+            module = task.day.module
+            tasks_in_module = Task.objects.filter(day__module=module)
+            total_tasks = tasks_in_module.count()
+            completed_tasks = TaskCompletion.objects.filter(
+                student=student,
+                task__in=tasks_in_module,
+                completed=True
+            ).count()
+            
+            return Response({
+                'task_completion': serializer.data,
+                'module_progress': {
+                    'total_tasks': total_tasks,
+                    'completed_tasks': completed_tasks,
+                    'percentage': round((completed_tasks / total_tasks * 100), 1) if total_tasks > 0 else 0
+                }
+            }, status=status.HTTP_200_OK)
+            
+        except Student.DoesNotExist:
+            return Response({"error": "Student not found"}, status=status.HTTP_404_NOT_FOUND)
+        except Task.DoesNotExist:
+            return Response({"error": "Task not found"}, status=status.HTTP_404_NOT_FOUND)
 
 
+# ====================== BATCH ENDPOINTS FOR OPTIMIZATION ======================
+# Add these after your existing ModuleProgressView and TaskCompletionToggleView
+
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def batch_get_student_modules(request):
+    """
+    Get modules for MULTIPLE students in ONE request.
+    This replaces 4 separate API calls with 1 call.
+    
+    Request body: { "student_ids": [30, 17, 16, 15] }
+    Response: { "30": [...modules...], "17": [...modules...] }
+    """
+    student_ids = request.data.get('student_ids', [])
+    
+    if not student_ids:
+        return Response(
+            {"error": "student_ids array is required"}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    results = {}
+    
+    for student_id in student_ids:
+        try:
+            # Get modules for this student
+            modules = Module.objects.filter(
+                studentmodule__student_id=student_id
+            ).order_by('order')
+            
+            from .serializers import ModuleSerializer
+            serializer = ModuleSerializer(modules, many=True)
+            results[str(student_id)] = serializer.data
+        except Exception as e:
+            results[str(student_id)] = []
+    
+    return Response(results)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def batch_create_review_folders(request):
+    """
+    Create MULTIPLE review folders in ONE request.
+    This replaces 4 separate POST calls with 1 call.
+    
+    Request body: { "folders": [{
+        "student": 30,
+        "week_folder": "May 1st Week",
+        "week": "5",
+        "course": "Course Name",
+        "review_date": "2025-05-01",
+        "work_documents": "https://...",
+        "review_sheet": "https://...",
+        "industry_expert": "",
+        "meeting_link": "",
+        "is_done": false
+    }, ...] }
+    """
+    folders_data = request.data.get('folders', [])
+    
+    if not folders_data:
+        return Response(
+            {"error": "folders array is required"}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    created_folders = []
+    errors = []
+    
+    for folder_data in folders_data:
+        folder_data['created_by'] = request.user.id
+        
+        from .serializers import ReviewFolderSerializer
+        serializer = ReviewFolderSerializer(data=folder_data)
+        if serializer.is_valid():
+            folder = serializer.save()
+            created_folders.append(serializer.data)
+        else:
+            errors.append({
+                'student_id': folder_data.get('student'),
+                'errors': serializer.errors
+            })
+    
+    return Response({
+        'success': created_folders,
+        'errors': errors,
+        'success_count': len(created_folders),
+        'error_count': len(errors)
+    }, status=status.HTTP_201_CREATED if created_folders else status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def batch_create_week_reviews(request):
+    """
+    Create MULTIPLE week reviews in ONE request.
+    This replaces multiple POST calls with 1 call.
+    
+    Request body: { "reviews": [{
+        "student": 30,
+        "module": 2,
+        "task_status": "Pending",
+        "feedback": "",
+        "reviewer_name": "",
+        "advisor_name": "",
+        "extra_workouts": "Not Completed",
+        "review_date": "2025-05-01",
+        "english_score": 0,
+        "extra_workouts_mark": 0,
+        "progress_video": "",
+        "progress_video_mark": 0,
+        "review_score": 0,
+        "english_review": ""
+    }, ...] }
+    """
+    reviews_data = request.data.get('reviews', [])
+    
+    if not reviews_data:
+        return Response(
+            {"error": "reviews array is required"}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    created_reviews = []
+    errors = []
+    
+    for review_data in reviews_data:
+        from .serializers import WeekReviewSerializer
+        serializer = WeekReviewSerializer(data=review_data)
+        if serializer.is_valid():
+            review = serializer.save()
+            created_reviews.append(serializer.data)
+        else:
+            errors.append({
+                'student_id': review_data.get('student'),
+                'errors': serializer.errors
+            })
+    
+    return Response({
+        'success': created_reviews,
+        'errors': errors,
+        'success_count': len(created_reviews),
+        'error_count': len(errors)
+    }, status=status.HTTP_201_CREATED if created_reviews else status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def batch_check_week_reviews(request):
+    """
+    Check if week reviews exist for multiple students in ONE request.
+    
+    Request body: { "checks": [
+        {"student_id": 30, "module_id": 2},
+        {"student_id": 17, "module_id": 2}
+    ] }
+    """
+    checks_data = request.data.get('checks', [])
+    
+    if not checks_data:
+        return Response(
+            {"error": "checks array is required"}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    from .models import WeekReview
+    
+    results = []
+    
+    for check in checks_data:
+        student_id = check.get('student_id')
+        module_id = check.get('module_id')
+        
+        try:
+            review = WeekReview.objects.get(student_id=student_id, module_id=module_id)
+            results.append({
+                'student_id': student_id,
+                'module_id': module_id,
+                'exists': True,
+                'review_id': review.id
+            })
+        except WeekReview.DoesNotExist:
+            results.append({
+                'student_id': student_id,
+                'module_id': module_id,
+                'exists': False,
+                'review_id': None
+            })
+    
+    return Response(results)
