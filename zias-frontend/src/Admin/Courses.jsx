@@ -39,7 +39,7 @@ function Toast({ message, type, onClose }) {
   const icon = type === "success" ? "✓" : type === "error" ? "✕" : "ℹ";
 
   return (
-    <div className={`fixed top-5 right-5 z-50 flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-2xl ${bgColor} text-white text-sm font-medium max-w-sm`}
+    <div className={`fixed top-5 right-5 z-50 flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-2xl ${bgColor} text-white text-sm font-medium max-w-[90vw] sm:max-w-sm`}
       style={{ animation: "slideDown 0.25s cubic-bezier(0.16,1,0.3,1)" }}>
       <span className="w-6 h-6 rounded-full bg-white/25 flex items-center justify-center text-xs font-bold shrink-0">{icon}</span>
       <span className="flex-1">{message}</span>
@@ -161,17 +161,17 @@ function CourseFormModal({ isOpen, onClose, editingCourse, onSave }) {
   const inputClass = "w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 text-sm";
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-2 sm:p-4" onClick={onClose}>
+      <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto modal-scroll" onClick={(e) => e.stopPropagation()}>
         <form onSubmit={handleSubmit}>
-          <div className="flex justify-between items-center px-6 py-5 border-b border-gray-100">
+          <div className="flex justify-between items-center px-4 sm:px-6 py-5 border-b border-gray-100">
             <div>
               <h3 className="text-base font-bold text-gray-900">{editingCourse ? "Edit Course" : "New Course"}</h3>
               <p className="text-xs text-gray-400 mt-0.5">Fill in the course details</p>
             </div>
-            <button type="button" onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-gray-100 text-gray-400 text-lg">×</button>
+            <button type="button" onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-gray-100 text-gray-400 text-lg transition-colors">×</button>
           </div>
-          <div className="px-6 py-5 space-y-3.5">
+          <div className="px-4 sm:px-6 py-5 space-y-3.5">
             <input
               name="name"
               type="text"
@@ -201,7 +201,7 @@ function CourseFormModal({ isOpen, onClose, editingCourse, onSave }) {
               className={`${inputClass} resize-none`}
             />
           </div>
-          <div className="flex gap-2 px-6 py-4 border-t border-gray-100">
+          <div className="flex gap-2 px-4 sm:px-6 py-4 border-t border-gray-100">
             <button type="submit" disabled={submitting} className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white py-2.5 rounded-xl font-medium text-sm transition-colors disabled:opacity-50">
               {submitting ? (editingCourse ? "Saving..." : "Adding...") : (editingCourse ? "Save Changes" : "Add Course")}
             </button>
@@ -225,6 +225,7 @@ function Courses() {
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 9;
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [courseToDelete, setCourseToDelete] = useState(null);
@@ -323,11 +324,13 @@ function Courses() {
   const handleEdit = (course) => {
     setEditingCourse(course);
     setShowForm(true);
+    setMobileMenuOpen(false);
   };
 
   const handleAddClick = () => {
     setEditingCourse(null);
     setShowForm(true);
+    setMobileMenuOpen(false);
   };
 
   const handleFormSave = () => {
@@ -338,8 +341,6 @@ function Courses() {
   const handleCardClick = (courseId) => {
     navigate(`/admin/modules?course_id=${courseId}`);
   };
-
-  const inputClass = "w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 text-sm";
 
   if (loading) {
     return (
@@ -359,15 +360,61 @@ function Courses() {
         @keyframes slideDown { from { opacity:0; transform:translateY(-12px); } to { opacity:1; transform:translateY(0); } }
         @keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
         .card-hover { transition: all 0.2s ease; }
-        .card-hover:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(0,0,0,0.10); }
+        .card-hover:hover { transform: translateY(-4px); box-shadow: 0 12px 40px rgba(0,0,0,0.12); }
         .course-card { animation: fadeUp 0.3s ease both; }
         .duration-pill { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+        
+        /* Responsive Grid Adjustments */
+        @media (max-width: 640px) {
+          .course-card {
+            animation: fadeUp 0.2s ease both;
+          }
+        }
+        
+        /* Touch-friendly tap targets */
+        button, 
+        [role="button"],
+        .tap-target {
+          min-height: 44px;
+          cursor: pointer;
+        }
+        
+        /* Smooth scrolling for modals */
+        .modal-scroll {
+          scrollbar-width: thin;
+          scrollbar-color: #cbd5e1 #f1f5f9;
+        }
+        .modal-scroll::-webkit-scrollbar {
+          width: 6px;
+        }
+        .modal-scroll::-webkit-scrollbar-track {
+          background: #f1f5f9;
+          border-radius: 10px;
+        }
+        .modal-scroll::-webkit-scrollbar-thumb {
+          background: #cbd5e1;
+          border-radius: 10px;
+        }
+        
+        /* Line clamp for descriptions */
+        .line-clamp-3 {
+          display: -webkit-box;
+          -webkit-line-clamp: 3;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+        
+        @media (max-width: 640px) {
+          .line-clamp-3 {
+            -webkit-line-clamp: 2;
+          }
+        }
       `}</style>
 
       {toastMsg && <Toast message={toastMsg.message} type={toastMsg.type} onClose={hideToast} />}
       <ConfirmModal isOpen={showConfirmModal} onClose={() => setShowConfirmModal(false)} onConfirm={confirmDelete} courseName={courseToDelete?.name} />
 
-      {/* Separate modal component – no focus loss */}
+      {/* Separate modal component */}
       <CourseFormModal
         isOpen={showForm}
         onClose={() => setShowForm(false)}
@@ -375,14 +422,36 @@ function Courses() {
         onSave={handleFormSave}
       />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Courses</h1>
-            <p className="text-gray-400 text-sm mt-0.5">{courses.length} total · {filteredCourses.length} shown</p>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6 md:py-10">
+        {/* Header - Responsive */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-100 border border-emerald-200 flex items-center justify-center shrink-0">
+              <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253" />
+              </svg>
+            </div>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">Courses</h1>
+              <p className="text-gray-400 text-xs sm:text-sm mt-0.5">{courses.length} total · {filteredCourses.length} shown</p>
+            </div>
           </div>
-          <div className="flex flex-col sm:flex-row gap-3">
+
+          {/* Mobile Menu Toggle Button */}
+          <div className="sm:hidden">
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-700 text-sm font-medium flex items-center justify-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+              Menu
+            </button>
+          </div>
+
+          {/* Controls - Desktop */}
+          <div className={`${mobileMenuOpen ? 'flex' : 'hidden'} sm:flex flex-col sm:flex-row gap-3 transition-all duration-300`}>
             <div className="relative">
               <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
@@ -396,88 +465,138 @@ function Courses() {
                 className="w-full sm:w-64 bg-white border border-gray-200 rounded-xl pl-10 pr-9 py-2.5 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 text-sm shadow-sm"
               />
               {searchTerm && (
-                <button onClick={() => setSearchTerm("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm">✕</button>
+                <button 
+                  onClick={() => setSearchTerm("")} 
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm p-1"
+                >
+                  ✕
+                </button>
               )}
             </div>
             <button
               onClick={handleAddClick}
-              className="flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold shadow-md shadow-emerald-500/30 transition-all hover:shadow-lg hover:shadow-emerald-500/40 active:scale-95"
+              className="flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold shadow-md shadow-emerald-500/30 transition-all hover:shadow-lg hover:shadow-emerald-500/40 active:scale-95 w-full sm:w-auto"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" /></svg>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
               Add Course
             </button>
           </div>
         </div>
 
-        {/* Card Grid */}
+        {/* Card Grid - Fully Responsive */}
         {paginatedCourses.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 gap-4">
+          <div className="flex flex-col items-center justify-center py-16 sm:py-24 gap-4">
             <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center">
               <svg className="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253" />
               </svg>
             </div>
-            <p className="text-gray-400 font-medium">No courses found</p>
-            {searchTerm && <button onClick={() => setSearchTerm("")} className="text-emerald-500 text-sm hover:underline">Clear search</button>}
+            <p className="text-gray-400 font-medium text-center">No courses found</p>
+            {searchTerm && (
+              <button 
+                onClick={() => setSearchTerm("")} 
+                className="text-emerald-500 text-sm hover:underline px-4 py-2"
+              >
+                Clear search
+              </button>
+            )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-            {paginatedCourses.map((course, idx) => (
-              <div
-                key={course.id}
-                className="course-card bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden card-hover flex flex-col cursor-pointer"
-                style={{ animationDelay: `${idx * 0.05}s` }}
-              >
-                <div className="flex-1" onClick={() => handleCardClick(course.id)}>
-                  <div className="p-5">
-                    <div className="flex items-start justify-between gap-3 mb-3">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {course.duration && (
-                          <span className="duration-pill text-white text-[11px] font-bold px-2.5 py-0.5 rounded-full">
-                            {course.duration} week{course.duration !== 1 ? 's' : ''}
-                          </span>
-                        )}
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-6">
+              {paginatedCourses.map((course, idx) => (
+                <div
+                  key={course.id}
+                  className="course-card bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden card-hover flex flex-col cursor-pointer"
+                  style={{ animationDelay: `${idx * 0.05}s` }}
+                >
+                  <div className="flex-1" onClick={() => handleCardClick(course.id)}>
+                    <div className="p-4 sm:p-5">
+                      <div className="flex items-start justify-between gap-3 mb-3">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {course.duration && (
+                            <span className="duration-pill text-white text-[10px] sm:text-[11px] font-bold px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full">
+                              {course.duration} week{course.duration !== 1 ? 's' : ''}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-0.5 shrink-0" onClick={e => e.stopPropagation()}>
+                          <button 
+                            onClick={() => handleEdit(course)} 
+                            title="Edit" 
+                            className="p-2 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+                          >
+                            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                          <button 
+                            onClick={() => handleDeleteClick(course.id, course.name)} 
+                            title="Delete" 
+                            className="p-2 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                          >
+                            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-0.5 shrink-0" onClick={e => e.stopPropagation()}>
-                        <button onClick={() => handleEdit(course)} title="Edit" className="p-1.5 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors">
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                        </button>
-                        <button onClick={() => handleDeleteClick(course.id, course.name)} title="Delete" className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors">
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                      </div>
+                      <h3 className="font-bold text-gray-900 text-sm sm:text-base leading-snug mb-1.5 break-words">
+                        {course.name}
+                      </h3>
+                      {course.description && (
+                        <p className="text-gray-500 text-xs sm:text-sm leading-relaxed line-clamp-3">
+                          {course.description}
+                        </p>
+                      )}
                     </div>
-                    <h3 className="font-bold text-gray-900 text-base leading-snug mb-1.5">{course.name}</h3>
-                    {course.description && (
-                      <p className="text-gray-500 text-xs leading-relaxed line-clamp-3">{course.description}</p>
-                    )}
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Pagination */}
-        {paginatedCourses.length > 0 && totalPages > 1 && (
-          <div className="flex flex-col sm:flex-row justify-between items-center gap-3 bg-white rounded-2xl border border-gray-200 px-5 py-3.5 shadow-sm">
-            <p className="text-gray-400 text-xs">Showing {startIndex + 1}–{Math.min(startIndex + itemsPerPage, totalFiltered)} of {totalFiltered}</p>
-            <div className="flex gap-1">
-              <button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1}
-                className="px-3 py-1.5 rounded-lg text-sm disabled:text-gray-300 text-gray-500 hover:bg-gray-100 disabled:cursor-not-allowed">←</button>
-              {getPageNumbers().map((p, i) =>
-                p === "..." ? <span key={i} className="px-2 py-1.5 text-gray-400">…</span> :
-                  <button key={p} onClick={() => setCurrentPage(p)}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium ${currentPage === p ? "bg-emerald-500 text-white shadow-sm" : "text-gray-600 hover:bg-gray-100"}`}>{p}</button>
-              )}
-              <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages}
-                className="px-3 py-1.5 rounded-lg text-sm disabled:text-gray-300 text-gray-500 hover:bg-gray-100 disabled:cursor-not-allowed">→</button>
+              ))}
             </div>
-          </div>
+
+            {/* Pagination - Responsive */}
+            {paginatedCourses.length > 0 && totalPages > 1 && (
+              <div className="flex flex-col sm:flex-row justify-between items-center gap-3 bg-white rounded-2xl border border-gray-200 px-4 sm:px-5 py-3.5 shadow-sm">
+                <p className="text-gray-400 text-xs text-center sm:text-left">
+                  Showing {startIndex + 1}–{Math.min(startIndex + itemsPerPage, totalFiltered)} of {totalFiltered}
+                </p>
+                <div className="flex gap-1 flex-wrap justify-center">
+                  <button 
+                    onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} 
+                    disabled={currentPage === 1}
+                    className="px-3 py-1.5 rounded-lg text-sm disabled:text-gray-300 text-gray-500 hover:bg-gray-100 disabled:cursor-not-allowed transition-colors"
+                  >
+                    ←
+                  </button>
+                  {getPageNumbers().map((p, i) =>
+                    p === "..." ? 
+                      <span key={i} className="px-2 py-1.5 text-gray-400">…</span> :
+                      <button 
+                        key={p} 
+                        onClick={() => setCurrentPage(p)}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                          currentPage === p 
+                            ? "bg-emerald-500 text-white shadow-sm" 
+                            : "text-gray-600 hover:bg-gray-100"
+                        }`}
+                      >
+                        {p}
+                      </button>
+                  )}
+                  <button 
+                    onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} 
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-1.5 rounded-lg text-sm disabled:text-gray-300 text-gray-500 hover:bg-gray-100 disabled:cursor-not-allowed transition-colors"
+                  >
+                    →
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

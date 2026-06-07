@@ -92,6 +92,7 @@ function Students() {
   const [progressStudent, setProgressStudent] = useState(null);
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [emailError, setEmailError] = useState("");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const [formData, setFormData] = useState({
     full_name: "", email: "", course: "", batch: "", mentor: "",
@@ -144,12 +145,11 @@ function Students() {
       'Data Science': 150000,
       'UI/UX': 120000,
     };
-    return courseAmounts[courseName] || 100000; // Default fee
+    return courseAmounts[courseName] || 100000;
   };
 
   const assignFeeToStudent = async (studentId, courseName) => {
     try {
-      // Get fee structures
       const feeRes = await API.get("/fee-structures/");
       let feeStructures = feeRes.data.results || feeRes.data;
       
@@ -174,7 +174,6 @@ function Students() {
       return false;
     }
   };
-  // ============================================================
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -329,7 +328,6 @@ function Students() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Basic validation
     if (!formData.full_name.trim()) {
       showToast("Full name is required", "error");
       return;
@@ -351,7 +349,6 @@ function Students() {
       return;
     }
 
-    // Phone validation
     const phoneFields = [
       { field: 'phone', setErr: setPhoneError, label: 'Student phone' },
       { field: 'fathers_contact', setErr: setFathersContactError, label: "Father's contact" },
@@ -371,7 +368,6 @@ function Students() {
     }
     if (hasError) return;
 
-    // Auto-assign mentor from batch
     let assignedMentorId = formData.mentor ? parseInt(formData.mentor) : null;
     if (!assignedMentorId && formData.batch) {
       assignedMentorId = await getMentorForBatch(formData.batch);
@@ -380,7 +376,6 @@ function Students() {
       }
     }
 
-    // Prepare payload
     const payload = {
       full_name: formData.full_name.trim(),
       email: formData.email.trim(),
@@ -418,7 +413,6 @@ function Students() {
         const newStudentId = createRes.data.id;
         showToast(`Student added successfully!`, "success");
         
-        // ✅ AUTO ASSIGN FEE TO NEW STUDENT
         await assignFeeToStudent(newStudentId, formData.course);
         
         if (selectedFiles.length) await uploadDocuments(newStudentId);
@@ -546,12 +540,99 @@ function Students() {
         @keyframes slide-in-from-top-2 { from { opacity:0; transform:translateY(-1rem); } to { opacity:1; transform:translateY(0); } }
         .animate-in { animation: slide-in-from-top-2 0.2s ease-out; }
         .row-hover:hover { background: rgba(240,253,244,0.8); }
-        @media (max-width: 640px) {
-          .student-table thead { display: none; }
-          .student-table tbody tr { display: block; margin-bottom: 1rem; border: 1px solid #d1fae5; border-radius: 1rem; background: white; }
-          .student-table tbody td { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; border-bottom: 1px solid #f0fdf4; text-align: right; gap: 1rem; }
-          .student-table tbody td:last-child { border-bottom: none; }
-          .student-table tbody td::before { content: attr(data-label); font-weight: 600; color: #6b7280; text-align: left; flex: 1; }
+        
+        /* Enhanced Responsive Table Styles */
+        @media (max-width: 768px) {
+          .student-table thead {
+            display: none;
+          }
+          .student-table tbody tr {
+            display: block;
+            margin-bottom: 1rem;
+            border: 1px solid #d1fae5;
+            border-radius: 1rem;
+            background: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+            transition: all 0.2s;
+          }
+          .student-table tbody td {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.875rem 1rem;
+            border-bottom: 1px solid #f0fdf4;
+            text-align: right;
+            gap: 1rem;
+            flex-wrap: wrap;
+          }
+          .student-table tbody td:last-child {
+            border-bottom: none;
+          }
+          .student-table tbody td::before {
+            content: attr(data-label);
+            font-weight: 600;
+            color: #059669;
+            background: #ecfdf5;
+            padding: 0.25rem 0.75rem;
+            border-radius: 2rem;
+            font-size: 0.7rem;
+            letter-spacing: 0.03em;
+            text-align: left;
+            flex-shrink: 0;
+            min-width: 100px;
+          }
+          
+          /* Action buttons wrapper for mobile */
+          .action-buttons-mobile {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+          }
+          
+          /* Touch-friendly tap targets */
+          button, 
+          [role="button"],
+          .tap-target {
+            min-height: 44px;
+            cursor: pointer;
+          }
+          
+          /* Improved spacing for mobile */
+          .container-padding {
+            padding-left: 1rem;
+            padding-right: 1rem;
+          }
+        }
+        
+        /* Tablet optimization */
+        @media (min-width: 769px) and (max-width: 1024px) {
+          .student-table td {
+            padding: 0.75rem 0.5rem;
+          }
+          .action-buttons {
+            display: flex;
+            gap: 0.25rem;
+          }
+        }
+        
+        /* Smooth scrolling for modals */
+        .modal-scroll {
+          scrollbar-width: thin;
+        }
+        
+        /* Loading animation */
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+        
+        /* Hover effects for cards */
+        .student-card-hover {
+          transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .student-card-hover:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 20px rgba(0,0,0,0.08);
         }
       `}</style>
 
@@ -559,77 +640,94 @@ function Students() {
       <ConfirmModal isOpen={showConfirmModal} onClose={() => setShowConfirmModal(false)} onConfirm={confirmDelete} studentName={studentToDelete?.name} />
       <ProgressModal isOpen={showProgressModal} onClose={() => setShowProgressModal(false)} student={progressStudent} />
 
-      <div className="bg-white border-b border-green-100 px-6 sm:px-8 py-6">
-        <div className="max-w-[1400px] mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <p className="text-[10px] tracking-[0.2em] uppercase text-green-400 mb-1.5 font-medium">Admin Panel</p>
-            <h1 className="text-2xl text-gray-800 leading-tight" style={{ fontFamily: '"DM Serif Display", serif' }}>
-              Students
-            </h1>
-            <p className="text-gray-400 text-xs mt-1 font-light">
-              {students.length} total · {filteredStudents.length} shown
-            </p>
-          </div>
+      {/* Header Section - Responsive */}
+      <div className="bg-white border-b border-green-100 px-4 sm:px-6 md:px-8 py-4 sm:py-6 sticky top-0 z-20 shadow-sm">
+        <div className="max-w-[1400px] mx-auto">
+          <div className="flex flex-col space-y-4 sm:space-y-0 sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex-1">
+              <p className="text-[10px] tracking-[0.2em] uppercase text-green-400 mb-1.5 font-medium">Admin Panel</p>
+              <h1 className="text-xl sm:text-2xl md:text-3xl text-gray-800 leading-tight" style={{ fontFamily: '"DM Serif Display", serif' }}>
+                Students
+              </h1>
+              <p className="text-gray-400 text-xs mt-1 font-light">
+                {students.length} total · {filteredStudents.length} shown
+              </p>
+            </div>
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            <div className="relative w-full sm:w-64">
-              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-              <input
-                type="text"
-                placeholder="Search students…"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-green-50 border border-green-200 rounded-xl py-2.5 pl-10 pr-9 text-sm focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 text-gray-700 placeholder-gray-400 transition-all"
-              />
-              {searchTerm && (
-                <button onClick={() => setSearchTerm("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+            {/* Mobile Menu Toggle Button */}
+            <div className="sm:hidden">
+              <button
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="w-full bg-green-50 border border-green-200 rounded-xl px-4 py-2.5 text-green-700 text-sm font-medium flex items-center justify-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+                Menu
+              </button>
+            </div>
+
+            {/* Controls - Desktop */}
+            <div className={`${mobileMenuOpen ? 'flex' : 'hidden'} sm:flex flex-col sm:flex-row items-stretch sm:items-center gap-3 transition-all duration-300`}>
+              <div className="relative w-full sm:w-64">
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input
+                  type="text"
+                  placeholder="Search students…"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full bg-green-50 border border-green-200 rounded-xl py-2.5 pl-10 pr-9 text-sm focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 text-gray-700 placeholder-gray-400 transition-all"
+                />
+                {searchTerm && (
+                  <button onClick={() => setSearchTerm("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+
+              {batchFilter && (
+                <button
+                  onClick={() => { setBatchFilter(""); navigate("/admin/students"); }}
+                  className="flex items-center justify-center gap-2 bg-green-50 border border-green-200 text-green-700 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-green-100 transition-all"
+                >
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
                   </svg>
+                  {batchFilter}
                 </button>
               )}
-            </div>
 
-            {batchFilter && (
               <button
-                onClick={() => { setBatchFilter(""); navigate("/admin/students"); }}
-                className="flex items-center justify-center gap-2 bg-green-50 border border-green-200 text-green-700 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-green-100 transition-all"
+                onClick={() => { setEditingId(null); resetForm(); setShowForm(true); setMobileMenuOpen(false); }}
+                className="flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-all shadow-sm hover:shadow-md w-full sm:w-auto"
               >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
                 </svg>
-                {batchFilter}
+                Add Student
               </button>
-            )}
-
-            <button
-              onClick={() => { setEditingId(null); resetForm(); setShowForm(true); }}
-              className="flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-all shadow-sm hover:shadow-md w-full sm:w-auto"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-              </svg>
-              Add Student
-            </button>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-8">
-
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-6 sm:py-8">
+        {/* Form Modal - Responsive */}
         {showForm && (
           <div
-            className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4"
             onClick={() => setShowForm(false)}
           >
             <form
               onSubmit={handleSubmit}
-              className="bg-white rounded-2xl w-full max-w-3xl border border-green-100 shadow-2xl shadow-green-100/50 max-h-[90vh] overflow-y-auto"
+              className="bg-white rounded-2xl w-full max-w-3xl border border-green-100 shadow-2xl shadow-green-100/50 max-h-[90vh] overflow-y-auto modal-scroll"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="sticky top-0 z-10 bg-white px-6 py-4 border-b border-green-100 rounded-t-2xl flex justify-between items-center">
+              <div className="sticky top-0 z-10 bg-white px-4 sm:px-6 py-4 border-b border-green-100 rounded-t-2xl flex justify-between items-center">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-xl bg-green-600 flex items-center justify-center shadow-sm">
                     <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -644,10 +742,10 @@ function Students() {
                     <p className="text-[11px] text-gray-400 font-light">{editingId ? "Update student information" : "Add a new student to the system"}</p>
                   </div>
                 </div>
-                <button type="button" onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none transition-colors">✕</button>
+                <button type="button" onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none transition-colors p-2">✕</button>
               </div>
 
-              <div className="px-6 py-5 space-y-6">
+              <div className="px-4 sm:px-6 py-5 space-y-6">
                 <div>
                   <p className={`${sectionTitleCls} text-green-600`}>Basic Information</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -666,7 +764,7 @@ function Students() {
                         <option value="">Select a course</option>
                         {coursesList.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                       </select>
-                      <p className="text-[10px] text-gray-400 mt-1">Fee will be auto-assigned based on course</p>
+                      <p className="text-[10px] text-gray-400 mt-1">Fee will be auto-assigned</p>
                     </div>
                     <div>
                       <label className={labelCls}>Batch *</label>
@@ -680,10 +778,10 @@ function Students() {
                         <option value="">Select a batch</option>
                         {batchesList.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
                       </select>
-                      <p className="text-[10px] text-gray-400 mt-1">Mentor will be auto-assigned based on batch</p>
+                      <p className="text-[10px] text-gray-400 mt-1">Auto-assigns mentor</p>
                     </div>
                     <div>
-                      <label className={labelCls}>Mentor (optional - auto-filled)</label>
+                      <label className={labelCls}>Mentor (optional)</label>
                       <select name="mentor" value={formData.mentor} onChange={handleChange} className={inputCls}>
                         <option value="">Auto-assign from batch</option>
                         {mentorsList.map(m => <option key={m.id} value={m.id}>{m.full_name || m.username}</option>)}
@@ -691,7 +789,7 @@ function Students() {
                     </div>
                     <div>
                       <label className={labelCls}>Phone</label>
-                      <input type="text" name="phone" value={formData.phone} onChange={handleChange} className={inputCls} />
+                      <input type="tel" name="phone" value={formData.phone} onChange={handleChange} className={inputCls} />
                       {phoneError && <p className="text-red-500 text-xs mt-1">{phoneError}</p>}
                     </div>
                     <div><label className={labelCls}>Date of Birth</label><input type="date" name="date_of_birth" value={formData.date_of_birth} onChange={handleChange} className={inputCls} /></div>
@@ -709,9 +807,9 @@ function Students() {
                   <p className={`${sectionTitleCls} text-gray-400`}>Parents</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div><label className={labelCls}>Father's Name</label><input type="text" name="fathers_name" value={formData.fathers_name} onChange={handleChange} className={inputCls} /></div>
-                    <div><label className={labelCls}>Father's Contact</label><input type="text" name="fathers_contact" value={formData.fathers_contact} onChange={handleChange} className={inputCls} />{fathersContactError && <p className="text-red-500 text-xs mt-1">{fathersContactError}</p>}</div>
+                    <div><label className={labelCls}>Father's Contact</label><input type="tel" name="fathers_contact" value={formData.fathers_contact} onChange={handleChange} className={inputCls} />{fathersContactError && <p className="text-red-500 text-xs mt-1">{fathersContactError}</p>}</div>
                     <div><label className={labelCls}>Mother's Name</label><input type="text" name="mothers_name" value={formData.mothers_name} onChange={handleChange} className={inputCls} /></div>
-                    <div><label className={labelCls}>Mother's Contact</label><input type="text" name="mothers_contact" value={formData.mothers_contact} onChange={handleChange} className={inputCls} />{mothersContactError && <p className="text-red-500 text-xs mt-1">{mothersContactError}</p>}</div>
+                    <div><label className={labelCls}>Mother's Contact</label><input type="tel" name="mothers_contact" value={formData.mothers_contact} onChange={handleChange} className={inputCls} />{mothersContactError && <p className="text-red-500 text-xs mt-1">{mothersContactError}</p>}</div>
                   </div>
                 </div>
 
@@ -721,13 +819,13 @@ function Students() {
                 </div>
 
                 <div className="border-t border-green-50 pt-5">
-                  <p className={`${sectionTitleCls} text-gray-400`}>Education</p>
+                  <p className={`${sectionTitleCls} text-gray-400`}>Education & Contact</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div><label className={labelCls}>Qualification</label><input type="text" name="educational_qualification" value={formData.educational_qualification} onChange={handleChange} className={inputCls} /></div>
                     <div><label className={labelCls}>College / School</label><input type="text" name="college_school" value={formData.college_school} onChange={handleChange} className={inputCls} /></div>
                     <div><label className={labelCls}>Parent Name</label><input type="text" name="parent_name" value={formData.parent_name} onChange={handleChange} className={inputCls} /></div>
-                    <div><label className={labelCls}>Parent Phone</label><input type="text" name="parent_phone" value={formData.parent_phone} onChange={handleChange} className={inputCls} />{parentPhoneError && <p className="text-red-500 text-xs mt-1">{parentPhoneError}</p>}</div>
-                    <div><label className={labelCls}>Emergency Contact</label><input type="text" name="emergency_contact" value={formData.emergency_contact} onChange={handleChange} className={inputCls} />{emergencyContactError && <p className="text-red-500 text-xs mt-1">{emergencyContactError}</p>}</div>
+                    <div><label className={labelCls}>Parent Phone</label><input type="tel" name="parent_phone" value={formData.parent_phone} onChange={handleChange} className={inputCls} />{parentPhoneError && <p className="text-red-500 text-xs mt-1">{parentPhoneError}</p>}</div>
+                    <div><label className={labelCls}>Emergency Contact</label><input type="tel" name="emergency_contact" value={formData.emergency_contact} onChange={handleChange} className={inputCls} />{emergencyContactError && <p className="text-red-500 text-xs mt-1">{emergencyContactError}</p>}</div>
                   </div>
                 </div>
 
@@ -745,14 +843,14 @@ function Students() {
                           {editDocuments.map(doc => (
                             <li key={doc.id} className="flex items-center justify-between gap-2 bg-green-50/60 border border-green-100 p-2.5 rounded-xl">
                               <a href={getDocumentUrl(doc.url)} target="_blank" rel="noopener noreferrer"
-                                className="flex items-center gap-2 text-green-600 hover:text-green-700 text-sm truncate">
+                                className="flex items-center gap-2 text-green-600 hover:text-green-700 text-sm truncate flex-1">
                                 <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                                 </svg>
                                 <span className="truncate">{doc.file_name || "Document"}</span>
                               </a>
                               <button type="button" onClick={() => deleteEditDocument(doc.id)}
-                                className="text-red-400 hover:text-red-600 p-1 rounded-lg hover:bg-red-50 transition shrink-0">
+                                className="text-red-400 hover:text-red-600 p-2 rounded-lg hover:bg-red-50 transition shrink-0">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                 </svg>
@@ -780,7 +878,7 @@ function Students() {
                 </div>
               </div>
 
-              <div className="sticky bottom-0 bg-white px-6 py-4 border-t border-green-100 rounded-b-2xl">
+              <div className="sticky bottom-0 bg-white px-4 sm:px-6 py-4 border-t border-green-100 rounded-b-2xl">
                 <button type="submit" disabled={submitting}
                   className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl text-sm font-medium transition-all disabled:opacity-50 shadow-sm hover:shadow-md">
                   {submitting ? (editingId ? "Saving…" : "Adding…") : (editingId ? "Save Changes" : "Add Student")}
@@ -790,16 +888,17 @@ function Students() {
           </div>
         )}
 
+        {/* View Modal - Responsive */}
         {viewingStudent && (
           <div
-            className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4"
             onClick={() => setViewingStudent(null)}
           >
             <div
-              className="bg-white rounded-2xl w-full max-w-3xl border border-green-100 shadow-2xl shadow-green-100/50 max-h-[90vh] overflow-y-auto"
+              className="bg-white rounded-2xl w-full max-w-3xl border border-green-100 shadow-2xl shadow-green-100/50 max-h-[90vh] overflow-y-auto modal-scroll"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="sticky top-0 bg-white px-6 py-4 border-b border-green-100 rounded-t-2xl flex justify-between items-center">
+              <div className="sticky top-0 bg-white px-4 sm:px-6 py-4 border-b border-green-100 rounded-t-2xl flex justify-between items-center">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-green-600 flex items-center justify-center text-white font-semibold text-sm shadow-sm">
                     {getFirstLetter(viewingStudent.full_name || viewingStudent.username)}
@@ -809,10 +908,10 @@ function Students() {
                     <p className="text-[11px] text-gray-400">{viewingStudent.course_name || viewingStudent.course}</p>
                   </div>
                 </div>
-                <button onClick={() => setViewingStudent(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+                <button onClick={() => setViewingStudent(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none p-2">✕</button>
               </div>
 
-              <div className="px-6 py-5 space-y-6">
+              <div className="px-4 sm:px-6 py-5 space-y-6">
                 <div>
                   <p className={`${sectionTitleCls} text-green-600`}>Basic Information</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -829,7 +928,7 @@ function Students() {
                     ].map(([label, val]) => (
                       <div key={label} className="bg-green-50/60 rounded-xl p-3 border border-green-100/60">
                         <p className="text-[10px] uppercase tracking-widest text-green-400 mb-1">{label}</p>
-                        <p className="text-gray-800 text-sm font-medium">{val || "—"}</p>
+                        <p className="text-gray-800 text-sm font-medium break-words">{val || "—"}</p>
                       </div>
                     ))}
                   </div>
@@ -855,12 +954,12 @@ function Students() {
                 <div className="border-t border-green-50 pt-5">
                   <p className={`${sectionTitleCls} text-gray-400`}>Address</p>
                   <div className="bg-green-50/60 rounded-xl p-3 border border-green-100/60">
-                    <p className="text-gray-800 text-sm">{viewingStudent.address || "—"}</p>
+                    <p className="text-gray-800 text-sm break-words">{viewingStudent.address || "—"}</p>
                   </div>
                 </div>
 
                 <div className="border-t border-green-50 pt-5">
-                  <p className={`${sectionTitleCls} text-gray-400`}>Education</p>
+                  <p className={`${sectionTitleCls} text-gray-400`}>Education & Contact</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {[
                       ["Qualification", viewingStudent.educational_qualification],
@@ -886,7 +985,7 @@ function Students() {
                       {viewerDocuments.map(doc => (
                         <li key={doc.id}>
                           <a href={getDocumentUrl(doc.url)} target="_blank" rel="noopener noreferrer"
-                            className="flex items-center gap-2 text-green-600 hover:text-green-700 transition-colors text-sm">
+                            className="flex items-center gap-2 text-green-600 hover:text-green-700 transition-colors text-sm break-all">
                             <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                             </svg>
@@ -899,7 +998,7 @@ function Students() {
                 </div>
               </div>
 
-              <div className="sticky bottom-0 bg-white px-6 py-4 border-t border-green-100 rounded-b-2xl flex justify-end">
+              <div className="sticky bottom-0 bg-white px-4 sm:px-6 py-4 border-t border-green-100 rounded-b-2xl flex justify-end">
                 <button onClick={() => setViewingStudent(null)}
                   className="border border-green-200 text-gray-500 px-6 py-2 rounded-xl text-sm hover:border-green-400 hover:text-green-600 transition-colors">
                   Close
@@ -909,89 +1008,93 @@ function Students() {
           </div>
         )}
 
+        {/* Students Table - Responsive */}
         <div className="bg-white rounded-2xl border border-green-100 overflow-hidden shadow-sm">
           <div className="h-1 bg-gradient-to-r from-green-500 to-green-300" />
 
-          <table className="student-table min-w-full">
-            <thead className="bg-green-50/60 border-b border-green-100">
-              <tr>
-                {["Student", "Email", "Course", "Batch", "Phone", "DOB", "Actions"].map(h => (
-                  <th key={h} className="text-left px-4 py-3.5 text-[10px] font-semibold text-green-500 uppercase tracking-[0.12em]">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-green-50">
-              {paginatedStudents.length === 0 ? (
+          <div className="overflow-x-auto">
+            <table className="student-table min-w-full">
+              <thead className="bg-green-50/60 border-b border-green-100">
                 <tr>
-                  <td colSpan={7} className="py-20 text-center">
-                    <div className="w-14 h-14 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-4">
-                      <svg className="w-6 h-6 text-green-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
-                    </div>
-                    <p className="text-gray-400 text-sm">No students found.</p>
-                  </td>
+                  {["Student", "Email", "Course", "Batch", "Phone", "DOB", "Actions"].map(h => (
+                    <th key={h} className="text-left px-3 sm:px-4 py-3.5 text-[10px] font-semibold text-green-500 uppercase tracking-[0.12em]">
+                      {h}
+                    </th>
+                  ))}
                 </tr>
-              ) : paginatedStudents.map(s => (
-                <tr key={s.id} className="row-hover transition-colors">
-                  <td data-label="Student" className="px-4 py-3.5">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-full bg-green-600 flex items-center justify-center text-white text-sm font-semibold shadow-sm">
-                        {getFirstLetter(s.full_name || s.username)}
+              </thead>
+              <tbody className="divide-y divide-green-50">
+                {paginatedStudents.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-20 text-center">
+                      <div className="w-14 h-14 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-4">
+                        <svg className="w-6 h-6 text-green-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
                       </div>
-                      <button
-                        onClick={() => openViewModal(s)}
-                        className="text-gray-800 text-sm font-medium hover:text-green-600 transition-colors text-left"
-                      >
-                        {s.full_name || s.username}
-                      </button>
-                    </div>
-                  </td>
-                  <td data-label="Email" className="px-4 py-3.5 text-gray-500 text-sm break-all">{s.email}</td>
-                  <td data-label="Course" className="px-4 py-3.5">
-                    <span className="inline-block bg-green-50 border border-green-200 text-green-700 text-xs font-medium px-2.5 py-1 rounded-full">
-                      {s.course_name || s.course || "—"}
-                    </span>
-                  </td>
-                  <td data-label="Batch" className="px-4 py-3.5">
-                    <span className="inline-block bg-gray-50 border border-gray-200 text-gray-600 text-xs font-mono px-2.5 py-1 rounded-full">
-                      {s.batch_name || s.batch || "—"}
-                    </span>
-                  </td>
-                  <td data-label="Phone" className="px-4 py-3.5 text-gray-500 text-sm">{s.phone || "—"}</td>
-                  <td data-label="DOB" className="px-4 py-3.5 text-gray-500 text-sm">{s.date_of_birth || "—"}</td>
-                  <td data-label="Actions" className="px-4 py-3.5">
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        onClick={() => handleEdit(s)}
-                        className="text-[11px] px-2.5 py-1.5 rounded-full border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-all font-medium"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDeleteClick(s.id, s.full_name || s.username)}
-                        className="text-[11px] px-2.5 py-1.5 rounded-full border border-red-200 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white hover:border-red-500 transition-all font-medium"
-                      >
-                        Delete
-                      </button>
-                      <button
-                        onClick={() => { setProgressStudent(s); setShowProgressModal(true); }}
-                        className="text-[11px] px-2.5 py-1.5 rounded-full border border-green-200 bg-green-50 text-green-700 hover:bg-green-600 hover:text-white hover:border-green-600 transition-all font-medium"
-                      >
-                        Progress
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                      <p className="text-gray-400 text-sm">No students found.</p>
+                    </td>
+                  </tr>
+                ) : paginatedStudents.map(s => (
+                  <tr key={s.id} className="row-hover transition-colors">
+                    <td data-label="Student" className="px-3 sm:px-4 py-3.5">
+                      <div className="flex items-center gap-2 sm:gap-3">
+                        <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-green-600 flex items-center justify-center text-white text-xs sm:text-sm font-semibold shadow-sm">
+                          {getFirstLetter(s.full_name || s.username)}
+                        </div>
+                        <button
+                          onClick={() => openViewModal(s)}
+                          className="text-gray-800 text-xs sm:text-sm font-medium hover:text-green-600 transition-colors text-left break-words flex-1"
+                        >
+                          {s.full_name || s.username}
+                        </button>
+                      </div>
+                    </td>
+                    <td data-label="Email" className="px-3 sm:px-4 py-3.5 text-gray-500 text-xs sm:text-sm break-all">{s.email}</td>
+                    <td data-label="Course" className="px-3 sm:px-4 py-3.5">
+                      <span className="inline-block bg-green-50 border border-green-200 text-green-700 text-[10px] sm:text-xs font-medium px-2 sm:px-2.5 py-1 rounded-full">
+                        {s.course_name || s.course || "—"}
+                      </span>
+                    </td>
+                    <td data-label="Batch" className="px-3 sm:px-4 py-3.5">
+                      <span className="inline-block bg-gray-50 border border-gray-200 text-gray-600 text-[10px] sm:text-xs font-mono px-2 sm:px-2.5 py-1 rounded-full">
+                        {s.batch_name || s.batch || "—"}
+                      </span>
+                    </td>
+                    <td data-label="Phone" className="px-3 sm:px-4 py-3.5 text-gray-500 text-xs sm:text-sm">{s.phone || "—"}</td>
+                    <td data-label="DOB" className="px-3 sm:px-4 py-3.5 text-gray-500 text-xs sm:text-sm">{s.date_of_birth || "—"}</td>
+                    <td data-label="Actions" className="px-3 sm:px-4 py-3.5">
+                      <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap">
+                        <button
+                          onClick={() => handleEdit(s)}
+                          className="text-[10px] sm:text-[11px] px-2 sm:px-2.5 py-1.5 rounded-full border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-all font-medium whitespace-nowrap"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteClick(s.id, s.full_name || s.username)}
+                          className="text-[10px] sm:text-[11px] px-2 sm:px-2.5 py-1.5 rounded-full border border-red-200 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white hover:border-red-500 transition-all font-medium whitespace-nowrap"
+                        >
+                          Delete
+                        </button>
+                        <button
+                          onClick={() => { setProgressStudent(s); setShowProgressModal(true); }}
+                          className="text-[10px] sm:text-[11px] px-2 sm:px-2.5 py-1.5 rounded-full border border-green-200 bg-green-50 text-green-700 hover:bg-green-600 hover:text-white hover:border-green-600 transition-all font-medium whitespace-nowrap"
+                        >
+                          Progress
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
+          {/* Pagination - Responsive */}
           {totalFiltered > 0 && (
-            <div className="bg-green-50/40 border-t border-green-100 px-5 py-3.5 flex flex-col sm:flex-row justify-between gap-3 items-center">
-              <p className="text-gray-400 text-xs">
+            <div className="bg-green-50/40 border-t border-green-100 px-4 sm:px-5 py-3.5 flex flex-col sm:flex-row justify-between gap-3 items-center">
+              <p className="text-gray-400 text-xs text-center sm:text-left">
                 Showing {startIndex + 1}–{Math.min(startIndex + itemsPerPage, totalFiltered)} of {totalFiltered} students
               </p>
               <div className="flex gap-1 flex-wrap justify-center">

@@ -94,6 +94,7 @@ function Mentors() {
   const [editDocuments, setEditDocuments] = useState([]);
   const [loadingEditDocs, setLoadingEditDocs] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [mentorToDelete, setMentorToDelete] = useState(null);
@@ -256,7 +257,6 @@ function Mentors() {
           batch: formData.batch ? parseInt(formData.batch) : null,
         };
         
-        // ✅ Add email to update if provided
         if (formData.email && formData.email.trim()) {
           updatePayload.email = formData.email.trim();
         }
@@ -270,7 +270,6 @@ function Mentors() {
         await fetchMentors();
 
       } else {
-        // ✅ CREATE WITH EMAIL
         const createPayload = {
           full_name: formData.full_name.trim(),
           expertise: formData.expertise.trim(),
@@ -278,7 +277,6 @@ function Mentors() {
           batch: formData.batch ? parseInt(formData.batch) : null,
         };
         
-        // ✅ Add email if provided
         if (formData.email && formData.email.trim()) {
           createPayload.email = formData.email.trim();
         }
@@ -464,12 +462,87 @@ function Mentors() {
         @keyframes slide-in-from-top-2 { from { opacity:0; transform:translateY(-1rem); } to { opacity:1; transform:translateY(0); } }
         .animate-in { animation: slide-in-from-top-2 0.2s ease-out; }
         .cursor-pointer { cursor: pointer; }
-        @media (max-width: 640px) {
-          .mentor-table thead { display: none; }
-          .mentor-table tbody tr { display: block; margin-bottom: 1rem; border: 1px solid #e5e7eb; border-radius: 0.75rem; background: white; }
-          .mentor-table tbody td { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; border-bottom: 1px solid #e5e7eb; text-align: right; gap: 1rem; }
-          .mentor-table tbody td:last-child { border-bottom: none; }
-          .mentor-table tbody td::before { content: attr(data-label); font-weight: 600; color: #6b7280; text-align: left; flex: 1; }
+        
+        /* Enhanced Responsive Styles */
+        @media (max-width: 768px) {
+          .mentor-table thead {
+            display: none;
+          }
+          .mentor-table tbody tr {
+            display: block;
+            margin-bottom: 1rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.75rem;
+            background: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+            transition: all 0.2s;
+          }
+          .mentor-table tbody td {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.875rem 1rem;
+            border-bottom: 1px solid #e5e7eb;
+            text-align: right;
+            gap: 1rem;
+            flex-wrap: wrap;
+          }
+          .mentor-table tbody td:last-child {
+            border-bottom: none;
+          }
+          .mentor-table tbody td::before {
+            content: attr(data-label);
+            font-weight: 600;
+            color: #059669;
+            background: #ecfdf5;
+            padding: 0.25rem 0.75rem;
+            border-radius: 2rem;
+            font-size: 0.7rem;
+            letter-spacing: 0.03em;
+            text-align: left;
+            flex-shrink: 0;
+            min-width: 100px;
+          }
+          
+          /* Touch-friendly tap targets */
+          button, 
+          [role="button"],
+          .tap-target {
+            min-height: 44px;
+            cursor: pointer;
+          }
+          
+          /* Improved spacing for mobile */
+          .container-padding {
+            padding-left: 1rem;
+            padding-right: 1rem;
+          }
+        }
+        
+        /* Tablet optimization */
+        @media (min-width: 769px) and (max-width: 1024px) {
+          .mentor-table td {
+            padding: 0.75rem 0.5rem;
+          }
+        }
+        
+        /* Smooth scrolling for modals */
+        .modal-scroll {
+          scrollbar-width: thin;
+        }
+        
+        /* Loading animation */
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+        
+        /* Hover effects for cards */
+        .mentor-card-hover {
+          transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .mentor-card-hover:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 20px rgba(0,0,0,0.08);
         }
       `}</style>
 
@@ -477,6 +550,7 @@ function Mentors() {
       <ConfirmModal isOpen={showConfirmModal} onClose={() => setShowConfirmModal(false)} onConfirm={confirmDelete} mentorName={mentorToDelete?.name} />
 
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-4 sm:py-8">
+        {/* Header Section - Responsive */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 rounded-xl bg-green-100 border border-green-200 flex items-center justify-center shrink-0">
@@ -485,11 +559,26 @@ function Mentors() {
               </svg>
             </div>
             <div>
-              <h1 className="text-xl font-semibold text-gray-800 tracking-tight">Mentors</h1>
+              <h1 className="text-xl sm:text-2xl font-semibold text-gray-800 tracking-tight">Mentors</h1>
               <p className="text-gray-500 text-xs mt-0.5">{mentors.length} total · {filteredMentors.length} shown</p>
             </div>
           </div>
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+
+          {/* Mobile Menu Toggle Button */}
+          <div className="sm:hidden">
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-700 text-sm font-medium flex items-center justify-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+              Menu
+            </button>
+          </div>
+
+          {/* Controls - Desktop */}
+          <div className={`${mobileMenuOpen ? 'flex' : 'hidden'} sm:flex flex-col sm:flex-row items-stretch sm:items-center gap-3 transition-all duration-300`}>
             <div className="relative w-full sm:w-64">
               <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
@@ -512,6 +601,7 @@ function Mentors() {
                 setEditingId(null);
                 resetForm();
                 setShowForm(true);
+                setMobileMenuOpen(false);
               }}
               className="shine flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 shadow-md w-full sm:w-auto"
             >
@@ -521,11 +611,12 @@ function Mentors() {
           </div>
         </div>
 
+        {/* Form Modal - Responsive */}
         {showForm && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={() => setShowForm(false)}>
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-2 sm:p-4" onClick={() => setShowForm(false)}>
             <form
               onSubmit={handleSubmit}
-              className="modal-enter bg-white rounded-2xl w-full max-w-2xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto"
+              className="modal-enter bg-white rounded-2xl w-full max-w-2xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto modal-scroll"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="sticky top-0 bg-white z-10 flex justify-between items-center px-4 sm:px-6 py-4 border-b border-gray-200">
@@ -599,14 +690,14 @@ function Mentors() {
                         <ul className="space-y-2">
                           {editDocuments.map(doc => (
                             <li key={doc.id} className="flex items-center justify-between gap-2 text-sm bg-gray-50 p-2 rounded-lg">
-                              <a href={getDocumentUrl(doc.url)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-blue-600 hover:underline truncate cursor-pointer">
+                              <a href={getDocumentUrl(doc.url)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-blue-600 hover:underline truncate cursor-pointer flex-1">
                                 <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
                                 <span className="truncate">{doc.file_name || "Document"}</span>
                               </a>
                               <button
                                 type="button"
                                 onClick={() => deleteEditDocument(doc.id)}
-                                className="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-50 transition"
+                                className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50 transition shrink-0"
                                 title="Delete document"
                               >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
@@ -623,10 +714,10 @@ function Mentors() {
                         multiple
                         accept=".pdf,.jpg,.jpeg,.png"
                         onChange={(e) => setSelectedFiles(Array.from(e.target.files))}
-                        className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                        className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 file:cursor-pointer"
                       />
                       {selectedFiles.length > 0 && (
-                        <ul className="mt-2 text-xs text-gray-500 list-disc pl-5">
+                        <ul className="mt-2 text-xs text-gray-500 space-y-1">
                           {selectedFiles.map((f, idx) => <li key={idx}>📎 {f.name}</li>)}
                         </ul>
                       )}
@@ -641,10 +732,10 @@ function Mentors() {
                       multiple
                       accept=".pdf,.jpg,.jpeg,.png"
                       onChange={(e) => setSelectedFiles(Array.from(e.target.files))}
-                      className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+                      className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100 file:cursor-pointer"
                     />
                     {selectedFiles.length > 0 && (
-                      <ul className="mt-2 text-xs text-gray-500 list-disc pl-5">
+                      <ul className="mt-2 text-xs text-gray-500 space-y-1">
                         {selectedFiles.map((f, idx) => <li key={idx}>📎 {f.name}</li>)}
                       </ul>
                     )}
@@ -665,9 +756,10 @@ function Mentors() {
           </div>
         )}
 
+        {/* View Modal - Responsive */}
         {viewingMentor && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={() => setViewingMentor(null)}>
-            <div className="bg-white rounded-2xl w-full max-w-3xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-2 sm:p-4" onClick={() => setViewingMentor(null)}>
+            <div className="bg-white rounded-2xl w-full max-w-3xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto modal-scroll" onClick={(e) => e.stopPropagation()}>
               <div className="sticky top-0 bg-white z-10 flex justify-between items-center px-4 sm:px-6 py-4 border-b border-gray-200">
                 <div className="flex items-center gap-3">
                   <div className="w-7 h-7 rounded-lg bg-green-100 border border-green-200 flex items-center justify-center">
@@ -689,11 +781,26 @@ function Mentors() {
                 <div>
                   <h4 className="text-xs font-semibold text-green-600 uppercase tracking-wider mb-3">Basic Information</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div><label className="block text-gray-500 text-xs">Full Name</label><p className="text-gray-800 text-sm mt-1">{viewingMentor.full_name || "—"}</p></div>
-                    <div><label className="block text-gray-500 text-xs">Email</label><p className="text-gray-800 text-sm mt-1">{viewingMentor.email || viewingMentor.user?.email || "—"}</p></div>
-                    <div><label className="block text-gray-500 text-xs">Phone</label><p className="text-gray-800 text-sm mt-1">{viewingMentor.phone || "—"}</p></div>
-                    <div><label className="block text-gray-500 text-xs">Expertise</label><p className="text-gray-800 text-sm mt-1">{viewingMentor.expertise || "—"}</p></div>
-                    <div><label className="block text-gray-500 text-xs">Batch</label><p className="text-gray-800 text-sm mt-1">{getBatchName(viewingMentor.batch)}</p></div>
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <label className="block text-gray-500 text-xs">Full Name</label>
+                      <p className="text-gray-800 text-sm mt-1 break-words">{viewingMentor.full_name || "—"}</p>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <label className="block text-gray-500 text-xs">Email</label>
+                      <p className="text-gray-800 text-sm mt-1 break-words">{viewingMentor.email || viewingMentor.user?.email || "—"}</p>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <label className="block text-gray-500 text-xs">Phone</label>
+                      <p className="text-gray-800 text-sm mt-1">{viewingMentor.phone || "—"}</p>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <label className="block text-gray-500 text-xs">Expertise</label>
+                      <p className="text-gray-800 text-sm mt-1">{viewingMentor.expertise || "—"}</p>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <label className="block text-gray-500 text-xs">Batch</label>
+                      <p className="text-gray-800 text-sm mt-1">{getBatchName(viewingMentor.batch)}</p>
+                    </div>
                   </div>
                 </div>
 
@@ -704,17 +811,17 @@ function Mentors() {
                   ) : (
                     <ul className="space-y-2">
                       {viewerDocuments.map(doc => (
-                        <li key={doc.id} className="flex items-center gap-2 text-sm bg-gray-50 p-2 rounded-lg">
+                        <li key={doc.id} className="flex items-center gap-2 text-sm bg-gray-50 p-3 rounded-lg">
                           <a
                             href={getDocumentUrl(doc.url)}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex items-center gap-2 text-blue-600 hover:underline truncate cursor-pointer"
+                            className="flex items-center gap-2 text-blue-600 hover:underline truncate cursor-pointer flex-1"
                           >
                             <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                             </svg>
-                            <span className="truncate">{doc.file_name || "Document"}</span>
+                            <span className="truncate break-all">{doc.file_name || "Document"}</span>
                           </a>
                         </li>
                       ))}
@@ -730,59 +837,119 @@ function Mentors() {
           </div>
         )}
 
+        {/* Mentors Table - Responsive */}
         <div className="overflow-hidden rounded-xl border border-gray-200 shadow-sm bg-white">
-          <table className="mentor-table min-w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="text-left px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Mentor</th>
-                <th className="text-left px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Email</th>
-                <th className="text-left px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Phone</th>
-                <th className="text-left px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Expertise</th>
-                <th className="text-left px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Batch</th>
-                <th className="text-left px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-100">
-              {paginatedMentors.map((m) => (
-                <tr key={m.id} className="table-row-hover group">
-                  <td data-label="Mentor" className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${getColor(m.full_name || m.username)} flex items-center justify-center text-white text-xs font-bold shrink-0`}>{getInitials(m.full_name || m.username)}</div>
-                      <button onClick={() => openViewModal(m)} className="text-gray-800 text-sm font-medium hover:text-green-600 transition-colors cursor-pointer">{m.full_name || m.username}</button>
-                    </div>
-                  </td>
-                  <td data-label="Email" className="px-4 py-3 text-gray-500 text-sm break-all">{m.email || m.user?.email || "—"}</td>
-                  <td data-label="Phone" className="px-4 py-3 text-gray-500 text-sm">{m.phone || "—"}</td>
-                  <td data-label="Expertise" className="px-4 py-3"><span className="inline-flex items-center gap-1.5 bg-green-100 text-green-700 border border-green-200 text-xs font-medium px-2 py-1 rounded-full">{m.expertise}</span></td>
-                  <td data-label="Batch" className="px-4 py-3">{m.batch ? <span className="inline-flex items-center gap-1.5 bg-purple-100 text-purple-700 border border-purple-200 text-xs font-medium px-2 py-1 rounded-full">{getBatchName(m.batch)}</span> : <span className="text-gray-400 text-xs">—</span>}</td>
-                  <td data-label="Actions" className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => handleEdit(m)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-gray-500 hover:text-green-600 hover:bg-green-50 border border-transparent hover:border-green-200 transition-all text-xs font-medium">
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                        <span className="hidden sm:inline">Edit</span>
-                      </button>
-                      <button onClick={() => handleDeleteClick(m.id, m.full_name || m.username)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-all text-xs font-medium">
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                        <span className="hidden sm:inline">Delete</span>
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {paginatedMentors.length === 0 && (
+          <div className="overflow-x-auto">
+            <table className="mentor-table min-w-full">
+              <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <td colSpan="6" className="text-center py-12 text-gray-500">{searchTerm ? "No mentors match your search" : "No mentors yet"}</td>
+                  <th className="text-left px-3 sm:px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Mentor</th>
+                  <th className="text-left px-3 sm:px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Email</th>
+                  <th className="text-left px-3 sm:px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Phone</th>
+                  <th className="text-left px-3 sm:px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Expertise</th>
+                  <th className="text-left px-3 sm:px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Batch</th>
+                  <th className="text-left px-3 sm:px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Actions</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-100">
+                {paginatedMentors.map((m) => (
+                  <tr key={m.id} className="table-row-hover group">
+                    <td data-label="Mentor" className="px-3 sm:px-4 py-3">
+                      <div className="flex items-center gap-2 sm:gap-3">
+                        <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${getColor(m.full_name || m.username)} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
+                          {getInitials(m.full_name || m.username)}
+                        </div>
+                        <button onClick={() => openViewModal(m)} className="text-gray-800 text-xs sm:text-sm font-medium hover:text-green-600 transition-colors cursor-pointer break-words flex-1 text-left">
+                          {m.full_name || m.username}
+                        </button>
+                      </div>
+                    </td>
+                    <td data-label="Email" className="px-3 sm:px-4 py-3 text-gray-500 text-xs sm:text-sm break-all">{m.email || m.user?.email || "—"}</td>
+                    <td data-label="Phone" className="px-3 sm:px-4 py-3 text-gray-500 text-xs sm:text-sm">{m.phone || "—"}</td>
+                    <td data-label="Expertise" className="px-3 sm:px-4 py-3">
+                      <span className="inline-flex items-center gap-1.5 bg-green-100 text-green-700 border border-green-200 text-[10px] sm:text-xs font-medium px-2 py-1 rounded-full">
+                        {m.expertise}
+                      </span>
+                    </td>
+                    <td data-label="Batch" className="px-3 sm:px-4 py-3">
+                      {m.batch ? 
+                        <span className="inline-flex items-center gap-1.5 bg-purple-100 text-purple-700 border border-purple-200 text-[10px] sm:text-xs font-medium px-2 py-1 rounded-full">
+                          {getBatchName(m.batch)}
+                        </span> : 
+                        <span className="text-gray-400 text-xs">—</span>
+                      }
+                    </td>
+                    <td data-label="Actions" className="px-3 sm:px-4 py-3">
+                      <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
+                        <button 
+                          onClick={() => handleEdit(m)} 
+                          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-gray-500 hover:text-green-600 hover:bg-green-50 border border-transparent hover:border-green-200 transition-all text-[11px] sm:text-xs font-medium"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                          <span className="hidden sm:inline">Edit</span>
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteClick(m.id, m.full_name || m.username)} 
+                          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-all text-[11px] sm:text-xs font-medium"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                          <span className="hidden sm:inline">Delete</span>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {paginatedMentors.length === 0 && (
+                  <tr>
+                    <td colSpan="6" className="text-center py-12 text-gray-500">
+                      {searchTerm ? "No mentors match your search" : "No mentors yet"}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          
+          {/* Pagination - Responsive */}
           {totalFiltered > 0 && (
             <div className="bg-gray-50 border-t border-gray-200 px-4 py-3 flex flex-col sm:flex-row justify-between gap-3 items-center">
-              <div className="text-gray-500 text-xs">Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, totalFiltered)} of {totalFiltered} mentors</div>
+              <div className="text-gray-500 text-xs text-center sm:text-left">
+                Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, totalFiltered)} of {totalFiltered} mentors
+              </div>
               <div className="flex gap-1 flex-wrap justify-center">
-                <button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1} className="px-2.5 py-1.5 rounded-lg text-sm disabled:text-gray-300 text-gray-500 hover:bg-gray-100 disabled:hover:bg-transparent">←</button>
-                {getPageNumbers().map((page, idx) => page === "..." ? <span key={idx} className="px-2 py-1.5 text-gray-400">...</span> : <button key={page} onClick={() => setCurrentPage(page)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${currentPage === page ? "bg-green-600 text-white shadow-sm" : "text-gray-600 hover:bg-gray-100"}`}>{page}</button>)}
-                <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages} className="px-2.5 py-1.5 rounded-lg text-sm disabled:text-gray-300 text-gray-500 hover:bg-gray-100 disabled:hover:bg-transparent">→</button>
+                <button 
+                  onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} 
+                  disabled={currentPage === 1} 
+                  className="px-2.5 py-1.5 rounded-lg text-sm disabled:text-gray-300 text-gray-500 hover:bg-gray-100 disabled:hover:bg-transparent transition-colors"
+                >
+                  ←
+                </button>
+                {getPageNumbers().map((page, idx) => 
+                  page === "..." ? 
+                    <span key={idx} className="px-2 py-1.5 text-gray-400">...</span> : 
+                    <button 
+                      key={page} 
+                      onClick={() => setCurrentPage(page)} 
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                        currentPage === page 
+                          ? "bg-green-600 text-white shadow-sm" 
+                          : "text-gray-600 hover:bg-gray-100"
+                      }`}
+                    >
+                      {page}
+                    </button>
+                )}
+                <button 
+                  onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} 
+                  disabled={currentPage === totalPages} 
+                  className="px-2.5 py-1.5 rounded-lg text-sm disabled:text-gray-300 text-gray-500 hover:bg-gray-100 disabled:hover:bg-transparent transition-colors"
+                >
+                  →
+                </button>
               </div>
             </div>
           )}

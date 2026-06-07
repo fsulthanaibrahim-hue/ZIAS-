@@ -16,7 +16,7 @@ function Toast({ message, type, onClose }) {
   const icon = type === "success" ? "✓" : type === "error" ? "✕" : "ℹ";
 
   return (
-    <div className={`fixed top-5 right-5 z-50 flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-2xl ${bgColor} text-white text-sm font-medium max-w-sm`}
+    <div className={`fixed top-5 right-5 z-50 flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-2xl ${bgColor} text-white text-sm font-medium max-w-[90vw] sm:max-w-sm`}
       style={{ animation: "slideDown 0.25s cubic-bezier(0.16,1,0.3,1)" }}>
       <span className="w-6 h-6 rounded-full bg-white/25 flex items-center justify-center text-xs font-bold shrink-0">{icon}</span>
       <span className="flex-1">{message}</span>
@@ -78,6 +78,7 @@ function Batches() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   const [dateError, setDateError] = useState("");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     start_date: "",
@@ -119,7 +120,6 @@ function Batches() {
     fetchBatches();
   }, []);
 
-  // ✅ Validate dates: end date cannot be before start date
   const validateDates = (startDate, endDate) => {
     if (startDate && endDate) {
       if (new Date(endDate) < new Date(startDate)) {
@@ -204,7 +204,6 @@ function Batches() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // ✅ Final validation before submit
     if (formData.start_date && formData.end_date) {
       if (new Date(formData.end_date) < new Date(formData.start_date)) {
         setDateError("End date cannot be earlier than start date");
@@ -248,14 +247,15 @@ function Batches() {
     });
     setDateError("");
     setShowForm(true);
+    setMobileMenuOpen(false);
   };
 
   const inputClass = "w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 text-sm";
   const inputErrorClass = "w-full bg-gray-50 border border-red-400 rounded-xl px-4 py-2.5 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20 text-sm";
 
   const ModalWrapper = ({ onClose, children, maxW = "max-w-lg" }) => (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className={`bg-white rounded-3xl w-full ${maxW} shadow-2xl max-h-[90vh] overflow-y-auto`} onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-2 sm:p-4" onClick={onClose}>
+      <div className={`bg-white rounded-3xl w-full ${maxW} shadow-2xl max-h-[90vh] overflow-y-auto modal-scroll`} onClick={e => e.stopPropagation()}>
         {children}
       </div>
     </div>
@@ -273,7 +273,6 @@ function Batches() {
   }
 
   const existingBatchNames = [...new Set(batches.map(b => b.name).filter(Boolean))];
-  // ✅ Get minimum date for end date (today or start date)
   const getMinEndDate = () => {
     if (formData.start_date) {
       return formData.start_date;
@@ -285,8 +284,76 @@ function Batches() {
     <div className="min-h-screen w-full bg-gray-50 text-gray-800" style={{ fontFamily: "'DM Sans', 'Geist', system-ui, sans-serif" }}>
       <style>{`
         @keyframes slideDown { from { opacity:0; transform:translateY(-12px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes fadeIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
         .card-hover { transition: all 0.2s ease; }
         .card-hover:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(0,0,0,0.10); }
+        
+        /* Responsive Table Styles */
+        @media (max-width: 768px) {
+          .batch-table thead {
+            display: none;
+          }
+          .batch-table tbody tr {
+            display: block;
+            margin-bottom: 1rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.75rem;
+            background: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+            transition: all 0.2s;
+          }
+          .batch-table tbody td {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.875rem 1rem;
+            border-bottom: 1px solid #e5e7eb;
+            text-align: right;
+            gap: 1rem;
+            flex-wrap: wrap;
+          }
+          .batch-table tbody td:last-child {
+            border-bottom: none;
+          }
+          .batch-table tbody td::before {
+            content: attr(data-label);
+            font-weight: 600;
+            color: #059669;
+            background: #ecfdf5;
+            padding: 0.25rem 0.75rem;
+            border-radius: 2rem;
+            font-size: 0.7rem;
+            letter-spacing: 0.03em;
+            text-align: left;
+            flex-shrink: 0;
+            min-width: 100px;
+          }
+        }
+        
+        /* Touch-friendly tap targets */
+        button, 
+        [role="button"],
+        .tap-target {
+          min-height: 44px;
+          cursor: pointer;
+        }
+        
+        /* Smooth scrolling for modals */
+        .modal-scroll {
+          scrollbar-width: thin;
+          scrollbar-color: #cbd5e1 #f1f5f9;
+        }
+        .modal-scroll::-webkit-scrollbar {
+          width: 6px;
+        }
+        .modal-scroll::-webkit-scrollbar-track {
+          background: #f1f5f9;
+          border-radius: 10px;
+        }
+        .modal-scroll::-webkit-scrollbar-thumb {
+          background: #cbd5e1;
+          border-radius: 10px;
+        }
       `}</style>
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
@@ -295,14 +362,14 @@ function Batches() {
       {showForm && (
         <ModalWrapper onClose={() => setShowForm(false)}>
           <form onSubmit={handleSubmit}>
-            <div className="flex justify-between items-center px-6 py-5 border-b border-gray-100">
+            <div className="flex justify-between items-center px-4 sm:px-6 py-5 border-b border-gray-100">
               <div>
                 <h3 className="text-base font-bold text-gray-900">{editingId ? "Edit Batch" : "New Batch"}</h3>
                 <p className="text-xs text-gray-400 mt-0.5">Fill in the batch details</p>
               </div>
-              <button type="button" onClick={() => setShowForm(false)} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-gray-100 text-gray-400 text-lg">×</button>
+              <button type="button" onClick={() => setShowForm(false)} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-gray-100 text-gray-400 text-lg transition-colors">×</button>
             </div>
-            <div className="px-6 py-5 space-y-3.5">
+            <div className="px-4 sm:px-6 py-5 space-y-3.5">
               <div>
                 <input
                   type="text"
@@ -322,7 +389,7 @@ function Batches() {
                 <p className="text-xs text-gray-400 mt-1">💡 Type freely – the input never loses focus.</p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-gray-500 text-xs mb-1">Start Date</label>
                   <input
@@ -352,12 +419,12 @@ function Batches() {
                   id="is_active"
                   checked={formData.is_active}
                   onChange={e => setFormData({ ...formData, is_active: e.target.checked })}
-                  className="w-4 h-4 text-emerald-500 rounded"
+                  className="w-4 h-4 text-emerald-500 rounded focus:ring-emerald-500"
                 />
                 <label htmlFor="is_active" className="text-sm text-gray-600">Active batch</label>
               </div>
             </div>
-            <div className="flex gap-2 px-6 py-4 border-t border-gray-100">
+            <div className="flex gap-2 px-4 sm:px-6 py-4 border-t border-gray-100">
               <button type="submit" className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white py-2.5 rounded-xl font-medium text-sm transition-colors">
                 {editingId ? "Save Changes" : "Add Batch"}
               </button>
@@ -369,13 +436,36 @@ function Batches() {
         </ModalWrapper>
       )}
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Batches</h1>
-            <p className="text-gray-400 text-sm mt-0.5">{batches.length} total · {filteredBatches.length} shown</p>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6 md:py-10">
+        {/* Header - Responsive */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-100 border border-emerald-200 flex items-center justify-center shrink-0">
+              <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+              </svg>
+            </div>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">Batches</h1>
+              <p className="text-gray-400 text-xs sm:text-sm mt-0.5">{batches.length} total · {filteredBatches.length} shown</p>
+            </div>
           </div>
-          <div className="flex flex-col sm:flex-row gap-3">
+
+          {/* Mobile Menu Toggle Button */}
+          <div className="sm:hidden">
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-700 text-sm font-medium flex items-center justify-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+              Menu
+            </button>
+          </div>
+
+          {/* Controls - Desktop */}
+          <div className={`${mobileMenuOpen ? 'flex' : 'hidden'} sm:flex flex-col sm:flex-row gap-3 transition-all duration-300`}>
             <div className="relative">
               <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
@@ -388,7 +478,12 @@ function Batches() {
                 className="w-full sm:w-64 bg-white border border-gray-200 rounded-xl pl-10 pr-9 py-2.5 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 text-sm shadow-sm"
               />
               {searchTerm && (
-                <button onClick={() => setSearchTerm("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm">✕</button>
+                <button 
+                  onClick={() => setSearchTerm("")} 
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm p-1"
+                >
+                  ✕
+                </button>
               )}
             </div>
             <button
@@ -397,77 +492,90 @@ function Batches() {
                 setFormData({ name: "", start_date: "", end_date: "", is_active: true });
                 setDateError("");
                 setShowForm(true);
+                setMobileMenuOpen(false);
               }}
-              className="flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold shadow-md shadow-emerald-500/30 transition-all hover:shadow-lg hover:shadow-emerald-500/40 active:scale-95"
+              className="flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold shadow-md shadow-emerald-500/30 transition-all hover:shadow-lg hover:shadow-emerald-500/40 active:scale-95 w-full sm:w-auto"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" /></svg>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
               Add Batch
             </button>
           </div>
         </div>
 
+        {/* Batches Table - Responsive */}
         {paginatedBatches.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 gap-4 bg-white rounded-2xl border border-gray-200">
+          <div className="flex flex-col items-center justify-center py-16 sm:py-24 gap-4 bg-white rounded-2xl border border-gray-200">
             <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center">
               <svg className="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
               </svg>
             </div>
-            <p className="text-gray-400 font-medium">No batches found</p>
-            {searchTerm && <button onClick={() => setSearchTerm("")} className="text-emerald-500 text-sm hover:underline">Clear search</button>}
+            <p className="text-gray-400 font-medium text-center">No batches found</p>
+            {searchTerm && (
+              <button 
+                onClick={() => setSearchTerm("")} 
+                className="text-emerald-500 text-sm hover:underline px-4 py-2"
+              >
+                Clear search
+              </button>
+            )}
           </div>
         ) : (
           <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-100">
+              <table className="batch-table min-w-full divide-y divide-gray-100">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Batch Name</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Start Date</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">End Date</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Batch Name</th>
+                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Start Date</th>
+                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">End Date</th>
+                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th className="px-4 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {paginatedBatches.map((batch) => (
                     <tr key={batch.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td data-label="Batch Name" className="px-4 sm:px-6 py-3 sm:py-4">
                         <button
                           onClick={(e) => handleBatchNameClick(batch.name, e)}
-                          className="text-sm font-medium text-emerald-600 hover:text-emerald-800 hover:underline cursor-pointer"
+                          className="text-sm font-medium text-emerald-600 hover:text-emerald-800 hover:underline cursor-pointer break-words text-left"
                         >
                           {batch.name}
                         </button>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td data-label="Start Date" className="px-4 sm:px-6 py-3 sm:py-4 text-sm text-gray-500">
                         {batch.start_date ? new Date(batch.start_date).toLocaleDateString() : "—"}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td data-label="End Date" className="px-4 sm:px-6 py-3 sm:py-4 text-sm text-gray-500">
                         {batch.end_date ? new Date(batch.end_date).toLocaleDateString() : "—"}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${batch.is_active ? "bg-emerald-100 text-emerald-800" : "bg-gray-100 text-gray-600"}`}>
+                      <td data-label="Status" className="px-4 sm:px-6 py-3 sm:py-4">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          batch.is_active ? "bg-emerald-100 text-emerald-800" : "bg-gray-100 text-gray-600"
+                        }`}>
                           {batch.is_active ? "Active" : "Inactive"}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
-                        <div className="flex items-center justify-center gap-2">
+                      <td data-label="Actions" className="px-4 sm:px-6 py-3 sm:py-4">
+                        <div className="flex items-center justify-start sm:justify-center gap-2">
                           <button
                             onClick={() => handleEdit(batch)}
-                            className="p-1.5 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+                            className="p-2 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
                             title="Edit Batch"
                           >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                             </svg>
                           </button>
                           <button
                             onClick={() => handleDeleteClick(batch.id, batch.name)}
-                            className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                            className="p-2 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
                             title="Delete Batch"
                           >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                             </svg>
                           </button>
@@ -478,27 +586,31 @@ function Batches() {
                 </tbody>
               </table>
             </div>
+            
+            {/* Pagination - Responsive */}
             {totalPages > 1 && (
-              <div className="flex justify-between items-center px-6 py-3 border-t border-gray-100 bg-gray-50/50">
-                <p className="text-sm text-gray-500">
+              <div className="flex flex-col sm:flex-row justify-between items-center gap-3 px-4 sm:px-6 py-3 border-t border-gray-100 bg-gray-50/50">
+                <p className="text-xs sm:text-sm text-gray-500 text-center sm:text-left">
                   Showing {startIndex + 1}–{Math.min(startIndex + itemsPerPage, totalFiltered)} of {totalFiltered}
                 </p>
-                <div className="flex gap-1">
+                <div className="flex gap-1 flex-wrap justify-center">
                   <button
                     onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
                     disabled={currentPage === 1}
-                    className="px-3 py-1 rounded-lg text-sm disabled:text-gray-300 text-gray-600 hover:bg-gray-200 disabled:cursor-not-allowed"
+                    className="px-3 py-1.5 rounded-lg text-sm disabled:text-gray-300 text-gray-600 hover:bg-gray-200 disabled:cursor-not-allowed transition-colors"
                   >
                     ← Previous
                   </button>
                   {getPageNumbers().map((p, i) =>
                     p === "..." ? (
-                      <span key={i} className="px-2 py-1 text-gray-400">…</span>
+                      <span key={i} className="px-2 py-1.5 text-gray-400">…</span>
                     ) : (
                       <button
                         key={p}
                         onClick={() => setCurrentPage(p)}
-                        className={`px-3 py-1 rounded-lg text-sm font-medium ${currentPage === p ? "bg-emerald-500 text-white" : "text-gray-600 hover:bg-gray-200"}`}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                          currentPage === p ? "bg-emerald-500 text-white shadow-sm" : "text-gray-600 hover:bg-gray-200"
+                        }`}
                       >
                         {p}
                       </button>
@@ -507,7 +619,7 @@ function Batches() {
                   <button
                     onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
                     disabled={currentPage === totalPages}
-                    className="px-3 py-1 rounded-lg text-sm disabled:text-gray-300 text-gray-600 hover:bg-gray-200 disabled:cursor-not-allowed"
+                    className="px-3 py-1.5 rounded-lg text-sm disabled:text-gray-300 text-gray-600 hover:bg-gray-200 disabled:cursor-not-allowed transition-colors"
                   >
                     Next →
                   </button>

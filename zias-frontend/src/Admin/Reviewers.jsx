@@ -52,6 +52,7 @@ function Reviewers() {
   const [viewingReviewer, setViewingReviewer] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -124,7 +125,6 @@ function Reviewers() {
     e.preventDefault();
     setSubmitting(true);
     
-    // ✅ Payload without username - backend will generate it
     const payload = {
       full_name: formData.name,
       email: formData.email,
@@ -177,6 +177,7 @@ function Reviewers() {
       experience: reviewer.experience ? reviewer.experience.toString() : "",
     });
     setShowForm(true);
+    setMobileMenuOpen(false);
   };
 
   const handleChange = (e) => {
@@ -255,13 +256,82 @@ function Reviewers() {
           to { opacity:1; transform:translateY(0); }
         }
         .animate-in { animation: slide-in-from-top-2 0.2s ease-out; }
-        @media (max-width: 640px) {
-          .reviewer-table thead { display: none; }
-          .reviewer-table tbody tr { display: block; margin-bottom: 1rem; border: 1px solid #e5e7eb; border-radius: 0.75rem; background: white; }
-          .reviewer-table tbody td { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; border-bottom: 1px solid #e5e7eb; text-align: right; }
-          .reviewer-table tbody td:last-child { border-bottom: none; }
-          .reviewer-table tbody td::before { content: attr(data-label); font-weight: 600; color: #6b7280; margin-right: 1rem; text-align: left; flex: 1; }
-          .reviewer-table tbody td .action-buttons { margin-left: auto; display: flex; gap: 0.5rem; }
+        
+        /* Enhanced Responsive Styles */
+        @media (max-width: 768px) {
+          .reviewer-table thead {
+            display: none;
+          }
+          .reviewer-table tbody tr {
+            display: block;
+            margin-bottom: 1rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.75rem;
+            background: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+            transition: all 0.2s;
+          }
+          .reviewer-table tbody td {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.875rem 1rem;
+            border-bottom: 1px solid #e5e7eb;
+            text-align: right;
+            gap: 1rem;
+            flex-wrap: wrap;
+          }
+          .reviewer-table tbody td:last-child {
+            border-bottom: none;
+          }
+          .reviewer-table tbody td::before {
+            content: attr(data-label);
+            font-weight: 600;
+            color: #059669;
+            background: #ecfdf5;
+            padding: 0.25rem 0.75rem;
+            border-radius: 2rem;
+            font-size: 0.7rem;
+            letter-spacing: 0.03em;
+            text-align: left;
+            flex-shrink: 0;
+            min-width: 110px;
+          }
+          
+          /* Touch-friendly tap targets */
+          button, 
+          [role="button"],
+          .tap-target {
+            min-height: 44px;
+            cursor: pointer;
+          }
+          
+          /* Improved spacing for mobile */
+          .container-padding {
+            padding-left: 1rem;
+            padding-right: 1rem;
+          }
+        }
+        
+        /* Tablet optimization */
+        @media (min-width: 769px) and (max-width: 1024px) {
+          .reviewer-table td {
+            padding: 0.75rem 0.5rem;
+          }
+        }
+        
+        /* Smooth scrolling for modals */
+        .modal-scroll {
+          scrollbar-width: thin;
+        }
+        
+        /* Hover effects for cards */
+        .reviewer-card-hover {
+          transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .reviewer-card-hover:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 20px rgba(0,0,0,0.08);
         }
       `}</style>
 
@@ -269,6 +339,7 @@ function Reviewers() {
       <ConfirmModal isOpen={showConfirmModal} onClose={() => setShowConfirmModal(false)} onConfirm={confirmDelete} reviewerName={reviewerToDelete?.name} />
 
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-4 sm:py-8">
+        {/* Header Section - Responsive */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 rounded-xl bg-green-100 border border-green-200 flex items-center justify-center shrink-0">
@@ -277,14 +348,28 @@ function Reviewers() {
               </svg>
             </div>
             <div>
-              <h1 className="text-xl font-semibold text-gray-800 tracking-tight">Reviewers</h1>
+              <h1 className="text-xl sm:text-2xl font-semibold text-gray-800 tracking-tight">Reviewers</h1>
               <p className="text-gray-500 text-xs mt-0.5">
                 {reviewers.length} total · {filteredReviewers.length} shown
               </p>
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          {/* Mobile Menu Toggle Button */}
+          <div className="sm:hidden">
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-700 text-sm font-medium flex items-center justify-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+              Menu
+            </button>
+          </div>
+
+          {/* Controls - Desktop */}
+          <div className={`${mobileMenuOpen ? 'flex' : 'hidden'} sm:flex flex-col sm:flex-row items-stretch sm:items-center gap-3 transition-all duration-300`}>
             <div className="relative w-full sm:w-64">
               <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
@@ -309,6 +394,7 @@ function Reviewers() {
                 setEditingId(null);
                 setFormData({ name: "", email: "", department: "", qualification: "", experience: "" });
                 setShowForm(true);
+                setMobileMenuOpen(false);
               }}
               className="shine flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 shadow-md w-full sm:w-auto"
             >
@@ -320,15 +406,15 @@ function Reviewers() {
           </div>
         </div>
 
-        {/* Add/Edit Modal */}
+        {/* Add/Edit Modal - Responsive */}
         {showForm && (
           <div
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4"
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-2 sm:p-4"
             onClick={() => setShowForm(false)}
           >
             <form
               onSubmit={handleSubmit}
-              className="modal-enter bg-white rounded-2xl w-full max-w-md border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto"
+              className="modal-enter bg-white rounded-2xl w-full max-w-md border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto modal-scroll"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="sticky top-0 bg-white z-10 flex justify-between items-center px-4 sm:px-6 py-4 border-b border-gray-200">
@@ -352,11 +438,11 @@ function Reviewers() {
               <div className="px-4 sm:px-6 py-5 space-y-4">
                 <div>
                   <label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Full Name *</label>
-                  <input type="text" name="name" value={formData.name} onChange={handleChange} required className={inputClass} />
+                  <input type="text" name="name" value={formData.name} onChange={handleChange} required className={inputClass} placeholder="Enter full name" />
                 </div>
                 <div>
                   <label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Email *</label>
-                  <input type="email" name="email" value={formData.email} onChange={handleChange} required className={inputClass} />
+                  <input type="email" name="email" value={formData.email} onChange={handleChange} required className={inputClass} placeholder="reviewer@example.com" />
                 </div>
                 <div>
                   <label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Department (Course) *</label>
@@ -373,7 +459,7 @@ function Reviewers() {
                 </div>
                 <div>
                   <label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Experience (years)</label>
-                  <input type="text" name="experience" value={formData.experience} onChange={handleChange} className={inputClass} placeholder="e.g. 5" />
+                  <input type="number" name="experience" value={formData.experience} onChange={handleChange} className={inputClass} placeholder="e.g. 5" min="0" step="1" />
                 </div>
               </div>
               <div className="flex gap-2 px-4 sm:px-6 py-4 border-t border-gray-200">
@@ -388,97 +474,174 @@ function Reviewers() {
           </div>
         )}
 
-        {/* Reviewers Table */}
+        {/* Reviewers Table - Responsive */}
         <div className="overflow-hidden rounded-xl border border-gray-200 shadow-sm bg-white">
-          <table className="reviewer-table min-w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="text-left px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Reviewer</th>
-                <th className="text-left px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Email</th>
-                <th className="text-left px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Department (Course)</th>
-                <th className="text-left px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-100">
-              {paginatedReviewers.length > 0 ? (
-                paginatedReviewers.map((r) => {
-                  const displayName = r.full_name || r.username;
-                  return (
-                    <tr key={r.id} className="table-row-hover transition-colors duration-150 group">
-                      <td data-label="Reviewer" className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${getColor(displayName)} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
-                            {getInitials(displayName)}
-                          </div>
-                          <button onClick={() => setViewingReviewer(r)} className="text-gray-800 text-sm font-medium hover:text-green-600 transition-colors cursor-pointer">
-                            {displayName}
-                          </button>
-                        </div>
-                      </td>
-                      <td data-label="Email" className="px-4 py-3 text-gray-500 text-sm break-all">{r.email}</td>
-                      <td data-label="Department" className="px-4 py-3">
-                        <span className="inline-flex items-center gap-1.5 bg-purple-100 text-purple-700 border border-purple-200 text-xs font-medium px-2 py-1 rounded-full">
-                          {r.department || (r.course ? r.course : "—")}
-                        </span>
-                      </td>
-                      <td data-label="Actions" className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <button onClick={() => handleEdit(r)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-gray-500 hover:text-green-600 hover:bg-green-50 border border-transparent hover:border-green-200 transition-all text-xs font-medium">
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                            <span className="hidden sm:inline">Edit</span>
-                          </button>
-                          <button onClick={() => handleDeleteClick(r.id, displayName)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-all text-xs font-medium">
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                            <span className="hidden sm:inline">Delete</span>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              ) : (
+          <div className="overflow-x-auto">
+            <table className="reviewer-table min-w-full">
+              <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <td colSpan="4" className="text-center py-12">
-                    <p className="text-gray-500">{searchTerm ? "No reviewers match your search" : "No reviewers yet"}</p>
-                  </td>
+                  <th className="text-left px-3 sm:px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Reviewer</th>
+                  <th className="text-left px-3 sm:px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Email</th>
+                  <th className="text-left px-3 sm:px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Department</th>
+                  <th className="text-left px-3 sm:px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Actions</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-100">
+                {paginatedReviewers.length > 0 ? (
+                  paginatedReviewers.map((r) => {
+                    const displayName = r.full_name || r.username;
+                    return (
+                      <tr key={r.id} className="table-row-hover transition-colors duration-150 group">
+                        <td data-label="Reviewer" className="px-3 sm:px-4 py-3">
+                          <div className="flex items-center gap-2 sm:gap-3">
+                            <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${getColor(displayName)} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
+                              {getInitials(displayName)}
+                            </div>
+                            <button 
+                              onClick={() => setViewingReviewer(r)} 
+                              className="text-gray-800 text-xs sm:text-sm font-medium hover:text-green-600 transition-colors cursor-pointer break-words flex-1 text-left"
+                            >
+                              {displayName}
+                            </button>
+                          </div>
+                        </td>
+                        <td data-label="Email" className="px-3 sm:px-4 py-3 text-gray-500 text-xs sm:text-sm break-all">{r.email}</td>
+                        <td data-label="Department" className="px-3 sm:px-4 py-3">
+                          <span className="inline-flex items-center gap-1.5 bg-purple-100 text-purple-700 border border-purple-200 text-[10px] sm:text-xs font-medium px-2 py-1 rounded-full">
+                            {r.department || (r.course ? r.course : "—")}
+                          </span>
+                        </td>
+                        <td data-label="Actions" className="px-3 sm:px-4 py-3">
+                          <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
+                            <button 
+                              onClick={() => handleEdit(r)} 
+                              className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-gray-500 hover:text-green-600 hover:bg-green-50 border border-transparent hover:border-green-200 transition-all text-[11px] sm:text-xs font-medium"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                              <span className="hidden sm:inline">Edit</span>
+                            </button>
+                            <button 
+                              onClick={() => handleDeleteClick(r.id, displayName)} 
+                              className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-all text-[11px] sm:text-xs font-medium"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                              <span className="hidden sm:inline">Delete</span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan="4" className="text-center py-12">
+                      <div className="w-14 h-14 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
+                        <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                      </div>
+                      <p className="text-gray-500 text-sm">{searchTerm ? "No reviewers match your search" : "No reviewers yet"}</p>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          
+          {/* Pagination - Responsive */}
           {totalFiltered > 0 && (
             <div className="bg-gray-50 border-t border-gray-200 px-4 py-3 flex flex-col sm:flex-row justify-between gap-3 items-center">
-              <div className="text-gray-500 text-xs">Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, totalFiltered)} of {totalFiltered} reviewers</div>
+              <div className="text-gray-500 text-xs text-center sm:text-left">
+                Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, totalFiltered)} of {totalFiltered} reviewers
+              </div>
               <div className="flex gap-1 flex-wrap justify-center">
-                <button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1} className="px-2.5 py-1.5 rounded-lg text-sm disabled:text-gray-300 text-gray-500 hover:bg-gray-100">←</button>
-                {getPageNumbers().map((page, idx) => page === "..." ? <span key={idx} className="px-2 py-1.5 text-gray-400">...</span> : <button key={page} onClick={() => setCurrentPage(page)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${currentPage === page ? "bg-green-600 text-white shadow-sm" : "text-gray-600 hover:bg-gray-100"}`}>{page}</button>)}
-                <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages} className="px-2.5 py-1.5 rounded-lg text-sm disabled:text-gray-300 text-gray-500 hover:bg-gray-100">→</button>
+                <button 
+                  onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} 
+                  disabled={currentPage === 1} 
+                  className="px-2.5 py-1.5 rounded-lg text-sm disabled:text-gray-300 text-gray-500 hover:bg-gray-100 disabled:hover:bg-transparent transition-colors"
+                >
+                  ←
+                </button>
+                {getPageNumbers().map((page, idx) => 
+                  page === "..." ? 
+                    <span key={idx} className="px-2 py-1.5 text-gray-400">...</span> : 
+                    <button 
+                      key={page} 
+                      onClick={() => setCurrentPage(page)} 
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                        currentPage === page 
+                          ? "bg-green-600 text-white shadow-sm" 
+                          : "text-gray-600 hover:bg-gray-100"
+                      }`}
+                    >
+                      {page}
+                    </button>
+                )}
+                <button 
+                  onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} 
+                  disabled={currentPage === totalPages} 
+                  className="px-2.5 py-1.5 rounded-lg text-sm disabled:text-gray-300 text-gray-500 hover:bg-gray-100 disabled:hover:bg-transparent transition-colors"
+                >
+                  →
+                </button>
               </div>
             </div>
           )}
         </div>
       </div>
 
-      {/* View Modal */}
+      {/* View Modal - Responsive */}
       {viewingReviewer && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4" onClick={() => setViewingReviewer(null)}>
-          <div className="bg-white rounded-2xl w-full max-w-2xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="sticky top-0 bg-white px-4 py-4 border-b flex justify-between items-center">
-              <div><h3 className="text-sm font-semibold">Reviewer Details</h3></div>
-              <button onClick={() => setViewingReviewer(null)} className="text-gray-400 hover:text-gray-600">✕</button>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-2 sm:p-4" onClick={() => setViewingReviewer(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-2xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto modal-scroll" onClick={(e) => e.stopPropagation()}>
+            <div className="sticky top-0 bg-white z-10 flex justify-between items-center px-4 sm:px-6 py-4 border-b border-gray-200">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-500 to-green-700 flex items-center justify-center text-white text-xs font-bold">
+                  {getInitials(viewingReviewer.full_name || viewingReviewer.username)}
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-800">Reviewer Details</h3>
+                  <p className="text-gray-500 text-xs">View all information</p>
+                </div>
+              </div>
+              <button onClick={() => setViewingReviewer(null)} className="text-gray-400 hover:text-gray-600 transition p-1.5 rounded-lg hover:bg-gray-100">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
-            <div className="px-4 py-5 grid grid-cols-2 gap-4">
-              <div><label className="text-gray-500 text-xs">Full Name</label><input value={viewingReviewer.full_name || viewingReviewer.username} readOnly className={readOnlyClass} /></div>
-              <div><label className="text-gray-500 text-xs">Email</label><input value={viewingReviewer.email} readOnly className={readOnlyClass} /></div>
-              <div><label className="text-gray-500 text-xs">Department</label><input value={viewingReviewer.department || "—"} readOnly className={readOnlyClass} /></div>
-              <div><label className="text-gray-500 text-xs">Qualification</label><input value={viewingReviewer.qualification || "—"} readOnly className={readOnlyClass} /></div>
-              <div><label className="text-gray-500 text-xs">Experience</label><input value={viewingReviewer.experience ? `${viewingReviewer.experience} years` : "—"} readOnly className={readOnlyClass} /></div>
+            <div className="px-4 sm:px-6 py-5 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <label className="block text-gray-500 text-xs mb-1">Full Name</label>
+                  <p className="text-gray-800 text-sm font-medium break-words">{viewingReviewer.full_name || viewingReviewer.username || "—"}</p>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <label className="block text-gray-500 text-xs mb-1">Email</label>
+                  <p className="text-gray-800 text-sm break-words">{viewingReviewer.email || "—"}</p>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <label className="block text-gray-500 text-xs mb-1">Department (Course)</label>
+                  <p className="text-gray-800 text-sm">{viewingReviewer.department || viewingReviewer.course || "—"}</p>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <label className="block text-gray-500 text-xs mb-1">Qualification</label>
+                  <p className="text-gray-800 text-sm">{viewingReviewer.qualification || "—"}</p>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <label className="block text-gray-500 text-xs mb-1">Experience</label>
+                  <p className="text-gray-800 text-sm">{viewingReviewer.experience ? `${viewingReviewer.experience} years` : "—"}</p>
+                </div>
+              </div>
             </div>
-            <div className="px-4 py-4 border-t flex justify-end">
-              <button onClick={() => setViewingReviewer(null)} className="bg-gray-100 px-5 py-2 rounded-lg">Close</button>
+            <div className="sticky bottom-0 bg-white px-4 sm:px-6 py-4 border-t border-gray-200 flex justify-end">
+              <button onClick={() => setViewingReviewer(null)} className="bg-gray-100 hover:bg-gray-200 border border-gray-200 text-gray-700 hover:text-gray-800 px-5 py-2 rounded-lg transition-all text-sm font-medium">
+                Close
+              </button>
             </div>
           </div>
         </div>
