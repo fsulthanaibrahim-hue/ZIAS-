@@ -83,7 +83,7 @@ import AccountsDashboard from "./pages/accounts/AccountsDashboard";
 import AccountsPayments from "./pages/accounts/AccountsPayments";
 import AccountsStudents from "./pages/accounts/AccountsStudents";
 import AccountsProfile from "./pages/accounts/AccountsProfile";
-import AccountsInvoices from "./pages/accounts/AccountsInvoices";
+import AccountsFeeStructure from "./pages/accounts/AccountsFeeStructure";
 // REMOVED: import AccountsChangePassword from "./pages/accounts/AccountsChangePassword"; // This file doesn't exist
 
 import StudentFees from "./pages/student/StudentFees";
@@ -516,7 +516,7 @@ function App() {
           <AccountsRoute>
             <div style={{ display: "flex" }}>
               <AccountsSidebar />
-              <AccountsInvoices />
+              <AccountsFeeStructure />
             </div>
           </AccountsRoute>
         } />

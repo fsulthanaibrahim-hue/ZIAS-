@@ -82,14 +82,14 @@ from .views import (
     StudentFeeSummaryView,
     AdminStudentFeeListView,
     AdminStudentFeeDetailView,
+    AccountsStudentListView, 
+    AccountsStudentFeeView,  # ✅ ADD COMMA HERE!
     
     # Other
-    ReviewerViewSet,
+    ReviewerViewSet,  # ✅ Now this works
 )
 
-# =========================
-# ROUTER
-# =========================
+# Rest of your code remains the same...
 router = DefaultRouter()
 
 router.register('students', StudentViewSet, basename='student')
@@ -143,6 +143,9 @@ urlpatterns = [
     path('accounts/dashboard/', AccountsDashboardView.as_view(), name='accounts-dashboard'),
     path('accounts/students/', AccountsStudentListView.as_view(), name='accounts-students'),
     path('accounts/profile/', AccountsProfileView.as_view(), name='accounts-profile'),
+    path('accounts/students/list/', AccountsStudentListView.as_view(), name='accounts-students-list'),
+    path('accounts/students/<int:student_id>/', AccountsStudentListView.as_view(), name='accounts-student-detail'),
+    path('accounts/student-fee/<int:student_id>/', AccountsStudentFeeView.as_view(), name='accounts-student-fee'),
     
     # Student URLs
     path('student/fee-summary/', StudentFeeSummaryView.as_view(), name='student-fee-summary'),
@@ -190,4 +193,3 @@ urlpatterns = [
     # Include router URLs (keep this at the end to avoid conflicts)
     path('', include(router.urls)),
 ]
-

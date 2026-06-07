@@ -1,610 +1,697 @@
-import React, { useEffect, useState, useCallback } from 'react';
+// pages/accounts/AccountsPayments.jsx
+import React, { useState, useEffect, useCallback } from 'react';
 import API from '../../api/api';
 import { toast } from 'react-hot-toast';
 
 function AccountsPayments() {
-  const [payments, setPayments] = useState([]);
   const [students, setStudents] = useState([]);
+  const [studentFees, setStudentFees] = useState([]);
+  const [feeStructures, setFeeStructures] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [selectedPayment, setSelectedPayment] = useState(null);
+  const [search, setSearch] = useState('');
+  const [applyingFee, setApplyingFee] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  
+  // Edit modal states
   const [showEditModal, setShowEditModal] = useState(false);
-  const [showAddModal, setShowAddModal] = useState(false);
+  const [editingStudent, setEditingStudent] = useState(null);
   const [editFormData, setEditFormData] = useState({
-    amount: '',
-    due_date: '',
-    status: '',
-    payment_method: '',
-    notes: ''
-  });
-  const [addFormData, setAddFormData] = useState({
-    student_name: '',
-    student_id: '',
-    amount: '',
-    due_date: '',
-    status: 'pending',
-    payment_method: '',
-    notes: ''
+    total_amount: "",
+    paid_amount: ""
   });
   const [updating, setUpdating] = useState(false);
-  const [adding, setAdding] = useState(false);
-  const [studentSuggestions, setStudentSuggestions] = useState([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
 
-  const fetchPayments = useCallback(async () => {
+  // Apply Fee Modal
+  const [showApplyModal, setShowApplyModal] = useState(false);
+  const [selectedFeeStructure, setSelectedFeeStructure] = useState(null);
+  const [applyingToAll, setApplyingToAll] = useState(false);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
     try {
-      const res = await API.get('/fee-payments/');
-      let paymentsData = [];
-      if (Array.isArray(res.data)) {
-        paymentsData = res.data;
-      } else if (res.data && Array.isArray(res.data.results)) {
-        paymentsData = res.data.results;
-      } else if (res.data && typeof res.data === 'object') {
-        paymentsData = [res.data];
-      }
-      setPayments(paymentsData);
-    } catch (error) {
-      console.error('Error fetching payments:', error);
-      toast.error('Failed to load payments');
-      setPayments([]);
+      // Fetch students
+      const studentsRes = await API.get('/accounts/students/');
+      let studentsData = studentsRes.data;
+      if (studentsData.results) studentsData = studentsData.results;
+      
+      // Fetch student fees (payment records)
+      const studentFeesRes = await API.get('/student-fees/');
+      let studentFeesData = studentFeesRes.data;
+      if (studentFeesData.results) studentFeesData = studentFeesData.results;
+      
+      // Fetch fee structures
+      const feeStructuresRes = await API.get('/fee-structures/');
+      let feeStructuresData = feeStructuresRes.data;
+      if (feeStructuresData.results) feeStructuresData = feeStructuresData.results;
+      
+      setStudents(Array.isArray(studentsData) ? studentsData : []);
+      setStudentFees(Array.isArray(studentFeesData) ? studentFeesData : []);
+      setFeeStructures(Array.isArray(feeStructuresData) ? feeStructuresData : []);
+      
+    } catch (err) {
+      console.error('Error:', err);
+      toast.error('Failed to load payment data');
+      setStudents([]);
+      setStudentFees([]);
+      setFeeStructures([]);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const fetchStudents = useCallback(async () => {
-    try {
-      const res = await API.get('/students/');
-      let studentsData = [];
-      if (Array.isArray(res.data)) {
-        studentsData = res.data;
-      } else if (res.data && Array.isArray(res.data.results)) {
-        studentsData = res.data.results;
-      }
-      setStudents(studentsData);
-    } catch (error) {
-      console.error('Error fetching students:', error);
+  const handleApplyFeeToAll = async () => {
+    if (!selectedFeeStructure) {
+      toast.error('Please select a fee structure');
+      return;
     }
-  }, []);
+    
+    const studentsWithFeeIds = studentFees.map(sf => sf.student);
+    const studentsWithoutFee = students.filter(s => !studentsWithFeeIds.includes(s.id));
+    
+    if (studentsWithoutFee.length === 0) {
+      toast.info('All students already have fee assigned');
+      setShowApplyModal(false);
+      return;
+    }
+    
+    setApplyingToAll(true);
+    let successCount = 0;
+    let failCount = 0;
+    
+    for (const student of studentsWithoutFee) {
+      try {
+        const totalAmount = parseFloat(selectedFeeStructure.total_amount) || 0;
+        const discount = parseFloat(selectedFeeStructure.discount_percentage) || 0;
+        const finalAmount = totalAmount * (1 - discount / 100);
+        
+        await API.post('/student-fees/', {
+          student: student.id,
+          fee_structure: selectedFeeStructure.id,
+          total_amount: finalAmount,
+          paid_amount: 0,
+          discount_applied: discount
+        });
+        successCount++;
+      } catch (err) {
+        console.error(`Failed for ${student.name}:`, err);
+        failCount++;
+      }
+    }
+    
+    if (successCount > 0) {
+      toast.success(`Fee assigned to ${successCount} students${failCount > 0 ? `, ${failCount} failed` : ''}`);
+    } else {
+      toast.error('Failed to assign fees');
+    }
+    
+    setShowApplyModal(false);
+    setSelectedFeeStructure(null);
+    await fetchData();
+    setApplyingToAll(false);
+  };
+
+  const handleApplyFeeToIndividual = async (student) => {
+    if (!selectedFeeStructure) {
+      toast.error('Please select a fee structure');
+      return;
+    }
+    
+    setApplyingFee(true);
+    try {
+      const totalAmount = parseFloat(selectedFeeStructure.total_amount) || 0;
+      const discount = parseFloat(selectedFeeStructure.discount_percentage) || 0;
+      const finalAmount = totalAmount * (1 - discount / 100);
+      
+      await API.post('/student-fees/', {
+        student: student.id,
+        fee_structure: selectedFeeStructure.id,
+        total_amount: finalAmount,
+        paid_amount: 0,
+        discount_applied: discount
+      });
+      
+      toast.success(`Fee assigned to ${student.name}`);
+      setShowApplyModal(false);
+      setSelectedFeeStructure(null);
+      await fetchData();
+    } catch (err) {
+      console.error('Error:', err);
+      toast.error('Failed to assign fee');
+    } finally {
+      setApplyingFee(false);
+    }
+  };
 
   useEffect(() => {
-    fetchPayments();
-    fetchStudents();
-  }, [fetchPayments, fetchStudents]);
-
-  const handleStudentNameChange = (value) => {
-    setAddFormData(prev => ({ ...prev, student_name: value, student_id: '' }));
+    fetchData();
     
-    if (value.length > 0) {
-      const filtered = students.filter(s => 
-        (s.full_name || s.name || s.user?.username || '').toLowerCase().includes(value.toLowerCase())
-      );
-      setStudentSuggestions(filtered.slice(0, 5));
-      setShowSuggestions(true);
-    } else {
-      setStudentSuggestions([]);
-      setShowSuggestions(false);
+    const handleUpdate = () => {
+      fetchData();
+    };
+    window.addEventListener('studentFeeUpdated', handleUpdate);
+    
+    return () => {
+      window.removeEventListener('studentFeeUpdated', handleUpdate);
+    };
+  }, [fetchData]);
+
+  const getStudentFeeInfo = (student) => {
+    const studentFeeRecord = studentFees.find(sf => sf.student === student.id);
+    
+    if (studentFeeRecord) {
+      const totalAmount = Number(studentFeeRecord.total_amount) || 0;
+      const paidAmount = Number(studentFeeRecord.paid_amount) || 0;
+      // Ensure pending amount never goes negative
+      const pendingAmount = Math.max(0, totalAmount - paidAmount);
+      
+      let status = 'Pending';
+      if (pendingAmount === 0 && totalAmount > 0) {
+        status = 'Paid';
+      } else if (paidAmount > 0 && pendingAmount > 0) {
+        status = 'Partially Paid';
+      } else if (pendingAmount === totalAmount && totalAmount > 0) {
+        status = 'Pending';
+      } else if (totalAmount === 0) {
+        status = 'No Fee Assigned';
+      }
+      
+      return {
+        totalAmount: totalAmount,
+        paidAmount: paidAmount,
+        pendingAmount: pendingAmount,
+        status: status,
+        feeStructureId: studentFeeRecord.fee_structure,
+        studentFeeId: studentFeeRecord.id,
+        studentName: studentFeeRecord.student_name || student.name || student.full_name,
+        courseName: studentFeeRecord.course_name || student.course,
+        discountApplied: studentFeeRecord.discount_applied || 0
+      };
     }
+    
+    return {
+      totalAmount: 0,
+      paidAmount: 0,
+      pendingAmount: 0,
+      status: 'No Fee Assigned',
+      feeStructureId: null,
+      studentFeeId: null,
+      discountApplied: 0
+    };
   };
 
-  const selectStudent = (student) => {
-    const studentName = student.full_name || student.name || student.user?.username;
-    setAddFormData(prev => ({ 
-      ...prev, 
-      student_name: studentName,
-      student_id: student.id
-    }));
-    setShowSuggestions(false);
-  };
-
-  const openEditModal = (payment) => {
-    setSelectedPayment(payment);
+  const handleEditClick = (student) => {
+    const feeInfo = getStudentFeeInfo(student);
+    if (!feeInfo.studentFeeId) {
+      // If no fee record, open apply modal instead
+      setSelectedFeeStructure(null);
+      setShowApplyModal(true);
+      setEditingStudent(student);
+      return;
+    }
+    
+    setEditingStudent(student);
     setEditFormData({
-      amount: payment.amount || '',
-      due_date: payment.due_date ? payment.due_date.split('T')[0] : '',
-      status: payment.status || 'pending',
-      payment_method: payment.payment_method || '',
-      notes: payment.notes || ''
+      total_amount: feeInfo.totalAmount.toString(),
+      paid_amount: feeInfo.paidAmount.toString()
     });
     setShowEditModal(true);
+    setMobileMenuOpen(false);
   };
 
-  const openAddModal = () => {
-    setAddFormData({
-      student_name: '',
-      student_id: '',
-      amount: '',
-      due_date: '',
-      status: 'pending',
-      payment_method: '',
-      notes: ''
-    });
-    setStudentSuggestions([]);
-    setShowSuggestions(false);
-    setShowAddModal(true);
-  };
-
-  const handleEditChange = (e) => {
-    const { name, value } = e.target;
-    setEditFormData(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleAddChange = (e) => {
-    const { name, value } = e.target;
-    if (name === 'student_name') {
-      handleStudentNameChange(value);
-    } else {
-      setAddFormData(prev => ({ ...prev, [name]: value }));
+  const handleUpdateFee = async () => {
+    if (!editingStudent) return;
+    
+    const feeInfo = getStudentFeeInfo(editingStudent);
+    if (!feeInfo.studentFeeId) {
+      toast.error('No fee record found');
+      setShowEditModal(false);
+      return;
     }
-  };
-
-  const saveEdit = async () => {
-    if (!selectedPayment) return;
+    
+    // Validate inputs
+    const newTotalAmount = parseFloat(editFormData.total_amount) || 0;
+    const newPaidAmount = parseFloat(editFormData.paid_amount) || 0;
+    
+    if (newTotalAmount < 0) {
+      toast.error('Total amount cannot be negative');
+      return;
+    }
+    
+    if (newPaidAmount < 0) {
+      toast.error('Paid amount cannot be negative');
+      return;
+    }
+    
+    if (newPaidAmount > newTotalAmount) {
+      toast.error('Paid amount cannot exceed total amount');
+      return;
+    }
     
     setUpdating(true);
     try {
       const payload = {
-        amount: parseFloat(editFormData.amount),
-        due_date: editFormData.due_date,
-        status: editFormData.status,
-        payment_method: editFormData.payment_method,
-        notes: editFormData.notes
+        total_amount: newTotalAmount,
+        paid_amount: newPaidAmount
       };
       
-      await API.patch(`/fee-payments/${selectedPayment.id}/`, payload);
+      await API.patch(`/student-fees/${feeInfo.studentFeeId}/`, payload);
+      
       toast.success('Payment updated successfully');
       setShowEditModal(false);
-      setSelectedPayment(null);
-      fetchPayments();
-    } catch (error) {
-      console.error('Update error:', error);
-      toast.error(error.response?.data?.detail || 'Failed to update payment');
+      setEditingStudent(null);
+      
+      await fetchData();
+      window.dispatchEvent(new Event('studentFeeUpdated'));
+      
+    } catch (err) {
+      console.error('Update error:', err);
+      toast.error(err.response?.data?.message || 'Failed to update payment');
     } finally {
       setUpdating(false);
     }
   };
 
-  const addPayment = async () => {
-    if (!addFormData.student_id) {
-      toast.error('Please select a student from suggestions');
+  const handleDeleteFee = async (student) => {
+    const feeInfo = getStudentFeeInfo(student);
+    if (!feeInfo.studentFeeId) {
+      toast.error('No fee record to delete');
       return;
     }
-    if (!addFormData.amount || parseFloat(addFormData.amount) <= 0) {
-      toast.error('Please enter a valid amount');
+    
+    if (!window.confirm(`Delete fee record for ${student.name}? This action cannot be undone.`)) {
       return;
     }
-    if (!addFormData.due_date) {
-      toast.error('Please select due date');
-      return;
-    }
-
-    setAdding(true);
+    
     try {
-      const payload = {
-        student: parseInt(addFormData.student_id),
-        amount: parseFloat(addFormData.amount),
-        due_date: addFormData.due_date,
-        status: addFormData.status,
-        payment_method: addFormData.payment_method || null,
-        notes: addFormData.notes
-      };
-      
-      await API.post('/fee-payments/', payload);
-      toast.success(`Payment of ₹${addFormData.amount} added with ${addFormData.status} status`);
-      setShowAddModal(false);
-      fetchPayments();
-    } catch (error) {
-      console.error('Add error:', error);
-      toast.error(error.response?.data?.detail || 'Failed to add payment');
-    } finally {
-      setAdding(false);
+      await API.delete(`/student-fees/${feeInfo.studentFeeId}/`);
+      toast.success('Fee record deleted successfully');
+      await fetchData();
+      window.dispatchEvent(new Event('studentFeeUpdated'));
+    } catch (err) {
+      console.error('Delete error:', err);
+      toast.error('Failed to delete fee record');
     }
   };
 
-  const formatDate = (dateString) => {
-    if (!dateString) return '—';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-IN', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
-  };
-
-  const formatDateTime = (dateString) => {
-    if (!dateString) return '—';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-IN', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
+  const filteredStudents = students.filter(student => {
+    const searchLower = search.toLowerCase();
+    const feeInfo = getStudentFeeInfo(student);
+    return (
+      (student.name || '').toLowerCase().includes(searchLower) ||
+      (student.full_name || '').toLowerCase().includes(searchLower) ||
+      (student.course || '').toLowerCase().includes(searchLower) ||
+      (student.email || '').toLowerCase().includes(searchLower) ||
+      feeInfo.status.toLowerCase().includes(searchLower)
+    );
+  });
 
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(amount || 0);
+    if (amount === 0 || !amount) return '₹0';
+    return '₹' + amount.toLocaleString('en-IN');
   };
 
-  const getStatusBadge = (status) => {
-    const statusConfig = {
-      paid: { class: 'bg-green-100 text-green-800', label: 'Paid' },
-      pending: { class: 'bg-yellow-100 text-yellow-800', label: 'Pending' },
-      overdue: { class: 'bg-red-100 text-red-800', label: 'Overdue' },
-      cancelled: { class: 'bg-gray-100 text-gray-800', label: 'Cancelled' },
-    };
-    const config = statusConfig[status] || statusConfig.pending;
-    return (
-      <span className={`px-2 py-1 rounded-full text-xs font-medium ${config.class}`}>
-        {config.label}
-      </span>
-    );
-  };
+  // Calculate summary statistics with proper validation
+  const totalStudents = students.length;
+  const studentsWithFee = studentFees.length;
+  const studentsWithoutFee = totalStudents - studentsWithFee;
+  
+  const totalFee = studentFees.reduce((sum, sf) => {
+    return sum + (Math.max(0, Number(sf.total_amount)) || 0);
+  }, 0);
+  
+  const totalPaid = studentFees.reduce((sum, sf) => {
+    return sum + (Math.max(0, Number(sf.paid_amount)) || 0);
+  }, 0);
+  
+  const totalPending = Math.max(0, totalFee - totalPaid);
+  
+  const paidCount = students.filter(s => {
+    const feeInfo = getStudentFeeInfo(s);
+    return feeInfo.status === 'Paid';
+  }).length;
+  
+  const partiallyPaidCount = students.filter(s => {
+    const feeInfo = getStudentFeeInfo(s);
+    return feeInfo.status === 'Partially Paid';
+  }).length;
+  
+  const pendingCount = students.filter(s => {
+    const feeInfo = getStudentFeeInfo(s);
+    return feeInfo.status === 'Pending';
+  }).length;
 
-  const markAsPaid = async (paymentId) => {
-    if (!window.confirm('Mark this payment as paid?')) return;
-    try {
-      await API.post(`/fee-payments/${paymentId}/mark_as_paid/`);
-      toast.success('Payment marked as paid');
-      fetchPayments();
-    } catch (error) {
-      toast.error(error.response?.data?.error || 'Failed to mark as paid');
+  const collectionRate = totalFee > 0 ? ((totalPaid / totalFee) * 100).toFixed(1) : 0;
+
+  const getStatusColor = (status) => {
+    switch(status) {
+      case 'Paid': return 'bg-emerald-100 text-emerald-800';
+      case 'Partially Paid': return 'bg-amber-100 text-amber-800';
+      case 'Pending': return 'bg-rose-100 text-rose-800';
+      case 'No Fee Assigned': return 'bg-gray-100 text-gray-600';
+      default: return 'bg-gray-100 text-gray-600';
     }
   };
-
-  const deletePayment = async (paymentId) => {
-    if (!window.confirm('Delete this payment record? This action cannot be undone.')) return;
-    try {
-      await API.delete(`/fee-payments/${paymentId}/`);
-      toast.success('Payment deleted successfully');
-      fetchPayments();
-    } catch (error) {
-      toast.error('Failed to delete payment');
-    }
-  };
-
-  const filteredPayments = Array.isArray(payments) ? payments.filter(payment => {
-    const studentName = (payment.student_full_name || payment.student_name || '').toLowerCase();
-    const search = searchTerm.toLowerCase();
-    const matchesSearch = searchTerm === '' || studentName.includes(search);
-    const matchesStatus = statusFilter === 'all' || payment.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  }) : [];
-
-  const safePayments = Array.isArray(payments) ? payments : [];
-  
-  const totalCollected = safePayments
-    .filter(p => p.status === 'paid')
-    .reduce((sum, p) => sum + (p.amount || 0), 0);
-  
-  const totalPending = safePayments
-    .filter(p => p.status === 'pending')
-    .reduce((sum, p) => sum + (p.amount || 0), 0);
-  
-  const totalOverdue = safePayments
-    .filter(p => p.status === 'overdue')
-    .reduce((sum, p) => sum + (p.amount || 0), 0);
 
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+          <p className="text-gray-600">Loading payment data...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-2xl font-bold">Payment Transactions</h1>
-          <p className="text-gray-500 text-sm mt-1">Manage and track all fee payments</p>
+    <div className="p-4 sm:p-6 lg:p-8 bg-gray-50 min-h-screen">
+      <div className="max-w-7xl mx-auto">
+        {/* Header Section */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">Payment Overview</h1>
+            <p className="text-sm text-gray-500 mt-1">Student-wise fee collection and payment summary</p>
+          </div>
+          
+          {/* Mobile Menu Toggle */}
+          <div className="sm:hidden">
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-700 text-sm font-medium flex items-center justify-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+              Actions
+            </button>
+          </div>
+          
+          {/* Action Buttons */}
+          <div className={`${mobileMenuOpen ? 'flex' : 'hidden'} sm:flex flex-col sm:flex-row gap-2`}>
+            {studentsWithoutFee > 0 && feeStructures.length > 0 && (
+              <button
+                onClick={() => {
+                  setEditingStudent(null);
+                  setSelectedFeeStructure(null);
+                  setShowApplyModal(true);
+                }}
+                disabled={applyingFee}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition disabled:opacity-50 text-sm whitespace-nowrap"
+              >
+                {applyingFee ? 'Applying...' : `Apply Fee (${studentsWithoutFee})`}
+              </button>
+            )}
+            <button
+              onClick={fetchData}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition text-sm whitespace-nowrap"
+            >
+              Refresh
+            </button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={openAddModal}
-            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
-          >
-            + Add Payment
-          </button>
-          <button
-            onClick={fetchPayments}
-            className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition"
-          >
-            ⟳ Refresh
-          </button>
-        </div>
-      </div>
 
-      {/* Status Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <div className="bg-green-50 rounded-lg p-4 border border-green-200">
-          <p className="text-sm text-gray-600">Total Collected</p>
-          <p className="text-2xl font-bold text-green-600">
-            {formatCurrency(totalCollected)}
-          </p>
-          <p className="text-xs text-gray-400 mt-1">
-            {safePayments.filter(p => p.status === 'paid').length} transactions
-          </p>
+        {/* Summary Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 mb-6">
+          <div className="bg-blue-50 rounded-xl p-4 sm:p-5 border border-blue-200">
+            <p className="text-gray-500 text-xs sm:text-sm">Total Students</p>
+            <p className="text-xl sm:text-2xl font-bold text-blue-700">{totalStudents}</p>
+            <p className="text-xs text-blue-600 mt-1">With Fee: {studentsWithFee}</p>
+          </div>
+          <div className="bg-purple-50 rounded-xl p-4 sm:p-5 border border-purple-200">
+            <p className="text-gray-500 text-xs sm:text-sm">Total Fee</p>
+            <p className="text-xl sm:text-2xl font-bold text-purple-700">{formatCurrency(totalFee)}</p>
+          </div>
+          <div className="bg-emerald-50 rounded-xl p-4 sm:p-5 border border-emerald-200">
+            <p className="text-gray-500 text-xs sm:text-sm">Total Paid</p>
+            <p className="text-xl sm:text-2xl font-bold text-emerald-700">{formatCurrency(totalPaid)}</p>
+          </div>
+          <div className="bg-rose-50 rounded-xl p-4 sm:p-5 border border-rose-200">
+            <p className="text-gray-500 text-xs sm:text-sm">Total Pending</p>
+            <p className="text-xl sm:text-2xl font-bold text-rose-700">{formatCurrency(totalPending)}</p>
+          </div>
+          <div className="bg-orange-50 rounded-xl p-4 sm:p-5 border border-orange-200">
+            <p className="text-gray-500 text-xs sm:text-sm">Collection Rate</p>
+            <p className="text-xl sm:text-2xl font-bold text-orange-700">{collectionRate}%</p>
+          </div>
         </div>
-        <div className="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
-          <p className="text-sm text-gray-600">Total Pending</p>
-          <p className="text-2xl font-bold text-yellow-600">
-            {formatCurrency(totalPending)}
-          </p>
-          <p className="text-xs text-gray-400 mt-1">
-            {safePayments.filter(p => p.status === 'pending').length} transactions
-          </p>
-          <p className="text-xs text-yellow-600 mt-1">⚠️ Yet to be paid</p>
-        </div>
-        <div className="bg-red-50 rounded-lg p-4 border border-red-200">
-          <p className="text-sm text-gray-600">Total Overdue</p>
-          <p className="text-2xl font-bold text-red-600">
-            {formatCurrency(totalOverdue)}
-          </p>
-          <p className="text-xs text-gray-400 mt-1">
-            {safePayments.filter(p => p.status === 'overdue').length} transactions
-          </p>
-        </div>
-      </div>
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4 mb-6">
-        <div className="relative flex-1">
+        {/* Payment Status Cards - No Fee Assigned removed */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
+          <div className="bg-emerald-50 rounded-xl p-3 sm:p-4 border border-emerald-200 text-center">
+            <p className="text-gray-500 text-xs sm:text-sm">Fully Paid</p>
+            <p className="text-lg sm:text-xl font-bold text-emerald-700">{paidCount} students</p>
+          </div>
+          <div className="bg-amber-50 rounded-xl p-3 sm:p-4 border border-amber-200 text-center">
+            <p className="text-gray-500 text-xs sm:text-sm">Partially Paid</p>
+            <p className="text-lg sm:text-xl font-bold text-amber-700">{partiallyPaidCount} students</p>
+          </div>
+          <div className="bg-rose-50 rounded-xl p-3 sm:p-4 border border-rose-200 text-center">
+            <p className="text-gray-500 text-xs sm:text-sm">Pending</p>
+            <p className="text-lg sm:text-xl font-bold text-rose-700">{pendingCount} students</p>
+          </div>
+        </div>
+
+        {/* Search */}
+        <div className="mb-6">
           <input
             type="text"
-            placeholder="🔍 Search by student name..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+            placeholder="Search by student name, course, email or payment status..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full md:w-96 border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
           />
-          <svg className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          {searchTerm && (
-            <button
-              onClick={() => setSearchTerm('')}
-              className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
-            >
-              ✕
-            </button>
-          )}
         </div>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-        >
-          <option value="all">All Status</option>
-          <option value="paid">Paid</option>
-          <option value="pending">Pending</option>
-          <option value="overdue">Overdue</option>
-        </select>
-      </div>
 
-      {/* Payments Table */}
-      <div className="overflow-x-auto bg-white rounded-xl shadow">
-        <table className="min-w-full">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Student Name</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Amount</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Pending Amount</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Due Date</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Payment Date</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Status</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Notes</th>
-              <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredPayments.length === 0 ? (
+        {/* Desktop Table View */}
+        <div className="hidden md:block overflow-x-auto bg-white rounded-xl shadow border border-gray-200">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
               <tr>
-                <td colSpan="8" className="text-center py-8 text-gray-400">
-                  No payments found
-                </td>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Student</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Course</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total Fee</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Paid</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Pending</th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
               </tr>
-            ) : (
-              filteredPayments.map((payment) => {
-                const isPending = payment.status === 'pending' || payment.status === 'overdue';
-                const pendingAmount = isPending ? payment.amount : 0;
-                
-                return (
-                  <tr key={payment.id} className="border-t hover:bg-gray-50 transition">
-                    <td className="px-4 py-3">
-                      <p className="font-medium text-gray-800">
-                        {payment.student_full_name || payment.student_name || '—'}
-                      </p>
-                    </td>
-                    <td className="px-4 py-3 font-medium text-gray-800">{formatCurrency(payment.amount)}</td>
-                    <td className="px-4 py-3 font-medium text-orange-600">
-                      {isPending ? formatCurrency(pendingAmount) : '—'}
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">{formatDate(payment.due_date)}</td>
-                    <td className="px-4 py-3">
-                      {payment.status === 'paid' && payment.payment_date ? (
-                        <span className="text-green-600 text-sm" title={formatDateTime(payment.payment_date)}>
-                          {formatDate(payment.payment_date)}
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {filteredStudents.length === 0 ? (
+                <tr>
+                  <td colSpan="7" className="text-center py-8 text-gray-500">
+                    No students found.
+                  </td>
+                </tr>
+              ) : (
+                filteredStudents.map((student) => {
+                  const feeInfo = getStudentFeeInfo(student);
+                  return (
+                    <tr key={student.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-gray-800 text-sm">{student.name || student.full_name || '—'}</p>
+                        {student.email && (
+                          <p className="text-xs text-gray-400">{student.email}</p>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        {student.course || student.class_name || '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right font-medium text-gray-900 text-sm">
+                        {feeInfo.totalAmount > 0 ? formatCurrency(feeInfo.totalAmount) : '—'}
+                        {feeInfo.discountApplied > 0 && (
+                          <p className="text-xs text-green-600">-{feeInfo.discountApplied}% off</p>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right text-emerald-600 font-medium text-sm">
+                        {feeInfo.paidAmount > 0 ? formatCurrency(feeInfo.paidAmount) : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right text-rose-600 font-medium text-sm">
+                        {feeInfo.pendingAmount > 0 ? formatCurrency(feeInfo.pendingAmount) : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(feeInfo.status)}`}>
+                          {feeInfo.status}
                         </span>
-                      ) : (
-                        <span className="text-gray-400">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">{getStatusBadge(payment.status)}</td>
-                    <td className="px-4 py-3 text-gray-600 max-w-xs truncate" title={payment.notes}>
-                      {payment.notes || '—'}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <button
-                          onClick={() => openEditModal(payment)}
-                          className="text-blue-600 hover:text-blue-800"
-                          title="Edit Payment"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                        </button>
-                        {payment.status !== 'paid' && (
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <div className="flex items-center justify-center gap-1">
                           <button
-                            onClick={() => markAsPaid(payment.id)}
-                            className="text-green-600 hover:text-green-800"
-                            title="Mark as Paid"
+                            onClick={() => handleEditClick(student)}
+                            className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            title={feeInfo.status === 'No Fee Assigned' ? 'Apply fee' : 'Edit payment'}
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                             </svg>
                           </button>
-                        )}
-                        <button
-                          onClick={() => deletePayment(payment.id)}
-                          className="text-red-600 hover:text-red-800"
-                          title="Delete"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })
+                          {feeInfo.status !== 'No Fee Assigned' && (
+                            <button
+                              onClick={() => handleDeleteFee(student)}
+                              className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Delete fee record"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Mobile Card View */}
+        <div className="md:hidden space-y-3">
+          {filteredStudents.length === 0 ? (
+            <div className="bg-white rounded-xl p-8 text-center text-gray-500">
+              No students found.
+            </div>
+          ) : (
+            filteredStudents.map((student) => {
+              const feeInfo = getStudentFeeInfo(student);
+              return (
+                <div key={student.id} className="bg-white rounded-xl shadow border border-gray-200 p-4">
+                  {/* Student Header */}
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <h3 className="font-semibold text-gray-800 text-base">{student.name || student.full_name || '—'}</h3>
+                      <p className="text-xs text-gray-500 mt-0.5">{student.course || student.class_name || '—'}</p>
+                      {student.email && (
+                        <p className="text-xs text-gray-400 mt-0.5">{student.email}</p>
+                      )}
+                    </div>
+                    <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(feeInfo.status)}`}>
+                      {feeInfo.status}
+                    </span>
+                  </div>
+                  
+                  {/* Payment Details */}
+                  <div className="grid grid-cols-3 gap-3 mb-3 pt-2 border-t border-gray-100">
+                    <div>
+                      <p className="text-xs text-gray-500 mb-1">Total Fee</p>
+                      <p className="text-sm font-semibold text-gray-900">
+                        {feeInfo.totalAmount > 0 ? formatCurrency(feeInfo.totalAmount) : '—'}
+                      </p>
+                      {feeInfo.discountApplied > 0 && (
+                        <p className="text-xs text-green-600">-{feeInfo.discountApplied}%</p>
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 mb-1">Paid</p>
+                      <p className="text-sm font-semibold text-emerald-600">
+                        {feeInfo.paidAmount > 0 ? formatCurrency(feeInfo.paidAmount) : '—'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 mb-1">Pending</p>
+                      <p className="text-sm font-semibold text-rose-600">
+                        {feeInfo.pendingAmount > 0 ? formatCurrency(feeInfo.pendingAmount) : '—'}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {/* Action Buttons */}
+                  <div className="flex gap-2 pt-2 border-t border-gray-100">
+                    <button
+                      onClick={() => handleEditClick(student)}
+                      className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-blue-600 hover:text-white hover:bg-blue-600 border border-blue-200 rounded-lg transition-colors text-sm"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                      {feeInfo.status === 'No Fee Assigned' ? 'Apply Fee' : 'Edit'}
+                    </button>
+                    {feeInfo.status !== 'No Fee Assigned' && (
+                      <button
+                        onClick={() => handleDeleteFee(student)}
+                        className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-red-600 hover:text-white hover:bg-red-600 border border-red-200 rounded-lg transition-colors text-sm"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                        Delete
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Note Section */}
+        <div className="mt-6 bg-yellow-50 border border-yellow-200 rounded-lg p-3 sm:p-4">
+          <h3 className="text-sm font-semibold text-yellow-900 mb-2">📌 Payment Information</h3>
+          <p className="text-xs sm:text-sm text-yellow-800">
+            This page shows student-wise fee details including Total Fee, Paid Amount, and Pending Balance.
+            {studentsWithoutFee > 0 && (
+              <span> <strong>{studentsWithoutFee} student(s)</strong> have no fee assigned. Click the <strong>Apply Fee</strong> button to assign fee.</span>
             )}
-          </tbody>
-        </table>
+            Click the <strong>Edit</strong> button to modify individual student payments. Click <strong>Delete</strong> to remove a fee record.
+          </p>
+          <div className="mt-2 text-xs text-yellow-700 break-words">
+            <strong>Summary:</strong> Total Fee: {formatCurrency(totalFee)} | Total Paid: {formatCurrency(totalPaid)} | Total Pending: {formatCurrency(totalPending)} | Collection Rate: {collectionRate}%
+          </div>
+        </div>
       </div>
 
-      {/* Add Payment Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white px-6 py-4 border-b flex justify-between items-center">
-              <div>
-                <h2 className="text-lg font-bold">Add New Payment</h2>
-                <p className="text-sm text-gray-500">Create a new fee payment record</p>
-              </div>
-              <button onClick={() => setShowAddModal(false)} className="text-gray-500 hover:text-gray-700 text-2xl">×</button>
+      {/* Edit Modal */}
+      {showEditModal && editingStudent && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowEditModal(false)}>
+          <div className="bg-white rounded-xl w-full max-w-md p-5 sm:p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg sm:text-xl font-bold text-gray-800">Edit Student Payment</h2>
+              <button onClick={() => setShowEditModal(false)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
             </div>
-            
-            <div className="p-6 space-y-4">
-              <div className="relative">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Select Student *</label>
-                <input
-                  type="text"
-                  name="student_name"
-                  value={addFormData.student_name}
-                  onChange={handleAddChange}
-                  placeholder="Type student name..."
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
-                  autoComplete="off"
-                />
-                {showSuggestions && studentSuggestions.length > 0 && (
-                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                    {studentSuggestions.map((student) => (
-                      <button
-                        key={student.id}
-                        type="button"
-                        onClick={() => selectStudent(student)}
-                        className="w-full text-left px-4 py-2 hover:bg-gray-100 text-gray-700 text-sm"
-                      >
-                        {student.full_name || student.name || student.user?.username}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                <p className="text-xs text-gray-400 mt-1">
-                  💡 Click on a suggestion to select the student
-                </p>
-              </div>
-              
+            <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+              <p className="text-sm text-gray-600">Student: <span className="font-semibold text-gray-800">{editingStudent.name || editingStudent.full_name}</span></p>
+            </div>
+            <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Amount *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Total Fee (₹)</label>
                 <input
                   type="number"
                   step="0.01"
-                  name="amount"
-                  value={addFormData.amount}
-                  onChange={handleAddChange}
-                  placeholder="Enter amount"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  min="0"
+                  value={editFormData.total_amount}
+                  onChange={(e) => setEditFormData({...editFormData, total_amount: e.target.value})}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
                   required
                 />
               </div>
-              
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Due Date *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Paid Amount (₹)</label>
                 <input
-                  type="date"
-                  name="due_date"
-                  value={addFormData.due_date}
-                  onChange={handleAddChange}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
-                  required
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={editFormData.paid_amount}
+                  onChange={(e) => setEditFormData({...editFormData, paid_amount: e.target.value})}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
                 />
+                <p className="text-xs text-gray-500 mt-1">Amount already collected from student</p>
               </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                <select
-                  name="status"
-                  value={addFormData.status}
-                  onChange={handleAddChange}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
-                >
-                  <option value="pending">Pending (Unpaid)</option>
-                  <option value="paid">Paid</option>
-                  <option value="overdue">Overdue</option>
-                  <option value="cancelled">Cancelled</option>
-                </select>
-                <p className="text-xs text-orange-600 mt-1">
-                  💡 Pending status means this amount is yet to be collected
-                </p>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
-                <select
-                  name="payment_method"
-                  value={addFormData.payment_method}
-                  onChange={handleAddChange}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
-                >
-                  <option value="">Select Payment Method</option>
-                  <option value="cash">Cash</option>
-                  <option value="card">Card</option>
-                  <option value="online">Online Transfer</option>
-                  <option value="cheque">Cheque</option>
-                  <option value="bank_transfer">Bank Transfer</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-                <textarea
-                  name="notes"
-                  value={addFormData.notes}
-                  onChange={handleAddChange}
-                  rows="3"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
-                  placeholder="Additional notes..."
-                />
-              </div>
+              {parseFloat(editFormData.paid_amount) > parseFloat(editFormData.total_amount) && (
+                <p className="text-xs text-red-600">⚠️ Paid amount cannot exceed total amount</p>
+              )}
             </div>
-            
-            <div className="sticky bottom-0 bg-white px-6 py-4 border-t flex gap-2">
+            <div className="flex gap-3 mt-6">
               <button
-                onClick={addPayment}
-                disabled={adding}
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-medium disabled:opacity-50"
+                onClick={handleUpdateFee}
+                disabled={updating || parseFloat(editFormData.paid_amount) > parseFloat(editFormData.total_amount)}
+                className="flex-1 bg-emerald-600 text-white py-2.5 rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition text-sm font-medium"
               >
-                {adding ? 'Adding...' : 'Add Payment'}
+                {updating ? 'Updating...' : 'Update Payment'}
               </button>
               <button
-                onClick={() => setShowAddModal(false)}
-                className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 py-2 rounded-lg font-medium"
+                onClick={() => setShowEditModal(false)}
+                className="flex-1 bg-gray-200 text-gray-800 py-2.5 rounded-lg hover:bg-gray-300 transition text-sm font-medium"
               >
                 Cancel
               </button>
@@ -613,125 +700,73 @@ function AccountsPayments() {
         </div>
       )}
 
-      {/* Edit Modal */}
-      {showEditModal && selectedPayment && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white px-6 py-4 border-b flex justify-between items-center">
-              <div>
-                <h2 className="text-lg font-bold">Edit Payment</h2>
-                <p className="text-sm text-gray-500">{selectedPayment.student_full_name || selectedPayment.student_name}</p>
-              </div>
-              <button onClick={() => setShowEditModal(false)} className="text-gray-500 hover:text-gray-700 text-2xl">×</button>
+      {/* Apply Fee Modal */}
+      {showApplyModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowApplyModal(false)}>
+          <div className="bg-white rounded-xl w-full max-w-md p-5 sm:p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg sm:text-xl font-bold text-gray-800">Apply Fee Structure</h2>
+              <button onClick={() => setShowApplyModal(false)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
             </div>
             
-            <div className="p-6 space-y-4">
-              {editFormData.status === 'pending' || editFormData.status === 'overdue' ? (
-                <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm font-medium text-orange-700">Pending Amount:</span>
-                    <span className="text-xl font-bold text-orange-600">
-                      {formatCurrency(editFormData.amount)}
-                    </span>
+            {editingStudent && (
+              <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                <p className="text-sm text-gray-600">Student: <span className="font-semibold text-gray-800">{editingStudent.name || editingStudent.full_name}</span></p>
+              </div>
+            )}
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Select Fee Structure</label>
+                <select
+                  value={selectedFeeStructure?.id || ''}
+                  onChange={(e) => {
+                    const selected = feeStructures.find(fs => fs.id === parseInt(e.target.value));
+                    setSelectedFeeStructure(selected);
+                  }}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
+                >
+                  <option value="">Select a fee structure...</option>
+                  {feeStructures.filter(fs => fs.is_active).map(fs => (
+                    <option key={fs.id} value={fs.id}>
+                      {fs.name} - {formatCurrency(fs.total_amount)} {fs.discount_percentage > 0 ? `(${fs.discount_percentage}% off)` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              {selectedFeeStructure && (
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <p className="text-sm font-medium text-gray-700">Fee Details:</p>
+                  <div className="mt-2 space-y-1 text-sm">
+                    <p>Original Amount: {formatCurrency(selectedFeeStructure.total_amount)}</p>
+                    {selectedFeeStructure.discount_percentage > 0 && (
+                      <>
+                        <p className="text-green-600">Discount: {selectedFeeStructure.discount_percentage}%</p>
+                        <p className="font-semibold">Final Amount: {formatCurrency(selectedFeeStructure.total_amount * (1 - selectedFeeStructure.discount_percentage / 100))}</p>
+                      </>
+                    )}
+                    <p>Duration: {selectedFeeStructure.number_of_months} months</p>
                   </div>
-                  <p className="text-xs text-orange-600">
-                    {editFormData.status === 'pending' 
-                      ? '⚠️ This payment is pending. Amount not yet received.'
-                      : '⚠️ This payment is overdue. Please collect immediately.'}
-                  </p>
-                </div>
-              ) : (
-                <div className="bg-green-50 rounded-lg p-4 border border-green-200">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm font-medium text-green-700">Payment Status:</span>
-                    <span className="text-xl font-bold text-green-600">Completed</span>
-                  </div>
-                  <p className="text-xs text-green-600">
-                    ✅ This payment has been received. No pending amount.
-                  </p>
                 </div>
               )}
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Amount *</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  name="amount"
-                  value={editFormData.amount}
-                  onChange={handleEditChange}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
-                  required
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
-                <input
-                  type="date"
-                  name="due_date"
-                  value={editFormData.due_date}
-                  onChange={handleEditChange}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                <select
-                  name="status"
-                  value={editFormData.status}
-                  onChange={handleEditChange}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
-                >
-                  <option value="pending">Pending (Unpaid)</option>
-                  <option value="paid">Paid</option>
-                  <option value="overdue">Overdue</option>
-                  <option value="cancelled">Cancelled</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
-                <select
-                  name="payment_method"
-                  value={editFormData.payment_method}
-                  onChange={handleEditChange}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
-                >
-                  <option value="">Select Payment Method</option>
-                  <option value="cash">Cash</option>
-                  <option value="card">Card</option>
-                  <option value="online">Online Transfer</option>
-                  <option value="cheque">Cheque</option>
-                  <option value="bank_transfer">Bank Transfer</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-                <textarea
-                  name="notes"
-                  value={editFormData.notes}
-                  onChange={handleEditChange}
-                  rows="3"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
-                  placeholder="Additional notes..."
-                />
-              </div>
             </div>
             
-            <div className="sticky bottom-0 bg-white px-6 py-4 border-t flex gap-2">
+            <div className="flex gap-3 mt-6">
               <button
-                onClick={saveEdit}
-                disabled={updating}
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-medium disabled:opacity-50"
+                onClick={editingStudent ? () => handleApplyFeeToIndividual(editingStudent) : handleApplyFeeToAll}
+                disabled={!selectedFeeStructure || applyingFee || applyingToAll}
+                className="flex-1 bg-blue-600 text-white py-2.5 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition text-sm font-medium"
               >
-                {updating ? 'Saving...' : 'Save Changes'}
+                {applyingFee || applyingToAll ? 'Applying...' : 'Apply Fee'}
               </button>
               <button
-                onClick={() => setShowEditModal(false)}
-                className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 py-2 rounded-lg font-medium"
+                onClick={() => {
+                  setShowApplyModal(false);
+                  setEditingStudent(null);
+                  setSelectedFeeStructure(null);
+                }}
+                className="flex-1 bg-gray-200 text-gray-800 py-2.5 rounded-lg hover:bg-gray-300 transition text-sm font-medium"
               >
                 Cancel
               </button>

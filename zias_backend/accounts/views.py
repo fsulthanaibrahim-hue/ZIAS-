@@ -2095,7 +2095,7 @@ class AccountsStudentListView(SafeAPIView):
     def get(self, request):
         user = request.user
         if not (user.is_accounts or user.is_admin or user.is_mentor):
-            return Response({"detail": "Not authorized"}, status=404)
+            return Response({"detail": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
 
         students = Student.objects.all().select_related('user', 'reviewer')
         result = []
@@ -2128,8 +2128,168 @@ class AccountsStudentListView(SafeAPIView):
                 'agreement_signed': student.agreement_signed,
                 'escalation_flag': student.escalation_flag,
                 'week_back_fee_status': week_back_status,
+                # ✅ ADD THIS - Include week_back_amount in response
+                'week_back_amount': float(student.week_back_amount) if student.week_back_amount else 0,
             })
         return Response(result)
+
+    def patch(self, request, student_id=None):
+        user = request.user
+        # Allow only accounts and admin to update
+        if not (user.is_accounts or user.is_admin):
+            return Response({"detail": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
+        
+        try:
+            student = Student.objects.get(id=student_id)
+        except Student.DoesNotExist:
+            return Response({"detail": "Student not found"}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Update allowed fields
+        if 'agreement_signed' in request.data:
+            student.agreement_signed = request.data['agreement_signed']
+        if 'week_back_amount' in request.data:
+            student.week_back_amount = request.data['week_back_amount']
+        if 'escalation_flag' in request.data:
+            student.escalation_flag = request.data['escalation_flag']
+        
+        student.save()
+        
+        # ✅ RETURN ALL UPDATED FIELDS including week_back_amount
+        return Response({
+            "id": student.id,
+            "agreement_signed": student.agreement_signed,
+            "week_back_amount": float(student.week_back_amount) if student.week_back_amount else 0,
+            "escalation_flag": student.escalation_flag,
+            "message": "Student updated successfully"
+        }, status=status.HTTP_200_OK)
+
+
+
+# ----------------------------
+# ACCOUNTS STUDENT FEE
+# ----------------------------
+class AccountsStudentFeeView(SafeAPIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, student_id=None):
+        user = request.user
+        if not (user.is_accounts or user.is_admin):
+            return Response({"detail": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
+        
+        try:
+            student = Student.objects.get(id=student_id)
+        except Student.DoesNotExist:
+            return Response({"detail": "Student not found"}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Get student fee record
+        student_fee = StudentFee.objects.filter(student=student).first()
+        
+        if student_fee:
+            return Response({
+                'id': student_fee.id,
+                'student': student.id,
+                'student_name': student.full_name,
+                'total_amount': float(student_fee.total_amount),
+                'paid_amount': float(student_fee.paid_amount),
+                'pending_amount': float(student_fee.total_amount - student_fee.paid_amount),
+                'fee_structure': student_fee.fee_structure.id if student_fee.fee_structure else None,
+                'fee_structure_name': student_fee.fee_structure.name if student_fee.fee_structure else None,
+                'discount_applied': float(student_fee.discount_applied) if student_fee.discount_applied else 0,
+                # ✅ ADD THESE - Include student fields
+                'week_back_amount': float(student.week_back_amount) if student.week_back_amount else 0,
+                'agreement_signed': student.agreement_signed,
+                'escalation_flag': student.escalation_flag,
+            })
+        
+        # ✅ RETURN STUDENT FIELDS EVEN IF NO FEE RECORD
+        return Response({
+            "detail": "No fee record found",
+            "week_back_amount": float(student.week_back_amount) if student.week_back_amount else 0,
+            "agreement_signed": student.agreement_signed,
+            "escalation_flag": student.escalation_flag,
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    def patch(self, request, student_id=None):
+        user = request.user
+        if not (user.is_accounts or user.is_admin):
+            return Response({"detail": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
+        
+        try:
+            student = Student.objects.get(id=student_id)
+        except Student.DoesNotExist:
+            return Response({"detail": "Student not found"}, status=status.HTTP_404_NOT_FOUND)
+        
+        # ✅ UPDATE STUDENT FIELDS FIRST (week_back_amount, agreement_signed, etc.)
+        student_updated = False
+        if 'week_back_amount' in request.data:
+            student.week_back_amount = request.data['week_back_amount']
+            student_updated = True
+        if 'agreement_signed' in request.data:
+            student.agreement_signed = request.data['agreement_signed']
+            student_updated = True
+        if 'escalation_flag' in request.data:
+            student.escalation_flag = request.data['escalation_flag']
+            student_updated = True
+        
+        if student_updated:
+            student.save()
+        
+        # ✅ UPDATE FEE FIELDS
+        student_fee = StudentFee.objects.filter(student=student).first()
+        fee_updated = False
+        
+        if student_fee:
+            if 'total_amount' in request.data:
+                student_fee.total_amount = request.data['total_amount']
+                fee_updated = True
+            if 'paid_amount' in request.data:
+                student_fee.paid_amount = request.data['paid_amount']
+                fee_updated = True
+            
+            if fee_updated:
+                student_fee.save()
+        
+        # ✅ RETURN COMPLETE UPDATED DATA
+        response_data = {
+            'message': "Updated successfully",
+            'week_back_amount': float(student.week_back_amount) if student.week_back_amount else 0,
+            'agreement_signed': student.agreement_signed,
+            'escalation_flag': student.escalation_flag,
+        }
+        
+        if student_fee:
+            response_data.update({
+                'id': student_fee.id,
+                'total_amount': float(student_fee.total_amount),
+                'paid_amount': float(student_fee.paid_amount),
+                'pending_amount': float(student_fee.total_amount - student_fee.paid_amount),
+            })
+        
+        if not student_fee and ('total_amount' in request.data or 'paid_amount' in request.data):
+            response_data['warning'] = "No fee record found to update. Please create a fee record first."
+        
+        return Response(response_data, status=status.HTTP_200_OK)
+
+    def delete(self, request, student_id=None):
+        user = request.user
+        # Only admin can delete, not accounts
+        if not user.is_admin:
+            return Response({"detail": "Only admin can delete fee records"}, status=status.HTTP_403_FORBIDDEN)
+        
+        try:
+            student = Student.objects.get(id=student_id)
+        except Student.DoesNotExist:
+            return Response({"detail": "Student not found"}, status=status.HTTP_404_NOT_FOUND)
+        
+        student_fee = StudentFee.objects.filter(student=student).first()
+        
+        if not student_fee:
+            return Response({"detail": "No fee record found"}, status=status.HTTP_404_NOT_FOUND)
+        
+        student_fee.delete()
+        
+        return Response({"message": "Fee record deleted successfully"}, status=status.HTTP_200_OK)
+        
 
 
 # ----------------------------
