@@ -112,6 +112,39 @@ class BatchViewSet(SafeViewSet, viewsets.ModelViewSet):
     serializer_class = BatchSerializer
     permission_classes = [IsAdminOrReadOnly]
 
+    def create(self, request, *args, **kwargs):
+        data = request.data.copy()
+        
+        # Force dates to be saved as-is without timezone conversion
+        if data.get('start_date'):
+            if isinstance(data['start_date'], str):
+                data['start_date'] = data['start_date'][:10]  # Take only YYYY-MM-DD
+        if data.get('end_date'):
+            if isinstance(data['end_date'], str):
+                data['end_date'] = data['end_date'][:10]
+        
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def update(self, request, *args, **kwargs):
+        data = request.data.copy()
+        
+        if data.get('start_date'):
+            if isinstance(data['start_date'], str):
+                data['start_date'] = data['start_date'][:10]
+        if data.get('end_date'):
+            if isinstance(data['end_date'], str):
+                data['end_date'] = data['end_date'][:10]
+        
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return Response(serializer.data)
+
 
 # ----------------------------
 # STUDENT VIEWSET - FIXED (No circular import)

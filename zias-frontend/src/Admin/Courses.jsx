@@ -48,7 +48,7 @@ function Toast({ message, type, onClose }) {
   );
 }
 
-function ConfirmModal({ isOpen, onClose, onConfirm, courseName }) {
+function ConfirmModal({ isOpen, onClose, onConfirm, courseName, hasModules = false }) {
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-4">
@@ -59,12 +59,24 @@ function ConfirmModal({ isOpen, onClose, onConfirm, courseName }) {
           </svg>
         </div>
         <h3 className="text-lg font-bold text-gray-900 mb-1">Delete Course?</h3>
-        <p className="text-gray-500 text-sm mb-6 leading-relaxed">
-          <span className="font-semibold text-gray-700">"{courseName}"</span> will be permanently removed. This action cannot be undone.
-        </p>
+        {hasModules ? (
+          <>
+            <p className="text-amber-600 text-sm mb-2 font-medium">⚠️ Cannot delete this course</p>
+            <p className="text-gray-500 text-sm mb-6 leading-relaxed">
+              <span className="font-semibold text-gray-700">"{courseName}"</span> has modules/submodules assigned to it.
+              Please delete all modules first before deleting this course.
+            </p>
+          </>
+        ) : (
+          <p className="text-gray-500 text-sm mb-6 leading-relaxed">
+            <span className="font-semibold text-gray-700">"{courseName}"</span> will be permanently removed. This action cannot be undone.
+          </p>
+        )}
         <div className="flex gap-2">
           <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium text-sm transition-colors">Cancel</button>
-          <button onClick={onConfirm} className="flex-1 px-4 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-medium text-sm transition-colors">Delete</button>
+          {!hasModules && (
+            <button onClick={onConfirm} className="flex-1 px-4 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-medium text-sm transition-colors">Delete</button>
+          )}
         </div>
       </div>
     </div>
@@ -226,6 +238,9 @@ function Courses() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 9;
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  
+  // Track modules count for each course
+  const [modulesCount, setModulesCount] = useState({});
 
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [courseToDelete, setCourseToDelete] = useState(null);
@@ -255,11 +270,32 @@ function Courses() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Fetch modules count for each course to check if delete is allowed
+  const fetchModulesCount = useCallback(async () => {
+    try {
+      const modulesRes = await API.get("modules/");
+      let modules = modulesRes.data.results || modulesRes.data;
+      if (!Array.isArray(modules)) modules = [];
+      
+      const countMap = {};
+      modules.forEach(module => {
+        const courseId = module.course;
+        if (courseId) {
+          countMap[courseId] = (countMap[courseId] || 0) + 1;
+        }
+      });
+      setModulesCount(countMap);
+    } catch (err) {
+      console.warn("Failed to fetch modules count:", err);
+    }
+  }, []);
+
   useEffect(() => {
     if (fetched.current) return;
     fetched.current = true;
     fetchCourses();
-  }, [fetchCourses]);
+    fetchModulesCount();
+  }, [fetchCourses, fetchModulesCount]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -300,8 +336,18 @@ function Courses() {
     return pages;
   };
 
+  // Check if course has modules
+  const hasModules = (courseId) => {
+    return modulesCount[courseId] > 0;
+  };
+
   const handleDeleteClick = (courseId, courseName) => {
-    setCourseToDelete({ id: courseId, name: courseName });
+    if (hasModules(courseId)) {
+      // Show error message if course has modules
+      showToast(`Cannot delete "${courseName}" because it has modules assigned. Please delete all modules first.`, "error");
+      return;
+    }
+    setCourseToDelete({ id: courseId, name: courseName, hasModules: false });
     setShowConfirmModal(true);
   };
 
@@ -364,39 +410,20 @@ function Courses() {
         .course-card { animation: fadeUp 0.3s ease both; }
         .duration-pill { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
         
-        /* Responsive Grid Adjustments */
         @media (max-width: 640px) {
-          .course-card {
-            animation: fadeUp 0.2s ease both;
-          }
+          .course-card { animation: fadeUp 0.2s ease both; }
         }
         
-        /* Touch-friendly tap targets */
-        button, 
-        [role="button"],
-        .tap-target {
-          min-height: 44px;
-          cursor: pointer;
-        }
+        button, [role="button"], .tap-target { min-height: 44px; cursor: pointer; }
         
-        /* Smooth scrolling for modals */
         .modal-scroll {
           scrollbar-width: thin;
           scrollbar-color: #cbd5e1 #f1f5f9;
         }
-        .modal-scroll::-webkit-scrollbar {
-          width: 6px;
-        }
-        .modal-scroll::-webkit-scrollbar-track {
-          background: #f1f5f9;
-          border-radius: 10px;
-        }
-        .modal-scroll::-webkit-scrollbar-thumb {
-          background: #cbd5e1;
-          border-radius: 10px;
-        }
+        .modal-scroll::-webkit-scrollbar { width: 6px; }
+        .modal-scroll::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 10px; }
+        .modal-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         
-        /* Line clamp for descriptions */
         .line-clamp-3 {
           display: -webkit-box;
           -webkit-line-clamp: 3;
@@ -405,16 +432,19 @@ function Courses() {
         }
         
         @media (max-width: 640px) {
-          .line-clamp-3 {
-            -webkit-line-clamp: 2;
-          }
+          .line-clamp-3 { -webkit-line-clamp: 2; }
         }
       `}</style>
 
       {toastMsg && <Toast message={toastMsg.message} type={toastMsg.type} onClose={hideToast} />}
-      <ConfirmModal isOpen={showConfirmModal} onClose={() => setShowConfirmModal(false)} onConfirm={confirmDelete} courseName={courseToDelete?.name} />
+      <ConfirmModal 
+        isOpen={showConfirmModal} 
+        onClose={() => setShowConfirmModal(false)} 
+        onConfirm={confirmDelete} 
+        courseName={courseToDelete?.name}
+        hasModules={courseToDelete?.hasModules || false}
+      />
 
-      {/* Separate modal component */}
       <CourseFormModal
         isOpen={showForm}
         onClose={() => setShowForm(false)}
@@ -423,7 +453,7 @@ function Courses() {
       />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6 md:py-10">
-        {/* Header - Responsive */}
+        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-emerald-100 border border-emerald-200 flex items-center justify-center shrink-0">
@@ -437,7 +467,7 @@ function Courses() {
             </div>
           </div>
 
-          {/* Mobile Menu Toggle Button */}
+          {/* Mobile Menu Toggle */}
           <div className="sm:hidden">
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -450,7 +480,7 @@ function Courses() {
             </button>
           </div>
 
-          {/* Controls - Desktop */}
+          {/* Controls */}
           <div className={`${mobileMenuOpen ? 'flex' : 'hidden'} sm:flex flex-col sm:flex-row gap-3 transition-all duration-300`}>
             <div className="relative">
               <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -485,7 +515,7 @@ function Courses() {
           </div>
         </div>
 
-        {/* Card Grid - Fully Responsive */}
+        {/* Card Grid */}
         {paginatedCourses.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 sm:py-24 gap-4">
             <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center">
@@ -506,58 +536,70 @@ function Courses() {
         ) : (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-6">
-              {paginatedCourses.map((course, idx) => (
-                <div
-                  key={course.id}
-                  className="course-card bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden card-hover flex flex-col cursor-pointer"
-                  style={{ animationDelay: `${idx * 0.05}s` }}
-                >
-                  <div className="flex-1" onClick={() => handleCardClick(course.id)}>
-                    <div className="p-4 sm:p-5">
-                      <div className="flex items-start justify-between gap-3 mb-3">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          {course.duration && (
-                            <span className="duration-pill text-white text-[10px] sm:text-[11px] font-bold px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full">
-                              {course.duration} week{course.duration !== 1 ? 's' : ''}
-                            </span>
-                          )}
+              {paginatedCourses.map((course, idx) => {
+                const courseHasModules = hasModules(course.id);
+                const moduleCount = modulesCount[course.id] || 0;
+                return (
+                  <div
+                    key={course.id}
+                    className="course-card bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden card-hover flex flex-col cursor-pointer"
+                    style={{ animationDelay: `${idx * 0.05}s` }}
+                  >
+                    <div className="flex-1" onClick={() => handleCardClick(course.id)}>
+                      <div className="p-4 sm:p-5">
+                        <div className="flex items-start justify-between gap-3 mb-3">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {course.duration && (
+                              <span className="duration-pill text-white text-[10px] sm:text-[11px] font-bold px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full">
+                                {course.duration} week{course.duration !== 1 ? 's' : ''}
+                              </span>
+                            )}
+                            {courseHasModules && (
+                              <span className="bg-blue-100 text-blue-700 text-[10px] sm:text-[11px] font-medium px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full">
+                                {moduleCount} module{moduleCount !== 1 ? 's' : ''}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-0.5 shrink-0" onClick={e => e.stopPropagation()}>
+                            <button 
+                              onClick={() => handleEdit(course)} 
+                              title="Edit" 
+                              className="p-2 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+                            >
+                              <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                            </button>
+                            {/* Only show delete button if course has NO modules */}
+                            {!courseHasModules && (
+                              <button 
+                                onClick={() => handleDeleteClick(course.id, course.name)} 
+                                title="Delete" 
+                                className="p-2 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                              >
+                                <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-0.5 shrink-0" onClick={e => e.stopPropagation()}>
-                          <button 
-                            onClick={() => handleEdit(course)} 
-                            title="Edit" 
-                            className="p-2 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
-                          >
-                            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                          </button>
-                          <button 
-                            onClick={() => handleDeleteClick(course.id, course.name)} 
-                            title="Delete" 
-                            className="p-2 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-                          >
-                            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
-                        </div>
+                        <h3 className="font-bold text-gray-900 text-sm sm:text-base leading-snug mb-1.5 break-words">
+                          {course.name}
+                        </h3>
+                        {course.description && (
+                          <p className="text-gray-500 text-xs sm:text-sm leading-relaxed line-clamp-3">
+                            {course.description}
+                          </p>
+                        )}
                       </div>
-                      <h3 className="font-bold text-gray-900 text-sm sm:text-base leading-snug mb-1.5 break-words">
-                        {course.name}
-                      </h3>
-                      {course.description && (
-                        <p className="text-gray-500 text-xs sm:text-sm leading-relaxed line-clamp-3">
-                          {course.description}
-                        </p>
-                      )}
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
-            {/* Pagination - Responsive */}
+            {/* Pagination */}
             {paginatedCourses.length > 0 && totalPages > 1 && (
               <div className="flex flex-col sm:flex-row justify-between items-center gap-3 bg-white rounded-2xl border border-gray-200 px-4 sm:px-5 py-3.5 shadow-sm">
                 <p className="text-gray-400 text-xs text-center sm:text-left">

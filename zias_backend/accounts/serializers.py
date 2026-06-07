@@ -82,11 +82,30 @@ class UserSerializer(serializers.ModelSerializer):
 # ----------------------------
 # BATCH SERIALIZER
 # ----------------------------
+# In serializers.py
 class BatchSerializer(serializers.ModelSerializer):
-    student_count = serializers.IntegerField(source='students.count', read_only=True)
+    start_date = serializers.DateField(
+        input_formats=['%Y-%m-%d', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%dT%H:%M:%S.%fZ'],
+        format='%Y-%m-%d'
+    )
+    end_date = serializers.DateField(
+        input_formats=['%Y-%m-%d', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%dT%H:%M:%S.%fZ'],
+        format='%Y-%m-%d'
+    )
+    
     class Meta:
         model = Batch
-        fields = ['id', 'name', 'start_date', 'end_date', 'is_active', 'created_at', 'student_count']
+        fields = '__all__'
+    
+    def to_internal_value(self, data):
+        # Convert date strings to date objects without timezone
+        if 'start_date' in data and data['start_date']:
+            if isinstance(data['start_date'], str):
+                data['start_date'] = data['start_date'].split('T')[0]
+        if 'end_date' in data and data['end_date']:
+            if isinstance(data['end_date'], str):
+                data['end_date'] = data['end_date'].split('T')[0]
+        return super().to_internal_value(data)
 
 
 # ---------------------------

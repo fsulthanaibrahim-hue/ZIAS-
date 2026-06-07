@@ -94,6 +94,39 @@ function Batches() {
 
   const fetched = useRef(false);
 
+  // ✅ FIXED: Display date correctly from YYYY-MM-DD to DD/MM/YYYY
+  const formatDateForDisplay = (dateString) => {
+    if (!dateString) return "—";
+    // If it's in YYYY-MM-DD format
+    if (typeof dateString === 'string' && dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      const [year, month, day] = dateString.split('-');
+      return `${day}/${month}/${year}`;
+    }
+    // Fallback for Date objects
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return "—";
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  };
+
+  // ✅ FIXED: Format date for input field (YYYY-MM-DD)
+  const formatDateForInput = (dateString) => {
+    if (!dateString) return "";
+    // If it's already in YYYY-MM-DD format
+    if (typeof dateString === 'string' && dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      return dateString;
+    }
+    // Convert from other formats
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return "";
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const fetchBatches = async () => {
     setLoading(true);
     try {
@@ -201,6 +234,7 @@ function Batches() {
     }
   };
 
+  // ✅ FIXED: Send dates directly without modification
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -212,12 +246,16 @@ function Batches() {
       }
     }
     
+    // Send dates exactly as selected (YYYY-MM-DD format from date picker)
     const payload = {
       name: formData.name,
       start_date: formData.start_date || null,
       end_date: formData.end_date || null,
       is_active: formData.is_active
     };
+    
+    console.log("📤 Sending payload:", payload);
+    
     try {
       if (editingId) {
         await API.patch(`batches/${editingId}/`, payload);
@@ -232,17 +270,19 @@ function Batches() {
       setDateError("");
       await fetchBatches();
     } catch (err) {
+      console.error("❌ Error:", err);
       const msg = getFriendlyErrorMessage(err, "Error saving batch");
       showToast(msg, "error");
     }
   };
 
   const handleEdit = (batch) => {
+    console.log("✏️ Editing batch:", batch);
     setEditingId(batch.id);
     setFormData({
       name: batch.name,
-      start_date: batch.start_date?.split('T')[0] || "",
-      end_date: batch.end_date?.split('T')[0] || "",
+      start_date: formatDateForInput(batch.start_date),
+      end_date: formatDateForInput(batch.end_date),
       is_active: batch.is_active
     });
     setDateError("");
@@ -547,10 +587,10 @@ function Batches() {
                         </button>
                       </td>
                       <td data-label="Start Date" className="px-4 sm:px-6 py-3 sm:py-4 text-sm text-gray-500">
-                        {batch.start_date ? new Date(batch.start_date).toLocaleDateString() : "—"}
+                        {formatDateForDisplay(batch.start_date)}
                       </td>
                       <td data-label="End Date" className="px-4 sm:px-6 py-3 sm:py-4 text-sm text-gray-500">
-                        {batch.end_date ? new Date(batch.end_date).toLocaleDateString() : "—"}
+                        {formatDateForDisplay(batch.end_date)}
                       </td>
                       <td data-label="Status" className="px-4 sm:px-6 py-3 sm:py-4">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
