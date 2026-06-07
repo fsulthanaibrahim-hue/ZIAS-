@@ -8,7 +8,7 @@ function AccountsDashboard() {
   const [data, setData] = useState({
     total_collected: 0,
     total_pending: 0,
-    total_overdue: 0,
+    total_students: 0,
     recent_payments: [],
     student_fee_summary: [],
     summary: {}
@@ -27,7 +27,7 @@ function AccountsDashboard() {
       setData({
         total_collected: res.data.total_collected || 0,
         total_pending: res.data.total_pending || 0,
-        total_overdue: res.data.total_overdue || 0,
+        total_students: res.data.summary?.total_students || res.data.total_students || 0,
         recent_payments: res.data.recent_payments || [],
         student_fee_summary: res.data.student_fee_summary || [],
         summary: res.data.summary || {}
@@ -91,7 +91,7 @@ function AccountsDashboard() {
   }
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 bg-gray-50 min-h-screen">
+    <div className="p-4 sm:p-6 lg:p-8 bg-gray-50 min-h-screen w-screen">
       <div className="max-w-7xl mx-auto">
         {/* Header with period selector */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 sm:mb-8">
@@ -116,7 +116,7 @@ function AccountsDashboard() {
           </div>
         </div>
 
-        {/* Summary Cards */}
+        {/* Summary Cards - 3 Cards (Collected, Pending, Total Students) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
           <div className="bg-gradient-to-br from-emerald-50 to-white rounded-2xl shadow-sm border border-emerald-100 p-4 sm:p-5 hover:shadow-md transition">
             <div className="flex items-center justify-between">
@@ -146,15 +146,15 @@ function AccountsDashboard() {
             </div>
           </div>
           
-          <div className="bg-gradient-to-br from-red-50 to-white rounded-2xl shadow-sm border border-red-100 p-4 sm:p-5 hover:shadow-md transition">
+          <div className="bg-gradient-to-br from-blue-50 to-white rounded-2xl shadow-sm border border-blue-100 p-4 sm:p-5 hover:shadow-md transition">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-gray-500 text-sm font-medium">Overdue Fees</p>
-                <p className="text-2xl sm:text-3xl font-bold text-red-700 mt-2">{formatCurrency(data.total_overdue)}</p>
+                <p className="text-gray-500 text-sm font-medium">Total Students</p>
+                <p className="text-2xl sm:text-3xl font-bold text-blue-700 mt-2">{data.total_students}</p>
               </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-red-100 rounded-full flex items-center justify-center">
-                <svg className="w-5 h-5 sm:w-6 sm:h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                 </svg>
               </div>
             </div>
@@ -248,7 +248,7 @@ function AccountsDashboard() {
               </svg>
               <h2 className="text-lg sm:text-xl font-semibold text-gray-800">Recent Payments</h2>
             </div>
-            <span className="text-xs text-gray-400">Latest transactions (Unique students)</span>
+            <span className="text-xs text-gray-400">Latest transactions</span>
           </div>
           
           {data.recent_payments.length === 0 ? (
