@@ -53,6 +53,8 @@ function Reviewers() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  
+  // ✅ Fix: Separate form data state properly
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -60,6 +62,7 @@ function Reviewers() {
     qualification: "",
     experience: "",
   });
+  
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [reviewerToDelete, setReviewerToDelete] = useState(null);
   const [toast, setToast] = useState(null);
@@ -76,6 +79,7 @@ function Reviewers() {
     try {
       const res = await API.get("reviewers/");
       const reviewersArray = extractArray(res);
+      console.log("Fetched reviewers:", reviewersArray);
       setReviewers(reviewersArray);
     } catch (err) {
       console.error(err);
@@ -121,21 +125,32 @@ function Reviewers() {
     }
   };
 
+  // ✅ Fix: Properly handle form submission without resetting before API call
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
+    
+    // Get the current experience value from formData
+    let experienceValue = null;
+    if (formData.experience && formData.experience !== "" && formData.experience !== "0") {
+      experienceValue = parseInt(formData.experience);
+      if (isNaN(experienceValue)) experienceValue = null;
+    }
+    
+    console.log("📝 Current formData:", formData);
+    console.log("🎯 Experience value being sent:", experienceValue);
     
     const payload = {
       full_name: formData.name,
       email: formData.email,
       department: formData.department,
       qualification: formData.qualification || null,
-      experience: formData.experience ? parseInt(formData.experience) : null,
+      experience: experienceValue,
       batch: null,
       course: formData.department,
     };
     
-    console.log("Sending payload:", payload);
+    console.log("🚀 Sending payload:", JSON.stringify(payload, null, 2));
     
     try {
       if (editingId) {
@@ -145,6 +160,8 @@ function Reviewers() {
         await API.post("reviewers/", payload);
         showToast("Reviewer added successfully", "success");
       }
+      
+      // ✅ Only reset form AFTER successful API call
       setShowForm(false);
       setEditingId(null);
       setFormData({ name: "", email: "", department: "", qualification: "", experience: "" });
@@ -152,7 +169,7 @@ function Reviewers() {
       setCurrentPage(1);
     } catch (error) {
       console.error("❌ API error:", error);
-      console.error("Response data:", error.response?.data);
+      console.error("Error response:", error.response?.data);
       let errorMsg = "Unknown error";
       if (error.response?.data) {
         const data = error.response.data;
@@ -168,20 +185,44 @@ function Reviewers() {
   };
 
   const handleEdit = (reviewer) => {
+    console.log("✏️ Editing reviewer:", reviewer);
     setEditingId(reviewer.id);
+    // Check all possible experience field names
+    let expValue = reviewer.experience || reviewer.years_of_experience || reviewer.exp_years || "";
     setFormData({
-      name: reviewer.full_name || reviewer.username,
-      email: reviewer.email,
-      department: reviewer.department || "",
+      name: reviewer.full_name || reviewer.username || "",
+      email: reviewer.email || "",
+      department: reviewer.department || reviewer.course || "",
       qualification: reviewer.qualification || "",
-      experience: reviewer.experience ? reviewer.experience.toString() : "",
+      experience: expValue ? expValue.toString() : "",
     });
     setShowForm(true);
     setMobileMenuOpen(false);
   };
 
+  // ✅ Fix: Proper handleChange to preserve values
   const handleChange = (e) => {
-    setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    const { name, value } = e.target;
+    console.log(`🔄 Changing ${name} to:`, value);
+    setFormData(prev => ({ 
+      ...prev, 
+      [name]: value 
+    }));
+  };
+
+  // Helper to get experience value from reviewer
+  const getExperienceValue = (reviewer) => {
+    const exp = reviewer.experience || 
+                reviewer.years_of_experience || 
+                reviewer.exp_years || 
+                reviewer.total_experience ||
+                reviewer.experience_years;
+    
+    if (typeof exp === 'string') {
+      const parsed = parseInt(exp);
+      return isNaN(parsed) ? null : parsed;
+    }
+    return exp ? exp : null;
   };
 
   const filteredReviewers = reviewers.filter(r =>
@@ -229,10 +270,6 @@ function Reviewers() {
     placeholder-gray-400 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/30
     transition-all duration-200 text-sm
   `;
-  const readOnlyClass = `
-    w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 text-gray-600
-    cursor-not-allowed text-sm
-  `;
 
   const getInitials = (name) => (name || "?")[0].toUpperCase();
   const avatarColors = [
@@ -257,11 +294,8 @@ function Reviewers() {
         }
         .animate-in { animation: slide-in-from-top-2 0.2s ease-out; }
         
-        /* Enhanced Responsive Styles */
         @media (max-width: 768px) {
-          .reviewer-table thead {
-            display: none;
-          }
+          .reviewer-table thead { display: none; }
           .reviewer-table tbody tr {
             display: block;
             margin-bottom: 1rem;
@@ -269,7 +303,6 @@ function Reviewers() {
             border-radius: 0.75rem;
             background: white;
             box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-            transition: all 0.2s;
           }
           .reviewer-table tbody td {
             display: flex;
@@ -281,9 +314,7 @@ function Reviewers() {
             gap: 1rem;
             flex-wrap: wrap;
           }
-          .reviewer-table tbody td:last-child {
-            border-bottom: none;
-          }
+          .reviewer-table tbody td:last-child { border-bottom: none; }
           .reviewer-table tbody td::before {
             content: attr(data-label);
             font-weight: 600;
@@ -297,49 +328,21 @@ function Reviewers() {
             flex-shrink: 0;
             min-width: 110px;
           }
-          
-          /* Touch-friendly tap targets */
-          button, 
-          [role="button"],
-          .tap-target {
-            min-height: 44px;
-            cursor: pointer;
-          }
-          
-          /* Improved spacing for mobile */
-          .container-padding {
-            padding-left: 1rem;
-            padding-right: 1rem;
-          }
+          button, [role="button"], .tap-target { min-height: 44px; cursor: pointer; }
         }
         
-        /* Tablet optimization */
         @media (min-width: 769px) and (max-width: 1024px) {
-          .reviewer-table td {
-            padding: 0.75rem 0.5rem;
-          }
+          .reviewer-table td { padding: 0.75rem 0.5rem; }
         }
         
-        /* Smooth scrolling for modals */
-        .modal-scroll {
-          scrollbar-width: thin;
-        }
-        
-        /* Hover effects for cards */
-        .reviewer-card-hover {
-          transition: transform 0.2s, box-shadow 0.2s;
-        }
-        .reviewer-card-hover:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 20px rgba(0,0,0,0.08);
-        }
+        .modal-scroll { scrollbar-width: thin; }
       `}</style>
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
       <ConfirmModal isOpen={showConfirmModal} onClose={() => setShowConfirmModal(false)} onConfirm={confirmDelete} reviewerName={reviewerToDelete?.name} />
 
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-4 sm:py-8">
-        {/* Header Section - Responsive */}
+        {/* Header Section */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 rounded-xl bg-green-100 border border-green-200 flex items-center justify-center shrink-0">
@@ -355,7 +358,7 @@ function Reviewers() {
             </div>
           </div>
 
-          {/* Mobile Menu Toggle Button */}
+          {/* Mobile Menu Toggle */}
           <div className="sm:hidden">
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -368,7 +371,7 @@ function Reviewers() {
             </button>
           </div>
 
-          {/* Controls - Desktop */}
+          {/* Controls */}
           <div className={`${mobileMenuOpen ? 'flex' : 'hidden'} sm:flex flex-col sm:flex-row items-stretch sm:items-center gap-3 transition-all duration-300`}>
             <div className="relative w-full sm:w-64">
               <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -406,7 +409,7 @@ function Reviewers() {
           </div>
         </div>
 
-        {/* Add/Edit Modal - Responsive */}
+        {/* Add/Edit Modal */}
         {showForm && (
           <div
             className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-2 sm:p-4"
@@ -459,7 +462,17 @@ function Reviewers() {
                 </div>
                 <div>
                   <label className="block text-gray-600 text-xs font-medium mb-1.5 uppercase tracking-wider">Experience (years)</label>
-                  <input type="number" name="experience" value={formData.experience} onChange={handleChange} className={inputClass} placeholder="e.g. 5" min="0" step="1" />
+                  <input 
+                    type="number" 
+                    name="experience" 
+                    value={formData.experience} 
+                    onChange={handleChange} 
+                    className={inputClass} 
+                    placeholder="e.g. 5" 
+                    min="0" 
+                    step="1"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">Enter number of years of experience</p>
                 </div>
               </div>
               <div className="flex gap-2 px-4 sm:px-6 py-4 border-t border-gray-200">
@@ -474,7 +487,7 @@ function Reviewers() {
           </div>
         )}
 
-        {/* Reviewers Table - Responsive */}
+        {/* Reviewers Table */}
         <div className="overflow-hidden rounded-xl border border-gray-200 shadow-sm bg-white">
           <div className="overflow-x-auto">
             <table className="reviewer-table min-w-full">
@@ -483,6 +496,7 @@ function Reviewers() {
                   <th className="text-left px-3 sm:px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Reviewer</th>
                   <th className="text-left px-3 sm:px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Email</th>
                   <th className="text-left px-3 sm:px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Department</th>
+                  <th className="text-left px-3 sm:px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Experience</th>
                   <th className="text-left px-3 sm:px-4 py-3 text-gray-500 text-xs font-semibold uppercase tracking-widest">Actions</th>
                 </tr>
               </thead>
@@ -490,6 +504,7 @@ function Reviewers() {
                 {paginatedReviewers.length > 0 ? (
                   paginatedReviewers.map((r) => {
                     const displayName = r.full_name || r.username;
+                    const experienceValue = getExperienceValue(r);
                     return (
                       <tr key={r.id} className="table-row-hover transition-colors duration-150 group">
                         <td data-label="Reviewer" className="px-3 sm:px-4 py-3">
@@ -508,8 +523,17 @@ function Reviewers() {
                         <td data-label="Email" className="px-3 sm:px-4 py-3 text-gray-500 text-xs sm:text-sm break-all">{r.email}</td>
                         <td data-label="Department" className="px-3 sm:px-4 py-3">
                           <span className="inline-flex items-center gap-1.5 bg-purple-100 text-purple-700 border border-purple-200 text-[10px] sm:text-xs font-medium px-2 py-1 rounded-full">
-                            {r.department || (r.course ? r.course : "—")}
+                            {r.department || r.course || "—"}
                           </span>
+                        </td>
+                        <td data-label="Experience" className="px-3 sm:px-4 py-3">
+                          {experienceValue && experienceValue > 0 ? (
+                            <span className="inline-flex items-center gap-1.5 bg-blue-100 text-blue-700 border border-blue-200 text-[10px] sm:text-xs font-medium px-2 py-1 rounded-full">
+                              {experienceValue} {experienceValue === 1 ? 'year' : 'years'}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400 text-xs">—</span>
+                          )}
                         </td>
                         <td data-label="Actions" className="px-3 sm:px-4 py-3">
                           <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
@@ -538,7 +562,7 @@ function Reviewers() {
                   })
                 ) : (
                   <tr>
-                    <td colSpan="4" className="text-center py-12">
+                    <td colSpan="5" className="text-center py-12">
                       <div className="w-14 h-14 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
                         <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -552,7 +576,7 @@ function Reviewers() {
             </table>
           </div>
           
-          {/* Pagination - Responsive */}
+          {/* Pagination */}
           {totalFiltered > 0 && (
             <div className="bg-gray-50 border-t border-gray-200 px-4 py-3 flex flex-col sm:flex-row justify-between gap-3 items-center">
               <div className="text-gray-500 text-xs text-center sm:text-left">
@@ -594,7 +618,7 @@ function Reviewers() {
         </div>
       </div>
 
-      {/* View Modal - Responsive */}
+      {/* View Modal */}
       {viewingReviewer && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-2 sm:p-4" onClick={() => setViewingReviewer(null)}>
           <div className="bg-white rounded-2xl w-full max-w-2xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto modal-scroll" onClick={(e) => e.stopPropagation()}>
@@ -634,7 +658,11 @@ function Reviewers() {
                 </div>
                 <div className="bg-gray-50 rounded-lg p-3">
                   <label className="block text-gray-500 text-xs mb-1">Experience</label>
-                  <p className="text-gray-800 text-sm">{viewingReviewer.experience ? `${viewingReviewer.experience} years` : "—"}</p>
+                  <p className="text-gray-800 text-sm">
+                    {getExperienceValue(viewingReviewer) ? 
+                      `${getExperienceValue(viewingReviewer)} ${getExperienceValue(viewingReviewer) === 1 ? 'year' : 'years'}` : 
+                      "—"}
+                  </p>
                 </div>
               </div>
             </div>

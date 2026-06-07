@@ -211,6 +211,16 @@ function Mentors() {
       }
     }
     setSelectedFiles([]);
+    
+    // ✅ Refresh both edit documents and viewer documents if viewing this mentor
+    if (editingId === mentorId) {
+      const updatedDocs = await fetchMentorDocuments(mentorId);
+      setEditDocuments(updatedDocs);
+    }
+    if (viewingMentor?.id === mentorId) {
+      const updatedDocs = await fetchMentorDocuments(mentorId);
+      setViewerDocuments(updatedDocs);
+    }
   };
 
   const resetForm = () => {
@@ -263,6 +273,11 @@ function Mentors() {
         
         await API.patch(`mentors/${editingId}/`, updatePayload);
         showToast("Mentor updated successfully", "success");
+        
+        // Upload new documents if any
+        if (selectedFiles.length) {
+          await uploadDocumentsForMentor(editingId, selectedFiles);
+        }
         
         setShowForm(false);
         setEditingId(null);
@@ -339,6 +354,13 @@ function Mentors() {
     try {
       await API.delete(`mentor-documents/${docId}/`);
       setEditDocuments(prev => prev.filter(d => d.id !== docId));
+      
+      // ✅ Also refresh viewer documents if the same mentor is being viewed
+      if (viewingMentor && editingId === viewingMentor.id) {
+        const updatedDocs = await fetchMentorDocuments(editingId);
+        setViewerDocuments(updatedDocs);
+      }
+      
       showToast("Document removed", "success");
     } catch (err) {
       const msg = getFriendlyErrorMessage(err, "Failed to delete document");
@@ -463,11 +485,8 @@ function Mentors() {
         .animate-in { animation: slide-in-from-top-2 0.2s ease-out; }
         .cursor-pointer { cursor: pointer; }
         
-        /* Enhanced Responsive Styles */
         @media (max-width: 768px) {
-          .mentor-table thead {
-            display: none;
-          }
+          .mentor-table thead { display: none; }
           .mentor-table tbody tr {
             display: block;
             margin-bottom: 1rem;
@@ -475,7 +494,6 @@ function Mentors() {
             border-radius: 0.75rem;
             background: white;
             box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-            transition: all 0.2s;
           }
           .mentor-table tbody td {
             display: flex;
@@ -487,9 +505,7 @@ function Mentors() {
             gap: 1rem;
             flex-wrap: wrap;
           }
-          .mentor-table tbody td:last-child {
-            border-bottom: none;
-          }
+          .mentor-table tbody td:last-child { border-bottom: none; }
           .mentor-table tbody td::before {
             content: attr(data-label);
             font-weight: 600;
@@ -503,54 +519,17 @@ function Mentors() {
             flex-shrink: 0;
             min-width: 100px;
           }
-          
-          /* Touch-friendly tap targets */
-          button, 
-          [role="button"],
-          .tap-target {
-            min-height: 44px;
-            cursor: pointer;
-          }
-          
-          /* Improved spacing for mobile */
-          .container-padding {
-            padding-left: 1rem;
-            padding-right: 1rem;
-          }
+          button, [role="button"], .tap-target { min-height: 44px; cursor: pointer; }
         }
         
-        /* Tablet optimization */
-        @media (min-width: 769px) and (max-width: 1024px) {
-          .mentor-table td {
-            padding: 0.75rem 0.5rem;
-          }
-        }
-        
-        /* Smooth scrolling for modals */
-        .modal-scroll {
-          scrollbar-width: thin;
-        }
-        
-        /* Loading animation */
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-        
-        /* Hover effects for cards */
-        .mentor-card-hover {
-          transition: transform 0.2s, box-shadow 0.2s;
-        }
-        .mentor-card-hover:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 20px rgba(0,0,0,0.08);
-        }
+        @keyframes spin { to { transform: rotate(360deg); } }
       `}</style>
 
       {toastMsg && <Toast message={toastMsg.message} type={toastMsg.type} onClose={hideToast} />}
       <ConfirmModal isOpen={showConfirmModal} onClose={() => setShowConfirmModal(false)} onConfirm={confirmDelete} mentorName={mentorToDelete?.name} />
 
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-4 sm:py-8">
-        {/* Header Section - Responsive */}
+        {/* Header Section */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 rounded-xl bg-green-100 border border-green-200 flex items-center justify-center shrink-0">
@@ -564,7 +543,7 @@ function Mentors() {
             </div>
           </div>
 
-          {/* Mobile Menu Toggle Button */}
+          {/* Mobile Menu Toggle */}
           <div className="sm:hidden">
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -577,7 +556,7 @@ function Mentors() {
             </button>
           </div>
 
-          {/* Controls - Desktop */}
+          {/* Controls */}
           <div className={`${mobileMenuOpen ? 'flex' : 'hidden'} sm:flex flex-col sm:flex-row items-stretch sm:items-center gap-3 transition-all duration-300`}>
             <div className="relative w-full sm:w-64">
               <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -611,7 +590,7 @@ function Mentors() {
           </div>
         </div>
 
-        {/* Form Modal - Responsive */}
+        {/* Form Modal */}
         {showForm && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-2 sm:p-4" onClick={() => setShowForm(false)}>
             <form
@@ -756,7 +735,7 @@ function Mentors() {
           </div>
         )}
 
-        {/* View Modal - Responsive */}
+        {/* View Modal */}
         {viewingMentor && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-2 sm:p-4" onClick={() => setViewingMentor(null)}>
             <div className="bg-white rounded-2xl w-full max-w-3xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto modal-scroll" onClick={(e) => e.stopPropagation()}>
@@ -828,6 +807,33 @@ function Mentors() {
                     </ul>
                   )}
                 </div>
+
+                {/* ✅ Add Document Upload Section in View Modal */}
+                <div className="border-t border-gray-200 pt-4">
+                  <h4 className="text-xs font-semibold text-emerald-600 uppercase tracking-wider mb-3">Upload New Documents</h4>
+                  <input
+                    type="file"
+                    multiple
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    onChange={(e) => setNewDocs(Array.from(e.target.files))}
+                    className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 file:cursor-pointer"
+                  />
+                  {newDocs.length > 0 && (
+                    <div className="mt-3">
+                      <p className="text-xs text-gray-500 mb-2">Selected files:</p>
+                      <ul className="space-y-1">
+                        {newDocs.map((f, idx) => <li key={idx} className="text-xs text-gray-600">📎 {f.name}</li>)}
+                      </ul>
+                      <button
+                        onClick={uploadDocsToCurrentMentor}
+                        disabled={uploadingDocs}
+                        className="mt-3 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm hover:bg-emerald-700 transition disabled:opacity-50"
+                      >
+                        {uploadingDocs ? "Uploading..." : "Upload Documents"}
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="sticky bottom-0 bg-white px-4 sm:px-6 py-4 border-t border-gray-200 flex justify-end">
@@ -837,7 +843,7 @@ function Mentors() {
           </div>
         )}
 
-        {/* Mentors Table - Responsive */}
+        {/* Mentors Table */}
         <div className="overflow-hidden rounded-xl border border-gray-200 shadow-sm bg-white">
           <div className="overflow-x-auto">
             <table className="mentor-table min-w-full">
@@ -914,7 +920,7 @@ function Mentors() {
             </table>
           </div>
           
-          {/* Pagination - Responsive */}
+          {/* Pagination */}
           {totalFiltered > 0 && (
             <div className="bg-gray-50 border-t border-gray-200 px-4 py-3 flex flex-col sm:flex-row justify-between gap-3 items-center">
               <div className="text-gray-500 text-xs text-center sm:text-left">
