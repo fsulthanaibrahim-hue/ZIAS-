@@ -2008,34 +2008,125 @@ class AccountsDashboardView(SafeAPIView):
                 next_month = start_date.replace(day=28) + timedelta(days=4)
                 end_date = next_month - timedelta(days=next_month.day)
 
-            payments = FeePayment.objects.filter(
-                payment_date__gte=start_date,
-                payment_date__lte=end_date
-            )
-            total_collected = payments.filter(status='paid').aggregate(total=Sum('amount'))['total'] or 0
-            total_pending = payments.filter(status='pending').aggregate(total=Sum('amount'))['total'] or 0
-            total_overdue = payments.filter(status='overdue').aggregate(total=Sum('amount'))['total'] or 0
+            # Get ALL students with their REAL fee data from student-fees table
+            students = Student.objects.all().select_related('user')
+            
+            total_fee = 0
+            total_paid = 0
+            paid_count = 0
+            partially_paid_count = 0
+            pending_count = 0
+            no_fee_count = 0
+            
+            student_details = []
+            
+            for student in students:
+                student_fee = StudentFee.objects.filter(student=student).first()
+                
+                if student_fee:
+                    total_amount = float(student_fee.total_amount)
+                    paid_amount = float(student_fee.paid_amount)
+                    pending_amount = total_amount - paid_amount
+                    
+                    total_fee += total_amount
+                    total_paid += paid_amount
+                    
+                    if pending_amount <= 0 and total_amount > 0:
+                        paid_count += 1
+                        status_text = "Paid"
+                    elif paid_amount > 0 and pending_amount > 0:
+                        partially_paid_count += 1
+                        status_text = "Partially Paid"
+                    elif pending_amount > 0:
+                        pending_count += 1
+                        status_text = "Pending"
+                    else:
+                        no_fee_count += 1
+                        status_text = "No Fee"
+                    
+                    # Get only REAL payments from fee-payments (if any)
+                    real_payments = FeePayment.objects.filter(
+                        student=student, 
+                        status='paid'
+                    ).order_by('-payment_date')
+                    
+                    latest_payment = real_payments.first()
+                    
+                    student_details.append({
+                        'student_name': student.full_name or student.user.username,
+                        'course': student.course,
+                        'total_fee': total_amount,
+                        'paid': paid_amount,
+                        'pending': pending_amount,
+                        'status': status_text,
+                        'last_payment_amount': float(latest_payment.amount) if latest_payment else 0,
+                        'last_payment_date': latest_payment.payment_date.isoformat() if latest_payment else None,
+                    })
+                else:
+                    no_fee_count += 1
+                    student_details.append({
+                        'student_name': student.full_name or student.user.username,
+                        'course': student.course,
+                        'total_fee': 0,
+                        'paid': 0,
+                        'pending': 0,
+                        'status': "No Fee Assigned",
+                        'last_payment_amount': 0,
+                        'last_payment_date': None,
+                    })
+            
+            # Get ONLY REAL recent payments (students who actually paid)
+            real_payments_list = []
+            seen_students = set()
+            
+            # Get all REAL paid payments
+            all_real_payments = FeePayment.objects.filter(status='paid').order_by('-payment_date')
+            
+            for payment in all_real_payments:
+                if payment.student_id not in seen_students:
+                    seen_students.add(payment.student_id)
+                    # Only add if the payment is REAL (check if student actually paid)
+                    student_fee = StudentFee.objects.filter(student=payment.student).first()
+                    if student_fee and student_fee.paid_amount > 0:
+                        real_payments_list.append({
+                            'id': payment.id,
+                            'student_name': payment.student.full_name or payment.student.user.username,
+                            'amount': float(payment.amount),
+                            'payment_date': payment.payment_date.isoformat(),
+                            'status': payment.status,
+                        })
+                    if len(real_payments_list) >= 10:
+                        break
 
-            recent_payments = payments.order_by('-payment_date')[:10]
-            recent_list = []
-            for p in recent_payments:
-                recent_list.append({
-                    'id': p.id,
-                    'student_name': p.student.full_name or p.student.user.username,
-                    'amount': float(p.amount),
-                    'payment_date': p.payment_date.isoformat(),
-                    'status': p.status,
-                })
+            # Calculate period-specific collections
+            period_payments = FeePayment.objects.filter(
+                payment_date__gte=start_date,
+                payment_date__lte=end_date,
+                status='paid'
+            )
+            total_collected_period = period_payments.aggregate(total=Sum('amount'))['total'] or 0
 
             return Response({
                 'period': period,
-                'total_collected': float(total_collected),
-                'total_pending': float(total_pending),
-                'total_overdue': float(total_overdue),
-                'recent_payments': recent_list,
+                'total_collected': float(total_collected_period),
+                'total_pending': float(total_fee - total_paid),  # Real pending from student-fees
+                'total_overdue': 0,  # Calculate based on due dates if needed
+                'recent_payments': real_payments_list,  # Only REAL payments
+                'student_fee_summary': student_details,
+                'summary': {
+                    'total_students': students.count(),
+                    'total_fee': total_fee,
+                    'total_paid': total_paid,
+                    'total_pending_fee': total_fee - total_paid,
+                    'paid_count': paid_count,
+                    'partially_paid_count': partially_paid_count,
+                    'pending_count': pending_count,
+                    'no_fee_count': no_fee_count,
+                    'collection_rate': round((total_paid / total_fee * 100), 2) if total_fee > 0 else 0,
+                }
             })
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)        
 
 
 # ----------------------------
