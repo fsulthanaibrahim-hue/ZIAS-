@@ -83,10 +83,11 @@ from .views import (
     AdminStudentFeeListView,
     AdminStudentFeeDetailView,
     AccountsStudentListView, 
-    AccountsStudentFeeView,  # ✅ ADD COMMA HERE!
+    AccountsStudentFeeView, 
+    StudentProgressView, 
     
     # Other
-    ReviewerViewSet,  # ✅ Now this works
+    ReviewerViewSet,  
 )
 
 # Rest of your code remains the same...
@@ -152,6 +153,7 @@ urlpatterns = [
     path('students/list/', StudentListView.as_view(), name='student-list'),
     path('student/review-status/', StudentReviewStatusView.as_view(), name='student-review-status'),
     path('student/course-status/', StudentCourseStatusView.as_view(), name='student-course-status'),
+    path('students/<int:student_id>/progress/', StudentProgressView.as_view(), name='student-progress'),
     
     # Admin/Accounts Fee Management URLs
     path('admin/students-fee/', AdminStudentFeeListView.as_view(), name='admin-students-fee'),
@@ -190,6 +192,5 @@ urlpatterns = [
     # Notification URLs
     path('notifications/unread-count/', UnreadNotificationCountView.as_view(), name='unread-count'),
     
-    # Include router URLs (keep this at the end to avoid conflicts)
     path('', include(router.urls)),
 ]

@@ -2635,6 +2635,62 @@ class AdminStudentFeeDetailView(APIView):
 
 
 
+class StudentProgressView(SafeAPIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, student_id):
+        user = request.user
+        # Check permissions
+        if not (user.is_accounts or user.is_admin or user.is_mentor):
+            return Response({"detail": "Not authorized"}, status=403)
+        
+        try:
+            student = Student.objects.get(id=student_id)
+        except Student.DoesNotExist:
+            return Response({"detail": "Student not found"}, status=404)
+        
+        # Get all modules for the student's course
+        if student.course:
+            modules = Module.objects.filter(
+                Q(is_common=True) | Q(course__name=student.course)
+            ).order_by('order')
+        else:
+            modules = Module.objects.filter(is_common=True).order_by('order')
+        
+        # Get completed weeks from StudentWeekReview in ONE query
+        completed_reviews = StudentWeekReview.objects.filter(
+            student=student,
+            task_status='Task Completed'
+        ).values_list('module_id', flat=True)
+        
+        # Get module orders for completed weeks
+        completed_modules = Module.objects.filter(id__in=completed_reviews)
+        completed_weeks = [m.order for m in completed_modules if m.order]
+        completed_weeks.sort()
+        
+        total_weeks = modules.count()
+        last_completed = completed_weeks[-1] if completed_weeks else 0
+        current_week = last_completed + 1
+        progress_percent = round((len(completed_weeks) / total_weeks) * 100) if total_weeks > 0 else 0
+        
+        return Response({
+            'student_id': student.id,
+            'student_name': student.full_name or student.user.username,
+            'course': student.course or '—',
+            'batch': student.batch or '—',
+            'completed_weeks': completed_weeks,
+            'current_week': current_week,
+            'next_week': current_week + 1 if current_week < total_weeks else None,
+            'total_weeks': total_weeks,
+            'progress_percent': progress_percent,
+        })
+
+
+
+
+
+
+
 
 
 
