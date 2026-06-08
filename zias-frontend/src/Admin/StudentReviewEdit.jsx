@@ -2,8 +2,17 @@ import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import API from "../api/api";
 
-let initialDataFetched = false;
-let reviewersMentorsCache = null; // Cache for reviewers/mentors
+// Module-level caches (persist across component remounts)
+let globalDataCache = {
+  student: null,
+  weeks: null,
+  reviews: null,
+  fetched: false,
+  loadingPromise: null
+};
+
+let staticDataCache = null;
+let staticDataPromise = null;
 
 const extractWeekNumber = (module) => {
   if (module.order) return parseInt(module.order, 10);
@@ -41,16 +50,15 @@ function StudentReviewEdit() {
   const studentId = searchParams.get("student_id");
   const rangeParam = searchParams.get("range") || "0-12";
 
-  const [student, setStudent] = useState(null);
-  const [allWeeks, setAllWeeks] = useState([]);
+  const [student, setStudent] = useState(() => globalDataCache.student);
+  const [allWeeks, setAllWeeks] = useState(() => globalDataCache.weeks || []);
   const [filteredWeeks, setFilteredWeeks] = useState([]);
-  const [originalReviews, setOriginalReviews] = useState({});
-  const [editedReviews, setEditedReviews] = useState({});
-  const [loading, setLoading] = useState(true);
+  const [originalReviews, setOriginalReviews] = useState(() => globalDataCache.reviews || {});
+  const [editedReviews, setEditedReviews] = useState(() => globalDataCache.reviews || {});
+  const [loading, setLoading] = useState(!globalDataCache.fetched);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
-  const dataFetched = useRef(false);
 
   const [reviewersList, setReviewersList] = useState([]);
   const [mentorsList, setMentorsList] = useState([]);
@@ -106,58 +114,64 @@ function StudentReviewEdit() {
     );
   };
 
-  // ✅ OPTIMIZED: Fetch reviewers and mentors once with caching
+  // ✅ Fetch static data (reviewers/mentors) - only once globally
   useEffect(() => {
-    const fetchReviewersAndMentors = async () => {
-      // Use cache if available
-      if (reviewersMentorsCache) {
-        setReviewersList(reviewersMentorsCache.reviewers);
-        setMentorsList(reviewersMentorsCache.mentors);
+    const fetchStaticData = async () => {
+      if (staticDataCache) {
+        setReviewersList(staticDataCache.reviewers);
+        setMentorsList(staticDataCache.mentors);
+        return;
+      }
+      
+      if (staticDataPromise) {
+        const data = await staticDataPromise;
+        setReviewersList(data.reviewers);
+        setMentorsList(data.mentors);
         return;
       }
 
-      try {
-        // ✅ Fetch both in parallel
-        const [reviewersRes, mentorsRes] = await Promise.all([
-          API.get("reviewers/"),
-          API.get("mentors/")
-        ]);
+      staticDataPromise = (async () => {
+        try {
+          const [reviewersRes, mentorsRes] = await Promise.all([
+            API.get("reviewers/"),
+            API.get("mentors/")
+          ]);
 
-        let reviewers = Array.isArray(reviewersRes.data) ? reviewersRes.data : (reviewersRes.data?.results || []);
-        let mentors = Array.isArray(mentorsRes.data) ? mentorsRes.data : (mentorsRes.data?.results || []);
+          let reviewers = Array.isArray(reviewersRes.data) ? reviewersRes.data : (reviewersRes.data?.results || []);
+          let mentors = Array.isArray(mentorsRes.data) ? mentorsRes.data : (mentorsRes.data?.results || []);
 
-        const reviewerNames = reviewers.map(rev => {
-          let name = rev.full_name || rev.name || rev.user?.full_name || rev.user?.username || rev.username;
-          if (!name) name = `Reviewer #${rev.id}`;
-          if (name && name !== `Reviewer #${rev.id}`) name = name.charAt(0).toUpperCase() + name.slice(1);
-          return `${name} Sir`;
-        });
+          const reviewerNames = reviewers.map(rev => {
+            let name = rev.full_name || rev.name || rev.user?.full_name || rev.user?.username || rev.username;
+            if (!name) name = `Reviewer #${rev.id}`;
+            if (name && name !== `Reviewer #${rev.id}`) name = name.charAt(0).toUpperCase() + name.slice(1);
+            return `${name} Sir`;
+          });
 
-        const mentorNames = mentors.map(ment => {
-          let name = ment.full_name || ment.name || ment.user?.full_name || ment.user?.username || ment.username;
-          if (!name) name = `Mentor #${ment.id}`;
-          if (name && name !== `Mentor #${ment.id}`) name = name.charAt(0).toUpperCase() + name.slice(1);
-          return name;
-        });
+          const mentorNames = mentors.map(ment => {
+            let name = ment.full_name || ment.name || ment.user?.full_name || ment.user?.username || ment.username;
+            if (!name) name = `Mentor #${ment.id}`;
+            if (name && name !== `Mentor #${ment.id}`) name = name.charAt(0).toUpperCase() + name.slice(1);
+            return name;
+          });
 
-        const finalReviewers = reviewerNames.length ? [...new Set(reviewerNames)] : ["No reviewers available"];
-        const finalMentors = mentorNames.length ? [...new Set(mentorNames)] : ["No mentors available"];
+          const finalReviewers = reviewerNames.length ? [...new Set(reviewerNames)] : ["No reviewers available"];
+          const finalMentors = mentorNames.length ? [...new Set(mentorNames)] : ["No mentors available"];
 
-        // Cache the results
-        reviewersMentorsCache = {
-          reviewers: finalReviewers,
-          mentors: finalMentors
-        };
-
-        setReviewersList(finalReviewers);
-        setMentorsList(finalMentors);
-      } catch (err) {
-        setReviewersList(["No reviewers available"]);
-        setMentorsList(["No mentors available"]);
-      }
+          staticDataCache = { reviewers: finalReviewers, mentors: finalMentors };
+          return staticDataCache;
+        } catch (err) {
+          return { reviewers: ["No reviewers available"], mentors: ["No mentors available"] };
+        } finally {
+          staticDataPromise = null;
+        }
+      })();
+      
+      const data = await staticDataPromise;
+      setReviewersList(data.reviewers);
+      setMentorsList(data.mentors);
     };
 
-    fetchReviewersAndMentors();
+    fetchStaticData();
   }, []);
 
   const rows = useMemo(
@@ -177,58 +191,99 @@ function StudentReviewEdit() {
     [reviewersList, mentorsList]
   );
 
-  // ✅ OPTIMIZED: Fetch student and modules in parallel
+  // ✅ Fetch main data - uses global cache to prevent duplicate calls
   useEffect(() => {
     if (!studentId) {
       navigate("/admin/review-sheets");
       return;
     }
 
-    const fetchInitialData = async () => {
+    const fetchMainData = async () => {
+      // If already fetched and cached, use cache
+      if (globalDataCache.fetched && globalDataCache.weeks) {
+        setStudent(globalDataCache.student);
+        setAllWeeks(globalDataCache.weeks);
+        setOriginalReviews(globalDataCache.reviews || {});
+        setEditedReviews(globalDataCache.reviews || {});
+        setLoading(false);
+        return;
+      }
+      
+      // If already loading, wait for the existing promise
+      if (globalDataCache.loadingPromise) {
+        setLoading(true);
+        const data = await globalDataCache.loadingPromise;
+        setStudent(data.student);
+        setAllWeeks(data.weeks);
+        setOriginalReviews(data.reviews);
+        setEditedReviews(data.reviews);
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
+      
+      globalDataCache.loadingPromise = (async () => {
+        try {
+          // Fetch student and modules in parallel
+          const [studentRes, modulesRes] = await Promise.all([
+            API.get(`students/${studentId}/`),
+            API.get(`modules/student-modules/?student_id=${studentId}`)
+          ]);
+
+          const studentData = studentRes.data;
+          let weeksData = modulesRes.data;
+          weeksData.sort((a, b) => extractWeekNumber(a) - extractWeekNumber(b));
+
+          // Batch fetch all reviews in parallel
+          const reviewPromises = weeksData.map(week => 
+            API.get(`week-review/${week.id}/?student_id=${studentId}`)
+              .then(res => ({ weekId: week.id, data: res.data }))
+              .catch(() => ({ weekId: week.id, data: {} }))
+          );
+
+          const reviewsResults = await Promise.all(reviewPromises);
+
+          const reviewsData = {};
+          reviewsResults.forEach(({ weekId, data }) => {
+            reviewsData[weekId] = data;
+          });
+
+          const result = {
+            student: studentData,
+            weeks: weeksData,
+            reviews: reviewsData
+          };
+          
+          globalDataCache = {
+            ...result,
+            fetched: true,
+            loadingPromise: null
+          };
+          
+          return result;
+        } catch (err) {
+          console.error("Error fetching data:", err);
+          setError("Failed to load review data.");
+          globalDataCache.loadingPromise = null;
+          throw err;
+        }
+      })();
+
       try {
-        // ✅ Fetch student and modules in parallel
-        const [studentRes, modulesRes] = await Promise.all([
-          API.get(`students/${studentId}/`),
-          API.get(`modules/student-modules/?student_id=${studentId}`)
-        ]);
-
-        setStudent(studentRes.data);
-
-        let weeksData = modulesRes.data;
-        weeksData.sort((a, b) => extractWeekNumber(a) - extractWeekNumber(b));
-        setAllWeeks(weeksData);
-
-        // ✅ OPTIMIZED: Batch fetch all reviews in parallel
-        const reviewPromises = weeksData.map(week => 
-          API.get(`week-review/${week.id}/?student_id=${studentId}`)
-            .then(res => ({ weekId: week.id, data: res.data }))
-            .catch(() => ({ weekId: week.id, data: {} }))
-        );
-
-        const reviewsResults = await Promise.all(reviewPromises);
-
-        const reviewsData = {};
-        const editsData = {};
-        reviewsResults.forEach(({ weekId, data }) => {
-          reviewsData[weekId] = data;
-          editsData[weekId] = { ...data };
-        });
-
-        setOriginalReviews(reviewsData);
-        setEditedReviews(editsData);
+        const data = await globalDataCache.loadingPromise;
+        setStudent(data.student);
+        setAllWeeks(data.weeks);
+        setOriginalReviews(data.reviews);
+        setEditedReviews(data.reviews);
       } catch (err) {
-        setError("Failed to load review data.");
-        console.error(err);
+        // Error already handled
       } finally {
         setLoading(false);
       }
     };
 
-    if (!dataFetched.current) {
-      dataFetched.current = true;
-      fetchInitialData();
-    }
+    fetchMainData();
   }, [studentId, navigate]);
 
   useEffect(() => {
@@ -304,7 +359,6 @@ function StudentReviewEdit() {
     return <input type="text" value={value} onChange={e => onChange(e.target.value)} className={inputClass} />;
   };
 
-  // ✅ OPTIMIZED: Batch save with single API call per week (but parallel across weeks)
   const handleSaveAll = async () => {
     setSaving(true);
     const promises = [];
@@ -340,7 +394,6 @@ function StudentReviewEdit() {
         }
       }
 
-      // Add english_review if changed
       if (edited.english_review !== original.english_review) {
         changes.english_review = edited.english_review;
       }
@@ -367,7 +420,6 @@ function StudentReviewEdit() {
       const results = await Promise.all(promises);
       showToast(`Successfully saved ${results.length} week(s)`, "success");
 
-      // ✅ Refresh only the updated weeks
       const newOriginal = { ...originalReviews };
       const newEdited = { ...editedReviews };
 
@@ -377,6 +429,9 @@ function StudentReviewEdit() {
           newEdited[result.weekId] = { ...result.data };
         }
       }
+
+      // Update global cache
+      globalDataCache.reviews = newOriginal;
 
       setOriginalReviews(newOriginal);
       setEditedReviews(newEdited);
@@ -428,7 +483,7 @@ function StudentReviewEdit() {
           </div>
         </div>
 
-        {/* Desktop Table - same as before */}
+        {/* Desktop Table */}
         <div className="hidden md:block overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
           <table className="min-w-full border-collapse">
             <thead className="bg-gray-50 border-b">
@@ -480,7 +535,7 @@ function StudentReviewEdit() {
           </table>
         </div>
 
-        {/* Mobile Cards - same as before */}
+        {/* Mobile Cards */}
         <div className="md:hidden space-y-6">
           {filteredWeeks.map(week => {
             const { total, stars } = getWeekTotalAndStars(week.id);
