@@ -192,6 +192,7 @@ function Accounts() {
 
     try {
       if (editingId) {
+        // Update existing account
         const updatePayload = {
           full_name: formData.full_name.trim(),
           phone: formData.phone || "",
@@ -207,36 +208,87 @@ function Accounts() {
         await fetchAccounts();
 
       } else {
+        // Create new account - generate username from email
+        const username = formData.email.split('@')[0];
+        // Generate a random password
+        const tempPassword = Math.random().toString(36).slice(-8) + "A1!";
+        
         const createPayload = {
-          full_name: formData.full_name.trim(),
           email: formData.email.trim(),
+          username: username,
+          password: tempPassword,
+          confirm_password: tempPassword,
+          full_name: formData.full_name.trim(),
           phone: formData.phone || "",
           department: formData.department || "",
         };
         
         console.log("Creating account with payload:", createPayload);
-        const response = await API.post("/accounts/", createPayload);
         
-        const generatedUsername = response.data?.username || response.data?.user?.username || "generated";
-        showToast(`Account created! Username: ${generatedUsername} sent to ${formData.email}`, "success");
-
-        setShowForm(false);
-        resetForm();
-        await fetchAccounts();
-        setCurrentPage(1);
+        try {
+          const response = await API.post("/accounts/", createPayload);
+          console.log("Account created:", response.data);
+          showToast(`Account created! Username: ${username}`, "success");
+          setShowForm(false);
+          resetForm();
+          await fetchAccounts();
+          setCurrentPage(1);
+        } catch (error) {
+          console.error("API Error:", error);
+          
+          // Try alternative payload without password
+          const altPayload = {
+            email: formData.email.trim(),
+            full_name: formData.full_name.trim(),
+            phone: formData.phone || "",
+            department: formData.department || "",
+          };
+          
+          try {
+            const response = await API.post("/accounts/", altPayload);
+            console.log("Account created with alt payload:", response.data);
+            showToast("Account created successfully", "success");
+            setShowForm(false);
+            resetForm();
+            await fetchAccounts();
+            setCurrentPage(1);
+          } catch (altError) {
+            throw altError;
+          }
+        }
       }
     } catch (error) {
       console.error("Error saving account:", error);
       let msg = "Error saving account";
       
-      if (error.response?.data?.error) {
-        msg = error.response.data.error;
-      } else if (error.response?.data?.detail) {
-        msg = error.response.data.detail;
-      } else if (error.response?.data?.email) {
-        msg = `Email error: ${error.response.data.email}`;
-      } else if (error.response?.data?.non_field_errors) {
-        msg = error.response.data.non_field_errors[0];
+      if (error.response?.data) {
+        const errorData = error.response.data;
+        
+        if (typeof errorData === 'object') {
+          if (errorData.email) {
+            msg = Array.isArray(errorData.email) ? errorData.email[0] : errorData.email;
+          } else if (errorData.username) {
+            msg = Array.isArray(errorData.username) ? errorData.username[0] : errorData.username;
+          } else if (errorData.full_name) {
+            msg = Array.isArray(errorData.full_name) ? errorData.full_name[0] : errorData.full_name;
+          } else if (errorData.detail) {
+            msg = errorData.detail;
+          } else if (errorData.error) {
+            msg = errorData.error;
+          } else if (errorData.non_field_errors) {
+            msg = Array.isArray(errorData.non_field_errors) ? errorData.non_field_errors[0] : errorData.non_field_errors;
+          } else {
+            const firstKey = Object.keys(errorData)[0];
+            if (firstKey) {
+              const firstError = errorData[firstKey];
+              msg = Array.isArray(firstError) ? firstError[0] : String(firstError);
+            }
+          }
+        } else if (typeof errorData === 'string') {
+          msg = errorData;
+        }
+      } else if (error.message) {
+        msg = error.message;
       }
       
       showToast(msg, "error");
@@ -330,7 +382,6 @@ function Accounts() {
         @keyframes slide-in-from-top-2 { from { opacity:0; transform:translateY(-1rem); } to { opacity:1; transform:translateY(0); } }
         .animate-in { animation: slide-in-from-top-2 0.2s ease-out; }
         
-        /* Enhanced Responsive Table Styles */
         @media (max-width: 768px) {
           .accounts-table thead {
             display: none;
@@ -342,7 +393,6 @@ function Accounts() {
             border-radius: 0.75rem;
             background: white;
             box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-            transition: all 0.2s;
           }
           .accounts-table tbody td {
             display: flex;
@@ -371,7 +421,6 @@ function Accounts() {
             min-width: 100px;
           }
           
-          /* Touch-friendly tap targets */
           button, 
           [role="button"],
           .tap-target {
@@ -380,14 +429,12 @@ function Accounts() {
           }
         }
         
-        /* Tablet optimization */
         @media (min-width: 769px) and (max-width: 1024px) {
           .accounts-table td {
             padding: 0.75rem 0.5rem;
           }
         }
         
-        /* Smooth scrolling for modals */
         .modal-scroll {
           scrollbar-width: thin;
         }
@@ -397,7 +444,7 @@ function Accounts() {
       <ConfirmModal isOpen={showConfirmModal} onClose={() => setShowConfirmModal(false)} onConfirm={confirmDelete} accountName={accountToDelete?.name} />
 
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-4 sm:py-8">
-        {/* Header Section - Responsive */}
+        {/* Header Section */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 rounded-xl bg-green-100 border border-green-200 flex items-center justify-center shrink-0">
@@ -411,7 +458,6 @@ function Accounts() {
             </div>
           </div>
 
-          {/* Mobile Menu Toggle Button */}
           <div className="sm:hidden">
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -424,7 +470,6 @@ function Accounts() {
             </button>
           </div>
 
-          {/* Controls - Desktop */}
           <div className={`${mobileMenuOpen ? 'flex' : 'hidden'} sm:flex flex-col sm:flex-row items-stretch sm:items-center gap-3 transition-all duration-300`}>
             <div className="relative w-full sm:w-64">
               <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -458,7 +503,7 @@ function Accounts() {
           </div>
         </div>
 
-        {/* Add/Edit Form Modal - Responsive */}
+        {/* Add/Edit Form Modal */}
         {showForm && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-2 sm:p-4" onClick={() => setShowForm(false)}>
             <form
@@ -504,7 +549,9 @@ function Accounts() {
                         placeholder={editingId ? "Email cannot be changed" : "Enter email address"}
                       />
                       {!editingId && (
-                        <p className="text-xs text-gray-400 mt-1">Username will be auto-generated from email prefix. Login credentials will be emailed.</p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          Username will be auto-generated from email. A temporary password will be created.
+                        </p>
                       )}
                     </div>
                     <div>
@@ -524,7 +571,6 @@ function Accounts() {
                       {!phoneError && formData.phone && formData.phone.length === 10 && (
                         <p className="text-xs text-green-500 mt-1">✓ Valid phone number</p>
                       )}
-                      <p className="text-xs text-gray-400 mt-1">Optional, exactly 10 digits if provided</p>
                     </div>
                     <div>
                       <label className="block text-gray-600 text-xs font-medium mb-1.5">Department</label>
@@ -542,17 +588,12 @@ function Accounts() {
                 >
                   {submitting ? (editingId ? "Saving..." : "Creating...") : (editingId ? "Save Changes" : "Create Account")}
                 </button>
-                {!editingId && (
-                  <p className="text-xs text-gray-400 text-center mt-2">
-                    Credentials will be emailed automatically
-                  </p>
-                )}
               </div>
             </form>
           </div>
         )}
 
-        {/* View Details Modal - Responsive */}
+        {/* View Details Modal */}
         {viewingAccount && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-2 sm:p-4" onClick={() => setViewingAccount(null)}>
             <div className="bg-white rounded-2xl w-full max-w-3xl border border-gray-200 shadow-xl max-h-[90vh] overflow-y-auto modal-scroll" onClick={(e) => e.stopPropagation()}>
@@ -589,7 +630,7 @@ function Accounts() {
                       <label className="block text-gray-500 text-xs">Phone</label>
                       <p className="text-gray-800 text-sm mt-1">
                         {viewingAccount.phone ? (
-                          <span className="font-mono">{viewingAccount.phone.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3')}</span>
+                          <span className="font-mono">{viewingAccount.phone}</span>
                         ) : "—"}
                       </p>
                     </div>
@@ -633,7 +674,7 @@ function Accounts() {
           </div>
         )}
 
-        {/* Accounts Table - Responsive */}
+        {/* Accounts Table */}
         <div className="overflow-hidden rounded-xl border border-gray-200 shadow-sm bg-white">
           <div className="overflow-x-auto">
             <table className="accounts-table min-w-full">
@@ -698,7 +739,7 @@ function Accounts() {
             </table>
           </div>
           
-          {/* Pagination - Responsive */}
+          {/* Pagination */}
           {totalFiltered > 0 && (
             <div className="bg-gray-50 border-t border-gray-200 px-4 py-3 flex flex-col sm:flex-row justify-between gap-3 items-center">
               <div className="text-gray-500 text-xs text-center sm:text-left">

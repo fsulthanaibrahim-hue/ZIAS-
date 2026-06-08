@@ -11,6 +11,8 @@ function StudentFees() {
   const [agreementSigned, setAgreementSigned] = useState(false);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [selectedPayment, setSelectedPayment] = useState(null);
   
   // Use ref to prevent duplicate calls
   const isFetching = useRef(false);
@@ -42,20 +44,13 @@ function StudentFees() {
     try {
       console.log(`Syncing: Current DB paid_amount = ${currentPaidAmount}, Payments total = ${paymentsTotal}`);
       
-      // Update the database
       const response = await API.patch(`/student-fees/${studentFee.id}/`, {
         paid_amount: paymentsTotal
       });
       
-      console.log('Sync response:', response.data);
-      
-      // Update local state with the response
       setStudentFee(response.data);
-      
       toast.success(`Payment amount synchronized! Paid amount updated from ${formatCurrency(currentPaidAmount)} to ${formatCurrency(paymentsTotal)}`);
-      
-      // Refresh all data
-      await fetchStudentData(true); // Force refresh
+      await fetchStudentData(true);
       
     } catch (error) {
       console.error('Failed to sync paid_amount:', error);
@@ -66,7 +61,6 @@ function StudentFees() {
   };
 
   const fetchStudentData = useCallback(async (force = false) => {
-    // Prevent multiple simultaneous calls
     if (isFetching.current && !force) {
       console.log('Already fetching, skipping...');
       return;
@@ -74,7 +68,6 @@ function StudentFees() {
     
     isFetching.current = true;
     
-    // Only show loading on initial load or manual refresh
     if (!initialLoadDone.current || force) {
       setLoading(true);
     }
@@ -106,14 +99,12 @@ function StudentFees() {
         return;
       }
       
-      // Store student ID to prevent duplicate calls for same student
       studentIdRef.current = student.id;
       
       setStudentInfo(student);
       setWeekBackAmount(student.week_back_amount || 0);
       setAgreementSigned(student.agreement_signed || false);
 
-      // Get student's fee record
       const feeRes = await API.get(`/student-fees/?student=${student.id}`);
       let feeData = feeRes.data;
       if (feeData.results) feeData = feeData.results;
@@ -123,7 +114,6 @@ function StudentFees() {
         setStudentFee(fee);
       }
 
-      // Get ALL payments for this student
       const paymentRes = await API.get(`/fee-payments/?student=${student.id}`);
       let payments = paymentRes.data;
       if (payments.results) payments = payments.results;
@@ -144,7 +134,6 @@ function StudentFees() {
     }
   }, []);
 
-  // Debounced refresh to prevent multiple calls
   const debouncedRefresh = useCallback(() => {
     if (fetchTimeout.current) {
       clearTimeout(fetchTimeout.current);
@@ -155,12 +144,10 @@ function StudentFees() {
   }, [fetchStudentData]);
 
   useEffect(() => {
-    // Only fetch on mount if not already loaded
     if (!initialLoadDone.current) {
       fetchStudentData();
     }
     
-    // Listen for fee updates from accounts page
     const handleFeeUpdate = (event) => {
       console.log('Fee data changed, refreshing...', event);
       debouncedRefresh();
@@ -169,7 +156,6 @@ function StudentFees() {
     window.addEventListener('studentFeeUpdated', handleFeeUpdate);
     window.addEventListener('feeDataChanged', handleFeeUpdate);
     
-    // Cleanup
     return () => {
       window.removeEventListener('studentFeeUpdated', handleFeeUpdate);
       window.removeEventListener('feeDataChanged', handleFeeUpdate);
@@ -177,7 +163,7 @@ function StudentFees() {
         clearTimeout(fetchTimeout.current);
       }
     };
-  }, [fetchStudentData, debouncedRefresh]); // Remove visibilitychange listener
+  }, [fetchStudentData, debouncedRefresh]);
 
   const formatCurrency = (amount) => {
     if (amount === undefined || amount === null) return '₹0';
@@ -192,15 +178,73 @@ function StudentFees() {
     return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
   };
 
-  // USE calculated amount from payments for display
-  const paymentsTotal = calculateTotalFromPayments();
+  // Generate receipt for a payment
+  const generateReceipt = (payment) => {
+    setSelectedPayment(payment);
+    setShowReceiptModal(true);
+  };
+
+  const printReceipt = () => {
+    const receiptHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Payment Receipt</title>
+        <style>
+          body { font-family: 'Inter', sans-serif; padding: 20px; background: #f0fdf4; }
+          .receipt { max-width: 600px; margin: 0 auto; background: white; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); overflow: hidden; }
+          .header { background: linear-gradient(135deg, #059669, #10b981); color: white; padding: 30px; text-align: center; }
+          .content { padding: 30px; }
+          .amount { font-size: 32px; color: #059669; font-weight: bold; text-align: center; margin: 20px 0; }
+          .details { border-top: 1px solid #e5e7eb; border-bottom: 1px solid #e5e7eb; padding: 20px 0; margin: 20px 0; }
+          .detail-row { display: flex; justify-content: space-between; margin-bottom: 12px; }
+          .footer { text-align: center; padding: 20px; background: #f9fafb; font-size: 12px; color: #6b7280; }
+          .logo { font-size: 24px; font-weight: bold; margin-bottom: 10px; }
+        </style>
+      </head>
+      <body>
+        <div class="receipt">
+          <div class="header">
+            <div class="logo">ZIAS Academy</div>
+            <p style="margin:5px 0 0;opacity:0.9">Payment Receipt</p>
+          </div>
+          <div class="content">
+            <div class="detail-row"><span><strong>Receipt No:</strong></span><span>${selectedPayment.id}</span></div>
+            <div class="detail-row"><span><strong>Student Name:</strong></span><span>${studentInfo?.full_name || studentInfo?.name || 'Student'}</span></div>
+            <div class="detail-row"><span><strong>Email:</strong></span><span>${studentInfo?.email || studentInfo?.user?.email || '—'}</span></div>
+            <div class="amount">${formatCurrency(selectedPayment.amount)}</div>
+            <div class="details">
+              <div class="detail-row"><span>Payment Date:</span><span>${formatDate(selectedPayment.payment_date)}</span></div>
+              <div class="detail-row"><span>Payment Method:</span><span>${selectedPayment.payment_method?.toUpperCase() || 'CASH'}</span></div>
+              <div class="detail-row"><span>Status:</span><span style="color:#059669">${selectedPayment.status?.toUpperCase() || 'PAID'}</span></div>
+              ${selectedPayment.notes ? `<div class="detail-row"><span>Notes:</span><span>${selectedPayment.notes}</span></div>` : ''}
+            </div>
+            <div class="footer">
+              <p>Thank you for your payment!</p>
+              <p>This is a computer generated receipt.</p>
+            </div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+    
+    const win = window.open();
+    win.document.write(receiptHtml);
+    win.document.close();
+    win.print();
+    toast.success('Receipt generated');
+  };
+
+  // Use the database paid_amount after sync
+  const actualPaidAmount = studentFee?.paid_amount || 0;
   const totalAmount = studentFee?.total_amount || 0;
-  const dbPaidAmount = studentFee?.paid_amount || 0;
-  const pendingAmount = totalAmount - paymentsTotal;
-  const paymentPercentage = totalAmount > 0 ? ((paymentsTotal / totalAmount) * 100).toFixed(1) : 0;
+  const pendingAmount = totalAmount - actualPaidAmount;
+  const paymentPercentage = totalAmount > 0 ? ((actualPaidAmount / totalAmount) * 100).toFixed(1) : 0;
   
-  // Check if there's a mismatch
-  const hasMismatch = Math.abs(paymentsTotal - dbPaidAmount) > 1;
+  // Calculate payments total for display
+  const paymentsTotal = calculateTotalFromPayments();
+  const hasMismatch = Math.abs(paymentsTotal - actualPaidAmount) > 1;
 
   let feeStatus = 'Pending';
   let statusColor = 'bg-rose-100 text-rose-800';
@@ -209,7 +253,7 @@ function StudentFees() {
     feeStatus = 'Paid';
     statusColor = 'bg-emerald-100 text-emerald-800';
     statusBadgeColor = 'bg-emerald-500';
-  } else if (paymentsTotal > 0 && pendingAmount > 0) {
+  } else if (actualPaidAmount > 0 && pendingAmount > 0) {
     feeStatus = 'Partially Paid';
     statusColor = 'bg-amber-100 text-amber-800';
     statusBadgeColor = 'bg-amber-500';
@@ -275,7 +319,7 @@ function StudentFees() {
               </div>
             </div>
 
-            {/* CRITICAL MISMATCH WARNING */}
+            {/* Mismatch Warning */}
             {hasMismatch && (
               <div className="mb-6 bg-red-50 border-2 border-red-300 rounded-xl p-5 shadow-sm">
                 <div className="flex items-start gap-3">
@@ -288,7 +332,7 @@ function StudentFees() {
                     <h3 className="font-bold text-red-800 text-lg">Payment Data Mismatch Detected!</h3>
                     <p className="text-red-700 text-sm mt-1">
                       Your payment records show <strong className="font-bold">{formatCurrency(paymentsTotal)}</strong> paid, 
-                      but the system has recorded <strong className="font-bold">{formatCurrency(dbPaidAmount)}</strong>.
+                      but the system has recorded <strong className="font-bold">{formatCurrency(actualPaidAmount)}</strong>.
                     </p>
                     <div className="mt-3 p-3 bg-white rounded-lg border border-red-200">
                       <p className="text-sm font-medium text-gray-700">How to fix:</p>
@@ -345,12 +389,7 @@ function StudentFees() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-gray-500 text-sm">Amount Paid</p>
-                    <p className="text-2xl font-bold text-emerald-600">{formatCurrency(paymentsTotal)}</p>
-                    {hasMismatch && (
-                      <p className="text-xs text-red-500 mt-1">
-                        ⚠️ DB shows: {formatCurrency(dbPaidAmount)}
-                      </p>
-                    )}
+                    <p className="text-2xl font-bold text-emerald-600">{formatCurrency(actualPaidAmount)}</p>
                   </div>
                   <div className="w-11 h-11 bg-emerald-100 rounded-xl flex items-center justify-center">
                     <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -428,7 +467,7 @@ function StudentFees() {
               </div>
             )}
 
-            {/* Payment History Table */}
+            {/* Payment History Table - No Delete Button */}
             <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
               <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
                 <h3 className="font-semibold text-gray-800">Payment History</h3>
@@ -453,7 +492,7 @@ function StudentFees() {
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment Date</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Method</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Notes</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Receipt</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -472,7 +511,17 @@ function StudentFees() {
                               {payment.status || 'Paid'}
                             </span>
                           </td>
-                          <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">{payment.notes || '—'}</td>
+                          <td className="px-6 py-4 text-sm">
+                            <button 
+                              onClick={() => generateReceipt(payment)}
+                              className="text-indigo-600 hover:text-indigo-700 text-sm font-medium flex items-center gap-1"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                              Receipt
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -494,14 +543,78 @@ function StudentFees() {
               <p className="text-sm text-blue-700">
                 Your total fee is <strong>{formatCurrency(totalAmount)}</strong>. 
                 You have made <strong>{allPayments.length}</strong> payment(s) totaling <strong>{formatCurrency(paymentsTotal)}</strong>.
+                Your current paid amount is <strong>{formatCurrency(actualPaidAmount)}</strong>.
                 Your current pending balance is <strong>{formatCurrency(pendingAmount)}</strong>.
                 {weekBackAmount > 0 && ` You also have a week back amount of ${formatCurrency(weekBackAmount)} that needs to be cleared.`}
                 {pendingAmount > 0 && ' Please complete your pending payment at the earliest.'}
               </p>
+              {hasMismatch && (
+                <div className="mt-3 p-2 bg-yellow-50 rounded-lg text-xs text-yellow-700">
+                  ⚠️ Note: There's a mismatch between your payment records and the system. Please click the "Fix Payment Amount" button above.
+                </div>
+              )}
             </div>
           </div>
         </div>
       </div>
+
+      {/* Receipt Modal */}
+      {showReceiptModal && selectedPayment && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowReceiptModal(false)}>
+          <div className="bg-white rounded-xl w-full max-w-md max-h-[85vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center px-4 sm:px-6 py-4 border-b bg-gray-50">
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900">Payment Receipt</h2>
+              <button onClick={() => setShowReceiptModal(false)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+            </div>
+            <div className="overflow-y-auto flex-1 p-4 sm:p-6">
+              <div className="text-center mb-4">
+                <h3 className="text-xl font-bold text-gray-900">ZIAS Academy</h3>
+                <p className="text-gray-500 text-sm">Payment Receipt</p>
+              </div>
+              <div className="space-y-3">
+                <div className="flex justify-between pb-2 border-b">
+                  <span className="text-gray-600">Receipt No:</span>
+                  <span className="font-medium">#{selectedPayment.id}</span>
+                </div>
+                <div className="flex justify-between pb-2 border-b">
+                  <span className="text-gray-600">Student:</span>
+                  <span className="font-medium">{studentInfo?.full_name || studentInfo?.name}</span>
+                </div>
+                <div className="flex justify-between pb-2 border-b">
+                  <span className="text-gray-600">Amount:</span>
+                  <span className="font-bold text-emerald-600 text-lg">{formatCurrency(selectedPayment.amount)}</span>
+                </div>
+                <div className="flex justify-between pb-2 border-b">
+                  <span className="text-gray-600">Date:</span>
+                  <span>{formatDate(selectedPayment.payment_date)}</span>
+                </div>
+                <div className="flex justify-between pb-2 border-b">
+                  <span className="text-gray-600">Method:</span>
+                  <span className="capitalize">{selectedPayment.payment_method || 'Cash'}</span>
+                </div>
+                <div className="flex justify-between pb-2 border-b">
+                  <span className="text-gray-600">Status:</span>
+                  <span className="text-emerald-600 font-medium">Paid</span>
+                </div>
+                {selectedPayment.notes && (
+                  <div className="pb-2 border-b">
+                    <span className="text-gray-600">Notes:</span>
+                    <p className="text-sm mt-1">{selectedPayment.notes}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="px-4 sm:px-6 py-4 border-t bg-gray-50 flex gap-3">
+              <button onClick={printReceipt} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-lg font-medium transition text-sm">
+                Print / Download
+              </button>
+              <button onClick={() => setShowReceiptModal(false)} className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 py-2.5 rounded-lg font-medium transition text-sm">
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
