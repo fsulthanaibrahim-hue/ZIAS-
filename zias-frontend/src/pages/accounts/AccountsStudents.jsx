@@ -6,7 +6,6 @@ import { toast } from 'react-hot-toast';
 function AccountsStudents() {
   const [students, setStudents] = useState([]);
   const [studentFees, setStudentFees] = useState([]);
-  const [feeStructures, setFeeStructures] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [selectedStudent, setSelectedStudent] = useState(null);
@@ -39,60 +38,63 @@ function AccountsStudents() {
   const [reportData, setReportData] = useState(null);
   const [generatingReport, setGeneratingReport] = useState(false);
 
+  // ✅ SIMPLE fetch - no complex refs
   const fetchData = async () => {
     setLoading(true);
+    
     try {
-      // Fetch students from accounts endpoint
+      // Fetch students
       const studentsRes = await API.get("/accounts/students/");
       let studentsData = studentsRes.data;
       if (studentsData.results) studentsData = studentsData.results;
+      if (!Array.isArray(studentsData)) studentsData = [];
+      
+      // Fetch student fees
+      const studentFeesRes = await API.get("/student-fees/");
+      let studentFeesData = studentFeesRes.data;
+      if (studentFeesData.results) studentFeesData = studentFeesData.results;
+      if (!Array.isArray(studentFeesData)) studentFeesData = [];
       
       const mappedStudents = studentsData.map(s => ({
         id: s.id,
         name: s.name || s.full_name || `Student ${s.id}`,
-        full_name: s.full_name,
-        email: s.email,
-        phone: s.phone || s.mobile,
         course: s.course,
         week_back_amount: parseFloat(s.week_back_amount) || 0,
-        agreement_signed: s.agreement_signed || false,
-        reviewer_name: s.reviewer_name || '—'
+        agreement_signed: s.agreement_signed || false
       }));
       
       setStudents(mappedStudents);
-      
-      // Fetch student fees
-      try {
-        const studentFeesRes = await API.get("/student-fees/");
-        let studentFeesData = studentFeesRes.data;
-        if (studentFeesData.results) studentFeesData = studentFeesData.results;
-        setStudentFees(Array.isArray(studentFeesData) ? studentFeesData : []);
-      } catch (feeErr) {
-        console.warn("No permission to read student fees");
-        setStudentFees([]);
-      }
-      
-      // Fetch fee structures
-      try {
-        const feeStructuresRes = await API.get("/fee-structures/");
-        let feeStructuresData = feeStructuresRes.data;
-        if (feeStructuresData.results) feeStructuresData = feeStructuresData.results;
-        setFeeStructures(Array.isArray(feeStructuresData) ? feeStructuresData : []);
-      } catch (feeErr) {
-        console.warn("No permission to read fee structures");
-        setFeeStructures([]);
-      }
+      setStudentFees(studentFeesData);
       
     } catch (err) {
-      console.error(err);
+      console.error('Error:', err);
       if (err.response?.status === 403) {
-        toast.error("Access denied. Please contact admin for permissions.");
+        toast.error("Permission denied. Please contact admin.");
       } else {
         toast.error("Failed to load student data");
       }
+      setStudents([]);
+      setStudentFees([]);
     } finally {
       setLoading(false);
     }
+  };
+
+  useEffect(() => {
+    fetchData();
+    
+    const handleUpdate = () => {
+      fetchData();
+    };
+    window.addEventListener('studentFeeUpdated', handleUpdate);
+    
+    return () => {
+      window.removeEventListener('studentFeeUpdated', handleUpdate);
+    };
+  }, []);
+
+  const handleRefresh = () => {
+    fetchData();
   };
 
   const getStudentFeeInfo = (student) => {
@@ -117,8 +119,7 @@ function AccountsStudents() {
         weekBackAmount: weekBackAmount,
         agreementSigned: student.agreement_signed || false,
         studentFeeId: studentFeeRecord.id,
-        feeStatus: feeStatus,
-        reviewerName: student.reviewer_name
+        feeStatus: feeStatus
       };
     }
     
@@ -129,8 +130,7 @@ function AccountsStudents() {
       weekBackAmount: student.week_back_amount || 0,
       agreementSigned: student.agreement_signed || false,
       studentFeeId: null,
-      feeStatus: "No Fee Assigned",
-      reviewerName: student.reviewer_name
+      feeStatus: "No Fee Assigned"
     };
   };
 
@@ -152,20 +152,14 @@ function AccountsStudents() {
     
     setApplying(true);
     try {
-      let updateSuccessful = false;
-      
-      // Prepare payload for AccountsStudentFeeView (handles both fee and student updates)
       const updatePayload = {};
       
-      // Add fee fields if they have values
       if (editFormData.total_amount !== "" && editFormData.total_amount !== undefined) {
         updatePayload.total_amount = parseFloat(editFormData.total_amount);
       }
       if (editFormData.paid_amount !== "" && editFormData.paid_amount !== undefined) {
         updatePayload.paid_amount = parseFloat(editFormData.paid_amount);
       }
-      
-      // Add student fields
       if (editFormData.week_back_amount !== "" && editFormData.week_back_amount !== undefined) {
         updatePayload.week_back_amount = parseFloat(editFormData.week_back_amount) || 0;
       }
@@ -173,83 +167,14 @@ function AccountsStudents() {
         updatePayload.agreement_signed = editFormData.agreement_signed;
       }
       
-      // Make single API call to update both fee and student data
       if (Object.keys(updatePayload).length > 0) {
-        try {
-          const response = await API.patch(`/accounts/student-fee/${editingStudent.id}/`, updatePayload);
-          console.log("✅ Update successful:", response.data);
-          updateSuccessful = true;
-          
-          // Update local state immediately for better UX
-          setStudents(prevStudents => prevStudents.map(s => 
-            s.id === editingStudent.id 
-              ? { 
-                  ...s, 
-                  week_back_amount: response.data.week_back_amount !== undefined 
-                    ? response.data.week_back_amount 
-                    : (updatePayload.week_back_amount || s.week_back_amount),
-                  agreement_signed: response.data.agreement_signed !== undefined 
-                    ? response.data.agreement_signed 
-                    : (updatePayload.agreement_signed || s.agreement_signed)
-                }
-              : s
-          ));
-          
-          // Also update studentFees if fee data was updated
-          if (response.data.total_amount !== undefined) {
-            setStudentFees(prevFees => {
-              const existingIndex = prevFees.findIndex(f => f.student === editingStudent.id);
-              if (existingIndex >= 0) {
-                const updatedFees = [...prevFees];
-                updatedFees[existingIndex] = {
-                  ...updatedFees[existingIndex],
-                  total_amount: response.data.total_amount,
-                  paid_amount: response.data.paid_amount,
-                };
-                return updatedFees;
-              }
-              return prevFees;
-            });
-          }
-          
-        } catch (updateErr) {
-          console.error("Update error:", updateErr);
-          if (updateErr.response?.status === 403) {
-            toast.error("Permission denied. Cannot update student.");
-            return;
-          } else if (updateErr.response?.status === 404) {
-            toast.warning("No fee record found. Creating one...");
-            // Try to create fee record if it doesn't exist
-            try {
-              const createPayload = {
-                student: editingStudent.id,
-                total_amount: updatePayload.total_amount || 0,
-                paid_amount: updatePayload.paid_amount || 0,
-              };
-              const createResponse = await API.post("/student-fees/", createPayload);
-              console.log("✅ Fee record created:", createResponse.data);
-              updateSuccessful = true;
-              toast.success("Fee record created and updated");
-            } catch (createErr) {
-              toast.error("Failed to create fee record");
-              throw createErr;
-            }
-          } else {
-            toast.error(updateErr.response?.data?.message || "Failed to update student");
-            throw updateErr;
-          }
-        }
-      } else {
-        toast.info("No changes to update");
-      }
-      
-      if (updateSuccessful) {
+        await API.patch(`/accounts/student-fee/${editingStudent.id}/`, updatePayload);
+        toast.success("Student updated successfully");
         setShowEditModal(false);
         setEditingStudent(null);
-        toast.success("Student updated successfully");
-        
-        // Full refresh to ensure data consistency
         await fetchData();
+      } else {
+        toast.info("No changes to update");
       }
       
     } catch (err) {
@@ -276,11 +201,7 @@ function AccountsStudents() {
       setPaymentHistory(filteredPayments);
     } catch (err) {
       console.error(err);
-      if (err.response?.status === 403) {
-        toast.error("Cannot view payment history: Permission denied");
-      } else {
-        toast.error("Failed to load payment history");
-      }
+      toast.error("Failed to load payment history");
       setShowPaymentHistory(false);
     } finally {
       setHistoryLoading(false);
@@ -331,11 +252,7 @@ function AccountsStudents() {
       
     } catch (err) {
       console.error("Payment error:", err);
-      if (err.response?.status === 403) {
-        toast.error("Cannot add payment: Permission denied");
-      } else {
-        toast.error("Failed to add payment");
-      }
+      toast.error("Failed to add payment");
     } finally {
       setAddingPayment(false);
     }
@@ -369,7 +286,6 @@ function AccountsStudents() {
             <div class="content">
               <div class="detail-row"><span><strong>Receipt No:</strong></span><span>${payment.id}</span></div>
               <div class="detail-row"><span><strong>Student Name:</strong></span><span>${student?.name || student?.full_name}</span></div>
-              <div class="detail-row"><span><strong>Email:</strong></span><span>${student?.email || '—'}</span></div>
               <div class="amount">${formatCurrency(payment.amount)}</div>
               <div class="details">
                 <div class="detail-row"><span>Payment Date:</span><span>${formatDate(payment.payment_date)}</span></div>
@@ -444,28 +360,17 @@ function AccountsStudents() {
       await fetchData();
     } catch (err) {
       console.error("Delete error:", err);
-      if (err.response?.status === 403) {
-        toast.error("Cannot delete fee record: Permission denied");
-      } else {
-        toast.error("Failed to delete fee record");
-      }
+      toast.error("Failed to delete fee record");
     } finally {
       setApplying(false);
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
   const filteredStudents = students.filter((s) => {
     const searchLower = search.toLowerCase();
     return (
       (s.name || "").toLowerCase().includes(searchLower) ||
-      (s.full_name || "").toLowerCase().includes(searchLower) ||
-      (s.email || "").toLowerCase().includes(searchLower) ||
-      (s.course || "").toLowerCase().includes(searchLower) ||
-      (s.reviewer_name || "").toLowerCase().includes(searchLower)
+      (s.course || "").toLowerCase().includes(searchLower)
     );
   });
 
@@ -497,6 +402,7 @@ function AccountsStudents() {
     return styles[status] || "bg-gray-100 text-gray-600";
   };
 
+  // ✅ SIMPLE loading check
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-50">
@@ -516,10 +422,9 @@ function AccountsStudents() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">Student Fee Management</h1>
-              <p className="text-xs sm:text-sm text-gray-500 mt-1">Manage student fees, track payments, and generate reports</p>
+              <p className="text-xs sm:text-sm text-gray-500 mt-1">Manage student fees and track payments</p>
             </div>
             
-            {/* Mobile Menu Toggle */}
             <div className="sm:hidden">
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -532,13 +437,12 @@ function AccountsStudents() {
               </button>
             </div>
             
-            {/* Action Buttons */}
             <div className={`${mobileMenuOpen ? 'flex' : 'hidden'} sm:flex flex-col sm:flex-row gap-3`}>
               <button onClick={generateFeeReport} disabled={generatingReport} className="flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-all duration-200 shadow-sm disabled:opacity-50">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                 Fee Reports
               </button>
-              <button onClick={fetchData} className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 transition-all duration-200">
+              <button onClick={handleRefresh} className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 transition-all duration-200">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                 Refresh
               </button>
@@ -548,25 +452,25 @@ function AccountsStudents() {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 sm:mb-8">
-          <div className="bg-white rounded-xl border border-gray-100 p-4 sm:p-5 shadow-sm hover:shadow-md transition-shadow">
+          <div className="bg-white rounded-xl border border-gray-100 p-4 sm:p-5 shadow-sm">
             <div className="flex items-center justify-between">
               <div><p className="text-xs sm:text-sm text-gray-500 mb-1">Total Collected</p><p className="text-xl sm:text-2xl font-bold text-gray-900">{formatCurrency(totalCollected)}</p></div>
               <div className="w-10 h-10 sm:w-12 sm:h-12 bg-emerald-100 rounded-xl flex items-center justify-center"><svg className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>
             </div>
           </div>
-          <div className="bg-white rounded-xl border border-gray-100 p-4 sm:p-5 shadow-sm hover:shadow-md transition-shadow">
+          <div className="bg-white rounded-xl border border-gray-100 p-4 sm:p-5 shadow-sm">
             <div className="flex items-center justify-between">
               <div><p className="text-xs sm:text-sm text-gray-500 mb-1">Total Outstanding</p><p className="text-xl sm:text-2xl font-bold text-gray-900">{formatCurrency(totalOutstanding)}</p></div>
               <div className="w-10 h-10 sm:w-12 sm:h-12 bg-rose-100 rounded-xl flex items-center justify-center"><svg className="w-5 h-5 sm:w-6 sm:h-6 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>
             </div>
           </div>
-          <div className="bg-white rounded-xl border border-gray-100 p-4 sm:p-5 shadow-sm hover:shadow-md transition-shadow">
+          <div className="bg-white rounded-xl border border-gray-100 p-4 sm:p-5 shadow-sm">
             <div className="flex items-center justify-between">
               <div><p className="text-xs sm:text-sm text-gray-500 mb-1">Week Back Amount</p><p className="text-xl sm:text-2xl font-bold text-gray-900">{formatCurrency(totalWeekBackAmount)}</p></div>
               <div className="w-10 h-10 sm:w-12 sm:h-12 bg-amber-100 rounded-xl flex items-center justify-center"><svg className="w-5 h-5 sm:w-6 sm:h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>
             </div>
           </div>
-          <div className="bg-white rounded-xl border border-gray-100 p-4 sm:p-5 shadow-sm hover:shadow-md transition-shadow">
+          <div className="bg-white rounded-xl border border-gray-100 p-4 sm:p-5 shadow-sm">
             <div className="flex items-center justify-between">
               <div><p className="text-xs sm:text-sm text-gray-500 mb-1">Students with Fee</p><p className="text-xl sm:text-2xl font-bold text-gray-900">{studentFees.length}</p></div>
               <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-xl flex items-center justify-center"><svg className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg></div>
@@ -578,7 +482,7 @@ function AccountsStudents() {
         <div className="mb-6">
           <div className="relative max-w-md w-full">
             <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-            <input type="text" placeholder="Search by name, email, course or reviewer..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm" />
+            <input type="text" placeholder="Search by name or course..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm" />
           </div>
         </div>
 
@@ -589,7 +493,7 @@ function AccountsStudents() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Student</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Reviewer</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Course</th>
                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total</th>
                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Paid</th>
                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Pending</th>
@@ -606,11 +510,10 @@ function AccountsStudents() {
                       <td className="px-4 py-3">
                         <div>
                           <p className="font-medium text-gray-900 text-sm">{student.name}</p>
-                          <p className="text-xs text-gray-500">{student.email}</p>
                           <p className="text-xs text-gray-400 mt-0.5">{student.course || "No Course"}</p>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{feeInfo.reviewerName || '—'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{student.course || '—'}</td>
                       <td className="px-4 py-3 text-right font-semibold text-gray-900 text-sm">{feeInfo.totalAmount > 0 ? formatCurrency(feeInfo.totalAmount) : "—"}</td>
                       <td className="px-4 py-3 text-right text-emerald-600 font-medium text-sm">{feeInfo.paidAmount > 0 ? formatCurrency(feeInfo.paidAmount) : "—"}</td>
                       <td className="px-4 py-3 text-right text-rose-600 font-medium text-sm">{feeInfo.pendingAmount > 0 ? formatCurrency(feeInfo.pendingAmount) : "—"}</td>
@@ -660,9 +563,7 @@ function AccountsStudents() {
                   <div className="flex justify-between items-start mb-3">
                     <div>
                       <h3 className="font-semibold text-gray-900 text-base">{student.name}</h3>
-                      <p className="text-xs text-gray-500 mt-0.5">{student.email}</p>
                       <p className="text-xs text-gray-400 mt-0.5">{student.course || "No Course"}</p>
-                      <p className="text-xs text-gray-400 mt-0.5">Reviewer: {feeInfo.reviewerName || '—'}</p>
                     </div>
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${getFeeStatusBadge(feeInfo.feeStatus)}`}>{feeInfo.feeStatus}</span>
                   </div>
@@ -702,24 +603,10 @@ function AccountsStudents() {
             </div>
             <p className="text-sm text-gray-600 mb-4 pb-3 border-b break-words">{editingStudent.name}</p>
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Total Amount (₹)</label>
-                <input type="number" step="0.01" value={editFormData.total_amount} onChange={(e) => setEditFormData({...editFormData, total_amount: e.target.value})} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Paid Amount (₹)</label>
-                <input type="number" step="0.01" value={editFormData.paid_amount} onChange={(e) => setEditFormData({...editFormData, paid_amount: e.target.value})} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Week Back Amount (₹)</label>
-                <input type="number" step="0.01" value={editFormData.week_back_amount} onChange={(e) => setEditFormData({...editFormData, week_back_amount: e.target.value})} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm" />
-              </div>
-              <div>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={editFormData.agreement_signed} onChange={(e) => setEditFormData({...editFormData, agreement_signed: e.target.checked})} className="w-4 h-4 text-emerald-600 rounded" />
-                  <span className="text-sm text-gray-700">Agreement Signed</span>
-                </label>
-              </div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Total Amount (₹)</label><input type="number" step="0.01" value={editFormData.total_amount} onChange={(e) => setEditFormData({...editFormData, total_amount: e.target.value})} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm" /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Paid Amount (₹)</label><input type="number" step="0.01" value={editFormData.paid_amount} onChange={(e) => setEditFormData({...editFormData, paid_amount: e.target.value})} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm" /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Week Back Amount (₹)</label><input type="number" step="0.01" value={editFormData.week_back_amount} onChange={(e) => setEditFormData({...editFormData, week_back_amount: e.target.value})} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm" /></div>
+              <div><label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={editFormData.agreement_signed} onChange={(e) => setEditFormData({...editFormData, agreement_signed: e.target.checked})} className="w-4 h-4 text-emerald-600 rounded" /><span className="text-sm text-gray-700">Agreement Signed</span></label></div>
             </div>
             <div className="flex gap-3 mt-6">
               <button onClick={handleUpdateStudentFee} disabled={applying} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-xl font-medium transition text-sm">Update</button>
@@ -739,27 +626,10 @@ function AccountsStudents() {
             </div>
             <p className="text-sm text-gray-600 mb-4 pb-3 border-b break-words">{paymentStudent.name}</p>
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Amount (₹)</label>
-                <input type="number" step="0.01" value={paymentData.amount} onChange={(e) => setPaymentData({...paymentData, amount: e.target.value})} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm" required />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Payment Date</label>
-                <input type="date" value={paymentData.payment_date} onChange={(e) => setPaymentData({...paymentData, payment_date: e.target.value})} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
-                <select value={paymentData.payment_method} onChange={(e) => setPaymentData({...paymentData, payment_method: e.target.value})} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm">
-                  <option value="cash">Cash</option>
-                  <option value="card">Card</option>
-                  <option value="bank_transfer">Bank Transfer</option>
-                  <option value="online">Online</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Notes (Optional)</label>
-                <textarea value={paymentData.notes} onChange={(e) => setPaymentData({...paymentData, notes: e.target.value})} rows="2" className="w-full border border-gray-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm" />
-              </div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Amount (₹)</label><input type="number" step="0.01" value={paymentData.amount} onChange={(e) => setPaymentData({...paymentData, amount: e.target.value})} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm" required /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Payment Date</label><input type="date" value={paymentData.payment_date} onChange={(e) => setPaymentData({...paymentData, payment_date: e.target.value})} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm" /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label><select value={paymentData.payment_method} onChange={(e) => setPaymentData({...paymentData, payment_method: e.target.value})} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"><option value="cash">Cash</option><option value="card">Card</option><option value="bank_transfer">Bank Transfer</option><option value="online">Online</option></select></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Notes (Optional)</label><textarea value={paymentData.notes} onChange={(e) => setPaymentData({...paymentData, notes: e.target.value})} rows="2" className="w-full border border-gray-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm" /></div>
             </div>
             <div className="flex gap-3 mt-6">
               <button onClick={handleAddPayment} disabled={addingPayment} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-xl font-medium transition text-sm">Add Payment</button>
@@ -778,40 +648,18 @@ function AccountsStudents() {
               <button onClick={() => setShowPaymentHistory(false)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
             </div>
             <div className="overflow-y-auto flex-1 p-4 sm:p-6">
-              {historyLoading ? (
-                <div className="text-center py-8">Loading payments...</div>
-              ) : paymentHistory.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">No payment records found.</div>
-              ) : (
+              {historyLoading ? <div className="text-center py-8">Loading payments...</div> : paymentHistory.length === 0 ? <div className="text-center py-8 text-gray-500">No payment records found.</div> : (
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Method</th>
-                        <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Receipt</th>
-                      </tr>
-                    </thead>
+                    <thead className="bg-gray-50"><tr><th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Amount</th><th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th><th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Method</th><th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Receipt</th></tr></thead>
                     <tbody className="divide-y divide-gray-100">
-                      {paymentHistory.map((p) => (
-                        <tr key={p.id} className="hover:bg-gray-50">
-                          <td className="px-3 py-2 text-sm font-medium text-gray-900">{formatCurrency(p.amount)}</td>
-                          <td className="px-3 py-2 text-sm text-gray-600">{formatDate(p.payment_date)}</td>
-                          <td className="px-3 py-2 text-sm capitalize text-gray-600">{p.payment_method || "—"}</td>
-                          <td className="px-3 py-2 text-center">
-                            <button onClick={() => generateReceipt(p)} className="text-indigo-600 hover:text-indigo-700 text-sm font-medium">📄 Receipt</button>
-                          </td>
-                        </tr>
-                      ))}
+                      {paymentHistory.map((p) => (<tr key={p.id} className="hover:bg-gray-50"><td className="px-3 py-2 text-sm font-medium text-gray-900">{formatCurrency(p.amount)}</td><td className="px-3 py-2 text-sm text-gray-600">{formatDate(p.payment_date)}</td><td className="px-3 py-2 text-sm capitalize text-gray-600">{p.payment_method || "—"}</td><td className="px-3 py-2 text-center"><button onClick={() => generateReceipt(p)} className="text-indigo-600 hover:text-indigo-700 text-sm font-medium">📄 Receipt</button></td></tr>))}
                     </tbody>
                   </table>
                 </div>
               )}
             </div>
-            <div className="px-4 sm:px-6 py-4 border-t bg-gray-50 flex justify-end">
-              <button onClick={() => setShowPaymentHistory(false)} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-sm font-medium transition">Close</button>
-            </div>
+            <div className="px-4 sm:px-6 py-4 border-t bg-gray-50 flex justify-end"><button onClick={() => setShowPaymentHistory(false)} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-sm font-medium transition">Close</button></div>
           </div>
         </div>
       )}
@@ -820,35 +668,14 @@ function AccountsStudents() {
       {showReportModal && reportData && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowReportModal(false)}>
           <div className="bg-white rounded-xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center px-4 sm:px-6 py-4 border-b bg-gray-50">
-              <h2 className="text-base sm:text-lg font-semibold text-gray-900">Fee Report</h2>
-              <button onClick={() => setShowReportModal(false)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
-            </div>
+            <div className="flex justify-between items-center px-4 sm:px-6 py-4 border-b bg-gray-50"><h2 className="text-base sm:text-lg font-semibold text-gray-900">Fee Report</h2><button onClick={() => setShowReportModal(false)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button></div>
             <div className="overflow-y-auto flex-1 p-4 sm:p-6">
-              <div className="text-center mb-6">
-                <h3 className="text-lg sm:text-xl font-bold text-gray-900">ZIAS - Fee Report</h3>
-                <p className="text-gray-500 text-xs sm:text-sm">Generated on: {new Date(reportData.generated_on).toLocaleString()}</p>
-              </div>
-              <div className="grid grid-cols-2 gap-3 mb-6">
-                <div className="bg-blue-50 rounded-xl p-3"><p className="text-gray-600 text-xs">Total Students</p><p className="text-lg sm:text-xl font-bold text-blue-700">{reportData.total_students}</p></div>
-                <div className="bg-purple-50 rounded-xl p-3"><p className="text-gray-600 text-xs">Students with Fee</p><p className="text-lg sm:text-xl font-bold text-purple-700">{reportData.students_with_fee}</p></div>
-                <div className="bg-emerald-50 rounded-xl p-3"><p className="text-gray-600 text-xs">Total Collected</p><p className="text-lg sm:text-xl font-bold text-emerald-700">{formatCurrency(reportData.total_paid_amount)}</p></div>
-                <div className="bg-rose-50 rounded-xl p-3"><p className="text-gray-600 text-xs">Total Pending</p><p className="text-lg sm:text-xl font-bold text-rose-700">{formatCurrency(reportData.total_pending_amount)}</p></div>
-              </div>
-              <div className="space-y-2">
-                <div className="flex justify-between items-center p-3 bg-emerald-50 rounded-xl text-sm"><span>Fully Paid</span><span className="font-bold text-emerald-700">{reportData.paid_count} students</span></div>
-                <div className="flex justify-between items-center p-3 bg-amber-50 rounded-xl text-sm"><span>Partially Paid</span><span className="font-bold text-amber-700">{reportData.partially_paid_count} students</span></div>
-                <div className="flex justify-between items-center p-3 bg-rose-50 rounded-xl text-sm"><span>Pending</span><span className="font-bold text-rose-700">{reportData.pending_count} students</span></div>
-                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl text-sm"><span>No Fee Assigned</span><span className="font-bold text-gray-700">{reportData.no_fee_count} students</span></div>
-              </div>
-              <div className="mt-6 bg-orange-50 rounded-xl p-4 text-center">
-                <p className="text-gray-600 text-sm">Collection Rate</p>
-                <p className="text-2xl sm:text-3xl font-bold text-orange-600">{reportData.collection_rate}%</p>
-              </div>
+              <div className="text-center mb-6"><h3 className="text-lg sm:text-xl font-bold text-gray-900">ZIAS - Fee Report</h3><p className="text-gray-500 text-xs sm:text-sm">Generated on: {new Date(reportData.generated_on).toLocaleString()}</p></div>
+              <div className="grid grid-cols-2 gap-3 mb-6"><div className="bg-blue-50 rounded-xl p-3"><p className="text-gray-600 text-xs">Total Students</p><p className="text-lg sm:text-xl font-bold text-blue-700">{reportData.total_students}</p></div><div className="bg-purple-50 rounded-xl p-3"><p className="text-gray-600 text-xs">Students with Fee</p><p className="text-lg sm:text-xl font-bold text-purple-700">{reportData.students_with_fee}</p></div><div className="bg-emerald-50 rounded-xl p-3"><p className="text-gray-600 text-xs">Total Collected</p><p className="text-lg sm:text-xl font-bold text-emerald-700">{formatCurrency(reportData.total_paid_amount)}</p></div><div className="bg-rose-50 rounded-xl p-3"><p className="text-gray-600 text-xs">Total Pending</p><p className="text-lg sm:text-xl font-bold text-rose-700">{formatCurrency(reportData.total_pending_amount)}</p></div></div>
+              <div className="space-y-2"><div className="flex justify-between items-center p-3 bg-emerald-50 rounded-xl text-sm"><span>Fully Paid</span><span className="font-bold text-emerald-700">{reportData.paid_count} students</span></div><div className="flex justify-between items-center p-3 bg-amber-50 rounded-xl text-sm"><span>Partially Paid</span><span className="font-bold text-amber-700">{reportData.partially_paid_count} students</span></div><div className="flex justify-between items-center p-3 bg-rose-50 rounded-xl text-sm"><span>Pending</span><span className="font-bold text-rose-700">{reportData.pending_count} students</span></div><div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl text-sm"><span>No Fee Assigned</span><span className="font-bold text-gray-700">{reportData.no_fee_count} students</span></div></div>
+              <div className="mt-6 bg-orange-50 rounded-xl p-4 text-center"><p className="text-gray-600 text-sm">Collection Rate</p><p className="text-2xl sm:text-3xl font-bold text-orange-600">{reportData.collection_rate}%</p></div>
             </div>
-            <div className="px-4 sm:px-6 py-4 border-t bg-gray-50 flex justify-end">
-              <button onClick={() => setShowReportModal(false)} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-sm font-medium transition">Close</button>
-            </div>
+            <div className="px-4 sm:px-6 py-4 border-t bg-gray-50 flex justify-end"><button onClick={() => setShowReportModal(false)} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-sm font-medium transition">Close</button></div>
           </div>
         </div>
       )}
