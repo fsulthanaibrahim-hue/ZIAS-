@@ -171,6 +171,11 @@ function AccountsPayments() {
       setEditingStudent(null);
       
       await fetchData();
+      
+      // Dispatch events to notify other components (like StudentFees)
+      window.dispatchEvent(new CustomEvent('feeDataChanged', { 
+        detail: { studentId: editingStudent.id, timestamp: new Date().toISOString() }
+      }));
       window.dispatchEvent(new Event('studentFeeUpdated'));
       
     } catch (err) {
@@ -197,6 +202,11 @@ function AccountsPayments() {
       toast.success('Fee record deleted successfully');
       
       await fetchData();
+      
+      // Dispatch events to notify other components
+      window.dispatchEvent(new CustomEvent('feeDataChanged', { 
+        detail: { studentId: student.id, timestamp: new Date().toISOString() }
+      }));
       window.dispatchEvent(new Event('studentFeeUpdated'));
       
     } catch (err) {
@@ -246,6 +256,8 @@ function AccountsPayments() {
     
     if (successCount > 0) {
       toast.success(`Fee assigned to ${successCount} students${failCount > 0 ? `, ${failCount} failed` : ''}`);
+      // Dispatch event to notify other components
+      window.dispatchEvent(new Event('studentFeeUpdated'));
     } else {
       toast.error('Failed to assign fees');
     }
@@ -280,6 +292,13 @@ function AccountsPayments() {
       setShowApplyModal(false);
       setSelectedFeeStructure(null);
       await fetchData();
+      
+      // Dispatch event to notify other components
+      window.dispatchEvent(new CustomEvent('feeDataChanged', { 
+        detail: { studentId: student.id, timestamp: new Date().toISOString() }
+      }));
+      window.dispatchEvent(new Event('studentFeeUpdated'));
+      
     } catch (err) {
       console.error('Error:', err);
       toast.error('Failed to assign fee');

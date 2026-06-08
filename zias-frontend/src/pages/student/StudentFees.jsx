@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import API from '../../api/api';
 import { toast } from 'react-hot-toast';
 import StudentSidebar from '../../components/StudentSidebar';
@@ -10,10 +10,75 @@ function StudentFees() {
   const [weekBackAmount, setWeekBackAmount] = useState(0);
   const [agreementSigned, setAgreementSigned] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('summary');
+  const [syncing, setSyncing] = useState(false);
+  
+  // Use ref to prevent duplicate calls
+  const isFetching = useRef(false);
+  const fetchTimeout = useRef(null);
+  const initialLoadDone = useRef(false);
+  const studentIdRef = useRef(null);
 
-  const fetchStudentData = async () => {
-    setLoading(true);
+  // Calculate total from payments
+  const calculateTotalFromPayments = useCallback(() => {
+    return allPayments.reduce((sum, payment) => {
+      if (payment.status === 'paid' || payment.status === 'completed') {
+        return sum + (Number(payment.amount) || 0);
+      }
+      return sum;
+    }, 0);
+  }, [allPayments]);
+
+  // FORCE SYNC - Update the database paid_amount to match payments
+  const forceSyncPaidAmount = async () => {
+    if (!studentFee?.id) {
+      toast.error('No fee record found to sync');
+      return;
+    }
+    
+    const paymentsTotal = calculateTotalFromPayments();
+    const currentPaidAmount = Number(studentFee.paid_amount) || 0;
+    
+    setSyncing(true);
+    try {
+      console.log(`Syncing: Current DB paid_amount = ${currentPaidAmount}, Payments total = ${paymentsTotal}`);
+      
+      // Update the database
+      const response = await API.patch(`/student-fees/${studentFee.id}/`, {
+        paid_amount: paymentsTotal
+      });
+      
+      console.log('Sync response:', response.data);
+      
+      // Update local state with the response
+      setStudentFee(response.data);
+      
+      toast.success(`Payment amount synchronized! Paid amount updated from ${formatCurrency(currentPaidAmount)} to ${formatCurrency(paymentsTotal)}`);
+      
+      // Refresh all data
+      await fetchStudentData(true); // Force refresh
+      
+    } catch (error) {
+      console.error('Failed to sync paid_amount:', error);
+      toast.error('Failed to sync payments. Please contact support.');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const fetchStudentData = useCallback(async (force = false) => {
+    // Prevent multiple simultaneous calls
+    if (isFetching.current && !force) {
+      console.log('Already fetching, skipping...');
+      return;
+    }
+    
+    isFetching.current = true;
+    
+    // Only show loading on initial load or manual refresh
+    if (!initialLoadDone.current || force) {
+      setLoading(true);
+    }
+    
     try {
       let student = null;
       
@@ -41,6 +106,9 @@ function StudentFees() {
         return;
       }
       
+      // Store student ID to prevent duplicate calls for same student
+      studentIdRef.current = student.id;
+      
       setStudentInfo(student);
       setWeekBackAmount(student.week_back_amount || 0);
       setAgreementSigned(student.agreement_signed || false);
@@ -65,18 +133,51 @@ function StudentFees() {
         : [];
       
       setAllPayments(sortedPayments);
+      initialLoadDone.current = true;
 
     } catch (err) {
       console.error('Error:', err);
       toast.error('Failed to load fee information');
     } finally {
       setLoading(false);
+      isFetching.current = false;
     }
-  };
+  }, []);
+
+  // Debounced refresh to prevent multiple calls
+  const debouncedRefresh = useCallback(() => {
+    if (fetchTimeout.current) {
+      clearTimeout(fetchTimeout.current);
+    }
+    fetchTimeout.current = setTimeout(() => {
+      fetchStudentData(true);
+    }, 500);
+  }, [fetchStudentData]);
 
   useEffect(() => {
-    fetchStudentData();
-  }, []);
+    // Only fetch on mount if not already loaded
+    if (!initialLoadDone.current) {
+      fetchStudentData();
+    }
+    
+    // Listen for fee updates from accounts page
+    const handleFeeUpdate = (event) => {
+      console.log('Fee data changed, refreshing...', event);
+      debouncedRefresh();
+    };
+    
+    window.addEventListener('studentFeeUpdated', handleFeeUpdate);
+    window.addEventListener('feeDataChanged', handleFeeUpdate);
+    
+    // Cleanup
+    return () => {
+      window.removeEventListener('studentFeeUpdated', handleFeeUpdate);
+      window.removeEventListener('feeDataChanged', handleFeeUpdate);
+      if (fetchTimeout.current) {
+        clearTimeout(fetchTimeout.current);
+      }
+    };
+  }, [fetchStudentData, debouncedRefresh]); // Remove visibilitychange listener
 
   const formatCurrency = (amount) => {
     if (amount === undefined || amount === null) return '₹0';
@@ -91,17 +192,15 @@ function StudentFees() {
     return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
   };
 
-  // Calculate actual paid amount from payments
-  const actualPaidAmount = allPayments.reduce((sum, payment) => {
-    if (payment.status === 'paid' || payment.status === 'completed') {
-      return sum + (Number(payment.amount) || 0);
-    }
-    return sum;
-  }, 0);
-
+  // USE calculated amount from payments for display
+  const paymentsTotal = calculateTotalFromPayments();
   const totalAmount = studentFee?.total_amount || 0;
-  const pendingAmount = totalAmount - actualPaidAmount;
-  const paymentPercentage = totalAmount > 0 ? ((actualPaidAmount / totalAmount) * 100).toFixed(1) : 0;
+  const dbPaidAmount = studentFee?.paid_amount || 0;
+  const pendingAmount = totalAmount - paymentsTotal;
+  const paymentPercentage = totalAmount > 0 ? ((paymentsTotal / totalAmount) * 100).toFixed(1) : 0;
+  
+  // Check if there's a mismatch
+  const hasMismatch = Math.abs(paymentsTotal - dbPaidAmount) > 1;
 
   let feeStatus = 'Pending';
   let statusColor = 'bg-rose-100 text-rose-800';
@@ -110,11 +209,20 @@ function StudentFees() {
     feeStatus = 'Paid';
     statusColor = 'bg-emerald-100 text-emerald-800';
     statusBadgeColor = 'bg-emerald-500';
-  } else if (actualPaidAmount > 0 && pendingAmount > 0) {
+  } else if (paymentsTotal > 0 && pendingAmount > 0) {
     feeStatus = 'Partially Paid';
     statusColor = 'bg-amber-100 text-amber-800';
     statusBadgeColor = 'bg-amber-500';
   }
+
+  const handleManualRefresh = () => {
+    toast.loading('Refreshing fee data...', { id: 'refresh' });
+    fetchStudentData(true).then(() => {
+      toast.success('Fee data updated!', { id: 'refresh' });
+    }).catch(() => {
+      toast.error('Failed to refresh', { id: 'refresh' });
+    });
+  };
 
   if (loading) {
     return (
@@ -136,13 +244,66 @@ function StudentFees() {
       <div className="flex-1 overflow-y-auto">
         <div className="p-4 sm:p-6 lg:p-8">
           <div className="max-w-6xl mx-auto">
-            {/* Header */}
-            <div className="mb-8">
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">My Fee Status</h1>
-              <p className="text-gray-500 text-sm mt-1">View your complete fee details, payment history, and week back amount</p>
+            {/* Header with Buttons */}
+            <div className="mb-8 flex justify-between items-center">
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">My Fee Status</h1>
+                <p className="text-gray-500 text-sm mt-1">View your complete fee details, payment history, and week back amount</p>
+              </div>
+              <div className="flex gap-2">
+                {hasMismatch && (
+                  <button 
+                    onClick={forceSyncPaidAmount}
+                    disabled={syncing}
+                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition text-sm flex items-center gap-2 shadow-sm"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                    </svg>
+                    {syncing ? 'Fixing...' : '🔧 Fix Payment Amount'}
+                  </button>
+                )}
+                <button 
+                  onClick={handleManualRefresh}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition text-sm flex items-center gap-2 shadow-sm"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Refresh
+                </button>
+              </div>
             </div>
 
-            {/* Student Info Card - Student ID Removed */}
+            {/* CRITICAL MISMATCH WARNING */}
+            {hasMismatch && (
+              <div className="mb-6 bg-red-50 border-2 border-red-300 rounded-xl p-5 shadow-sm">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center shrink-0">
+                    <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-bold text-red-800 text-lg">Payment Data Mismatch Detected!</h3>
+                    <p className="text-red-700 text-sm mt-1">
+                      Your payment records show <strong className="font-bold">{formatCurrency(paymentsTotal)}</strong> paid, 
+                      but the system has recorded <strong className="font-bold">{formatCurrency(dbPaidAmount)}</strong>.
+                    </p>
+                    <div className="mt-3 p-3 bg-white rounded-lg border border-red-200">
+                      <p className="text-sm font-medium text-gray-700">How to fix:</p>
+                      <p className="text-sm text-gray-600 mt-1">
+                        1️⃣ Click the <strong className="text-red-600">"Fix Payment Amount"</strong> button above<br/>
+                        2️⃣ This will update the database to match your actual payment records<br/>
+                        3️⃣ Your correct paid amount will be {formatCurrency(paymentsTotal)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Student Info Card */}
             {studentInfo && (
               <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6 shadow-sm">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -161,7 +322,6 @@ function StudentFees() {
                       </span>
                     </div>
                   </div>
-                  {/* Student ID section completely removed */}
                 </div>
               </div>
             )}
@@ -185,7 +345,12 @@ function StudentFees() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-gray-500 text-sm">Amount Paid</p>
-                    <p className="text-2xl font-bold text-emerald-600">{formatCurrency(actualPaidAmount)}</p>
+                    <p className="text-2xl font-bold text-emerald-600">{formatCurrency(paymentsTotal)}</p>
+                    {hasMismatch && (
+                      <p className="text-xs text-red-500 mt-1">
+                        ⚠️ DB shows: {formatCurrency(dbPaidAmount)}
+                      </p>
+                    )}
                   </div>
                   <div className="w-11 h-11 bg-emerald-100 rounded-xl flex items-center justify-center">
                     <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -314,11 +479,11 @@ function StudentFees() {
                     <tfoot className="bg-gray-50 border-t border-gray-200">
                       <tr>
                         <td colSpan="1" className="px-6 py-3 text-sm font-semibold text-gray-700">Total</td>
-                        <td className="px-6 py-3 text-sm font-bold text-emerald-600">{formatCurrency(actualPaidAmount)}</td>
+                        <td className="px-6 py-3 text-sm font-bold text-emerald-600">{formatCurrency(paymentsTotal)}</td>
                         <td colSpan="4"></td>
-                       </tr>
+                      </tr>
                     </tfoot>
-                   </table>
+                  </table>
                 )}
               </div>
             </div>
@@ -328,7 +493,7 @@ function StudentFees() {
               <h3 className="text-sm font-semibold text-blue-800 mb-2">📌 Fee Summary</h3>
               <p className="text-sm text-blue-700">
                 Your total fee is <strong>{formatCurrency(totalAmount)}</strong>. 
-                You have made <strong>{allPayments.length}</strong> payment(s) totaling <strong>{formatCurrency(actualPaidAmount)}</strong>.
+                You have made <strong>{allPayments.length}</strong> payment(s) totaling <strong>{formatCurrency(paymentsTotal)}</strong>.
                 Your current pending balance is <strong>{formatCurrency(pendingAmount)}</strong>.
                 {weekBackAmount > 0 && ` You also have a week back amount of ${formatCurrency(weekBackAmount)} that needs to be cleared.`}
                 {pendingAmount > 0 && ' Please complete your pending payment at the earliest.'}
