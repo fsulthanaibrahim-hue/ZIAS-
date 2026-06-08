@@ -955,5 +955,15 @@ class StudentFeePaymentSerializer(serializers.ModelSerializer):
         model = StudentFeePayment
         fields = '__all__'
 
-   
+
+
+class ReviewAssignmentSerializer(serializers.ModelSerializer):
+    review_date = serializers.DateField(source='review_folder.review_date', read_only=True)
+    meeting_link = serializers.URLField(source='review_folder.meeting_link', read_only=True)
+    student_name = serializers.CharField(source='student.full_name', read_only=True)
+    mentor_name = serializers.CharField(source='mentor.full_name', read_only=True)
+    
+    class Meta:
+        model = ReviewAssignment
+        fields = '__all__'  
         

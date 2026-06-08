@@ -14,9 +14,74 @@ function MentorAssignments() {
   const [refreshing, setRefreshing] = useState(false);
   const [filterStatus, setFilterStatus] = useState("all");
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [studentsCache, setStudentsCache] = useState({});
+  const [reviewersCache, setReviewersCache] = useState({});
   const initialFetchDone = useRef(false);
   const intervalRef = useRef(null);
   const isMountedRef = useRef(true);
+
+  // Fetch student details
+  const fetchStudentDetails = useCallback(async (studentId) => {
+    if (!studentId) return null;
+    if (studentsCache[studentId]) return studentsCache[studentId];
+    
+    try {
+      const res = await API.get(`/students/${studentId}/`);
+      const student = res.data;
+      const studentName = student.full_name || student.user?.full_name || student.user?.username || `Student ${studentId}`;
+      setStudentsCache(prev => ({ ...prev, [studentId]: studentName }));
+      return studentName;
+    } catch (err) {
+      console.error(`Error fetching student ${studentId}:`, err);
+      return `Student ${studentId}`;
+    }
+  }, [studentsCache]);
+
+  // Fetch reviewer details
+  const fetchReviewerDetails = useCallback(async (reviewerId) => {
+    if (!reviewerId) return null;
+    if (reviewersCache[reviewerId]) return reviewersCache[reviewerId];
+    
+    try {
+      const res = await API.get(`/reviewers/${reviewerId}/`);
+      const reviewer = res.data;
+      const reviewerName = reviewer.full_name || reviewer.user?.full_name || reviewer.user?.username || `Reviewer ${reviewerId}`;
+      setReviewersCache(prev => ({ ...prev, [reviewerId]: reviewerName }));
+      return reviewerName;
+    } catch (err) {
+      console.error(`Error fetching reviewer ${reviewerId}:`, err);
+      return `Reviewer ${reviewerId}`;
+    }
+  }, [reviewersCache]);
+
+  // Fetch review folder details
+  const fetchReviewFolderDetails = useCallback(async (studentId, week) => {
+    if (!studentId) return null;
+    
+    try {
+      const res = await API.get(`/review-folders/`, {
+        params: {
+          student: studentId,
+          week_folder: week
+        }
+      });
+      
+      let folders = res.data;
+      if (folders?.results) folders = folders.results;
+      
+      if (folders && folders.length > 0) {
+        const folder = folders[0];
+        return {
+          review_date: folder.review_date,
+          meeting_link: folder.meeting_link,
+          review_sheet: folder.review_sheet
+        };
+      }
+    } catch (err) {
+      console.error("Error fetching review folder:", err);
+    }
+    return null;
+  }, []);
 
   // Force refresh function - always fetches fresh data
   const forceRefreshData = useCallback(async (showToastMsg = false) => {
@@ -29,15 +94,35 @@ function MentorAssignments() {
       if (data?.results && Array.isArray(data.results)) data = data.results;
       else if (!Array.isArray(data)) data = [];
       
+      // Enrich assignments with student and reviewer names
+      const enrichedAssignments = await Promise.all(data.map(async (assignment) => {
+        const studentName = await fetchStudentDetails(assignment.student_id || assignment.student);
+        const reviewerName = await fetchReviewerDetails(assignment.reviewer_id || assignment.reviewer);
+        const folderDetails = await fetchReviewFolderDetails(
+          assignment.student_id || assignment.student, 
+          assignment.week
+        );
+        
+        return {
+          ...assignment,
+          student_full_name: studentName || "—",
+          reviewer_full_name: reviewerName || "—",
+          course: assignment.course || "—",
+          review_date: folderDetails?.review_date || assignment.review_date,
+          meeting_link: folderDetails?.meeting_link,
+          review_sheet: folderDetails?.review_sheet
+        };
+      }));
+      
       // Check if new data arrived
       const oldLength = cachedData?.length || 0;
-      const newLength = data.length;
+      const newLength = enrichedAssignments.length;
       
       // Update cache
-      cachedData = data;
+      cachedData = enrichedAssignments;
       
       if (isMountedRef.current) {
-        setAssignments(data);
+        setAssignments(enrichedAssignments);
         setLastUpdated(new Date());
         
         // Show notification for new assignments
@@ -50,14 +135,14 @@ function MentorAssignments() {
         }
       }
       
-      console.log("Force refresh completed:", data.length, "assignments");
+      console.log("Force refresh completed:", enrichedAssignments.length, "assignments");
     } catch (err) {
       console.error("Force refresh error:", err);
       if (showToastMsg) toast.error("Failed to refresh assignments");
     } finally {
       if (isMountedRef.current) setRefreshing(false);
     }
-  }, [user?.id]);
+  }, [user?.id, fetchStudentDetails, fetchReviewerDetails, fetchReviewFolderDetails]);
 
   // Normal fetch with cache (for initial load)
   const fetchAssignments = useCallback(async (forceRefresh = false, showToast = false) => {
@@ -103,10 +188,30 @@ function MentorAssignments() {
         if (data?.results && Array.isArray(data.results)) data = data.results;
         else if (!Array.isArray(data)) data = [];
         
-        console.log("Initial fetch:", data.length, "assignments");
-        cachedData = data;
+        // Enrich assignments with student and reviewer names
+        const enrichedAssignments = await Promise.all(data.map(async (assignment) => {
+          const studentName = await fetchStudentDetails(assignment.student_id || assignment.student);
+          const reviewerName = await fetchReviewerDetails(assignment.reviewer_id || assignment.reviewer);
+          const folderDetails = await fetchReviewFolderDetails(
+            assignment.student_id || assignment.student, 
+            assignment.week
+          );
+          
+          return {
+            ...assignment,
+            student_full_name: studentName || "—",
+            reviewer_full_name: reviewerName || "—",
+            course: assignment.course || "—",
+            review_date: folderDetails?.review_date || assignment.review_date,
+            meeting_link: folderDetails?.meeting_link,
+            review_sheet: folderDetails?.review_sheet
+          };
+        }));
+        
+        console.log("Initial fetch:", enrichedAssignments.length, "assignments");
+        cachedData = enrichedAssignments;
         if (isMountedRef.current) setLastUpdated(new Date());
-        return data;
+        return enrichedAssignments;
       } catch (err) {
         console.error("Fetch error:", err);
         if (showToast) toast.error("Failed to load assignments");
@@ -124,7 +229,7 @@ function MentorAssignments() {
     } finally {
       if (isMountedRef.current) setLoading(false);
     }
-  }, [user?.id, forceRefreshData]);
+  }, [user?.id, forceRefreshData, fetchStudentDetails, fetchReviewerDetails, fetchReviewFolderDetails]);
 
   // Initial fetch
   useEffect(() => {
@@ -134,14 +239,14 @@ function MentorAssignments() {
     }
   }, [user?.id, fetchAssignments]);
 
-  // ✅ Auto-refresh every 30 seconds - ALWAYS force refresh
+  // Auto-refresh every 30 seconds
   useEffect(() => {
     if (!user?.id) return;
     
     intervalRef.current = setInterval(() => {
       console.log("🔄 Auto-refreshing assignments...");
-      forceRefreshData(true); // Always fetch fresh data
-    }, 30000); // Refresh every 30 seconds
+      forceRefreshData(true);
+    }, 30000);
     
     return () => {
       if (intervalRef.current) {
@@ -150,7 +255,7 @@ function MentorAssignments() {
     };
   }, [user?.id, forceRefreshData]);
 
-  // ✅ Refresh when tab becomes visible again
+  // Refresh when tab becomes visible
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (!document.hidden && user?.id) {
@@ -183,7 +288,6 @@ function MentorAssignments() {
   const handleAccept = async (id) => {
     try {
       await API.post(`/review-assignments/${id}/accept/`);
-      // Clear cache and force refresh
       cachedData = null;
       await forceRefreshData(true);
       toast.success("Assignment accepted successfully!");
@@ -196,7 +300,6 @@ function MentorAssignments() {
   const handleReject = async (id) => {
     try {
       await API.post(`/review-assignments/${id}/reject/`);
-      // Clear cache and force refresh
       cachedData = null;
       await forceRefreshData(true);
       toast.success("Assignment rejected successfully!");
@@ -229,7 +332,17 @@ function MentorAssignments() {
   // Format date
   const formatDate = (dateString) => {
     if (!dateString) return "—";
-    return new Date(dateString).toLocaleDateString("en-IN");
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return "—";
+      return date.toLocaleDateString("en-IN", { 
+        day: 'numeric', 
+        month: 'short', 
+        year: 'numeric' 
+      });
+    } catch (error) {
+      return "—";
+    }
   };
 
   // Format time for last updated
@@ -349,29 +462,55 @@ function MentorAssignments() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Course</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Week</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Review Date</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Proposed Time</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Meeting Link</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
               {filteredAssignments.map((ass) => {
-                const suggestedTime = getSuggestedTime(ass.comments);
                 const isPending = ass.status === "pending approval";
                 const isAssigned = ass.status === "assigned";
                 const weekNumber = ass.week ? `Week ${ass.week}` : "—";
+                const reviewDate = ass.review_date;
+                const meetingLink = ass.meeting_link;
                 
                 return (
                   <tr key={ass.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 text-sm text-gray-900">{ass.student_full_name || "—"}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900">{ass.reviewer_full_name || "—"}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{ass.course || "—"}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{weekNumber}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{formatDate(ass.review_date)}</td>
+                    <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                      {ass.student_full_name || "—"}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-700">
+                      {ass.reviewer_full_name || "—"}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      {ass.course || "—"}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      {weekNumber}
+                    </td>
                     <td className="px-4 py-3 text-sm">
-                      {suggestedTime ? (
-                        <span className="text-amber-600 font-medium">{suggestedTime}</span>
-                      ) : "—"}
+                      {reviewDate ? (
+                        <span className="text-indigo-600 font-medium">
+                          {formatDate(reviewDate)}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 italic">Not scheduled</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      {meetingLink ? (
+                        <a 
+                          href={meetingLink} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800 underline"
+                        >
+                          Join Meeting
+                        </a>
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
