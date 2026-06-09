@@ -687,11 +687,11 @@ const Courses = () => {
                   fontSize: "18px", fontWeight: "700", color: "#15803d",
                 }}
               >
-                U
+                R
               </div>
               <div style={{ textAlign: "left" }}>
-                <div style={{ fontFamily: "'Georgia', serif", fontSize: "16px", fontWeight: "700", color: "#111827" }}>Udaifa K.K</div>
-                <div style={{ fontSize: "11px", color: "#9ca3af", letterSpacing: "0.06em", textTransform: "uppercase" }}>Full Stack Developer · Batch 2024</div>
+                <div style={{ fontFamily: "'Georgia', serif", fontSize: "16px", fontWeight: "700", color: "#111827" }}>Rana Fathima</div>
+                <div style={{ fontSize: "11px", color: "#9ca3af", letterSpacing: "0.06em", textTransform: "uppercase" }}>Full Stack Developer · Batch 2025</div>
               </div>
               <div style={{ display: "flex", gap: "3px", marginLeft: "6px" }}>
                 {[...Array(5)].map((_, i) => <FaStar key={i} style={{ fontSize: "12px", color: "#d97706" }} />)}

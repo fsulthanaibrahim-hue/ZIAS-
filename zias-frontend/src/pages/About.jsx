@@ -351,7 +351,7 @@ const About = () => {
             viewport={{ once: true }}
             className="grid grid-cols-1 md:grid-cols-3 gap-6"
           >
-            {/* Testimonial 1 - Udaifa K.K */}
+            {/* Testimonial 1 */}
             <motion.div
               variants={fadeInUp}
               className="backdrop-blur-md bg-white/60 rounded-2xl p-6 transition-all duration-300 border border-white/40 shadow-lg hover:shadow-xl"
@@ -365,10 +365,10 @@ const About = () => {
                   className="w-11 h-11 rounded-full flex items-center justify-center text-green-700 font-extrabold text-base flex-shrink-0"
                   style={{ background: "linear-gradient(135deg,#dcfce7,#bbf7d0)" }}
                 >
-                  U
+                  F
                 </div>
                 <div>
-                  <div className="font-bold text-gray-900 text-sm">Udaifa K.K</div>
+                  <div className="font-bold text-gray-900 text-sm">Fathimath Sulthana</div>
                   <div className="text-xs text-gray-400">Full Stack Developer</div>
                 </div>
                 <div className="ml-auto flex text-yellow-400 text-xs gap-0.5">
@@ -377,7 +377,7 @@ const About = () => {
               </div>
             </motion.div>
 
-            {/* Testimonial 2 - Hasna C.H */}
+            {/* Testimonial 2 */}
             <motion.div
               variants={fadeInUp}
               className="backdrop-blur-md bg-white/60 rounded-2xl p-6 transition-all duration-300 border border-white/40 shadow-lg hover:shadow-xl"
@@ -391,10 +391,10 @@ const About = () => {
                   className="w-11 h-11 rounded-full flex items-center justify-center text-green-700 font-extrabold text-base flex-shrink-0"
                   style={{ background: "linear-gradient(135deg,#dcfce7,#bbf7d0)" }}
                 >
-                  H
+                  S
                 </div>
                 <div>
-                  <div className="font-bold text-gray-900 text-sm">Hasna C.H</div>
+                  <div className="font-bold text-gray-900 text-sm">Shaniya</div>
                   <div className="text-xs text-gray-400">Frontend Developer</div>
                 </div>
                 <div className="ml-auto flex text-yellow-400 text-xs gap-0.5">
@@ -403,7 +403,7 @@ const About = () => {
               </div>
             </motion.div>
 
-            {/* Testimonial 3 - Wafa Fathima C.K */}
+            {/* Testimonial 3 */}
             <motion.div
               variants={fadeInUp}
               className="backdrop-blur-md bg-white/60 rounded-2xl p-6 transition-all duration-300 border border-white/40 shadow-lg hover:shadow-xl"
@@ -417,10 +417,10 @@ const About = () => {
                   className="w-11 h-11 rounded-full flex items-center justify-center text-green-700 font-extrabold text-base flex-shrink-0"
                   style={{ background: "linear-gradient(135deg,#dcfce7,#bbf7d0)" }}
                 >
-                  W
+                  S
                 </div>
                 <div>
-                  <div className="font-bold text-gray-900 text-sm">Wafa Fathima C.K</div>
+                  <div className="font-bold text-gray-900 text-sm">Saneedha</div>
                   <div className="text-xs text-gray-400">Backend Developer</div>
                 </div>
                 <div className="ml-auto flex text-yellow-400 text-xs gap-0.5">
