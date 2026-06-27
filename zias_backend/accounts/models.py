@@ -132,7 +132,7 @@ class Student(models.Model):
 class Mentor(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='mentor_profile')
     full_name = models.CharField(max_length=255, blank=True, null=True)
-    email = models.EmailField(max_length=255, blank=True, null=True, unique=True)  # ADD THIS LINE
+    email = models.EmailField(max_length=255, blank=True, null=True, unique=True) 
     phone = models.CharField(max_length=20, blank=True, null=True)
     expertise = models.CharField(max_length=255, blank=True, null=True)
     batch = models.ForeignKey(Batch, on_delete=models.SET_NULL, null=True, blank=True, related_name='mentors')
