@@ -21,7 +21,7 @@ function ResetPassword() {
       return;
     }
     try {
-      const res = await axios.post(`http://127.0.0.1:8000/api/reset-password/${token}/`, {
+      const res = await axios.post(`https://zias-4p4n.onrender.com/api/reset-password/${token}/`, {
         new_password: password
       });
       setMessage(res.data.detail);

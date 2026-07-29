@@ -2,7 +2,7 @@ import axios from 'axios';
 import { clearAuthStorage } from './authStorage';
 
 // Configure axios defaults
-axios.defaults.baseURL = 'http://127.0.0.1:8000/api/';
+axios.defaults.baseURL = 'https://zias-4p4n.onrender.com/api/';
 
 // Add request interceptor to attach token
 axios.interceptors.request.use(
@@ -34,7 +34,7 @@ axios.interceptors.response.use(
       
       try {
         const refreshToken = localStorage.getItem('refresh_token');
-        const response = await axios.post('http://127.0.0.1:8000/api/token/refresh/', {
+        const response = await axios.post('https://zias-4p4n.onrender.com/api/token/refresh/', {
           refresh: refreshToken
         });
         

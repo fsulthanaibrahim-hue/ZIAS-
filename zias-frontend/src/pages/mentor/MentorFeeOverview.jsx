@@ -57,7 +57,7 @@ function MentorFeeOverview() {
     fetchPromise = (async () => {
       try {
         const token = localStorage.getItem("access_token");
-        const BASE_URL = "http://127.0.0.1:8000";
+        const BASE_URL = "https://zias-4p4n.onrender.com";
         
         // Fetch mentor profile
         const mentorRes = await fetch(`${BASE_URL}/api/mentors/me/`, {
@@ -173,7 +173,7 @@ function MentorFeeOverview() {
     setShowPaymentHistory(true);
     try {
       const token = localStorage.getItem("access_token");
-      const BASE_URL = "http://127.0.0.1:8000";
+      const BASE_URL = "https://zias-4p4n.onrender.com";
       
       const res = await fetch(`${BASE_URL}/api/fee-payments/?student=${student.id}`, {
         headers: { "Authorization": `Bearer ${token}` }

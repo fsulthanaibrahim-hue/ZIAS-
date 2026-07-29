@@ -15,7 +15,7 @@ io.use(async (socket, next) => {
   const token = socket.handshake.query.token;
   if (!token) return next(new Error('No token'));
   try {
-    const response = await axios.get('http://127.0.0.1:8000/api/users/me/', {
+    const response = await axios.get('https://zias-4p4n.onrender.com/api/users/me/', {
       headers: { Authorization: `Bearer ${token}` }
     });
     socket.user = response.data;
@@ -35,7 +35,7 @@ io.on('connection', (socket) => {
   socket.on('send_message', async ({ room_id, content }) => {
     if (!room_id || !content) return;
     try {
-      const response = await axios.post('http://127.0.0.1:8000/api/chat-messages/', {
+      const response = await axios.post('https://zias-4p4n.onrender.com/api/chat-messages/', {
         room: room_id,
         content: content
       }, {
@@ -67,7 +67,7 @@ io.on('connection', (socket) => {
 
   socket.on('mark_read', async ({ room_id }) => {
     try {
-      await axios.post(`http://127.0.0.1:8000/api/chat-messages/mark-read/${room_id}/`, {}, {
+      await axios.post(`https://zias-4p4n.onrender.com/api/chat-messages/mark-read/${room_id}/`, {}, {
         headers: { Authorization: `Bearer ${socket.handshake.query.token}` }
       });
       socket.to(`room_${room_id}`).emit('messages_read', { room_id, read_by: socket.user.id });

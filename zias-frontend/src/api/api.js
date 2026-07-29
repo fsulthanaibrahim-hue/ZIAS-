@@ -2,7 +2,7 @@ import axios from "axios";
 import { clearAuthStorage } from "../utils/authStorage";
 
 const API = axios.create({
-  baseURL: "http://127.0.0.1:8000/api/",
+  baseURL: "https://zias-4p4n.onrender.com/api/",
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
@@ -73,7 +73,7 @@ API.interceptors.response.use(
 
     try {
       const response = await axios.post(
-        "http://127.0.0.1:8000/api/token/refresh/",
+        "https://zias-4p4n.onrender.com/api/token/refresh/",
         { refresh: refreshToken }
       );
 

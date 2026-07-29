@@ -153,7 +153,7 @@ const Contact = () => {
     
     try {
       // Send to backend with shorter timeout
-      const response = await axios.post("http://127.0.0.1:8000/api/contact/", formData, {
+      const response = await axios.post("https://zias-4p4n.onrender.com/api/contact/", formData, {
         timeout: 3000 // 3 second timeout for faster response
       });
       

@@ -108,7 +108,7 @@ function Mentors() {
   const getDocumentUrl = (url) => {
     if (!url || typeof url !== 'string') return '#';
     if (url.startsWith('http')) return url;
-    return `http://127.0.0.1:8000${url}`;
+    return `https://zias-4p4n.onrender.com${url}`;
   };
 
   const fetchMentors = useCallback(async () => {

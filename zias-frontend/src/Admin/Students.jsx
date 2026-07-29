@@ -125,7 +125,7 @@ function Students() {
       cleanUrl = '/' + cleanUrl;
     }
     
-    return `http://127.0.0.1:8000${cleanUrl}`;
+    return `https://zias-4p4n.onrender.com${cleanUrl}`;
   };
 
   // ✅ FIXED: Open document directly
