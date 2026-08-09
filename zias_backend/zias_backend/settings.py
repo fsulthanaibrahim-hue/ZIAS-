@@ -168,10 +168,9 @@ CHANNEL_LAYERS = {
 
 
 
-CORS_ALLOWED_ORIGINS = config(
-    'CORS_ALLOWED_ORIGINS',
-    default='http://localhost:5173'
-).split(',')
+CORS_ALLOWED_ORIGINS = [
+    "https://zias-frontend.onrender.com",
+]
 
 CORS_ALLOW_CREDENTIALS = True
 
@@ -245,11 +244,11 @@ CELERY_BEAT_SCHEDULE = {
 
 SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default=False, cast=bool)
 SESSION_COOKIE_SECURE = config('SESSION_COOKIE_SECURE', default=False, cast=bool)
+
 CSRF_COOKIE_SECURE = config('CSRF_COOKIE_SECURE', default=False, cast=bool)
-CSRF_TRUSTED_ORIGINS = config(
-    'CSRF_TRUSTED_ORIGINS',
-    default='http://localhost:5173'
-).split(',')
+CSRF_TRUSTED_ORIGINS = [
+    "https://zias-frontend.onrender.com",
+]
 
 
 
