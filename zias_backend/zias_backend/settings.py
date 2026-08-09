@@ -28,7 +28,9 @@ SECRET_KEY = config('SECRET_KEY')
 DEBUG = config('DEBUG', default=False, cast=bool)
 
 ALLOWED_HOSTS = [
-    "*"
+    "zias-4p4n.onrender.com",
+    "localhost",
+    "127.0.0.1",
 ]
 
 
@@ -155,15 +157,20 @@ ASGI_APPLICATION = 'zias_backend.asgi.application'
 
 
 # Redis / Channels
-REDIS_HOST = config('REDIS_HOST', default='127.0.0.1')
-REDIS_PORT = config('REDIS_PORT', default=6379, cast=int)
+# Redis / Channels
+
+REDIS_URL = config('REDIS_URL')
 
 CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
-        'CONFIG': {'hosts': [(REDIS_HOST, REDIS_PORT)]},
+        'CONFIG': {
+            'hosts': [REDIS_URL],
+        },
     },
 }
+
+
 
 
 
@@ -225,13 +232,14 @@ PASSWORD_EXPIRY_DAYS = config('PASSWORD_EXPIRY_DAYS', default=3, cast=int)
 
 
 # Celery settings
-CELERY_BROKER_URL = config('REDIS_URL', default='redis://localhost:6379/0')
-CELERY_RESULT_BACKEND = config('REDIS_URL', default='redis://localhost:6379/0')
+CELERY_BROKER_URL = REDIS_URL
+CELERY_RESULT_BACKEND = REDIS_URL
 
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'Asia/Kolkata'
+
 
 from celery.schedules import crontab
 
