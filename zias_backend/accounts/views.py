@@ -2023,6 +2023,11 @@ class RegisterUserView(generics.CreateAPIView):
         group_name = role.capitalize()
         group, created = Group.objects.get_or_create(name=group_name)
         user.groups.add(group)
+
+        if role == 'admin':
+            user.is_staff = True
+            user.is_superuser = True
+            user.save(update_fields=['is_staff, is_superuser'])
         
         if role == 'student':
             Student.objects.get_or_create(user=user, defaults={'full_name': user.get_full_name() or user.username})
