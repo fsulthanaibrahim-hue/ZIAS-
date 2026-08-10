@@ -171,11 +171,11 @@ CHANNEL_LAYERS = {
 }
 
 
-
-
-
-
 CORS_ALLOWED_ORIGINS = [
+    "https://zias-frontend.onrender.com",
+]
+
+CSRF_TRUSTED_ORIGINS = [
     "https://zias-frontend.onrender.com",
 ]
 
