@@ -157,6 +157,7 @@ function StudentProfile() {
         // Only one API call: /students/me/
         const studentRes = await API.get("students/me/");
         const student = studentRes.data;
+        
         // Merge from localStorage user
         const merged = {
           ...student,
@@ -215,11 +216,12 @@ function StudentProfile() {
   const email = profile.email || "";
   const initials = getInitials(username);
 
+  // ✅ Personal fields (Removed Mentor, relies on new backend data)
   const personalFields = [
     { key: "course",        label: "Course",        icon: "🎓", value: profile.course },
-    { key: "batch",         label: "Batch",          icon: "📅", value: profile.batch },
-    { key: "phone",         label: "Phone",          icon: "📞", value: profile.phone },
-    { key: "date_of_birth", label: "Date of Birth",  icon: "🎂", value: profile.date_of_birth },
+    { key: "batch",         label: "Batch",         icon: "📅", value: profile.batch_name || profile.batch }, // Fallback
+    { key: "phone",         label: "Phone",         icon: "📞", value: profile.phone },
+    { key: "date_of_birth", label: "Date of Birth", icon: "🎂", value: profile.date_of_birth },
   ];
 
   return (
@@ -282,7 +284,7 @@ function StudentProfile() {
             }}>
               <StatBadge label="Course" value={profile.course || "—"} />
               <div style={{ borderLeft: "1.5px solid var(--green-200)", borderRight: "1.5px solid var(--green-200)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <StatBadge label="Batch" value={profile.batch || "—"} />
+                <StatBadge label="Batch" value={profile.batch_name || profile.batch || "—"} />
               </div>
               <StatBadge label="Status" value="Active" />
             </div>

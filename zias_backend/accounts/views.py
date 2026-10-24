@@ -167,25 +167,25 @@ class StudentViewSet(viewsets.ModelViewSet):
         if user_role == 'admin':
             return Student.objects.all()
         
-        # Mentor can see only students assigned to them
+        # Mentor can see only students in their batch (Since mentor field is removed)
         if user_role == 'mentor':
             try:
-                # Use apps.get_model to avoid circular import
                 from django.apps import apps
                 Mentor = apps.get_model('mentors', 'Mentor')
                 
                 # Try to find mentor by email
                 mentor = Mentor.objects.filter(email=user.email).first()
                 
-                if mentor:
-                    return Student.objects.filter(mentor=mentor)
+                if mentor and mentor.batch:
+                    # Filter by batch instead of mentor
+                    return Student.objects.filter(student_batch=mentor.batch)
                 
-                # FALLBACK: Return students with mentor_id = 13
-                return Student.objects.filter(mentor_id=13)
+                # If no mentor profile or batch found, return all
+                return Student.objects.all()
                 
-            except Exception:
-                # FALLBACK: Return students with mentor_id = 13
-                return Student.objects.filter(mentor_id=13)
+            except Exception as e:
+                print(f"Error filtering students for mentor: {e}")
+                return Student.objects.all()
         
         # Student can see only their own profile
         if user_role == 'student':
