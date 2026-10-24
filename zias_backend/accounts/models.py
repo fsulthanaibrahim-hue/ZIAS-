@@ -88,7 +88,6 @@ class Student(models.Model):
     course = models.CharField(max_length=255, blank=True, null=True)
     batch = models.CharField(max_length=100, blank=True, null=True)
     student_batch = models.ForeignKey(Batch, on_delete=models.SET_NULL, null=True, blank=True, related_name='students')
-    mentor = models.ForeignKey('Mentor', on_delete=models.SET_NULL, null=True, blank=True, related_name='students')
     phone = models.CharField(max_length=20, blank=True, null=True)
     date_of_birth = models.DateField(null=True, blank=True)
     age = models.PositiveIntegerField(blank=True, null=True)

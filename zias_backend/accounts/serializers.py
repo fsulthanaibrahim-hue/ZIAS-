@@ -325,17 +325,17 @@ class StudentDocumentSerializer(serializers.ModelSerializer):
 # -----------------------------
 class StudentSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(write_only=True, required=True)
+    username = serializers.CharField(write_only=True, required=False)
     
     class Meta:
         model = Student
         fields = [
-            'id', 'full_name', 'email', 'course', 'batch', 'student_batch', 'mentor',
+            'id', 'full_name', 'email', 'course', 'batch', 'student_batch', 
             'phone', 'date_of_birth', 'age', 'gender',
             'fathers_name', 'fathers_contact', 'mothers_name', 'mothers_contact',
             'address', 'educational_qualification', 'college_school',
             'parent_name', 'parent_phone', 'emergency_contact',
-            'week_back_amount',
-            'agreement_signed',
+            'week_back_amount', 'agreement_signed',
         ]
 
     def to_representation(self, instance):
@@ -404,20 +404,17 @@ Please change your password after first login.
 
     def update(self, instance, validated_data):
         validated_data.pop('email', None)
-        
-        for field in ['full_name', 'phone', 'course', 'date_of_birth', 'age', 'gender',
-                      'fathers_name', 'fathers_contact', 'mothers_name', 'mothers_contact',
-                      'address', 'educational_qualification', 'college_school',
-                      'parent_name', 'parent_phone', 'emergency_contact', 'mentor',
-                      'week_back_amount', 'agreement_signed']:
-            if field in validated_data:
-                setattr(instance, field, validated_data[field])
-        
-        batch_name = validated_data.get('batch')
-        if batch_name:
-            batch_obj = Batch.objects.filter(name__iexact=batch_name).first()
-            if batch_obj:
-                instance.student_batch = batch_obj
+        validated_data.pop('username', None)
+
+        batch_obj = validated_data.pop('student_batch', None)
+        if batch_obj:
+            instance.student_batch = batch_obj
+            instance.batch = batch_obj.name
+
+        validated_data.pop('batch', None)
+
+        for field, value in validated_data.items():
+            setattr(instance, field, value)    
         
         instance.save()
         return instance

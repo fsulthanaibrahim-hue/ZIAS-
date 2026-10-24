@@ -67,7 +67,6 @@ function Students() {
   const [students, setStudents] = useState([]);
   const [coursesList, setCoursesList] = useState([]);
   const [batchesList, setBatchesList] = useState([]);
-  const [mentorsList, setMentorsList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -95,7 +94,7 @@ function Students() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const [formData, setFormData] = useState({
-    full_name: "", email: "", course: "", batch: "", mentor: "",
+    full_name: "", email: "", course: "", batch: "",
     phone: "", date_of_birth: "", age: "", gender: "",
     fathers_name: "", fathers_contact: "", mothers_name: "", mothers_contact: "",
     address: "", educational_qualification: "", college_school: "",
@@ -355,7 +354,7 @@ function Students() {
 
   const resetForm = () => {
     setFormData({
-      full_name: "", email: "", course: "", batch: "", mentor: "",
+      full_name: "", email: "", course: "", batch: "", 
       phone: "", date_of_birth: "", age: "", gender: "",
       fathers_name: "", fathers_contact: "", mothers_name: "", mothers_contact: "",
       address: "", educational_qualification: "", college_school: "",
@@ -409,20 +408,12 @@ function Students() {
     }
     if (hasError) return;
 
-    let assignedMentorId = formData.mentor ? parseInt(formData.mentor) : null;
-    if (!assignedMentorId && formData.batch) {
-      assignedMentorId = await getMentorForBatch(formData.batch);
-      if (assignedMentorId) {
-        console.log(`✅ Auto-assigned mentor ID ${assignedMentorId} for batch ${formData.batch}`);
-      }
-    }
 
     const payload = {
       full_name: formData.full_name.trim(),
       email: formData.email.trim(),
       course: formData.course,
       batch: formData.batch,
-      mentor: assignedMentorId,
       phone: formData.phone || null,
       date_of_birth: formData.date_of_birth || null,
       age: formData.age ? parseInt(formData.age) : null,
@@ -495,7 +486,6 @@ function Students() {
       email: student.email || "",
       course: student.course_name || student.course || "",
       batch: student.batch_name || student.batch || "",
-      mentor: student.mentor ? student.mentor.toString() : "",
       phone: student.phone || "", 
       date_of_birth: student.date_of_birth || "",
       age: student.age?.toString() || "", 
@@ -734,7 +724,6 @@ function Students() {
                     <div><label className={labelCls}>Email *</label><input type="email" name="email" value={formData.email} onChange={handleChange} required className={inputCls} />{emailError && <p className="text-red-500 text-xs mt-1">{emailError}</p>}</div>
                     <div><label className={labelCls}>Course *</label><select name="course" value={formData.course} onChange={handleChange} required className={inputCls}><option value="">Select a course</option>{coursesList.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select><p className="text-[10px] text-gray-400 mt-1">Fee will be auto-assigned</p></div>
                     <div><label className={labelCls}>Batch *</label><select name="batch" value={formData.batch} onChange={handleBatchChange} required className={inputCls}><option value="">Select a batch</option>{batchesList.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}</select><p className="text-[10px] text-gray-400 mt-1">Auto-assigns mentor</p></div>
-                    <div><label className={labelCls}>Mentor (optional)</label><select name="mentor" value={formData.mentor} onChange={handleChange} className={inputCls}><option value="">Auto-assign from batch</option>{mentorsList.map(m => <option key={m.id} value={m.id}>{m.full_name || m.username}</option>)}</select></div>
                     <div><label className={labelCls}>Phone</label><input type="tel" name="phone" value={formData.phone} onChange={handleChange} className={inputCls} />{phoneError && <p className="text-red-500 text-xs mt-1">{phoneError}</p>}</div>
                     <div><label className={labelCls}>Date of Birth</label><input type="date" name="date_of_birth" value={formData.date_of_birth} onChange={handleChange} className={inputCls} /></div>
                     <div><label className={labelCls}>Age</label><input type="text" value={formData.age} readOnly className={readOnlyCls} /></div>
