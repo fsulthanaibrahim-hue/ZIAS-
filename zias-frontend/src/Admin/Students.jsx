@@ -109,22 +109,19 @@ function Students() {
   const getDocumentUrl = (url) => {
     if (!url || typeof url !== 'string') return '#';
     
-    // If it's already a full URL, return as is
     if (url.startsWith('http://') || url.startsWith('https://')) {
       return url;
     }
     
-    // Remove any duplicate /api/ prefixes
     let cleanUrl = url;
     cleanUrl = cleanUrl.replace(/^\/api\//, '/');
     cleanUrl = cleanUrl.replace(/\/\//g, '/');
     
-    // Ensure it starts with /
     if (!cleanUrl.startsWith('/')) {
       cleanUrl = '/' + cleanUrl;
     }
     
-    return `https://zias-backend.onrender.com/api/${cleanUrl}`;
+    return `https://zias-backend.onrender.com${cleanUrl}`;
   };
 
   // ✅ FIXED: Open document directly
@@ -134,7 +131,6 @@ function Students() {
       return;
     }
     
-    // Get the file URL from different possible field names
     let fileUrl = doc.file || doc.url || doc.document || doc.file_url;
     
     if (!fileUrl) {
@@ -145,41 +141,16 @@ function Students() {
     const fullUrl = getDocumentUrl(fileUrl);
     
     if (fullUrl && fullUrl !== '#') {
-      // Open in new tab
       window.open(fullUrl, '_blank');
     } else {
       showToast("Unable to open document", "error");
     }
   };
 
-  // ========== Auto-assign mentor based on batch ==========
-  const getMentorForBatch = useCallback(async (batchName) => {
-    if (!batchName) return null;
-    try {
-      const existingMentor = mentorsList.find(m => m.batch === batchName || m.batch_name === batchName);
-      if (existingMentor) {
-        return existingMentor.id;
-      }
-      const mentorsRes = await API.get("mentors/");
-      const mentors = mentorsRes.data.results || mentorsRes.data;
-      const batchMentor = mentors.find(m => m.batch === batchName || m.batch_name === batchName);
-      return batchMentor ? batchMentor.id : null;
-    } catch(err) {
-      console.error("Error finding mentor for batch:", err);
-      return null;
-    }
-  }, [mentorsList]);
-
-  const handleBatchChange = async (e) => {
+  // ✅ CLEANED UP: Auto-assign mentor removed completely
+  const handleBatchChange = (e) => {
     const batchName = e.target.value;
     setFormData(prev => ({ ...prev, batch: batchName }));
-    if (batchName && !formData.mentor) {
-      const mentorId = await getMentorForBatch(batchName);
-      if (mentorId) {
-        setFormData(prev => ({ ...prev, mentor: mentorId.toString() }));
-        showToast(`Auto-assigned mentor for batch: ${batchName}`, "success");
-      }
-    }
   };
 
   // ========== Auto-assign fee based on course ==========
@@ -233,13 +204,13 @@ function Students() {
     hasLoaded.current = true;
     setLoading(true);
     try {
-      const [studentsRes, coursesRes, batchesRes, mentorsRes] = await Promise.all([
-        API.get("students/"), API.get("courses/"), API.get("batches/"), API.get("mentors/")
+      // ✅ REMOVED API.get("mentors/")
+      const [studentsRes, coursesRes, batchesRes] = await Promise.all([
+        API.get("students/"), API.get("courses/"), API.get("batches/")
       ]);
       setStudents(extractArray(studentsRes));
       setCoursesList(extractArray(coursesRes));
       setBatchesList(extractArray(batchesRes));
-      setMentorsList(extractArray(mentorsRes));
     } catch (err) {
       if (err.response?.status === 401) {
         showToast("Session expired. Please log in again.", "error");
@@ -407,7 +378,6 @@ function Students() {
       } else setErr('');
     }
     if (hasError) return;
-
 
     const payload = {
       full_name: formData.full_name.trim(),
@@ -723,7 +693,7 @@ function Students() {
                     <div><label className={labelCls}>Full Name *</label><input type="text" name="full_name" value={formData.full_name} onChange={handleChange} className={inputCls} required /></div>
                     <div><label className={labelCls}>Email *</label><input type="email" name="email" value={formData.email} onChange={handleChange} required className={inputCls} />{emailError && <p className="text-red-500 text-xs mt-1">{emailError}</p>}</div>
                     <div><label className={labelCls}>Course *</label><select name="course" value={formData.course} onChange={handleChange} required className={inputCls}><option value="">Select a course</option>{coursesList.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select><p className="text-[10px] text-gray-400 mt-1">Fee will be auto-assigned</p></div>
-                    <div><label className={labelCls}>Batch *</label><select name="batch" value={formData.batch} onChange={handleBatchChange} required className={inputCls}><option value="">Select a batch</option>{batchesList.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}</select><p className="text-[10px] text-gray-400 mt-1">Auto-assigns mentor</p></div>
+                    <div><label className={labelCls}>Batch *</label><select name="batch" value={formData.batch} onChange={handleBatchChange} required className={inputCls}><option value="">Select a batch</option>{batchesList.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}</select></div>
                     <div><label className={labelCls}>Phone</label><input type="tel" name="phone" value={formData.phone} onChange={handleChange} className={inputCls} />{phoneError && <p className="text-red-500 text-xs mt-1">{phoneError}</p>}</div>
                     <div><label className={labelCls}>Date of Birth</label><input type="date" name="date_of_birth" value={formData.date_of_birth} onChange={handleChange} className={inputCls} /></div>
                     <div><label className={labelCls}>Age</label><input type="text" value={formData.age} readOnly className={readOnlyCls} /></div>
@@ -845,12 +815,11 @@ function Students() {
                 <div>
                   <p className={`${sectionTitleCls} text-green-600`}>Basic Information</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {[
+                    {[ // ✅ REMOVED Mentor row completely
                       ["Full Name", viewingStudent.full_name],
                       ["Email", viewingStudent.email],
                       ["Course", viewingStudent.course_name || viewingStudent.course],
                       ["Batch", viewingStudent.batch_name || viewingStudent.batch],
-                      ["Mentor", mentorsList.find(m => m.id === viewingStudent.mentor)?.full_name || mentorsList.find(m => m.id === viewingStudent.mentor)?.username || "—"],
                       ["Phone", viewingStudent.phone],
                       ["Date of Birth", viewingStudent.date_of_birth],
                       ["Age", viewingStudent.age],
