@@ -48,7 +48,7 @@ function MentorDashboard() {
     const fetchData = async () => {
       try {
         const token = localStorage.getItem('access_token');
-        const BASE_URL = 'https://zias-4p4n.onrender.com';
+        const BASE_URL = 'https://zias-backend.onrender.com';
         
         console.log("=== FETCHING MENTOR DATA ===");
         
@@ -174,7 +174,7 @@ function MentorDashboard() {
   const getDocumentUrl = (url) => {
     if (!url) return "#";
     if (url.startsWith("http")) return url;
-    return `https://zias-4p4n.onrender.com${url}`;
+    return `https://zias-backend.onrender.com/api/${url}`;
   };
 
   return (

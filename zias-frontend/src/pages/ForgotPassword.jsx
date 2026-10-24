@@ -12,7 +12,7 @@ function ForgotPassword() {
     setMessage("");
     setError("");
     try {
-      const res = await axios.post("https://zias-4p4n.onrender.com/api/request-password-reset/", { email });
+      const res = await axios.post("https://zias-backend.onrender.com/api/request-password-reset/", { email });
       setMessage(res.data.detail);
     } catch (err) {
       setError("Something went wrong. Try again.");

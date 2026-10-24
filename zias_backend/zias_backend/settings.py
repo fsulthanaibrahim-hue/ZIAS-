@@ -28,7 +28,7 @@ SECRET_KEY = config('SECRET_KEY')
 DEBUG = config('DEBUG', default=False, cast=bool)
 
 ALLOWED_HOSTS = [
-    "zias-backend-new.onrender.com",
+    "zias-backend.onrender.com",
     "localhost",
     "127.0.0.1",
 ]
@@ -175,12 +175,14 @@ CHANNEL_LAYERS = {
 
 
 CORS_ALLOWED_ORIGINS = [
+    "https://zias-backend.onrender.com",
     "https://zias-frontend.onrender.com",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
 ]
 
 CSRF_TRUSTED_ORIGINS = [
+    "https://zias-backend.onrender.com",
     "https://zias-frontend.onrender.com",
     "http://localhost:5173",
     "http://127.0.0.1:5173",

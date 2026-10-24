@@ -124,7 +124,7 @@ function Students() {
       cleanUrl = '/' + cleanUrl;
     }
     
-    return `https://zias-4p4n.onrender.com${cleanUrl}`;
+    return `https://zias-backend.onrender.com/api/${cleanUrl}`;
   };
 
   // ✅ FIXED: Open document directly

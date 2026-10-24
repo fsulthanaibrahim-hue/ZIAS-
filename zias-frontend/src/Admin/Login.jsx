@@ -67,7 +67,7 @@ function AdminLogin() {
     try {
       // ✅ Use your custom login endpoint (which returns user data)
       clearAuthStorage();
-      const response = await axios.post("https://zias-4p4n.onrender.com/api/login/", {
+      const response = await axios.post("https://zias-backend.onrender.com/api/login/", {
         username: trimmedUsername,
         password: trimmedPassword
       });

@@ -3,7 +3,7 @@ import axios from "axios";
 import toast from "react-hot-toast";
 
 const API = axios.create({
-  baseURL: "https://zias-4p4n.onrender.com/api/",
+  baseURL: "https://zias-backend.onrender.com/api/",
   headers: { "Content-Type": "application/json" }
 });
 

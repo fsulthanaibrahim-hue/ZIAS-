@@ -108,8 +108,8 @@ function Mentors() {
   const getDocumentUrl = (url) => {
     if (!url || typeof url !== 'string') return '#';
     if (url.startsWith('http')) return url;
-    return `https://zias-4p4n.onrender.com${url}`;
-  };
+    return `https://zias-backend.onrender.com/api/${url}`;
+  };    
 
   const fetchMentors = useCallback(async () => {
     try {
