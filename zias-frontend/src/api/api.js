@@ -3,27 +3,24 @@ import { clearAuthStorage } from "../utils/authStorage";
 
 const API = axios.create({
   baseURL: "https://zias-backend.onrender.com/api/",
-  timeout: 10000,
+  timeout: 60000,
   headers: {
-    'Content-Type': 'application/json',
-  }
+    "Content-Type": "application/json",
+  },
 });
 
 let isRefreshing = false;
 let failedQueue = [];
 
 const processQueue = (error, token = null) => {
-  failedQueue.forEach(prom => {
-    if (error) {
-      prom.reject(error);
-    } else {
-      prom.resolve(token);
-    }
+  failedQueue.forEach((prom) => {
+    if (error) prom.reject(error);
+    else prom.resolve(token);
   });
   failedQueue = [];
 };
 
-API.interceptors.request.use(config => {
+API.interceptors.request.use((config) => {
   const token = localStorage.getItem("access_token");
   const isLoginRequest = config.url?.includes("/login/");
   const isRefreshRequest = config.url?.includes("/token/refresh/");
@@ -31,7 +28,7 @@ API.interceptors.request.use(config => {
     config.headers.Authorization = `Bearer ${token}`;
   }
   if (config.data instanceof FormData) {
-    delete config.headers['Content-Type'];
+    delete config.headers["Content-Type"];
   }
   return config;
 });
@@ -40,20 +37,17 @@ API.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
-    const isAuthRequest = originalRequest?.url?.includes("/login/") || originalRequest?.url?.includes("/token/refresh/");
+    const isAuthRequest =
+      originalRequest?.url?.includes("/login/") ||
+      originalRequest?.url?.includes("/token/refresh/");
 
-    if (error.response?.status !== 401) {
-      return Promise.reject(error);
-    }
-
-    if (originalRequest._retry || isAuthRequest) {
-      return Promise.reject(error);
-    }
+    if (error.response?.status !== 401) return Promise.reject(error);
+    if (originalRequest._retry || isAuthRequest) return Promise.reject(error);
 
     const refreshToken = localStorage.getItem("refresh_token");
     if (!refreshToken) {
       clearAuthStorage();
-      window.location.href = "/login";
+      window.location.assign("/login");
       return Promise.reject(error);
     }
 
@@ -78,20 +72,16 @@ API.interceptors.response.use(
       );
 
       const { access, refresh: newRefreshToken } = response.data;
-      
       if (access) localStorage.setItem("access_token", access);
       if (newRefreshToken) localStorage.setItem("refresh_token", newRefreshToken);
 
-      API.defaults.headers.common.Authorization = `Bearer ${access}`;
       processQueue(null, access);
-
       originalRequest.headers.Authorization = `Bearer ${access}`;
       return API(originalRequest);
-      
     } catch (refreshError) {
       processQueue(refreshError, null);
       clearAuthStorage();
-      window.location.href = "/login";
+      window.location.assign("/login");
       return Promise.reject(refreshError);
     } finally {
       isRefreshing = false;

@@ -477,7 +477,7 @@ Login URL: http://{domain}/login
 
 Please change your password after first login.
 """
-            send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [email], fail_silently=False)
+            send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [email], fail_silently=True)
         except Exception as e:
             print(f"Email failed: {e}")
         
@@ -488,7 +488,7 @@ Please change your password after first login.
 # REVIEWER SERIALIZER (SAME AS MENTOR)
 # ----------------------------
 class ReviewerSerializer(serializers.ModelSerializer):
-    email = serializers.EmailField(write_only=True, required=False)
+    email = serializers.EmailField(write_only=True)
     
     class Meta:
         model = Reviewer
