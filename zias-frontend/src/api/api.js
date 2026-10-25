@@ -3,7 +3,7 @@ import { clearAuthStorage } from "../utils/authStorage";
 
 const API = axios.create({
   baseURL: "https://zias-backend.onrender.com/api/",
-  timeout: 60000,
+  timeout: 10000,
   headers: {
     "Content-Type": "application/json",
   },

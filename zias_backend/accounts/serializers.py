@@ -347,12 +347,16 @@ class StudentSerializer(serializers.ModelSerializer):
         return ret
 
     def create(self, validated_data):
+        # 1. Pop fields that don't belong to the Student model
         email = validated_data.pop('email')
         full_name = validated_data.pop('full_name', '')
         phone = validated_data.pop('phone', '')
         
-        # Generate username from email
-        username = email.split('@')[0]
+        # ✅ THIS IS THE FIX — remove username from validated_data
+        requested_username = validated_data.pop('username', None)
+        
+        # 2. Generate a unique username
+        username = requested_username or email.split('@')[0]
         counter = 1
         original = username
         while User.objects.filter(username=username).exists():
@@ -361,22 +365,29 @@ class StudentSerializer(serializers.ModelSerializer):
         
         random_password = generate_random_password()
         
-        # Create user using your custom User model
+        # 3. Create the User account
         user = User.objects.create_user(
             username=username,
             email=email,
             password=random_password
         )
         
-        # Create student
+        # 4. Separate student_batch ForeignKey from the rest
+        batch_obj = validated_data.pop('student_batch', None)
+        batch_name = batch_obj.name if batch_obj else None
+        validated_data.pop('batch', None)
+        
+        # 5. Create the Student profile (safe — no more unexpected kwargs)
         student = Student.objects.create(
             user=user,
             full_name=full_name,
             phone=phone,
+            batch=batch_name,
+            student_batch=batch_obj,
             **validated_data
         )
         
-        # Send welcome email
+        # 6. Send welcome email (fail_silently=True so it never hangs)
         try:
             domain = getattr(settings, 'SITE_DOMAIN', 'localhost:5173')
             subject = 'Welcome to ZIAS – Your Student Account'
@@ -396,7 +407,7 @@ Login URL: http://{domain}/login
 
 Please change your password after first login.
 """
-            send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [email], fail_silently=False)
+            send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [email], fail_silently=True)
         except Exception as e:
             print(f"Email failed: {e}")
         
@@ -418,7 +429,6 @@ Please change your password after first login.
         
         instance.save()
         return instance
-
 
 # ----------------------------
 # MENTOR SERIALIZER
