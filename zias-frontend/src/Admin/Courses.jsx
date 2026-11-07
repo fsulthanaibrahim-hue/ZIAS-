@@ -1,0 +1,648 @@
+import { useEffect, useState, useRef, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import API from "../api/api";
+import { toast } from "react-hot-toast";
+import { clearAuthStorage } from "../utils/authStorage";
+
+// Helper to turn any API error into a user‑friendly message (never 5xx)
+const getFriendlyErrorMessage = (err, defaultMsg = "An error occurred") => {
+  if (!err?.response) {
+    return "Network error. Please check your connection.";
+  }
+  const status = err.response.status;
+  if (status >= 500) {
+    return "Service temporarily unavailable. Please try again later.";
+  }
+  if (status === 404) {
+    return "Course not found.";
+  }
+  if (status === 400) {
+    return "Invalid request. Please check your data.";
+  }
+  if (status === 401 || status === 403) {
+    return "You are not authorized. Please log in again.";
+  }
+  return err.response?.data?.detail || err.response?.data?.message || defaultMsg;
+};
+
+function Toast({ message, type, onClose }) {
+  useEffect(() => {
+    const timer = setTimeout(onClose, 3000);
+    return () => clearTimeout(timer);
+  }, [onClose]);
+
+  const bgColor = type === "success"
+    ? "bg-emerald-500"
+    : type === "error"
+    ? "bg-red-500"
+    : "bg-slate-600";
+  const icon = type === "success" ? "✓" : type === "error" ? "✕" : "ℹ";
+
+  return (
+    <div className={`fixed top-5 right-5 z-50 flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-2xl ${bgColor} text-white text-sm font-medium max-w-[90vw] sm:max-w-sm`}
+      style={{ animation: "slideDown 0.25s cubic-bezier(0.16,1,0.3,1)" }}>
+      <span className="w-6 h-6 rounded-full bg-white/25 flex items-center justify-center text-xs font-bold shrink-0">{icon}</span>
+      <span className="flex-1">{message}</span>
+      <button onClick={onClose} className="text-white/60 hover:text-white text-lg leading-none ml-1">×</button>
+    </div>
+  );
+}
+
+function ConfirmModal({ isOpen, onClose, onConfirm, courseName, hasModules = false }) {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-3xl max-w-sm w-full shadow-2xl p-7 mx-4" style={{ animation: "modalIn 0.2s cubic-bezier(0.16,1,0.3,1)" }}>
+        <div className="w-12 h-12 bg-red-100 rounded-2xl flex items-center justify-center mb-4">
+          <svg className="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+        </div>
+        <h3 className="text-lg font-bold text-gray-900 mb-1">Delete Course?</h3>
+        {hasModules ? (
+          <>
+            <p className="text-amber-600 text-sm mb-2 font-medium">⚠️ Cannot delete this course</p>
+            <p className="text-gray-500 text-sm mb-6 leading-relaxed">
+              <span className="font-semibold text-gray-700">"{courseName}"</span> has modules/submodules assigned to it.
+              Please delete all modules first before deleting this course.
+            </p>
+          </>
+        ) : (
+          <p className="text-gray-500 text-sm mb-6 leading-relaxed">
+            <span className="font-semibold text-gray-700">"{courseName}"</span> will be permanently removed. This action cannot be undone.
+          </p>
+        )}
+        <div className="flex gap-2">
+          <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium text-sm transition-colors">Cancel</button>
+          {!hasModules && (
+            <button onClick={onConfirm} className="flex-1 px-4 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-medium text-sm transition-colors">Delete</button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function extractCoursesArray(response) {
+  const data = response?.data ?? response;
+  if (Array.isArray(data)) return data;
+  if (data && Array.isArray(data.results)) return data.results;
+  return [];
+}
+
+// ========== SEPARATE MODAL COMPONENT ==========
+function CourseFormModal({ isOpen, onClose, editingCourse, onSave }) {
+  const [formData, setFormData] = useState({
+    name: "",
+    description: "",
+    duration: ""
+  });
+  const [durationError, setDurationError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (editingCourse) {
+      setFormData({
+        name: editingCourse.name || "",
+        description: editingCourse.description || "",
+        duration: editingCourse.duration ? editingCourse.duration.toString() : ""
+      });
+    } else {
+      setFormData({ name: "", description: "", duration: "" });
+    }
+    setDurationError("");
+  }, [editingCourse, isOpen]);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    if (name === "duration") {
+      const num = parseInt(value, 10);
+      if (value === "") {
+        setFormData(prev => ({ ...prev, duration: "" }));
+        setDurationError("");
+      } else if (isNaN(num) || num < 0) {
+        setDurationError("Duration must be a positive number");
+        setFormData(prev => ({ ...prev, duration: value }));
+      } else {
+        setDurationError("");
+        setFormData(prev => ({ ...prev, duration: num.toString() }));
+      }
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    let durationValue = null;
+    if (formData.duration && formData.duration !== "") {
+      const num = parseInt(formData.duration, 10);
+      if (isNaN(num) || num <= 0) {
+        setDurationError("Duration must be a positive number");
+        return;
+      }
+      durationValue = num;
+    }
+
+    const payload = {
+      name: formData.name,
+      description: formData.description,
+      duration: durationValue
+    };
+
+    setSubmitting(true);
+    try {
+      if (editingCourse) {
+        await API.patch(`courses/${editingCourse.id}/`, payload);
+      } else {
+        await API.post("courses/", payload);
+      }
+      onSave(); // refresh parent list
+      onClose();
+    } catch (err) {
+      const friendlyMsg = getFriendlyErrorMessage(err, "Error saving course");
+      toast.error(friendlyMsg);
+      console.warn(err);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  const inputClass = "w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 text-sm";
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-2 sm:p-4" onClick={onClose}>
+      <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto modal-scroll" onClick={(e) => e.stopPropagation()}>
+        <form onSubmit={handleSubmit}>
+          <div className="flex justify-between items-center px-4 sm:px-6 py-5 border-b border-gray-100">
+            <div>
+              <h3 className="text-base font-bold text-gray-900">{editingCourse ? "Edit Course" : "New Course"}</h3>
+              <p className="text-xs text-gray-400 mt-0.5">Fill in the course details</p>
+            </div>
+            <button type="button" onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-gray-100 text-gray-400 text-lg transition-colors">×</button>
+          </div>
+          <div className="px-4 sm:px-6 py-5 space-y-3.5">
+            <input
+              name="name"
+              type="text"
+              placeholder="Course name"
+              value={formData.name}
+              onChange={handleChange}
+              required
+              className={inputClass}
+            />
+            <input
+              name="duration"
+              type="number"
+              placeholder="Duration (weeks)"
+              value={formData.duration}
+              onChange={handleChange}
+              min="1"
+              step="1"
+              className={inputClass}
+            />
+            {durationError && <p className="text-red-500 text-xs mt-1">{durationError}</p>}
+            <textarea
+              name="description"
+              placeholder="Description (optional)"
+              value={formData.description}
+              onChange={handleChange}
+              rows="3"
+              className={`${inputClass} resize-none`}
+            />
+          </div>
+          <div className="flex gap-2 px-4 sm:px-6 py-4 border-t border-gray-100">
+            <button type="submit" disabled={submitting} className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white py-2.5 rounded-xl font-medium text-sm transition-colors disabled:opacity-50">
+              {submitting ? (editingCourse ? "Saving..." : "Adding...") : (editingCourse ? "Save Changes" : "Add Course")}
+            </button>
+            <button type="button" onClick={onClose} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 py-2.5 rounded-xl font-medium text-sm transition-colors">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ========== MAIN COURSES COMPONENT ==========
+function Courses() {
+  const navigate = useNavigate();
+  const [courses, setCourses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editingCourse, setEditingCourse] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 9;
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  
+  // Track modules count for each course
+  const [modulesCount, setModulesCount] = useState({});
+
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [courseToDelete, setCourseToDelete] = useState(null);
+  const [toastMsg, setToastMsg] = useState(null);
+  const showToast = (msg, type = "success") => setToastMsg({ message: msg, type });
+  const hideToast = () => setToastMsg(null);
+
+  const fetched = useRef(false);
+  const searchInputRef = useRef(null);
+
+  const fetchCourses = useCallback(() => {
+    API.get("courses/")
+      .then(res => {
+        setCourses(extractCoursesArray(res));
+      })
+      .catch(err => {
+        const friendlyMsg = getFriendlyErrorMessage(err, "Failed to load courses");
+        showToast(friendlyMsg, "error");
+        console.warn(err);
+        if (err.response?.status === 401) {
+          setTimeout(() => {
+            clearAuthStorage();
+            window.location.href = "/login";
+          }, 1500);
+        }
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  // Fetch modules count for each course to check if delete is allowed
+  const fetchModulesCount = useCallback(async () => {
+    try {
+      const modulesRes = await API.get("modules/");
+      let modules = modulesRes.data.results || modulesRes.data;
+      if (!Array.isArray(modules)) modules = [];
+      
+      const countMap = {};
+      modules.forEach(module => {
+        const courseId = module.course;
+        if (courseId) {
+          countMap[courseId] = (countMap[courseId] || 0) + 1;
+        }
+      });
+      setModulesCount(countMap);
+    } catch (err) {
+      console.warn("Failed to fetch modules count:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (fetched.current) return;
+    fetched.current = true;
+    fetchCourses();
+    fetchModulesCount();
+  }, [fetchCourses, fetchModulesCount]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  const filteredCourses = Array.isArray(courses)
+    ? courses.filter(c =>
+        c.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        c.duration?.toString().toLowerCase().includes(searchTerm.toLowerCase()) ||
+        c.description?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : [];
+
+  const totalFiltered = filteredCourses.length;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / itemsPerPage));
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedCourses = filteredCourses.slice(startIndex, startIndex + itemsPerPage);
+
+  const getPageNumbers = () => {
+    const pages = [];
+    if (totalPages <= 5) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else if (currentPage <= 3) {
+      for (let i = 1; i <= 4; i++) pages.push(i);
+      pages.push("...");
+      pages.push(totalPages);
+    } else if (currentPage >= totalPages - 2) {
+      pages.push(1);
+      pages.push("...");
+      for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      pages.push("...");
+      for (let i = currentPage - 1; i <= currentPage + 1; i++) pages.push(i);
+      pages.push("...");
+      pages.push(totalPages);
+    }
+    return pages;
+  };
+
+  // Check if course has modules
+  const hasModules = (courseId) => {
+    return modulesCount[courseId] > 0;
+  };
+
+  const handleDeleteClick = (courseId, courseName) => {
+    if (hasModules(courseId)) {
+      // Show error message if course has modules
+      showToast(`Cannot delete "${courseName}" because it has modules assigned. Please delete all modules first.`, "error");
+      return;
+    }
+    setCourseToDelete({ id: courseId, name: courseName, hasModules: false });
+    setShowConfirmModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!courseToDelete) return;
+    try {
+      await API.delete(`courses/${courseToDelete.id}/`);
+      await fetchCourses();
+      showToast("Course deleted successfully", "success");
+    } catch (err) {
+      const friendlyMsg = getFriendlyErrorMessage(err, "Failed to delete course");
+      showToast(friendlyMsg, "error");
+      console.warn(err);
+    } finally {
+      setShowConfirmModal(false);
+      setCourseToDelete(null);
+    }
+  };
+
+  const handleEdit = (course) => {
+    setEditingCourse(course);
+    setShowForm(true);
+    setMobileMenuOpen(false);
+  };
+
+  const handleAddClick = () => {
+    setEditingCourse(null);
+    setShowForm(true);
+    setMobileMenuOpen(false);
+  };
+
+  const handleFormSave = () => {
+    fetchCourses();
+    showToast(editingCourse ? "Course updated successfully" : "Course added successfully", "success");
+  };
+
+  const handleCardClick = (courseId) => {
+    navigate(`/admin/modules?course_id=${courseId}`);
+  };
+
+  if (loading) {
+    return (
+      <div className="w-full min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-gray-400 text-sm">Loading courses…</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen w-full bg-gray-50 text-gray-800" style={{ fontFamily: "'DM Sans', 'Geist', system-ui, sans-serif" }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap');
+        @keyframes slideDown { from { opacity:0; transform:translateY(-12px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+        .card-hover { transition: all 0.2s ease; }
+        .card-hover:hover { transform: translateY(-4px); box-shadow: 0 12px 40px rgba(0,0,0,0.12); }
+        .course-card { animation: fadeUp 0.3s ease both; }
+        .duration-pill { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+        
+        @media (max-width: 640px) {
+          .course-card { animation: fadeUp 0.2s ease both; }
+        }
+        
+        button, [role="button"], .tap-target { min-height: 44px; cursor: pointer; }
+        
+        .modal-scroll {
+          scrollbar-width: thin;
+          scrollbar-color: #cbd5e1 #f1f5f9;
+        }
+        .modal-scroll::-webkit-scrollbar { width: 6px; }
+        .modal-scroll::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 10px; }
+        .modal-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        
+        .line-clamp-3 {
+          display: -webkit-box;
+          -webkit-line-clamp: 3;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+        
+        @media (max-width: 640px) {
+          .line-clamp-3 { -webkit-line-clamp: 2; }
+        }
+      `}</style>
+
+      {toastMsg && <Toast message={toastMsg.message} type={toastMsg.type} onClose={hideToast} />}
+      <ConfirmModal 
+        isOpen={showConfirmModal} 
+        onClose={() => setShowConfirmModal(false)} 
+        onConfirm={confirmDelete} 
+        courseName={courseToDelete?.name}
+        hasModules={courseToDelete?.hasModules || false}
+      />
+
+      <CourseFormModal
+        isOpen={showForm}
+        onClose={() => setShowForm(false)}
+        editingCourse={editingCourse}
+        onSave={handleFormSave}
+      />
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6 md:py-10">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-100 border border-emerald-200 flex items-center justify-center shrink-0">
+              <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253" />
+              </svg>
+            </div>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">Courses</h1>
+              <p className="text-gray-400 text-xs sm:text-sm mt-0.5">{courses.length} total · {filteredCourses.length} shown</p>
+            </div>
+          </div>
+
+          {/* Mobile Menu Toggle */}
+          <div className="sm:hidden">
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-700 text-sm font-medium flex items-center justify-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+              Menu
+            </button>
+          </div>
+
+          {/* Controls */}
+          <div className={`${mobileMenuOpen ? 'flex' : 'hidden'} sm:flex flex-col sm:flex-row gap-3 transition-all duration-300`}>
+            <div className="relative">
+              <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
+              </svg>
+              <input
+                ref={searchInputRef}
+                type="text"
+                placeholder="Search courses…"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full sm:w-64 bg-white border border-gray-200 rounded-xl pl-10 pr-9 py-2.5 text-gray-800 placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 text-sm shadow-sm"
+              />
+              {searchTerm && (
+                <button 
+                  onClick={() => setSearchTerm("")} 
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm p-1"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+            <button
+              onClick={handleAddClick}
+              className="flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold shadow-md shadow-emerald-500/30 transition-all hover:shadow-lg hover:shadow-emerald-500/40 active:scale-95 w-full sm:w-auto"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Add Course
+            </button>
+          </div>
+        </div>
+
+        {/* Card Grid */}
+        {paginatedCourses.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 sm:py-24 gap-4">
+            <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center">
+              <svg className="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253" />
+              </svg>
+            </div>
+            <p className="text-gray-400 font-medium text-center">No courses found</p>
+            {searchTerm && (
+              <button 
+                onClick={() => setSearchTerm("")} 
+                className="text-emerald-500 text-sm hover:underline px-4 py-2"
+              >
+                Clear search
+              </button>
+            )}
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-6">
+              {paginatedCourses.map((course, idx) => {
+                const courseHasModules = hasModules(course.id);
+                const moduleCount = modulesCount[course.id] || 0;
+                return (
+                  <div
+                    key={course.id}
+                    className="course-card bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden card-hover flex flex-col cursor-pointer"
+                    style={{ animationDelay: `${idx * 0.05}s` }}
+                  >
+                    <div className="flex-1" onClick={() => handleCardClick(course.id)}>
+                      <div className="p-4 sm:p-5">
+                        <div className="flex items-start justify-between gap-3 mb-3">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {course.duration && (
+                              <span className="duration-pill text-white text-[10px] sm:text-[11px] font-bold px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full">
+                                {course.duration} week{course.duration !== 1 ? 's' : ''}
+                              </span>
+                            )}
+                            {courseHasModules && (
+                              <span className="bg-blue-100 text-blue-700 text-[10px] sm:text-[11px] font-medium px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full">
+                                {moduleCount} module{moduleCount !== 1 ? 's' : ''}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-0.5 shrink-0" onClick={e => e.stopPropagation()}>
+                            <button 
+                              onClick={() => handleEdit(course)} 
+                              title="Edit" 
+                              className="p-2 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+                            >
+                              <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                            </button>
+                            {/* Only show delete button if course has NO modules */}
+                            {!courseHasModules && (
+                              <button 
+                                onClick={() => handleDeleteClick(course.id, course.name)} 
+                                title="Delete" 
+                                className="p-2 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                              >
+                                <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        <h3 className="font-bold text-gray-900 text-sm sm:text-base leading-snug mb-1.5 break-words">
+                          {course.name}
+                        </h3>
+                        {course.description && (
+                          <p className="text-gray-500 text-xs sm:text-sm leading-relaxed line-clamp-3">
+                            {course.description}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Pagination */}
+            {paginatedCourses.length > 0 && totalPages > 1 && (
+              <div className="flex flex-col sm:flex-row justify-between items-center gap-3 bg-white rounded-2xl border border-gray-200 px-4 sm:px-5 py-3.5 shadow-sm">
+                <p className="text-gray-400 text-xs text-center sm:text-left">
+                  Showing {startIndex + 1}–{Math.min(startIndex + itemsPerPage, totalFiltered)} of {totalFiltered}
+                </p>
+                <div className="flex gap-1 flex-wrap justify-center">
+                  <button 
+                    onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} 
+                    disabled={currentPage === 1}
+                    className="px-3 py-1.5 rounded-lg text-sm disabled:text-gray-300 text-gray-500 hover:bg-gray-100 disabled:cursor-not-allowed transition-colors"
+                  >
+                    ←
+                  </button>
+                  {getPageNumbers().map((p, i) =>
+                    p === "..." ? 
+                      <span key={i} className="px-2 py-1.5 text-gray-400">…</span> :
+                      <button 
+                        key={p} 
+                        onClick={() => setCurrentPage(p)}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                          currentPage === p 
+                            ? "bg-emerald-500 text-white shadow-sm" 
+                            : "text-gray-600 hover:bg-gray-100"
+                        }`}
+                      >
+                        {p}
+                      </button>
+                  )}
+                  <button 
+                    onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} 
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-1.5 rounded-lg text-sm disabled:text-gray-300 text-gray-500 hover:bg-gray-100 disabled:cursor-not-allowed transition-colors"
+                  >
+                    →
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default Courses;
